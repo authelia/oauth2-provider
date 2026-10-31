@@ -27,14 +27,12 @@ type SSFVerificationRequestBody struct {
 // SSFVerificationHandler for the stream of the requesting client. The application writes 204 on nil and uses
 // WriteSSFError otherwise.
 //
-// An unknown stream and another client's stream give the same 404. A request inside the stream's
-// MinVerificationInterval gives ErrSSFVerificationThrottled and does not call the handler; the time is recorded only
-// after the handler succeeds, and concurrent requests may both pass. The specification does not restrict verification
-// by stream status, so a paused or disabled stream reaches the handler, which must refuse or not transmit on a disabled
-// stream.
-//
-// Once the handler has succeeded the event is accepted, so a failure to save the time returns nil rather than an error
-// that would make the receiver retry and duplicate the event; the throttle may then not be recorded.
+// An unknown stream and another client's stream give the same 404. A policy error gives 403, and a stored push endpoint
+// the SSFEndpointValidator no longer permits gives 400. A request inside the stream's MinVerificationInterval gives
+// ErrSSFVerificationThrottled and does not call the handler. The time is recorded before the handler is called, so a
+// failed delivery counts towards the interval and a failure to save the time fails the request; concurrent requests may
+// both pass. The specification does not restrict verification by stream status, so a paused or disabled stream reaches
+// the handler, which must refuse or not transmit on a disabled stream.
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.4.2
 func (f *Fosite) HandleSSFVerificationRequest(ctx context.Context, r *http.Request, session Session) (err error) {
@@ -81,19 +79,27 @@ func (f *Fosite) HandleSSFVerificationRequest(ctx context.Context, r *http.Reque
 		return ssfStreamStorageError(ErrNotFound)
 	}
 
+	client := ar.GetClient()
+
+	if _, err = f.resolveSSFClientPolicy(ctx, config, client); err != nil {
+		return err
+	}
+
+	if err = f.validateSSFStoredDelivery(ctx, config, client, stream.Delivery); err != nil {
+		return err
+	}
+
 	now := time.Now().UTC()
 
 	if interval := time.Duration(stream.MinVerificationInterval) * time.Second; interval > 0 && !stream.LastVerificationAt.IsZero() && now.Sub(stream.LastVerificationAt) < interval {
 		return errorsx.WithStack(ErrSSFVerificationThrottled.WithHintf("A verification event may be requested once every %d seconds.", stream.MinVerificationInterval))
 	}
 
-	if err = config.VerificationHandler.HandleSSFVerification(ctx, stream.Clone(), body.State); err != nil {
-		return err
+	if err = storage.UpdateSSFStreamLastVerification(ctx, clientID, body.StreamID, now); err != nil {
+		return ssfStreamStorageError(err)
 	}
 
-	_ = storage.UpdateSSFStreamLastVerification(ctx, clientID, body.StreamID, now)
-
-	return nil
+	return config.VerificationHandler.HandleSSFVerification(ctx, stream.Clone(), body.State)
 }
 
 // NewSSFVerificationSubject returns the sub_id of a verification event, an opaque identifier holding the stream ID.

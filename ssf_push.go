@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -104,33 +103,43 @@ type SSFPushResult struct {
 	Err error
 }
 
-// PushSecurityEventToken makes one RFC 8935 push attempt and reports the outcome. It never retries and never
-// follows redirects; queueing and retrying belong to the caller.
+// PushSecurityEventToken makes one RFC 8935 push attempt on behalf of the stream's client and reports the outcome. It
+// never retries and never follows redirects; queueing and retrying belong to the caller. An endpoint the
+// SSFEndpointValidator does not permit for the client is refused without a request, as is any endpoint when no validator
+// is configured.
 //
 // See: https://www.rfc-editor.org/rfc/rfc8935.html
-func (f *Fosite) PushSecurityEventToken(ctx context.Context, delivery SSFDelivery, token string) (result SSFPushResult) {
+func (f *Fosite) PushSecurityEventToken(ctx context.Context, client Client, delivery SSFDelivery, token string) (result SSFPushResult) {
 	// The URI of RFC 8935 is the only push method; the poll method is never pushed to.
 	if delivery.Method != "" && delivery.Method != SSFDeliveryMethodPush {
 		return ssfPushRefused("The delivery method is not the RFC 8935 push method.")
 	}
 
-	// An SET and its authorization header are only sent over https.
-	var (
-		uri *url.URL
-		err error
-	)
-
-	if uri, err = url.Parse(delivery.EndpointURL); err != nil || uri.Scheme != "https" || uri.Hostname() == "" {
-		return ssfPushRefused("The delivery endpoint URL must be an absolute https URL.")
+	if client == nil {
+		return ssfPushRefused("The delivery has no client.")
 	}
 
-	client := backChannelLogoutHTTPClient(f.Config.GetHTTPClient(ctx))
+	var (
+		config *SSFConfig
+		err    error
+	)
+
+	if config = f.getSSFConfig(ctx); config == nil {
+		return ssfPushRefused("The Shared Signals Framework transmitter is not configured.")
+	}
+
+	// An SET and its authorization header are only sent over https.
+	if err = validateSSFPushEndpoint(ctx, config, client, delivery.EndpointURL); err != nil {
+		return SSFPushResult{Outcome: SSFPushRejected, Err: err}
+	}
+
+	httpClient := backChannelLogoutHTTPClient(f.Config.GetHTTPClient(ctx))
 
 	// The caller owns retries, and a log hook would see the secret request.
-	client.RetryMax = 0
-	client.RequestLogHook = nil
-	client.ResponseLogHook = nil
-	client.CheckRetry = func(context.Context, *http.Response, error) (bool, error) { return false, nil }
+	httpClient.RetryMax = 0
+	httpClient.RequestLogHook = nil
+	httpClient.ResponseLogHook = nil
+	httpClient.CheckRetry = func(context.Context, *http.Response, error) (bool, error) { return false, nil }
 
 	ctx, cancel := context.WithTimeout(ctx, FetchTimeout)
 	defer cancel()
@@ -150,7 +159,7 @@ func (f *Fosite) PushSecurityEventToken(ctx context.Context, delivery SSFDeliver
 
 	var response *http.Response
 
-	if response, err = client.Do(request); response != nil {
+	if response, err = httpClient.Do(request); response != nil {
 		defer response.Body.Close()
 
 		result.Status = response.StatusCode

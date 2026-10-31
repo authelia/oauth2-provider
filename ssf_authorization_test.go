@@ -184,6 +184,34 @@ func TestAuthorizeSSFRequestShouldNotRevealIntrospectionFailure(t *testing.T) {
 	assert.NotContains(t, rfc.GetDescription(), "secret reason")
 }
 
+func TestAuthorizeSSFRequestShouldReportStorageFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	introspector := mock.NewMockTokenIntrospector(ctrl)
+	introspector.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(TokenUse(""), ErrServerError.WithDebug("storage unavailable"))
+
+	provider := &Fosite{
+		Store:  storage.NewMemoryStore(),
+		Config: &Config{SSF: &SSFConfig{Issuer: "https://ssf.example.com"}, TokenIntrospectionHandlers: TokenIntrospectionHandlers{introspector}},
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "https://ssf.example.com/ssf/stream", nil)
+	r.Header.Set(consts.HeaderAuthorization, "Bearer some-token")
+
+	_, _, err := provider.AuthorizeSSFRequestForTest(context.Background(), r, &DefaultSession{}, false)
+
+	require.ErrorIs(t, err, ErrServerError)
+
+	rw := httptest.NewRecorder()
+
+	provider.WriteSSFError(context.Background(), rw, r, err)
+
+	assert.Equal(t, http.StatusInternalServerError, rw.Code)
+	assert.Empty(t, rw.Header().Get(consts.HeaderWWWAuthenticate))
+}
+
 func TestGetSSFConfigRetainsHooks(t *testing.T) {
 	policy := &testSSFPolicy{}
 

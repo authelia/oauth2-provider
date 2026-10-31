@@ -189,14 +189,47 @@ func TestSSFVerification(t *testing.T) {
 		assert.WithinDuration(t, time.Now().UTC(), h.stored(t, "a", id).LastVerificationAt, time.Minute)
 	})
 
-	t.Run("ShouldNotRecordFailedHandler", func(t *testing.T) {
+	t.Run("ShouldThrottleAfterFailedHandler", func(t *testing.T) {
 		h, rec, id := newHarness(t, time.Minute)
 		rec.failure = errors.New("boom")
 
 		_, err := h.doVerify(t, "a", http.MethodPost, "application/json", `{"stream_id":"`+id+`"}`)
 		require.ErrorIs(t, err, rec.failure)
 
+		assert.False(t, h.stored(t, "a", id).LastVerificationAt.IsZero())
+
+		rw, err := h.doVerify(t, "a", http.MethodPost, "application/json", `{"stream_id":"`+id+`"}`)
+		require.Error(t, err)
+
+		assert.Equal(t, http.StatusTooManyRequests, rw.Code)
+		assert.Equal(t, 1, rec.calls)
+	})
+
+	t.Run("ShouldDenyOnPolicyError", func(t *testing.T) {
+		h, rec, id := newHarness(t, 0)
+		h.config.Policy = ssfHandlerPolicy{err: errors.New("operator disabled")}
+
+		rw, err := h.doVerify(t, "a", http.MethodPost, "application/json", `{"stream_id":"`+id+`"}`)
+		require.Error(t, err)
+
+		assert.Equal(t, http.StatusForbidden, rw.Code)
+		assert.Equal(t, 0, rec.calls)
 		assert.True(t, h.stored(t, "a", id).LastVerificationAt.IsZero())
+	})
+
+	t.Run("ShouldRejectStoredPushEndpointNoLongerPermitted", func(t *testing.T) {
+		h, rec, _ := newHarness(t, 0)
+		id := h.createStream(t, "b", `{"delivery":{"method":"`+SSFDeliveryMethodPush+`","endpoint_url":"https://rx.example.com/events"}}`)
+
+		h.config.EndpointValidator = ssfHandlerValidator{err: errors.New("private address")}
+
+		rw, err := h.doVerify(t, "b", http.MethodPost, "application/json", `{"stream_id":"`+id+`"}`)
+		require.Error(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, rw.Code)
+		assert.NotContains(t, rw.Body.String(), "private address")
+		assert.Equal(t, 0, rec.calls)
+		assert.True(t, h.stored(t, "b", id).LastVerificationAt.IsZero())
 	})
 
 	t.Run("ShouldKeepChangeMadeByHandler", func(t *testing.T) {
@@ -228,14 +261,14 @@ func TestSSFVerification(t *testing.T) {
 		assert.False(t, h.stored(t, "a", id).LastVerificationAt.IsZero())
 	})
 
-	t.Run("ShouldReturnNilWhenSaveFails", func(t *testing.T) {
+	t.Run("ShouldNotCallHandlerWhenSaveFails", func(t *testing.T) {
 		h, rec, id := newHarness(t, time.Minute)
 		h.provider.Store = &ssfFailUpdateStore{ssfCountingStore: h.store}
 
 		_, err := h.doVerify(t, "a", http.MethodPost, "application/json", `{"stream_id":"`+id+`"}`)
-		require.NoError(t, err)
+		require.Error(t, err)
 
-		assert.Equal(t, 1, rec.calls)
+		assert.Equal(t, 0, rec.calls)
 		assert.True(t, h.stored(t, "a", id).LastVerificationAt.IsZero())
 	})
 

@@ -50,11 +50,12 @@ type SSFConfig struct {
 	// MaxRequestBytes bounds the size of a request body. Defaults to 64 KiB.
 	MaxRequestBytes int64
 
-	// Policy resolves the per-client stream policy. Required to create or update a stream or its status; nil gives
-	// ErrServerError.
+	// Policy resolves the per-client stream policy. Required to create or update a stream or its status, to request
+	// verification and to poll; nil gives ErrServerError.
 	Policy SSFStreamPolicy
 
-	// EndpointValidator validates a receiver endpoint URL before it is stored or used.
+	// EndpointValidator validates a receiver endpoint URL when it is submitted, when a stream holding it is updated or
+	// enabled, on a verification request, and on every push.
 	EndpointValidator SSFEndpointValidator
 
 	// PollEndpointURL returns the poll endpoint URL of a stream.
@@ -94,8 +95,9 @@ func (f *Fosite) getSSFConfig(ctx context.Context) (config *SSFConfig) {
 	return &applied
 }
 
-// SSFStreamPolicy resolves the stream policy of a client. The policy applies at create and update only, and a status
-// update checks only that it resolves, so an application narrowing a policy must re-apply it in its emitter.
+// SSFStreamPolicy resolves the stream policy of a client. The policy applies at create and update only; a status update,
+// a verification request and a poll check only that it resolves, so an application narrowing a policy must re-apply it
+// in its emitter.
 type SSFStreamPolicy interface {
 	// SSFStreamPolicy returns the policy of the client.
 	SSFStreamPolicy(ctx context.Context, client Client) (policy *SSFClientPolicy, err error)

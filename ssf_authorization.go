@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -47,7 +48,9 @@ func (f *Fosite) authorizeSSFRequest(ctx context.Context, r *http.Request, sessi
 		ar  AccessRequester
 	)
 
-	if use, ar, err = f.IntrospectToken(ctx, token, AccessToken, session); err != nil {
+	if use, ar, err = f.IntrospectToken(ctx, token, AccessToken, session); errors.Is(err, ErrServerError) {
+		return nil, nil, err
+	} else if err != nil {
 		return nil, nil, errorsx.WithStack(ErrInvalidToken.WithHint("The Access Token is missing, malformed, or invalid.").WithWrap(err).WithDebugError(err))
 	} else if use != "" && use != AccessToken {
 		return nil, nil, errorsx.WithStack(ErrInvalidToken.WithHint("The Access Token is missing, malformed, or invalid.").WithDebugf("The credential was of type '%s' rather than 'access_token'.", use))

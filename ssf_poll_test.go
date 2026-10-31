@@ -7,6 +7,7 @@ package oauth2_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -181,6 +182,19 @@ func TestSSFPoll(t *testing.T) {
 		assert.Equal(t, unknown.Code, other.Code)
 		assert.Equal(t, unknown.Body.String(), other.Body.String())
 	})
+}
+
+func TestSSFPollPolicy(t *testing.T) {
+	h := newSSFHandlerHarness(t, nil)
+	id := h.createStream(t, "a", `{}`)
+
+	h.config.Policy = ssfHandlerPolicy{err: errors.New("operator disabled")}
+
+	rw := h.doPoll("a", http.MethodPost, "application/json", `{"ack":["x"]}`, id, nil, false)
+
+	assert.Equal(t, http.StatusForbidden, rw.Code)
+	assert.Contains(t, rw.Body.String(), `"err":"access_denied"`)
+	assert.NotContains(t, rw.Body.String(), "operator disabled")
 }
 
 func TestSSFPollResponse(t *testing.T) {

@@ -65,9 +65,9 @@ type ssfPollRequestBody struct {
 // the application took from its route. Only POST is served. An empty body is a default poll request; a body present
 // must be 'application/json'.
 //
-// An unknown stream and another client's stream give the same 404, and a push stream is a 400. The stream status is not
-// checked, as SSF Section 8.1.2.1 defines no error for polling, so the application returns no SETs on a paused or
-// disabled stream.
+// An unknown stream and another client's stream give the same 404, a policy error gives 403, and a push stream is a
+// 400. The stream status is not checked, as SSF Section 8.1.2.1 defines no error for polling, so the application returns
+// no SETs on a paused or disabled stream.
 //
 // See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.2
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2.1
@@ -98,6 +98,10 @@ func (f *Fosite) NewSSFPollRequest(ctx context.Context, r *http.Request, session
 
 	if stream == nil || stream.ClientID != clientID {
 		return nil, ssfStreamStorageError(ErrNotFound)
+	}
+
+	if _, err = f.resolveSSFClientPolicy(ctx, f.getSSFConfig(ctx), ar.GetClient()); err != nil {
+		return nil, err
 	}
 
 	if stream.Delivery.Method != SSFDeliveryMethodPoll {

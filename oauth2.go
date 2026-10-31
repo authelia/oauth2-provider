@@ -287,10 +287,11 @@ type Provider interface {
 	GenerateSecurityEventToken(ctx context.Context, stream *SSFStream, subject *jwt.SubjectIdentifier, event jwt.SecurityEvent, jti, txn string) (token, usedJTI string, err error)
 
 	// PushSecurityEventToken makes one RFC 8935 push attempt of the Security Event Token to the delivery endpoint and
-	// returns a typed outcome. It never retries and never follows redirects.
+	// returns a typed outcome. It never retries and never follows redirects, and refuses an endpoint the
+	// SSFEndpointValidator does not permit for the client.
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc8935.html
-	PushSecurityEventToken(ctx context.Context, delivery SSFDelivery, token string) (result SSFPushResult)
+	PushSecurityEventToken(ctx context.Context, client Client, delivery SSFDelivery, token string) (result SSFPushResult)
 
 	// NewSSFStreamRequest authorizes a request to the Shared Signals Framework stream configuration endpoint and
 	// decodes its body. The session must implement DPoPBoundSession and MTLSBoundSession.

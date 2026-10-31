@@ -167,6 +167,27 @@ func TestSSFStreamStatusPolicy(t *testing.T) {
 	})
 }
 
+func TestSSFStreamStatusStoredEndpoint(t *testing.T) {
+	h := newSSFHandlerHarness(t, nil)
+	id := h.createStream(t, "a", `{"delivery":{"method":"`+SSFDeliveryMethodPush+`","endpoint_url":"https://rx.example.com/events"}}`)
+
+	require.NoError(t, h.store.UpdateSSFStreamStatus(context.Background(), "a", id, SSFStreamStatusPaused, ""))
+
+	h.config.EndpointValidator = ssfHandlerValidator{err: errors.New("private address")}
+
+	t.Run("ShouldRejectEnable", func(t *testing.T) {
+		rw := h.doStatus(t, "a", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"`+id+`","status":"enabled"}`)
+		assert.Equal(t, http.StatusBadRequest, rw.Code)
+		assert.Equal(t, SSFStreamStatusPaused, h.stored(t, "a", id).Status)
+	})
+
+	t.Run("ShouldAllowDisable", func(t *testing.T) {
+		rw := h.doStatus(t, "a", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"`+id+`","status":"disabled"}`)
+		assert.Equal(t, http.StatusOK, rw.Code)
+		assert.Equal(t, SSFStreamStatusDisabled, h.stored(t, "a", id).Status)
+	})
+}
+
 func TestSSFStreamStatusRejects(t *testing.T) {
 	h := newSSFHandlerHarness(t, nil)
 	id := h.createStream(t, "a", `{}`)

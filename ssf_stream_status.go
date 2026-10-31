@@ -98,7 +98,8 @@ func (f *Fosite) NewSSFStreamStatusRequest(ctx context.Context, r *http.Request,
 
 // NewSSFStreamStatusResponse reads or updates the status of a stream of the requesting client. An unknown stream and
 // another client's stream give the same 404. A status change does not touch the other stream properties, and an omitted
-// reason clears the stored one. An update resolves the stream policy, and a policy error gives 403.
+// reason clears the stored one. An update resolves the stream policy, and a policy error gives 403. Enabling a stream
+// whose stored push endpoint the SSFEndpointValidator no longer permits gives 400.
 //
 // An application refusing a re-enable, for example of an operator-disabled stream, inspects the requester before
 // calling this.
@@ -173,6 +174,12 @@ func (f *Fosite) NewSSFStreamStatusResponse(ctx context.Context, requester SSFSt
 		}
 
 		body := requester.GetBody()
+
+		if body.Status == SSFStreamStatusEnabled {
+			if err = f.validateSSFStoredDelivery(ctx, config, requester.GetClient(), stream.Delivery); err != nil {
+				return nil, err
+			}
+		}
 
 		stream = stream.Clone()
 		stream.Status = body.Status

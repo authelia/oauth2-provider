@@ -445,6 +445,8 @@ func (f *Fosite) updateSSFStream(ctx context.Context, config *SSFConfig, storage
 		updated.Delivery = delivery
 	} else if !slices.Contains(policy.DeliveryMethods, stored.Delivery.Method) {
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The delivery method is not permitted for the client."))
+	} else if err = f.validateSSFStoredDelivery(ctx, config, client, stored.Delivery); err != nil {
+		return nil, err
 	}
 
 	if err = storage.UpdateSSFStream(ctx, &updated); err != nil {
@@ -575,18 +577,8 @@ func (f *Fosite) newSSFDelivery(ctx context.Context, config *SSFConfig, client C
 		return SSFDelivery{Method: SSFDeliveryMethodPoll, EndpointURL: endpoint}, nil
 	}
 
-	if config.EndpointValidator == nil {
-		return SSFDelivery{}, errorsx.WithStack(ErrServerError.WithDebug("The Shared Signals Framework transmitter is not configured with an endpoint validator, so push streams cannot be created."))
-	}
-
-	var endpoint *url.URL
-
-	if endpoint, err = url.Parse(in.EndpointURL); err != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil || strings.Contains(in.EndpointURL, "#") {
-		return SSFDelivery{}, errorsx.WithStack(ErrInvalidRequest.WithHint("The delivery 'endpoint_url' must be an absolute https URL."))
-	}
-
-	if err = config.EndpointValidator.ValidateSSFEndpoint(ctx, client, endpoint); err != nil {
-		return SSFDelivery{}, errorsx.WithStack(ErrInvalidRequest.WithHint("The delivery 'endpoint_url' is not permitted.").WithWrap(err).WithDebugError(err))
+	if err = validateSSFPushEndpoint(ctx, config, client, in.EndpointURL); err != nil {
+		return SSFDelivery{}, err
 	}
 
 	// A header value with CR, LF or other control characters can never be sent.
@@ -595,6 +587,32 @@ func (f *Fosite) newSSFDelivery(ctx context.Context, config *SSFConfig, client C
 	}
 
 	return SSFDelivery{Method: SSFDeliveryMethodPush, EndpointURL: in.EndpointURL, AuthorizationHeader: ptrString(in.AuthorizationHeader)}, nil
+}
+
+func validateSSFPushEndpoint(ctx context.Context, config *SSFConfig, client Client, raw string) (err error) {
+	if config.EndpointValidator == nil {
+		return errorsx.WithStack(ErrServerError.WithDebug("The Shared Signals Framework transmitter is not configured with an endpoint validator, so push streams cannot be used."))
+	}
+
+	var endpoint *url.URL
+
+	if endpoint, err = url.Parse(raw); err != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil || strings.Contains(raw, "#") {
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("The delivery 'endpoint_url' must be an absolute https URL."))
+	}
+
+	if err = config.EndpointValidator.ValidateSSFEndpoint(ctx, client, endpoint); err != nil {
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("The delivery 'endpoint_url' is not permitted.").WithWrap(err).WithDebugError(err))
+	}
+
+	return nil
+}
+
+func (f *Fosite) validateSSFStoredDelivery(ctx context.Context, config *SSFConfig, client Client, delivery SSFDelivery) (err error) {
+	if delivery.Method == SSFDeliveryMethodPoll {
+		return nil
+	}
+
+	return validateSSFPushEndpoint(ctx, config, client, delivery.EndpointURL)
 }
 
 // ssfIntersect returns the elements of supported that are in requested, without duplicates. It is never nil.

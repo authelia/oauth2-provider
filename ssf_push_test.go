@@ -25,6 +25,8 @@ import (
 
 const ssfPushSecret = "Bearer super-secret-value"
 
+var ssfPushClient = &oauth2.DefaultClient{ID: "a"}
+
 func TestPushSecurityEventToken(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -190,7 +192,7 @@ func TestPushSecurityEventToken(t *testing.T) {
 
 			provider := newSSFPushProvider(server)
 
-			result := provider.PushSecurityEventToken(context.Background(), oauth2.SSFDelivery{Method: "urn:ietf:rfc:8935", EndpointURL: server.URL, AuthorizationHeader: tc.auth}, "the.set.token")
+			result := provider.PushSecurityEventToken(context.Background(), ssfPushClient, oauth2.SSFDelivery{Method: "urn:ietf:rfc:8935", EndpointURL: server.URL, AuthorizationHeader: tc.auth}, "the.set.token")
 
 			assert.Equal(t, tc.outcome, result.Outcome)
 			assert.Equal(t, tc.status, result.Status)
@@ -225,7 +227,7 @@ func TestPushSecurityEventTokenShouldNotFollowRedirect(t *testing.T) {
 
 	defer server.Close()
 
-	result := newSSFPushProvider(server).PushSecurityEventToken(context.Background(), oauth2.SSFDelivery{EndpointURL: server.URL, AuthorizationHeader: ssfPushSecret}, "t")
+	result := newSSFPushProvider(server).PushSecurityEventToken(context.Background(), ssfPushClient, oauth2.SSFDelivery{EndpointURL: server.URL, AuthorizationHeader: ssfPushSecret}, "t")
 
 	assert.Equal(t, oauth2.SSFPushRejected, result.Outcome)
 	assert.Equal(t, http.StatusFound, result.Status)
@@ -240,7 +242,7 @@ func TestPushSecurityEventTokenShouldRetryOnNetworkError(t *testing.T) {
 
 	server.Close()
 
-	result := provider.PushSecurityEventToken(context.Background(), oauth2.SSFDelivery{EndpointURL: url, AuthorizationHeader: ssfPushSecret}, "t")
+	result := provider.PushSecurityEventToken(context.Background(), ssfPushClient, oauth2.SSFDelivery{EndpointURL: url, AuthorizationHeader: ssfPushSecret}, "t")
 
 	assert.Equal(t, oauth2.SSFPushRetryable, result.Outcome)
 	assert.Zero(t, result.Status)
@@ -268,7 +270,7 @@ func TestPushSecurityEventTokenShouldMakeOneRequestWithRetriesConfigured(t *test
 	client.RetryWaitMax = time.Millisecond
 	client.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) { return true, nil }
 
-	result := provider.PushSecurityEventToken(context.Background(), oauth2.SSFDelivery{EndpointURL: server.URL}, "t")
+	result := provider.PushSecurityEventToken(context.Background(), ssfPushClient, oauth2.SSFDelivery{EndpointURL: server.URL}, "t")
 
 	assert.Equal(t, oauth2.SSFPushRetryable, result.Outcome)
 	assert.Equal(t, int32(1), atomic.LoadInt32(&hits))
@@ -299,7 +301,7 @@ func TestPushSecurityEventTokenShouldRefuseInvalidDelivery(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := provider.PushSecurityEventToken(context.Background(), tc.delivery, "t")
+			result := provider.PushSecurityEventToken(context.Background(), ssfPushClient, tc.delivery, "t")
 
 			assert.Equal(t, oauth2.SSFPushRejected, result.Outcome)
 			assert.Zero(t, result.Status)
@@ -309,6 +311,43 @@ func TestPushSecurityEventTokenShouldRefuseInvalidDelivery(t *testing.T) {
 	}
 
 	assert.Zero(t, atomic.LoadInt32(&hits))
+}
+
+func TestPushSecurityEventTokenShouldEnforceEndpointValidator(t *testing.T) {
+	testCases := []struct {
+		name   string
+		client oauth2.Client
+		mutate func(config *oauth2.Config)
+	}{
+		{"ShouldRefuseValidatorError", ssfPushClient, func(config *oauth2.Config) {
+			config.SSF.EndpointValidator = ssfHandlerValidator{err: errors.New("private address")}
+		}},
+		{"ShouldRefuseMissingValidator", ssfPushClient, func(config *oauth2.Config) { config.SSF.EndpointValidator = nil }},
+		{"ShouldRefuseMissingConfig", ssfPushClient, func(config *oauth2.Config) { config.SSF = nil }},
+		{"ShouldRefuseMissingClient", nil, func(config *oauth2.Config) {}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var hits int32
+
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				atomic.AddInt32(&hits, 1)
+				w.WriteHeader(http.StatusAccepted)
+			}))
+			defer server.Close()
+
+			provider := newSSFPushProvider(server)
+
+			tc.mutate(provider.Config.(*oauth2.Config))
+
+			result := provider.PushSecurityEventToken(context.Background(), tc.client, oauth2.SSFDelivery{EndpointURL: server.URL, AuthorizationHeader: ssfPushSecret}, "t")
+
+			assert.Equal(t, oauth2.SSFPushRejected, result.Outcome)
+			assert.Error(t, result.Err)
+			assert.Zero(t, atomic.LoadInt32(&hits))
+		})
+	}
 }
 
 func TestPushSecurityEventTokenShouldNotCallLogHooks(t *testing.T) {
@@ -323,7 +362,7 @@ func TestPushSecurityEventTokenShouldNotCallLogHooks(t *testing.T) {
 	base.RequestLogHook = func(retryablehttp.Logger, *http.Request, int) { atomic.AddInt32(&requests, 1) }
 	base.ResponseLogHook = func(retryablehttp.Logger, *http.Response) { atomic.AddInt32(&responses, 1) }
 
-	result := provider.PushSecurityEventToken(context.Background(), oauth2.SSFDelivery{EndpointURL: server.URL, AuthorizationHeader: ssfPushSecret}, "t")
+	result := provider.PushSecurityEventToken(context.Background(), ssfPushClient, oauth2.SSFDelivery{EndpointURL: server.URL, AuthorizationHeader: ssfPushSecret}, "t")
 
 	assert.Equal(t, oauth2.SSFPushDelivered, result.Outcome)
 	assert.Zero(t, atomic.LoadInt32(&requests))
@@ -377,7 +416,7 @@ func TestPushSecurityEventTokenShouldIgnoreConfiguredCheckRetry(t *testing.T) {
 			provider.Config.(*oauth2.Config).HTTPClient.CheckRetry = tc.check
 			provider.Config.(*oauth2.Config).HTTPClient.RetryMax = 3
 
-			result := provider.PushSecurityEventToken(context.Background(), oauth2.SSFDelivery{EndpointURL: server.URL}, "t")
+			result := provider.PushSecurityEventToken(context.Background(), ssfPushClient, oauth2.SSFDelivery{EndpointURL: server.URL}, "t")
 
 			assert.Equal(t, tc.status, result.Status)
 			assert.Equal(t, tc.outcome, result.Outcome)
@@ -400,7 +439,7 @@ func TestSSFDeliveryShouldRedactAuthorizationHeader(t *testing.T) {
 }
 
 func newSSFPushProvider(server *httptest.Server) *oauth2.Fosite {
-	config := &oauth2.Config{}
+	config := &oauth2.Config{SSF: &oauth2.SSFConfig{Issuer: "https://ssf.example.com", EndpointValidator: ssfHandlerValidator{}}}
 
 	client := retryablehttp.NewClient()
 	client.Logger = nil

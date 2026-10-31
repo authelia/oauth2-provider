@@ -824,6 +824,18 @@ func TestSSFStreamUpdate(t *testing.T) {
 		}
 	})
 
+	t.Run("ShouldValidateStoredPushURLWithoutDelivery", func(t *testing.T) {
+		h := newSSFHandlerHarness(t, nil)
+		id := h.createStream(t, "a", `{`+ssfPushBody(pushURL, oldAuth)+`,"description":"old"}`)
+
+		h.config.EndpointValidator = ssfHandlerValidator{err: errors.New("private address")}
+
+		rw := h.do(t, "a", http.MethodPatch, ssfHandlerURL, "application/json", `{"stream_id":"`+id+`","description":"new"}`)
+		assert.Equal(t, http.StatusBadRequest, rw.Code)
+		assert.NotContains(t, rw.Body.String(), "private address")
+		assert.Equal(t, "old", h.stored(t, "a", id).Description)
+	})
+
 	t.Run("ShouldRejectInvalidDelivery", func(t *testing.T) {
 		for _, method := range methods {
 			for _, delivery := range []string{

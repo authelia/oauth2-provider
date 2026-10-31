@@ -688,6 +688,10 @@ type RFC8693ConfigProvider interface {
 	// (i.e. the 'subject_token_type', 'actor_token_type', and 'requested_token_type' URN values).
 	GetRFC8693TokenTypes(ctx context.Context) (types map[string]RFC8693TokenType)
 
+	// GetRFC8693MaxActorChainDepth returns the maximum number of actors, including nested 'act' claims, a token issued by
+	// Token Exchange may record.
+	GetRFC8693MaxActorChainDepth(ctx context.Context) (depth int)
+
 	// GetDefaultRFC8693RequestedTokenType returns the token type identifier used as the 'requested_token_type' when the
 	// Token Exchange request does not explicitly specify one.
 	GetDefaultRFC8693RequestedTokenType(ctx context.Context) (tokenType string)

@@ -96,6 +96,142 @@ func TestSubjectActorChainIsNotDropped(t *testing.T) {
 	}
 }
 
+func TestActorChainDepth(t *testing.T) {
+	const hint = "would exceed the permitted"
+
+	testCases := []struct {
+		name     string
+		limit    int
+		existing int
+		err      bool
+	}{
+		{name: "ShouldAcceptAFirstActor"},
+		{name: "ShouldAcceptTheDefaultDepth", existing: 7},
+		{name: "ShouldRejectBeyondTheDefaultDepth", existing: 8, err: true},
+		{name: "ShouldTreatANegativeLimitAsTheDefault", limit: -1, existing: 8, err: true},
+		{name: "ShouldAcceptAConfiguredDepth", limit: 2, existing: 1},
+		{name: "ShouldRejectBeyondAConfiguredDepth", limit: 2, existing: 2, err: true},
+		{name: "ShouldAcceptBeyondTheDefaultWhenConfigured", limit: 20, existing: 8},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newSpecConfig(t)
+			cfg.RFC8693MaxActorChainDepth = tc.limit
+
+			session := newSpecSession("alice")
+			session.SetSubjectToken(map[string]any{consts.ClaimSubject: "alice", consts.ClaimActor: actorChain(tc.existing)})
+			session.SetActorToken(map[string]any{consts.ClaimSubject: "bob"})
+
+			err := runGrantHandler(t, cfg, newSpecRequest(t, newConfidentialClient(), session, nil))
+
+			if tc.err {
+				assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+				assert.ErrorContains(t, oauth2.ErrorToDebugRFC6749Error(err), hint)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+		})
+	}
+
+	t.Run("ShouldLimitTheChainBeforeBuildingTheActClaim", func(t *testing.T) {
+		session := newSpecSession("alice")
+		session.SetSubjectToken(map[string]any{consts.ClaimSubject: "alice", consts.ClaimActor: actorChain(8)})
+		session.SetActorToken(map[string]any{"unidentified": true})
+
+		err := runGrantHandler(t, newSpecConfig(t), newSpecRequest(t, newConfidentialClient(), session, nil))
+
+		assert.ErrorContains(t, oauth2.ErrorToDebugRFC6749Error(err), hint)
+	})
+
+	t.Run("ShouldLimitTheChainAnAuthorizationGrantCarriesOver", func(t *testing.T) {
+		f := newGrantFixture(t, nil)
+		f.cfg.RFC8693MaxActorChainDepth = 2
+
+		_, err := f.exchange(t, grantExchange{audience: []string{grantTarget}, subjectActor: actorChain(3)})
+
+		assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+		assert.ErrorContains(t, oauth2.ErrorToDebugRFC6749Error(err), hint)
+	})
+
+	t.Run("ShouldAcceptTheChainAnAuthorizationGrantCarriesOverAtTheLimit", func(t *testing.T) {
+		f := newGrantFixture(t, nil)
+		f.cfg.RFC8693MaxActorChainDepth = 2
+
+		_, err := f.exchange(t, grantExchange{audience: []string{grantTarget}, subjectActor: actorChain(2)})
+
+		require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+	})
+}
+
+func TestActorChainDepthOfAnOwnAccessToken(t *testing.T) {
+	for _, sc := range bindingExchangeStores() {
+		testCases := []struct {
+			name     string
+			existing int
+			err      bool
+		}{
+			{name: "ShouldAcceptWithinTheLimit", existing: 7},
+			{name: "ShouldRejectBeyondTheLimit", existing: 8, err: true},
+		}
+
+		for _, tc := range testCases {
+			t.Run(sc.name+"/"+tc.name, func(t *testing.T) {
+				store := sc.newStore()
+				config, strategy := newBindingExchangeConfig()
+
+				client := &oauth2.DefaultRegisteredClient{
+					DefaultClient:               store.GetClients()["my-client"].(*oauth2.DefaultClient),
+					TokenExchangeOwnAccessToken: true,
+				}
+
+				subject := NewDefaultSession()
+				subject.SetSubject("peter")
+				subject.SetClaimActor(actorChain(tc.existing))
+
+				actor := NewDefaultSession()
+				actor.SetSubject("service-b")
+
+				request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693AccessToken, createSessionAccessToken(t.Context(), strategy, store, client, subject), consts.TokenTypeRFC8693AccessToken)
+				request.Client = client
+
+				form := request.GetRequestForm()
+				form.Set(consts.FormParameterActorTokenType, consts.TokenTypeRFC8693AccessToken)
+				form.Set(consts.FormParameterActorToken, createSessionAccessToken(t.Context(), strategy, store, client, actor))
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(newLifetimeAccessTokenHandler(config, strategy, store).HandleTokenEndpointRequest(t.Context(), request)))
+
+				err := (&TokenExchangeGrantHandler{Config: config}).PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())
+
+				if tc.err {
+					assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+					assert.ErrorContains(t, oauth2.ErrorToDebugRFC6749Error(err), "would exceed the permitted")
+
+					return
+				}
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			})
+		}
+	}
+}
+
+func actorChain(depth int) (act map[string]any) {
+	for range depth {
+		next := map[string]any{consts.ClaimSubject: "service"}
+
+		if act != nil {
+			next[consts.ClaimActor] = act
+		}
+
+		act = next
+	}
+
+	return act
+}
+
 func chainSubjectToken(t *testing.T, strategy hoauth2.CoreStrategy, store rfc8693ExchangeStore, owner oauth2.Client, session *DefaultSession, refresh bool) string {
 	t.Helper()
 

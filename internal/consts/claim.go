@@ -52,6 +52,7 @@ const (
 	ClaimAudienceTenant                      = "aud_tenant"
 	ClaimAudienceSubject                     = "aud_sub"
 	ClaimSubjectIdentifier                   = "sub_id"
+	ClaimTransaction                         = "txn"
 )
 
 const (

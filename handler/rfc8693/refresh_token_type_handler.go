@@ -366,7 +366,7 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 	recordSubjectTokenDeadline(request)
 
 	rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.RefreshToken, c.RefreshTokenLifespan)
-	request.GetSession().SetExpiresAt(oauth2.RefreshToken, refreshTokenExpiry(request, rtLifespan))
+	request.GetSession().SetExpiresAt(oauth2.RefreshToken, oauth2.IssuanceDecisionFromContext(ctx).CapExpiry(oauth2.RefreshToken, refreshTokenExpiry(request, rtLifespan)))
 
 	var token, signature string
 

@@ -270,6 +270,7 @@ type Configurator interface {
 	TokenEndpointHandlersProvider
 	AuthorizeEndpointBindingHandlersProvider
 	TokenEndpointBindingHandlersProvider
+	IssuancePolicyProvider
 	RFC8628DeviceAuthorizeEndpointBindingHandlersProvider
 	TokenIntrospectionHandlersProvider
 	RevocationHandlersProvider

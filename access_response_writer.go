@@ -24,6 +24,10 @@ func (f *Fosite) NewAccessResponse(ctx context.Context, request AccessRequester)
 	ctx = context.WithValue(ctx, AccessRequestContextKey, request)
 	ctx = context.WithValue(ctx, AccessResponseContextKey, response)
 
+	if ctx, err = f.applyIssuancePolicy(ctx, request); err != nil {
+		return nil, err
+	}
+
 	for _, tk = range f.Config.GetTokenEndpointHandlers(ctx) {
 		if err = tk.PopulateTokenEndpointResponse(ctx, request, response); err == nil {
 			// do nothing

@@ -198,7 +198,9 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.AccessToken, c.AccessTokenLifespan)
 
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, capToSubjectTokenExpiry(request, time.Now().UTC().Add(atLifespan)))
+	decision := oauth2.IssuanceDecisionFromContext(ctx)
+
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, decision.CapExpiry(oauth2.AccessToken, capToSubjectTokenExpiry(request, time.Now().UTC().Add(atLifespan))))
 
 	var token, signature string
 
@@ -208,13 +210,13 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 		return err
 	}
 
-	issueRefreshToken := c.canIssueRefreshToken(request)
+	issueRefreshToken := c.canIssueRefreshToken(request) && !decision.DeniesToken(oauth2.RefreshToken)
 
 	if issueRefreshToken {
 		var refresh, refreshSignature string
 
 		recordSubjectTokenDeadline(request)
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, refreshTokenExpiry(request, oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.RefreshToken, c.RefreshTokenLifespan)))
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, decision.CapExpiry(oauth2.RefreshToken, refreshTokenExpiry(request, oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.RefreshToken, c.RefreshTokenLifespan))))
 		if refresh, refreshSignature, err = c.GenerateRefreshToken(ctx, request); err != nil {
 			return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 		}

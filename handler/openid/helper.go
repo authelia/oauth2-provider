@@ -62,9 +62,15 @@ func (i *IDTokenHandleHelper) IssueImplicitIDToken(ctx context.Context, lifespan
 
 // IssueExplicitIDToken generates an ID Token for the request and adds it to the token response as the 'id_token' value.
 func (i *IDTokenHandleHelper) IssueExplicitIDToken(ctx context.Context, lifespan time.Duration, request oauth2.Requester, response oauth2.AccessResponder) (err error) {
+	decision := oauth2.IssuanceDecisionFromContext(ctx)
+
+	if decision.DeniesToken(oauth2.IDToken) {
+		return nil
+	}
+
 	var token string
 
-	if token, err = i.generateIDToken(ctx, lifespan, request); err != nil {
+	if token, err = i.generateIDToken(ctx, decision.CapLifespan(oauth2.IDToken, lifespan), request); err != nil {
 		return err
 	}
 

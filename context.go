@@ -23,4 +23,6 @@ const (
 	AuthorizeResponseContextKey       = ContextKey("authorizeResponse")
 	PushedAuthorizeResponseContextKey = ContextKey("pushedAuthorizeResponse")
 	DPoPProofContextKey               = ContextKey("dpopProof")
+	IssuanceDecisionContextKey        = ContextKey("issuanceDecision")
+	IssuanceGrantsPreparedContextKey  = ContextKey("issuanceGrantsPrepared")
 )

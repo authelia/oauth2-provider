@@ -331,6 +331,9 @@ type Config struct {
 	// authorize request before the authorize endpoint handlers run.
 	AuthorizeEndpointBindingHandlers AuthorizeEndpointBindingHandlers
 
+	// IssuancePolicy decides the issuance of tokens at the token endpoint when set.
+	IssuancePolicy IssuancePolicy
+
 	// TokenEndpointBindingHandlers is a list of handlers that record and enforce a proof-of-possession binding on
 	// an access request a grant handler has accepted.
 	TokenEndpointBindingHandlers TokenEndpointBindingHandlers
@@ -639,6 +642,11 @@ func (c *Config) GetTokenEndpointHandlers(ctx context.Context) TokenEndpointHand
 // request before the authorize endpoint handlers run.
 func (c *Config) GetAuthorizeEndpointBindingHandlers(ctx context.Context) AuthorizeEndpointBindingHandlers {
 	return c.AuthorizeEndpointBindingHandlers
+}
+
+// GetIssuancePolicy returns the policy deciding the issuance of tokens at the token endpoint, if any.
+func (c *Config) GetIssuancePolicy(_ context.Context) IssuancePolicy {
+	return c.IssuancePolicy
 }
 
 // GetTokenEndpointBindingHandlers returns the handlers that record and enforce a proof-of-possession binding on an

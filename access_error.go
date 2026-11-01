@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"authelia.com/provider/oauth2/internal/consts"
 )
@@ -63,6 +64,10 @@ func (f *Fosite) writeErrorJSONRFC(ctx context.Context, rw http.ResponseWriter, 
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 
 	setClientAuthenticationChallenge(rw, rfc)
+
+	if rfc.retryAfter > 0 {
+		rw.Header().Set(consts.HeaderRetryAfter, strconv.Itoa(rfc.retryAfter))
+	}
 
 	rfc = rfc.WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx)).WithExposeDebug(f.Config.GetSendDebugMessagesToClients(ctx))
 

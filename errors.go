@@ -390,6 +390,7 @@ type (
 		useLegacyFormat bool
 		exposeDebug     bool
 		challenge       string
+		retryAfter      int
 
 		// Fields for globalization
 		hintIDField string
@@ -538,6 +539,15 @@ func (e *RFC6749Error) WithHintf(hint string, args ...any) *RFC6749Error {
 
 	err.hintArgs = args
 	err.HintField = fmt.Sprintf(hint, args...)
+	return &err
+}
+
+// WithRetryAfter sets the number of seconds a token endpoint error response asks the client to wait with the
+// 'Retry-After' header.
+func (e *RFC6749Error) WithRetryAfter(seconds int) *RFC6749Error {
+	err := *e
+	err.retryAfter = seconds
+
 	return &err
 }
 

@@ -164,6 +164,56 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 	return nil
 }
 
+// PrepareIssuance implements oauth2.IssuanceGrantPreparer by granting what the code carries.
+func (c *GenericCodeTokenEndpointHandler) PrepareIssuance(ctx context.Context, request oauth2.AccessRequester) (err error) {
+	var ar oauth2.Requester
+
+	if _, _, ar, err = c.codeSession(ctx, request); err != nil {
+		return err
+	}
+
+	grantCodeValues(request, ar)
+
+	return nil
+}
+
+// codeSession loads the session of the code. A concurrent redemption of the same code can surface the replay here
+// rather than in HandleTokenEndpointRequest, so it is handled the same way.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+func (c *GenericCodeTokenEndpointHandler) codeSession(ctx context.Context, request oauth2.AccessRequester) (code, signature string, ar oauth2.Requester, err error) {
+	session := request.GetSession()
+
+	request.SetSession(session.Clone())
+
+	code, signature, ar, err = c.GetCodeAndSession(ctx, request)
+
+	request.SetSession(session)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, oauth2.ErrInvalidatedDeviceCode), errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode):
+			if ar == nil {
+				return "", "", nil, errorsx.WithStack(oauth2.ErrServerError.
+					WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
+					WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode" or "ErrInvalidatedDeviceCode".`))
+			}
+
+			return "", "", nil, revokeCodeGrant(ctx, c.TokenRevocationStorage, ar.GetID())
+		case errors.Is(err, oauth2.ErrAuthorizationPending), errors.Is(err, oauth2.ErrAccessDenied),
+			errors.Is(err, oauth2.ErrDeviceExpiredToken), errors.Is(err, oauth2.ErrSlowDown),
+			errors.Is(err, oauth2.ErrInvalidGrant):
+			return "", "", nil, errorsx.WithStack(err)
+		case errors.Is(err, oauth2.ErrNotFound):
+			return "", "", nil, errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
+		default:
+			return "", "", nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
+	}
+
+	return code, signature, ar, nil
+}
+
 // PopulateTokenEndpointResponse handles populating the access response.
 //
 //nolint:gocyclo
@@ -172,55 +222,21 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	// A concurrent redemption of the same code can surface the replay here rather than in HandleTokenEndpointRequest,
-	// so it is handled the same way.
-	//
-	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
-	session := request.GetSession()
-
-	request.SetSession(session.Clone())
-
-	code, signature, ar, err := c.GetCodeAndSession(ctx, request)
-
-	request.SetSession(session)
-
+	code, signature, ar, err := c.codeSession(ctx, request)
 	if err != nil {
-		switch {
-		case errors.Is(err, oauth2.ErrInvalidatedDeviceCode), errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode):
-			if ar == nil {
-				return errorsx.WithStack(oauth2.ErrServerError.
-					WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
-					WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode" or "ErrInvalidatedDeviceCode".`))
-			}
-
-			return revokeCodeGrant(ctx, c.TokenRevocationStorage, ar.GetID())
-		case errors.Is(err, oauth2.ErrAuthorizationPending), errors.Is(err, oauth2.ErrAccessDenied),
-			errors.Is(err, oauth2.ErrDeviceExpiredToken), errors.Is(err, oauth2.ErrSlowDown),
-			errors.Is(err, oauth2.ErrInvalidGrant):
-			return errorsx.WithStack(err)
-		case errors.Is(err, oauth2.ErrNotFound):
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
-		default:
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-		}
+		return err
 	} else if err = c.ValidateCodeAndSession(ctx, request, ar, code); err != nil {
 		// This needs to happen after store retrieval for the session to be hydrated properly
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
 	}
 
-	for _, scope := range ar.GetGrantedScopes() {
-		request.GrantScope(scope)
-	}
+	var pending bool
 
-	for _, audience := range request.GetRequestedAudience() {
-		request.GrantAudience(audience)
+	if pending, err = oauth2.IssuanceGrantsPending(ctx); err != nil {
+		return err
+	} else if pending {
+		grantCodeValues(request, ar)
 	}
-
-	for _, resource := range request.GetRequestedResource() {
-		request.GrantResource(resource)
-	}
-
-	request.SetGrantedAuthorizationDetails(request.GetRequestedAuthorizationDetails())
 
 	var (
 		access, accessSignature   string
@@ -231,7 +247,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if c.canIssueRefreshToken(ctx, ar) {
+	if c.canIssueRefreshToken(ctx, ar) && !oauth2.IssuanceDecisionFromContext(ctx).DeniesToken(oauth2.RefreshToken) {
 		if refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
@@ -340,4 +356,5 @@ var (
 	_ oauth2.TokenEndpointHandler                     = (*GenericCodeTokenEndpointHandler)(nil)
 	_ oauth2.AuthorizationDetailsTokenEndpointHandler = (*GenericCodeTokenEndpointHandler)(nil)
 	_ CodeTokenEndpointHandler                        = (*GenericCodeTokenEndpointHandler)(nil)
+	_ oauth2.IssuanceGrantPreparer                    = (*GenericCodeTokenEndpointHandler)(nil)
 )

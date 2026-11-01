@@ -10,6 +10,7 @@ const (
 	HeaderAllow           = "Allow"
 	HeaderPragma          = "Pragma"
 	HeaderAuthorization   = "Authorization"
+	HeaderRetryAfter      = "Retry-After"
 	HeaderLocation        = "Location"
 	HeaderAccept          = "Accept"
 	HeaderAcceptLanguage  = "Accept-Language"

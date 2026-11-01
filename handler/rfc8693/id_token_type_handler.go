@@ -276,7 +276,7 @@ func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessReq
 		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(c.Config.GetIDTokenLifespan(ctx)))
 	}
 
-	claims.ExpirationTime = jwt.NewNumericDate(capToSubjectTokenExpiry(request, claims.ExpirationTime.Time))
+	claims.ExpirationTime = jwt.NewNumericDate(oauth2.IssuanceDecisionFromContext(ctx).CapExpiry(oauth2.IDToken, capToSubjectTokenExpiry(request, claims.ExpirationTime.Time)))
 
 	var token string
 

@@ -121,6 +121,22 @@ func (h *IssueHandler) HandleTokenEndpointRequest(ctx context.Context, request o
 	return nil
 }
 
+// PrepareIssuance implements oauth2.IssuanceGrantPreparer by granting the permitted authorization details.
+func (h *IssueHandler) PrepareIssuance(ctx context.Context, request oauth2.AccessRequester) (err error) {
+	if !rfc8693.IsIDJAGRequest(ctx, request, h.Config) {
+		return nil
+	}
+
+	relationship, err := h.relationship(ctx, request)
+	if err != nil {
+		return err
+	}
+
+	grantAuthorizationDetails(request, relationship)
+
+	return nil
+}
+
 // PopulateTokenEndpointResponse issues the grant.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.4
@@ -157,7 +173,7 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 	}
 
 	now := time.Now().UTC()
-	expires := rfc8693.CapToSubjectTokenExpiry(request, now.Add(h.Config.GetIDJAGLifespan(ctx))).Truncate(jwt.TimePrecision)
+	expires := oauth2.IssuanceDecisionFromContext(ctx).CapExpiry(oauth2.ExchangedToken, rfc8693.CapToSubjectTokenExpiry(request, now.Add(h.Config.GetIDJAGLifespan(ctx)))).Truncate(jwt.TimePrecision)
 
 	if expires.Sub(now) < time.Second {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The subject token expires too soon to issue an Identity Assertion JWT Authorization Grant."))
@@ -168,7 +184,13 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 		return err
 	}
 
-	grantAuthorizationDetails(request, relationship)
+	var pending bool
+
+	if pending, err = oauth2.IssuanceGrantsPending(ctx); err != nil {
+		return err
+	} else if pending {
+		grantAuthorizationDetails(request, relationship)
+	}
 
 	claims := h.claims(ctx, request, relationship, issuer, subject, now, expires)
 

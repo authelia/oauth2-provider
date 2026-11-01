@@ -84,6 +84,30 @@ func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'client_credentials'."))
 	}
 
+	var pending bool
+
+	if pending, err = oauth2.IssuanceGrantsPending(ctx); err != nil {
+		return err
+	} else if pending {
+		if err = c.PrepareIssuance(ctx, request); err != nil {
+			return err
+		}
+	}
+
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+	if err = oauth2.ValidateAuthorizationDetailsTypes(ctx, c.Config, request.GetClient(), request.GetGrantedAuthorizationDetails()); err != nil {
+		return err
+	}
+
+	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
+
+	_, err = c.IssueAccessToken(ctx, lifespan, request, response)
+
+	return err
+}
+
+// PrepareIssuance implements oauth2.IssuanceGrantPreparer by applying the implicit grant of the requested values.
+func (c *ClientCredentialsGrantHandler) PrepareIssuance(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if c.Config.GetClientCredentialsFlowImplicitGrantRequested(ctx) {
 		if len(request.GetGrantedScopes()) == 0 {
 			for _, scope := range request.GetRequestedScopes() {
@@ -108,16 +132,7 @@ func (c *ClientCredentialsGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		}
 	}
 
-	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
-	if err = oauth2.ValidateAuthorizationDetailsTypes(ctx, c.Config, request.GetClient(), request.GetGrantedAuthorizationDetails()); err != nil {
-		return err
-	}
-
-	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeClientCredentials, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-
-	_, err = c.IssueAccessToken(ctx, lifespan, request, response)
-
-	return err
+	return nil
 }
 
 // CanHandleAuthorizationDetails implements oauth2.AuthorizationDetailsTokenEndpointHandler. The RFC 9396
@@ -142,4 +157,5 @@ func (c *ClientCredentialsGrantHandler) CanHandleTokenEndpointRequest(_ context.
 var (
 	_ oauth2.TokenEndpointHandler                     = (*ClientCredentialsGrantHandler)(nil)
 	_ oauth2.AuthorizationDetailsTokenEndpointHandler = (*ClientCredentialsGrantHandler)(nil)
+	_ oauth2.IssuanceGrantPreparer                    = (*ClientCredentialsGrantHandler)(nil)
 )

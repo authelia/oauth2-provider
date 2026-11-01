@@ -760,3 +760,49 @@ func (otherTypeHandler) Type() string {
 func (otherTypeHandler) Validate(_ context.Context, _ oauth2.Requester, _ oauth2.AuthorizationDetail) error {
 	return nil
 }
+
+func TestIssueHandlerGrantsAuthorizationDetailsInPopulateWithoutADecision(t *testing.T) {
+	handler, _, _ := newIssueFixture(t, false)
+
+	request := newIssueRequest(t, newIssueSession(time.Now().Add(time.Hour)), nil)
+	request.RequestedAudience = oauth2.Arguments{redeemAudience}
+	request.SetRequestedAuthorizationDetails(oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{redeemActionInitiate}}})
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
+	require.Empty(t, request.GetGrantedAuthorizationDetails())
+
+	request.SetGrantedAuthorizationDetails(oauth2.AuthorizationDetails{{Type: issueOtherType}})
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())))
+	assert.Equal(t, request.GetRequestedAuthorizationDetails(), request.GetGrantedAuthorizationDetails())
+}
+
+func TestIssueHandlerHonoursTheIssuanceDecision(t *testing.T) {
+	handler, _, key := newIssueFixture(t, false)
+
+	request := newIssueRequest(t, newIssueSession(time.Now().Add(time.Hour)), nil)
+	request.RequestedAudience = oauth2.Arguments{redeemAudience}
+	request.SetRequestedAuthorizationDetails(oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{redeemActionInitiate}}, {Type: issueOtherType, Actions: []string{redeemActionRead}}})
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
+	require.Empty(t, request.GetGrantedAuthorizationDetails())
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PrepareIssuance(t.Context(), request)))
+	require.Len(t, request.GetGrantedAuthorizationDetails(), 2)
+
+	request.SetGrantedAuthorizationDetails(oauth2.AuthorizationDetails{{Type: issueOtherType, Actions: []string{redeemActionRead}}})
+
+	ctx := context.WithValue(t.Context(), oauth2.IssuanceDecisionContextKey, &oauth2.IssuanceDecision{Lifespans: map[oauth2.TokenType]time.Duration{oauth2.ExchangedToken: time.Minute}})
+
+	require.ErrorIs(t, handler.PopulateTokenEndpointResponse(ctx, request, oauth2.NewAccessResponse()), oauth2.ErrServerError)
+
+	ctx = context.WithValue(ctx, oauth2.IssuanceGrantsPreparedContextKey, true)
+	response := oauth2.NewAccessResponse()
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(ctx, request, response)))
+
+	_, claims := parseIssued(t, response.GetAccessToken(), key)
+
+	assert.InDelta(t, time.Now().Add(time.Minute).Unix(), claims[consts.ClaimExpirationTime], 2)
+	assert.Equal(t, oauth2.AuthorizationDetails{{Type: issueOtherType, Actions: []string{redeemActionRead}}}, response.GetExtra(consts.AccessResponseAuthorizationDetails))
+}

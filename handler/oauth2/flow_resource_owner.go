@@ -108,7 +108,7 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResp
 
 	var refresh, refreshSignature string
 
-	if len(c.Config.GetRefreshTokenScopes(ctx)) == 0 || request.GetGrantedScopes().HasOneOf(c.Config.GetRefreshTokenScopes(ctx)...) {
+	if (len(c.Config.GetRefreshTokenScopes(ctx)) == 0 || request.GetGrantedScopes().HasOneOf(c.Config.GetRefreshTokenScopes(ctx)...)) && !oauth2.IssuanceDecisionFromContext(ctx).DeniesToken(oauth2.RefreshToken) {
 		if refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		} else if err = c.ResourceOwnerPasswordCredentialsGrantStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessSignature, request.Sanitize([]string{})); err != nil {

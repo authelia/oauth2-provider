@@ -211,6 +211,20 @@ func TestAuthorizationGrantRequiresMayActForAnActor(t *testing.T) {
 	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "no 'may_act' claim")
 }
 
+func TestAuthorizationGrantHonoursTheIssuanceDecisionLifespan(t *testing.T) {
+	f := newGrantFixture(t, nil)
+
+	response, err := f.exchange(t, grantExchange{
+		audience: []string{grantTarget},
+		decision: &oauth2.IssuanceDecision{Lifespans: map[oauth2.TokenType]time.Duration{oauth2.ExchangedToken: time.Minute}},
+	})
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+	_, claims := parseGrant(t, response)
+
+	assert.InDelta(t, time.Now().Add(time.Minute).Unix(), claims[consts.ClaimExpirationTime], 2)
+}
+
 func TestAuthorizationGrantExpiresTooSoon(t *testing.T) {
 	f := newGrantFixture(t, nil)
 
@@ -709,6 +723,7 @@ type grantStore interface {
 }
 
 type grantExchange struct {
+	decision                                  *oauth2.IssuanceDecision
 	audience, resource, scopes, subjectScopes []string
 	subjectClient, actorSubject               string
 	subjectActor                              map[string]any
@@ -891,6 +906,10 @@ func (f *grantFixture) exchange(t *testing.T, e grantExchange) (*oauth2.AccessRe
 		if err := handler.HandleTokenEndpointRequest(ctx, request); err != nil {
 			return nil, err
 		}
+	}
+
+	if e.decision != nil {
+		ctx = context.WithValue(ctx, oauth2.IssuanceDecisionContextKey, e.decision)
 	}
 
 	for _, handler := range f.handlers {

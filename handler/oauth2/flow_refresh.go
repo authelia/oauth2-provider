@@ -226,8 +226,12 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		return c.populateTokenEndpointResponseWithoutRotation(ctx, request, response, accessToken, accessSignature)
 	}
 
-	if refreshToken, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	issueRefresh := !oauth2.IssuanceDecisionFromContext(ctx).DeniesToken(oauth2.RefreshToken)
+
+	if issueRefresh {
+		if refreshToken, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
 	}
 
 	signature := c.RefreshTokenStrategy.RefreshTokenSignature(ctx, request.GetRequestForm().Get(consts.FormParameterRefreshToken))
@@ -286,12 +290,17 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		return err
 	}
 
-	if err = c.TokenRevocationStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessSignature, srtrequester); err != nil {
-		return err
+	if issueRefresh {
+		if err = c.TokenRevocationStorage.CreateRefreshTokenSession(ctx, refreshSignature, accessSignature, srtrequester); err != nil {
+			return err
+		}
 	}
 
 	c.setAccessTokenResponse(ctx, request, response, accessToken)
-	response.SetExtra(consts.AccessResponseRefreshToken, refreshToken)
+
+	if issueRefresh {
+		response.SetExtra(consts.AccessResponseRefreshToken, refreshToken)
+	}
 
 	if err = storage.MaybeCommitTx(ctx, c.TokenRevocationStorage); err != nil {
 		return err

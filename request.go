@@ -207,6 +207,11 @@ func (a *Request) GetGrantedScopes() Arguments {
 	return a.GrantedScope
 }
 
+// SetGrantedScopes replaces the scopes that have been granted to the client.
+func (a *Request) SetGrantedScopes(scopes Arguments) {
+	a.GrantedScope = scopes
+}
+
 // GetGrantedAudience returns the audience values that have been granted to the client.
 func (a *Request) GetGrantedAudience() Arguments {
 	return a.GrantedAudience

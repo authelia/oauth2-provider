@@ -81,6 +81,152 @@ func TestCustomJWTTypeHandler_OmitsIDTokenKeyBindingConfirmation(t *testing.T) {
 	assert.NotEqual(t, consts.JSONWebTokenTypeDPoPIDToken, typ, "the exchanged token carried a 'dpop+id_token' type")
 }
 
+func TestCustomJWTTypeHandlerScopeClaim(t *testing.T) {
+	testCases := []struct {
+		name     string
+		granted  oauth2.Arguments
+		session  any
+		expected any
+	}{
+		{name: "ShouldIssueASingleScope", granted: oauth2.Arguments{"orders"}, expected: "orders"},
+		{name: "ShouldIssueSpaceSeparatedScopes", granted: oauth2.Arguments{"orders", "photos"}, expected: "orders photos"},
+		{name: "ShouldOmitTheClaimWithoutScopes"},
+		{name: "ShouldKeepAScopeTheSessionSets", granted: oauth2.Arguments{"orders"}, session: "custom", expected: "custom"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := newSpecConfig(t)
+
+			store := storage.NewExampleStore()
+
+			handler := &CustomJWTTypeHandler{
+				Config:   config,
+				Strategy: &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)},
+				Storage:  store,
+			}
+
+			session := newValidatedSpecSession("alice")
+
+			if tc.session != nil {
+				session.IDTokenClaims().Add(consts.ClaimScope, tc.session)
+			}
+
+			request := newCustomJWTScopeRequest(store.Clients["my-client"], session, tc.granted)
+			response := oauth2.NewAccessResponse()
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), request, response)))
+
+			claims := map[string]any{}
+
+			_, err := jwt.UnsafeParseSignedAny(response.GetAccessToken(), &claims)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected, claims[consts.ClaimScope])
+
+			if tc.session == nil {
+				assert.NotContains(t, session.IDTokenClaims().ToMapClaims(), consts.ClaimScope)
+			}
+		})
+	}
+}
+
+func TestCustomJWTIssuedWithScopesCanBeExchangedForThem(t *testing.T) {
+	config := newSpecConfig(t)
+
+	store := storage.NewExampleStore()
+
+	client := store.Clients["my-client"].(*oauth2.DefaultClient)
+	client.Scopes = append(client.Scopes, "orders")
+
+	grant := &TokenExchangeGrantHandler{Config: config, ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.ExactAudienceStrategy, ResourceStrategy: oauth2.ExactResourceStrategy}
+
+	handler := &CustomJWTTypeHandler{
+		Config:   config,
+		Strategy: &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)},
+		Storage:  store,
+	}
+
+	session := newValidatedSpecSession("alice")
+	session.IDTokenClaims().Add("subject", "alice")
+
+	response := oauth2.NewAccessResponse()
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), newCustomJWTScopeRequest(client, session, oauth2.Arguments{"orders"}), response)))
+
+	testCases := []struct {
+		name  string
+		scope string
+		grant string
+		hint  string
+	}{
+		{name: "ShouldPermitTheIssuedScope", scope: "orders"},
+		{name: "ShouldRefuseAScopeTheJWTWasNotIssued", scope: "photos", hint: "The subject token is not granted 'photos' and so this scope cannot be requested."},
+		{name: "ShouldRefuseAScopeTheClientMayNotRequest", scope: "contacts", grant: "The OAuth 2.0 Client is not allowed to request scope 'contacts'."},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
+				Request: oauth2.Request{
+					ID:             uuid.New().String(),
+					Client:         client,
+					Session:        newSpecSession(""),
+					RequestedScope: oauth2.Arguments{tc.scope},
+					Form: url.Values{
+						consts.FormParameterGrantType:        {consts.GrantTypeOAuthTokenExchange},
+						consts.FormParameterSubjectToken:     {response.GetAccessToken()},
+						consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+					},
+				},
+			}
+
+			err := grant.HandleTokenEndpointRequest(t.Context(), request)
+
+			if tc.grant != "" {
+				require.ErrorIs(t, err, oauth2.ErrInvalidScope)
+				assert.Equal(t, tc.grant, oauth2.ErrorToRFC6749Error(err).HintField)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			err = handler.HandleTokenEndpointRequest(t.Context(), request)
+
+			if tc.hint != "" {
+				require.ErrorIs(t, err, oauth2.ErrInvalidScope)
+				assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, oauth2.Arguments{tc.scope}, request.GetGrantedScopes())
+		})
+	}
+}
+
+func newCustomJWTScopeRequest(client oauth2.Client, session oauth2.Session, granted oauth2.Arguments) *oauth2.AccessRequest {
+	return &oauth2.AccessRequest{
+		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
+		Request: oauth2.Request{
+			ID:              uuid.New().String(),
+			Client:          client,
+			Session:         session,
+			GrantedScope:    granted,
+			GrantedAudience: oauth2.Arguments{client.GetID()},
+			Form: url.Values{
+				consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
+				consts.FormParameterRequestedTokenType: {"urn:spec:jwt"},
+				consts.FormParameterSubjectToken:       {"opaque-subject-token"},
+				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693AccessToken},
+			},
+		},
+	}
+}
+
 func TestCustomJWTTypeHandlerExpiry(t *testing.T) {
 	testCases := []struct {
 		name     string

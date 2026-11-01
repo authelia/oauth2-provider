@@ -101,6 +101,13 @@ type BaseClient interface {
 	// GetID returns the client ID.
 	GetID() string
 
+	// IsPublic returns true if the client is a public (non-confidential) client, which must not use symmetric signatures
+	// or symmetric encryption.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#Signing
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#Encryption
+	IsPublic() bool
+
 	// GetClientSecretPlainText returns the ClientSecret as plaintext if available. The semantics of this function
 	// return values are important.
 	// If the client is not configured with a secret the return should be:

@@ -178,6 +178,55 @@ func TestNewClientSecretJWKFromClient(t *testing.T) {
 	})
 }
 
+func TestNewClientSecretJWKFromClientRefusesAPublicClient(t *testing.T) {
+	const expected = "Error occurred retrieving the JSON Web Key. The client is a public client which must not use symmetric algorithms"
+
+	secret := []byte("super-secret-value-padded-to-thirty-two-octets")
+
+	testCases := []struct {
+		name string
+		alg  string
+		enc  string
+		use  string
+	}{
+		{name: "ShouldRefuseSignature", alg: string(jose.HS256), use: JSONWebTokenUseSignature},
+		{name: "ShouldRefuseKeyWrap", alg: string(jose.A128KW), use: JSONWebTokenUseEncryption},
+		{name: "ShouldRefuseDirectEncryption", alg: string(jose.DIRECT), enc: string(jose.A128CBC_HS256), use: JSONWebTokenUseEncryption},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewClientSecretJWKFromClient(t.Context(), &testClient{secret: secret, public: true}, "", tc.alg, tc.enc, tc.use)
+			assert.EqualError(t, err, expected)
+
+			key, err := NewClientSecretJWKFromClient(t.Context(), &testClient{secret: secret}, "", tc.alg, tc.enc, tc.use)
+			require.NoError(t, err)
+			assert.NotNil(t, key)
+		})
+	}
+}
+
+func TestDefaultStrategyRefusesSymmetricAlgorithmsForAPublicClient(t *testing.T) {
+	secret := []byte("super-secret-value-padded-to-thirty-two-octets")
+
+	strategy := &DefaultStrategy{Config: &testConfig{}, Issuer: NewDefaultIssuerRS256Unverified(mustRSAKey(t, 2048))}
+
+	confidential := &testClient{secret: secret, alg: string(jose.HS256), csigned: true, encAlg: string(JSONWebTokenAlgNone)}
+	public := &testClient{secret: secret, alg: string(jose.HS256), csigned: true, encAlg: string(JSONWebTokenAlgNone), public: true}
+
+	token, _, err := strategy.Encode(t.Context(), MapClaims{ClaimSubject: "peter"}, WithClient(confidential))
+	require.NoError(t, err)
+
+	_, err = strategy.Decode(t.Context(), token, WithClient(confidential))
+	require.NoError(t, err)
+
+	_, _, err = strategy.Encode(t.Context(), MapClaims{ClaimSubject: "peter"}, WithClient(public))
+	assert.ErrorContains(t, err, "must not use symmetric algorithms")
+
+	_, err = strategy.Decode(t.Context(), token, WithClient(public))
+	assert.ErrorContains(t, err, "must not use symmetric algorithms")
+}
+
 func TestNewClientSecretJWKFromClientHonoursTheSecretExpiry(t *testing.T) {
 	secret := []byte("super-secret-value-padded-to-thirty-two-octets")
 

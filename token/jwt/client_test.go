@@ -266,10 +266,15 @@ type testClient struct {
 	csigned             bool
 	jwks                *jose.JSONWebKeySet
 	jwksURI             string
+	public              bool
 }
 
 func (r *testClient) GetID() string {
 	return r.id
+}
+
+func (r *testClient) IsPublic() bool {
+	return r.public
 }
 
 func (r *testClient) GetClientSecretPlainText() (secret []byte, ok bool, err error) {
@@ -327,6 +332,8 @@ type stubBase struct {
 }
 
 func (s *stubBase) GetID() string { return s.id }
+
+func (s *stubBase) IsPublic() bool { return false }
 
 func (s *stubBase) GetClientSecretPlainText() ([]byte, bool, error) { return nil, false, nil }
 

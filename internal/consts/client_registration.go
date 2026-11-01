@@ -56,6 +56,16 @@ const (
 	ClientMetadataRevocationEndpointAuthAlg    = "revocation_endpoint_auth_signing_alg"
 )
 
+// Client metadata parameters naming a response signing or encryption algorithm, validated by name.
+const (
+	ClientMetadataAuthorizationSignedResponseAlg    = "authorization_signed_response_alg"
+	ClientMetadataAuthorizationEncryptedResponseAlg = "authorization_encrypted_response_alg"
+	ClientMetadataIntrospectionSignedResponseAlg    = "introspection_signed_response_alg"
+	ClientMetadataIntrospectionEncryptedResponseAlg = "introspection_encrypted_response_alg"
+	ClientMetadataAccessTokenSignedResponseAlg      = "access_token_signed_response_alg"
+	ClientMetadataAccessTokenEncryptedResponseAlg   = "access_token_encrypted_response_alg"
+)
+
 // Client metadata parameters naming a client authentication method, validated by name.
 const (
 	ClientMetadataTokenEndpointAuthMethod         = "token_endpoint_auth_method"

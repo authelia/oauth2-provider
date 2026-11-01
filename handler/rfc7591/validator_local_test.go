@@ -791,6 +791,48 @@ func TestLocalValidatorAuthorizationGrantProfiles(t *testing.T) {
 	}
 }
 
+func TestLocalValidatorPublicClientAlgorithms(t *testing.T) {
+	const none = consts.ClientAuthMethodNone
+
+	testCases := []struct {
+		name     string
+		metadata oauth2.ClientRegistrationMetadata
+		field    string
+		value    string
+	}{
+		{name: "ShouldAcceptAsymmetricAlgorithms", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, IDTokenSignedResponseAlg: "RS256", IDTokenEncryptedResponseAlg: "RSA-OAEP-256"}},
+		{name: "ShouldAcceptSymmetricAlgorithmsForAConfidentialClient", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: consts.ClientAuthMethodClientSecretBasic, IDTokenSignedResponseAlg: "HS256", IDTokenEncryptedResponseAlg: "A128KW"}},
+		{name: "ShouldAcceptSymmetricAlgorithmsWithoutAnAuthMethod", metadata: oauth2.ClientRegistrationMetadata{IDTokenSignedResponseAlg: "HS256"}},
+		{name: "ShouldRejectIDTokenSigning", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, IDTokenSignedResponseAlg: "HS256"}, field: "id_token_signed_response_alg", value: "HS256"},
+		{name: "ShouldRejectUserinfoSigning", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, UserinfoSignedResponseAlg: "HS384"}, field: "userinfo_signed_response_alg", value: "HS384"},
+		{name: "ShouldRejectRequestObjectSigning", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, RequestObjectSigningAlg: "HS512"}, field: "request_object_signing_alg", value: "HS512"},
+		{name: "ShouldRejectAuthorizationSigning", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, AuthorizationSignedResponseAlg: "HS256"}, field: "authorization_signed_response_alg", value: "HS256"},
+		{name: "ShouldRejectIntrospectionSigning", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, IntrospectionSignedResponseAlg: "HS256"}, field: "introspection_signed_response_alg", value: "HS256"},
+		{name: "ShouldRejectAccessTokenSigning", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, AccessTokenSignedResponseAlg: "HS256"}, field: "access_token_signed_response_alg", value: "HS256"},
+		{name: "ShouldRejectIDTokenKeyWrap", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, IDTokenEncryptedResponseAlg: "A128KW"}, field: "id_token_encrypted_response_alg", value: "A128KW"},
+		{name: "ShouldRejectUserinfoDirect", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, UserinfoEncryptedResponseAlg: "dir"}, field: "userinfo_encrypted_response_alg", value: "dir"},
+		{name: "ShouldRejectRequestObjectPasswordBased", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, RequestObjectEncryptionAlg: "PBES2-HS256+A128KW"}, field: "request_object_encryption_alg", value: "PBES2-HS256+A128KW"},
+		{name: "ShouldRejectAuthorizationEncryption", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, AuthorizationEncryptedResponseAlg: "A256GCMKW"}, field: "authorization_encrypted_response_alg", value: "A256GCMKW"},
+		{name: "ShouldRejectIntrospectionEncryption", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, IntrospectionEncryptedResponseAlg: "A128KW"}, field: "introspection_encrypted_response_alg", value: "A128KW"},
+		{name: "ShouldRejectAccessTokenEncryption", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, AccessTokenEncryptedResponseAlg: "A128KW"}, field: "access_token_encrypted_response_alg", value: "A128KW"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateAlgorithms(&tc.metadata)
+
+			if tc.field == "" {
+				require.NoError(t, err)
+
+				return
+			}
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The '"+tc.field+"' value '"+tc.value+"' is a symmetric algorithm which a client with the 'token_endpoint_auth_method' value 'none' must not use.")
+		})
+	}
+}
+
 const (
 	pairwiseSectorIdentifierURI = "https://example.com/sector.json"
 	pairwiseHostlessRedirectURI = "com.example.app:/cb"

@@ -207,6 +207,18 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return err
 	}
 
+	// The response metadata is built before anything is persisted, so a failure leaves the client and its tokens as they
+	// were.
+	var responseMetadata *oauth2.ClientRegistrationMetadata
+
+	if responseMetadata, err = strategy.MetadataFromClient(ctx, patched); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	if err = filter.FilterClientRegistrationMetadata(ctx, patched, responseMetadata); err != nil {
+		return err
+	}
+
 	if err = h.Store.UpdateClient(ctx, id, patched); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
@@ -240,16 +252,6 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 	if err != nil {
 		// The replacement client metadata is already persisted, but no replacement token was minted. The client's
 		// existing management token (not yet deleted, see below) still works, so nothing is lost.
-		return err
-	}
-
-	var responseMetadata *oauth2.ClientRegistrationMetadata
-
-	if responseMetadata, err = strategy.MetadataFromClient(ctx, patched); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	}
-
-	if err = filter.FilterClientRegistrationMetadata(ctx, patched, responseMetadata); err != nil {
 		return err
 	}
 

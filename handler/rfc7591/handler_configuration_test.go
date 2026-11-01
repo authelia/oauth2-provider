@@ -722,19 +722,19 @@ func TestClientConfigurationHandlerReportsRegistrationTimes(t *testing.T) {
 	}
 }
 
-func TestClientConfigurationHandlerUpdateKeepsTheTokenWhenTheResponseFails(t *testing.T) {
+func TestClientConfigurationHandlerUpdateChangesNothingWhenTheResponseFails(t *testing.T) {
 	testCases := []struct {
 		name      string
 		configure func(config *oauth2.Config)
 	}{
 		{
-			name: "ShouldKeepItWhenBuildingTheResponseMetadataFails",
+			name: "ShouldLeaveThemWhenBuildingTheResponseMetadataFails",
 			configure: func(config *oauth2.Config) {
 				config.RFC7591ClientRegistrationStrategy = &failingResponseMetadataStrategy{ClientRegistrationStrategy: config.RFC7591ClientRegistrationStrategy}
 			},
 		},
 		{
-			name: "ShouldKeepItWhenFilteringTheResponseMetadataFails",
+			name: "ShouldLeaveThemWhenFilteringTheResponseMetadataFails",
 			configure: func(config *oauth2.Config) {
 				config.RFC7591ClientRegistrationMetadataStrategy = &failingResponseMetadataFilter{}
 			},
@@ -767,6 +767,11 @@ func TestClientConfigurationHandlerUpdateKeepsTheTokenWhenTheResponseFails(t *te
 
 			_, err := store.GetClientRegistrationTokenSession(ctx, signature, &oauth2.DefaultSession{})
 			require.NoError(t, err)
+			assert.Len(t, store.ClientRegistrationTokens, 1)
+
+			client, err := store.GetClient(ctx, id)
+			require.NoError(t, err)
+			assert.Equal(t, []string{"https://example.com/cb"}, client.GetRedirectURIs())
 		})
 	}
 }

@@ -386,6 +386,10 @@ func (j *DefaultStrategy) validate(ctx context.Context, t *jwt.JSONWebToken, des
 				return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 			}
 		}
+	} else if o.idTokenHint && o.client != nil && kid == "" && o.client.GetSigningKeyID() == "" && IsSignedJWTClientSecretAlgStr(alg) && alg == o.client.GetSigningAlg() {
+		if key, err = NewClientSecretJWKFromClient(ctx, o.client, "", alg, "", JSONWebTokenUseSignature); err != nil {
+			return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
+		}
 	} else if key, err = j.issuerStrictJWK(ctx, kid, alg, JSONWebTokenUseSignature); err != nil {
 		return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 	}

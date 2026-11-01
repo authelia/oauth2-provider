@@ -116,6 +116,24 @@ func TestNewRPInitiatedLogoutRequest_AcceptsExpiredIDTokenHint(t *testing.T) {
 	assert.Equal(t, "session-1", requester.GetSessionID())
 }
 
+func TestNewRPInitiatedLogoutRequest_AcceptsHintSignedWithClientSecret(t *testing.T) {
+	client := &oauth2.DefaultRegisteredClient{
+		DefaultClient:            &oauth2.DefaultClient{ID: "test-client", ClientSecret: oauth2.NewPlainTextClientSecret("0123456789abcdef0123456789abcdef")},
+		IDTokenSignedResponseAlg: "HS256",
+	}
+	f, jwtStrategy, _ := newLogoutProviderWithJWT(t, client)
+
+	hint, _, err := jwtStrategy.Encode(t.Context(), baseHintClaims("test-client"), jwt.WithIDTokenClient(client))
+	require.NoError(t, err)
+
+	requester, err := f.NewRPInitiatedLogoutRequest(t.Context(), newLogoutGet(url.Values{
+		"id_token_hint": []string{hint},
+	}))
+
+	require.NoError(t, err)
+	assert.Equal(t, "alice", requester.GetSubject())
+}
+
 func TestNewRPInitiatedLogoutRequest_AcceptsAgreeingClientIDAndHint(t *testing.T) {
 	client := &oauth2.DefaultClient{ID: "test-client"}
 	f, jwtStrategy, _ := newLogoutProviderWithJWT(t, client)

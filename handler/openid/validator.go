@@ -211,7 +211,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 
 	var tokenHint *jwt.Token
 
-	tokenHint, err = v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenClient(request.GetClient()))
+	tokenHint, err = v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenHintClient(request.GetClient()))
 
 	var ve *jwt.ValidationError
 	if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {

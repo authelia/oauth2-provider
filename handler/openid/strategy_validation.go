@@ -46,7 +46,11 @@ func (s *DefaultIDTokenValidationStrategy) ValidateIDToken(ctx context.Context, 
 		sopts = append(sopts, jwt.WithAllowUnverified())
 	} else if request != nil {
 		if client := request.GetClient(); client != nil {
-			sopts = append(sopts, jwt.WithIDTokenClient(client))
+			if o.IDTokenHint {
+				sopts = append(sopts, jwt.WithIDTokenHintClient(client))
+			} else {
+				sopts = append(sopts, jwt.WithIDTokenClient(client))
+			}
 		}
 	}
 

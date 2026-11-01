@@ -90,6 +90,33 @@ func TestIDTokenSubjectTokenIssuer(t *testing.T) {
 	}
 }
 
+func TestIDTokenSubjectTokenSignedWithClientSecretIsRefused(t *testing.T) {
+	config := newSpecConfig(t)
+	config.IDTokenIssuer = "https://id.example.com"
+
+	store := storage.NewExampleStore()
+	client := &oauth2.DefaultRegisteredClient{
+		DefaultClient:            store.Clients["my-client"].(*oauth2.DefaultClient),
+		IDTokenSignedResponseAlg: "HS256",
+	}
+	client.ClientSecret = oauth2.NewPlainTextClientSecret("0123456789abcdef0123456789abcdef")
+
+	strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	token, _, err := strategy.Encode(t.Context(), jwt.MapClaims{
+		consts.ClaimIssuer:         config.IDTokenIssuer,
+		consts.ClaimSubject:        "victim",
+		consts.ClaimAudience:       []string{client.GetID()},
+		consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
+		consts.ClaimIssuedAt:       time.Now().Unix(),
+	}, jwt.WithIDTokenClient(client))
+	require.NoError(t, err)
+
+	err = newIDTokenSubjectHandler(config, strategy, store).HandleTokenEndpointRequest(t.Context(), newIDTokenSubjectRequest(client, token))
+
+	assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+}
+
 func TestCustomJWTIsNotAcceptedAsIDTokenSubjectToken(t *testing.T) {
 	testCases := []struct {
 		name     string

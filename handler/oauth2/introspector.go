@@ -32,7 +32,7 @@ type CoreValidator struct {
 // A token no path can derive a signature for has a format this validator does not issue, so oauth2.ErrUnknownRequest
 // lets the next oauth2.TokenIntrospector resolve it. A JWT which the access token path resolves by its signature and an
 // encrypted JWT are rejected instead: a stored JWT without a session has been revoked, and neither may be accepted by a
-// later oauth2.TokenIntrospector which does not consult storage.
+// later oauth2.TokenIntrospector which does not consult storage. This holds when refresh token validation is disabled.
 func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, tokenUseHint oauth2.TokenUse, request oauth2.AccessRequester, scopes []string) (use oauth2.TokenUse, err error) {
 	if len(token) == 0 {
 		return "", oauth2.ErrRequestUnauthorized.WithDebugf("The request either had a malformed Authorization header or didn't include a bearer token.")
@@ -40,6 +40,10 @@ func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, token
 
 	if c.Config.GetDisableRefreshTokenValidation(ctx) {
 		if err = c.introspectAccessToken(ctx, token, request, scopes); err != nil {
+			if errors.Is(err, oauth2.ErrUnknownRequest) {
+				return "", c.errUnresolvedToken(ctx, token)
+			}
+
 			return "", err
 		}
 
@@ -129,7 +133,7 @@ func matchScopes(ss oauth2.ScopeStrategy, granted, scopes []string) error {
 	return nil
 }
 
-func (c *CoreValidator) errEmptySignature(ctx context.Context, token string) error {
+func (c *CoreValidator) errUnresolvedToken(ctx context.Context, token string) error {
 	if jwt.IsEncryptedJWT(token) || (jwt.IsSignedJWT(token) && len(c.AccessTokenSignature(ctx, token)) != 0) {
 		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebugError(oauth2.ErrNotFound))
 	}
@@ -146,7 +150,7 @@ func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string,
 	signature := c.AccessTokenSignature(ctx, token)
 
 	if len(signature) == 0 {
-		return c.errEmptySignature(ctx, token)
+		return c.errUnresolvedToken(ctx, token)
 	}
 
 	var original oauth2.Requester
@@ -181,7 +185,7 @@ func (c *CoreValidator) introspectRefreshToken(ctx context.Context, token string
 	signature := c.RefreshTokenSignature(ctx, token)
 
 	if len(signature) == 0 {
-		return c.errEmptySignature(ctx, token)
+		return c.errUnresolvedToken(ctx, token)
 	}
 
 	var original oauth2.Requester

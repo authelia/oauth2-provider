@@ -6,6 +6,7 @@ package integration_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -49,27 +50,32 @@ func TestIntrospectForeignTokenReachesTheNextIntrospector(t *testing.T) {
 	for _, tc := range testCases {
 		for prefixName, prefix := range map[string]string{introspectUnprefixed: "", introspectPrefixed: introspectPrefix} {
 			for _, first := range []bool{true, false} {
-				t.Run(tc.name+"/"+prefixName, func(t *testing.T) {
-					config := &oauth2.Config{GlobalSecret: []byte("some-super-cool-secret-that-nobody-knows-nobody-knows")}
+				for _, disabled := range []bool{false, true} {
+					t.Run(fmt.Sprintf("%s/%s/First=%t/RefreshValidationDisabled=%t", tc.name, prefixName, first, disabled), func(t *testing.T) {
+						config := &oauth2.Config{
+							GlobalSecret:                  []byte("some-super-cool-secret-that-nobody-knows-nobody-knows"),
+							DisableRefreshTokenValidation: disabled,
+						}
 
-					provider := compose.Compose(config, storage.NewMemoryStore(), &compose.CommonStrategy{
-						CoreStrategy: hoauth2.NewHMACCoreStrategy(config, prefix),
-						Strategy:     &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())},
-					}, compose.OAuth2TokenIntrospectionFactory)
+						provider := compose.Compose(config, storage.NewMemoryStore(), &compose.CommonStrategy{
+							CoreStrategy: hoauth2.NewHMACCoreStrategy(config, prefix),
+							Strategy:     &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())},
+						}, compose.OAuth2TokenIntrospectionFactory)
 
-					foreign := &foreignTokenIntrospector{token: tc.token}
+						foreign := &foreignTokenIntrospector{token: tc.token}
 
-					if first {
-						config.TokenIntrospectionHandlers = append(oauth2.TokenIntrospectionHandlers{foreign}, config.TokenIntrospectionHandlers...)
-					} else {
-						config.TokenIntrospectionHandlers = append(config.TokenIntrospectionHandlers, foreign)
-					}
+						if first {
+							config.TokenIntrospectionHandlers = append(oauth2.TokenIntrospectionHandlers{foreign}, config.TokenIntrospectionHandlers...)
+						} else {
+							config.TokenIntrospectionHandlers = append(config.TokenIntrospectionHandlers, foreign)
+						}
 
-					use, _, err := provider.IntrospectToken(t.Context(), tc.token, oauth2.AccessToken, &oauth2.DefaultSession{})
-					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
-					assert.Equal(t, oauth2.AccessToken, use)
-					assert.True(t, foreign.called)
-				})
+						use, _, err := provider.IntrospectToken(t.Context(), tc.token, oauth2.AccessToken, &oauth2.DefaultSession{})
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+						assert.Equal(t, oauth2.AccessToken, use)
+						assert.True(t, foreign.called)
+					})
+				}
 			}
 		}
 	}
@@ -103,44 +109,47 @@ func TestIntrospectRevokedJWTIsNotAcceptedByTheStatelessIntrospector(t *testing.
 	for storeName, newStore := range stores {
 		for orderName, factories := range orders {
 			for prefixName, prefix := range map[string]string{introspectUnprefixed: "", introspectPrefixed: introspectPrefix} {
-				t.Run(storeName+"/"+orderName+"/"+prefixName, func(t *testing.T) {
-					ctx := t.Context()
+				for _, disabled := range []bool{false, true} {
+					t.Run(fmt.Sprintf("%s/%s/%s/RefreshValidationDisabled=%t", storeName, orderName, prefixName, disabled), func(t *testing.T) {
+						ctx := t.Context()
 
-					config := &oauth2.Config{
-						GlobalSecret:                  []byte("some-super-cool-secret-that-nobody-knows-nobody-knows"),
-						EnforceJWTProfileAccessTokens: true,
-					}
+						config := &oauth2.Config{
+							GlobalSecret:                  []byte("some-super-cool-secret-that-nobody-knows-nobody-knows"),
+							EnforceJWTProfileAccessTokens: true,
+							DisableRefreshTokenValidation: disabled,
+						}
 
-					s := newStore()
+						s := newStore()
 
-					strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
+						strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
 
-					core := &hoauth2.JWTProfileCoreStrategy{
-						HMACCoreStrategy: hoauth2.NewHMACCoreStrategy(config, prefix),
-						Strategy:         strategy,
-						Config:           config,
-					}
+						core := &hoauth2.JWTProfileCoreStrategy{
+							HMACCoreStrategy: hoauth2.NewHMACCoreStrategy(config, prefix),
+							Strategy:         strategy,
+							Config:           config,
+						}
 
-					provider := compose.Compose(config, s, &compose.CommonStrategy{CoreStrategy: core, Strategy: strategy}, factories...)
+						provider := compose.Compose(config, s, &compose.CommonStrategy{CoreStrategy: core, Strategy: strategy}, factories...)
 
-					request := newForeignTokenJWTRequest()
+						request := newForeignTokenJWTRequest()
 
-					token, signature, err := core.GenerateAccessToken(ctx, request)
-					require.NoError(t, err)
+						token, signature, err := core.GenerateAccessToken(ctx, request)
+						require.NoError(t, err)
 
-					require.NoError(t, s.CreateAccessTokenSession(ctx, signature, request))
+						require.NoError(t, s.CreateAccessTokenSession(ctx, signature, request))
 
-					use, _, err := provider.IntrospectToken(ctx, token, oauth2.AccessToken, &hoauth2.JWTSession{})
-					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
-					assert.Equal(t, oauth2.AccessToken, use)
+						use, _, err := provider.IntrospectToken(ctx, token, oauth2.AccessToken, &hoauth2.JWTSession{})
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+						assert.Equal(t, oauth2.AccessToken, use)
 
-					require.NoError(t, s.DeleteAccessTokenSession(ctx, signature))
+						require.NoError(t, s.DeleteAccessTokenSession(ctx, signature))
 
-					for _, hint := range []oauth2.TokenUse{oauth2.AccessToken, oauth2.RefreshToken, ""} {
-						_, _, err = provider.IntrospectToken(ctx, token, hint, &hoauth2.JWTSession{})
-						assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized, hint)
-					}
-				})
+						for _, hint := range []oauth2.TokenUse{oauth2.AccessToken, oauth2.RefreshToken, ""} {
+							_, _, err = provider.IntrospectToken(ctx, token, hint, &hoauth2.JWTSession{})
+							assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized, hint)
+						}
+					})
+				}
 			}
 		}
 	}

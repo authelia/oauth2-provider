@@ -402,9 +402,10 @@ func (c *RefreshTokenGrantHandler) handleRefreshTokenEndpointStorageError(ctx co
 	return handleRefreshTokenStorageError(ctx, c.TokenRevocationStorage, storageErr)
 }
 
-// RevokeRefreshTokenFamily responds to the reuse of a rotated refresh token by deleting the refresh token session with
-// the given signature and revoking the refresh and access tokens of the grant the request belongs to. The revocation
-// runs in a transaction when the store supports transactions.
+// RevokeRefreshTokenFamily responds to the reuse of a rotated refresh token by revoking the refresh and access tokens of
+// the grant the request belongs to. The revocation runs in a transaction when the store supports transactions. The
+// session of the rotated refresh token is kept, as RotateRefreshToken relies on it to refuse a request which read the
+// refresh token before it was rotated, and it keeps a later reuse detectable.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc6819#section-5.2.2.3
 // See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
@@ -417,9 +418,7 @@ func RevokeRefreshTokenFamily(ctx context.Context, store TokenRevocationStorage,
 		err = handleRefreshTokenStorageError(ctx, store, err)
 	}()
 
-	if err = store.DeleteRefreshTokenSession(ctx, signature); err != nil {
-		return err
-	} else if err = store.RevokeRefreshToken(
+	if err = store.RevokeRefreshToken(
 		ctx, request.GetID(),
 	); err != nil && !errors.Is(err, oauth2.ErrNotFound) {
 		return err

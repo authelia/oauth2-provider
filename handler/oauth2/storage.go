@@ -71,7 +71,8 @@ type RefreshTokenStorage interface {
 	// refresh token. Without it the revocation of a rotated refresh token answers with success and revokes nothing.
 	GetRefreshTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error)
 
-	// DeleteRefreshTokenSession removes the session stored against the given refresh token signature.
+	// DeleteRefreshTokenSession removes the session stored against the given refresh token signature. The handlers do not
+	// call it when revoking a grant, as a removed session cannot refuse a request which read it before it was rotated.
 	DeleteRefreshTokenSession(ctx context.Context, signature string) (err error)
 
 	// UpdateRefreshTokenSession replaces the request stored for the given refresh token signature while the refresh
@@ -90,8 +91,10 @@ type RefreshTokenStorage interface {
 	// example by a concurrent request that rotated it first. The refresh token grant handler treats that as a reused
 	// refresh token and revokes every token derived from the same authorization grant.
 	//
-	// This method should return the oauth2.ErrNotFound error when no session exists for the signature, which the refresh
-	// token grant handler answers as a revoked refresh token.
+	// This method MUST check the given signature and return the oauth2.ErrNotFound error when it does not exist rather
+	// than succeed, as the check is what makes a refresh token single use. The refresh token grant handler answers that
+	// as a revoked refresh token. A store which reports no rows affected as success would let a request which read the
+	// refresh token before it was removed issue tokens after its grant was revoked.
 	//
 	// It may return oauth2.ErrSerializationFailure when a concurrent transaction prevents it. GetRefreshTokenSession MUST
 	// then return oauth2.ErrInactiveToken if that transaction committed the rotation, when called with a context outside

@@ -188,16 +188,16 @@ func TestTokenExchangeWritesTheTokensAtomicallyWithoutRotation(t *testing.T) {
 		commit    error
 		rollback  error
 		expected  error
-		debug     string
+		debug     []string
 		begins    int
 		commits   int
 		rollbacks int
 		applied   int
 	}{
 		{name: "ShouldCommitBothTokens", issue: true, begins: 1, commits: 1, applied: 2},
-		{name: "ShouldRollBackWhenTheRefreshTokenCannotBeWritten", issue: true, create: errors.New("real db failure"), expected: oauth2.ErrServerError, debug: "real db failure", begins: 1, rollbacks: 1},
-		{name: "ShouldRollBackWhenTheCommitFails", issue: true, commit: errors.New("commit failure"), expected: oauth2.ErrServerError, debug: "commit failure", begins: 1, commits: 1, rollbacks: 1},
-		{name: "ShouldKeepTheCauseWhenTheRollbackFails", issue: true, create: errors.New("real db failure"), rollback: errors.New("rollback failure"), expected: oauth2.ErrServerError, debug: "real db failure", begins: 1, rollbacks: 1},
+		{name: "ShouldRollBackWhenTheRefreshTokenCannotBeWritten", issue: true, create: errors.New("real db failure"), expected: oauth2.ErrServerError, debug: []string{"real db failure"}, begins: 1, rollbacks: 1},
+		{name: "ShouldRollBackWhenTheCommitFails", issue: true, commit: errors.New("commit failure"), expected: oauth2.ErrServerError, debug: []string{"commit failure"}, begins: 1, commits: 1, rollbacks: 1},
+		{name: "ShouldKeepTheCauseWhenTheRollbackFails", issue: true, create: errors.New("real db failure"), rollback: errors.New("rollback failure"), expected: oauth2.ErrServerError, debug: []string{"real db failure", "rollback failure"}, begins: 1, rollbacks: 1},
 		{name: "ShouldNotBeginATransactionForASingleWrite", applied: 1},
 	}
 
@@ -216,7 +216,10 @@ func TestTokenExchangeWritesTheTokensAtomicallyWithoutRotation(t *testing.T) {
 
 				if tc.expected != nil {
 					require.ErrorIs(t, err, tc.expected)
-					assert.Contains(t, oauth2.ErrorToRFC6749Error(err).DebugField, tc.debug)
+
+					for _, debug := range tc.debug {
+						assert.Contains(t, oauth2.ErrorToRFC6749Error(err).DebugField, debug)
+					}
 				} else {
 					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 				}

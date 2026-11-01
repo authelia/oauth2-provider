@@ -42,6 +42,17 @@ type validateClientRegistrationTokenMethod interface {
 	ValidateClientRegistrationToken(ctx context.Context, requester oauth2.Requester, tokenString string) (err error)
 }
 
+// IsOpaqueClientRegistrationToken reports whether s.CoreStrategy recognises the token as a client registration token by
+// its format. The embedded hoauth2.CoreStrategy interface does not declare this method, and hoauth2.CoreValidator relies
+// on it to leave a prefixed client registration token to the next oauth2.TokenIntrospector.
+func (s CommonStrategy) IsOpaqueClientRegistrationToken(ctx context.Context, tokenString string) (is bool) {
+	strategy, ok := s.CoreStrategy.(interface {
+		IsOpaqueClientRegistrationToken(ctx context.Context, tokenString string) (is bool)
+	})
+
+	return ok && strategy.IsOpaqueClientRegistrationToken(ctx, tokenString)
+}
+
 // clientRegistrationTokenStrategy resolves s.CoreStrategy as an rfc7591.ClientRegistrationTokenStrategy, or returns
 // an error naming the CoreStrategy field and the specific methods it lacks. See the CommonStrategy doc comment for
 // why CoreStrategy, not CommonStrategy itself, is what must satisfy the interface.

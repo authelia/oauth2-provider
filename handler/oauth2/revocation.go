@@ -25,6 +25,13 @@ type TokenRevocationHandler struct {
 
 // RevokeToken implements https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 // The token type hint indicates which token type check should be performed first.
+//
+// A rotated refresh token presented by the client it was issued to revokes the grant, as RFC 7009 Section 2.1 permits and
+// as the token endpoint does for a reused refresh token, so the tokens which replaced it do not outlive the revocation.
+// One which is not intact is an invalid token, which RFC 7009 Section 2.2 answers with success and nothing revoked.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
+// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, tokenType oauth2.TokenType, client oauth2.Client) (err error) {
 	var handlers []RevocationTokenLookupFunc
 
@@ -39,9 +46,9 @@ func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, 
 
 	//nolint:prealloc
 	var (
-		request oauth2.Requester
-		tt      oauth2.TokenType
-		errs    []error
+		request, inactive oauth2.Requester
+		tt                oauth2.TokenType
+		errs              []error
 	)
 
 	for _, handler := range handlers {
@@ -49,11 +56,27 @@ func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, 
 			break
 		}
 
+		if tt == oauth2.RefreshToken && request != nil && errors.Is(err, oauth2.ErrInactiveToken) {
+			inactive = request
+		}
+
 		errs = append(errs, err)
 	}
 
 	if len(errs) == len(handlers) {
-		return r.handleErrors(errs)
+		if inactive == nil {
+			return r.handleErrors(errs)
+		}
+
+		if err = r.RefreshTokenStrategy.ValidateRefreshToken(ctx, inactive, token); !IsIntactToken(err) {
+			if !IsTokenRejection(err) {
+				errs = append(errs, err)
+			}
+
+			return r.handleErrors(errs)
+		}
+
+		request, tt = inactive, oauth2.RefreshToken
 	}
 
 	if request.GetClient().GetID() != client.GetID() {

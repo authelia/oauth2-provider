@@ -63,7 +63,8 @@ type RefreshTokenStorage interface {
 	//
 	// Make sure to also return the oauth2.Requester value when returning the oauth2.ErrInactiveToken error! The refresh
 	// token grant handler uses it to revoke every token derived from the same authorization grant when it detects that
-	// a refresh token has been reused.
+	// a refresh token has been reused, and the token revocation handler does the same when a client revokes a rotated
+	// refresh token. Without it the revocation of a rotated refresh token answers with success and revokes nothing.
 	GetRefreshTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error)
 
 	// DeleteRefreshTokenSession removes the session stored against the given refresh token signature.

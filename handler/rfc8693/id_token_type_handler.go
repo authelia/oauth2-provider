@@ -42,6 +42,8 @@ type IDTokenTypeHandler struct {
 // HandleTokenEndpointRequest implements RFC8693 Section 2.1 and the oauth2.TokenEndpointHandler.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
+//
+//nolint:gocyclo
 func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -95,7 +97,7 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 			return err
 		}
 
-		if !IsIDJAGRequest(ctx, request, c.Config) {
+		if !IsIDJAGRequest(ctx, request, c.Config) && !isTxnTokenRequest(ctx, request, c.Config) {
 			if err = validateSubjectTokenScope(request, nil); err != nil {
 				return err
 			}

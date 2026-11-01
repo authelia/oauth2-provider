@@ -54,6 +54,9 @@ var ErrHandlerOrder = errors.New("oauth2: handlers are registered in an order wh
 //     one, the order RFC8693TokenExchangeFactories declares. The grant handler validates the request and writes the
 //     RFC 8693 Section 4.1 'act' claim the token type handlers issue, and the validation handler enforces the RFC
 //     8693 Section 4.4 'may_act' claim on the tokens they validate.
+//   - Every rfc8693.TxnTokenTypeHandler is an RFC 8693 token type handler for that rule, and no other RFC 8693 token
+//     type handler may follow it, as it is the last to decline a request which is not for a Transaction Token (see
+//     draft-ietf-oauth-transaction-tokens-11 Section 11.2).
 //
 // Except for the RFC 8693 rule, a rule only applies when both handlers are registered.
 func ValidateHandlerOrder(config *oauth2.Config) (err error) {
@@ -122,7 +125,7 @@ func handlerPrecedes[Dependent, Dependency, Handler any](handlers []Handler) boo
 }
 
 func validateRFC8693HandlerOrder(config *oauth2.Config) (err error) {
-	var grant, typed, validator, grantUnordered, validatorUnordered bool
+	var grant, typed, validator, txn, grantUnordered, validatorUnordered, txnUnordered bool
 
 	for _, handler := range config.TokenEndpointHandlers {
 		switch handler.(type) {
@@ -132,11 +135,17 @@ func validateRFC8693HandlerOrder(config *oauth2.Config) (err error) {
 			if typed {
 				grantUnordered = true
 			}
-		case *rfc8693.AccessTokenTypeHandler, *rfc8693.RefreshTokenTypeHandler, *rfc8693.IDTokenTypeHandler, *rfc8693.CustomJWTTypeHandler, *idjag.IssueHandler:
+		case *rfc8693.AccessTokenTypeHandler, *rfc8693.RefreshTokenTypeHandler, *rfc8693.IDTokenTypeHandler, *rfc8693.CustomJWTTypeHandler, *idjag.IssueHandler, *rfc8693.TxnTokenTypeHandler:
 			typed = true
 
 			if validator {
 				validatorUnordered = true
+			}
+
+			if _, ok := handler.(*rfc8693.TxnTokenTypeHandler); ok {
+				txn = true
+			} else if txn {
+				txnUnordered = true
 			}
 		case *rfc8693.ActorTokenValidationHandler:
 			validator = true
@@ -159,6 +168,10 @@ func validateRFC8693HandlerOrder(config *oauth2.Config) (err error) {
 		err = errors.Join(err, fmt.Errorf("%w: the rfc8693.ActorTokenValidationHandler (RFC8693ActorTokenValidationFactory) must be registered with the other RFC 8693 handlers, as it requires a validated subject token and enforces the 'may_act' claim", ErrHandlerOrder))
 	case validatorUnordered:
 		err = errors.Join(err, fmt.Errorf("%w: the rfc8693.ActorTokenValidationHandler (RFC8693ActorTokenValidationFactory) must be registered after every RFC 8693 token type handler, as it enforces the 'may_act' claim on the tokens they validate", ErrHandlerOrder))
+	}
+
+	if txnUnordered {
+		err = errors.Join(err, fmt.Errorf("%w: the rfc8693.TxnTokenTypeHandler (RFC8693TxnTokenTypeFactory) must be registered after every other RFC 8693 token type handler, as it is the last to decline a request which is not for a Transaction Token", ErrHandlerOrder))
 	}
 
 	return err

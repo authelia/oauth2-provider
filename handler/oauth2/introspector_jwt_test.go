@@ -397,6 +397,7 @@ func BenchmarkIntrospectJWT(b *testing.B) {
 
 	assert.NoError(b, err)
 }
+
 func TestStatelessJWTValidatorTokenFormat(t *testing.T) {
 	const prefix = "authelia_%s_"
 

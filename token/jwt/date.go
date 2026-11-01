@@ -38,7 +38,13 @@ func (date *NumericDate) clone() *NumericDate {
 	return &cloned
 }
 
+const numericDateSecondsLimit = float64(1 << 62)
+
 func newNumericDateFromSeconds(f float64) *NumericDate {
+	// Converting a float64 outside the range of an int64 gives a result which differs between platforms, and a time.Time
+	// near the limits of an int64 does not compare correctly, so a value beyond the limit is treated as the limit.
+	f = max(min(f, numericDateSecondsLimit), -numericDateSecondsLimit)
+
 	round, frac := math.Modf(f)
 
 	return NewNumericDate(time.Unix(int64(round), int64(frac*1e9)))

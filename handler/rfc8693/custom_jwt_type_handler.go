@@ -34,6 +34,8 @@ import (
 // the 'subject_token' must instead be an assertion whose 'aud' claim includes the requesting client and whose 'typ' is
 // not an access token type, and its 'scope' claim does not limit the requested scopes.
 //
+// An issued custom JWT carries the granted scopes in its 'scope' claim, unless the session already sets that claim.
+//
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-5
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-4.2
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
@@ -379,6 +381,14 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	mapped := claims.ToMapClaims()
 
 	delete(mapped, consts.ClaimConfirmation)
+
+	// RFC 8693 Section 5 suggests the 'scope' claim to restrict the contexts in which delegated rights can be exercised,
+	// and Section 4.2 defines it as a space-separated list. A value the session already carries is kept.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-4.2
+	if _, exists := mapped[consts.ClaimScope]; !exists && len(request.GetGrantedScopes()) > 0 {
+		mapped[consts.ClaimScope] = strings.Join(request.GetGrantedScopes(), " ")
+	}
 
 	headers := stripIDTokenConfirmationHeader(session.IDTokenHeaders())
 

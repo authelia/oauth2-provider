@@ -1555,7 +1555,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					EXPECT().
 					GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
 					Return(request, nil).
-					Times(1)
+					Times(2)
 				mockRevocationStore.
 					EXPECT().
 					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).
@@ -1582,7 +1582,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					EXPECT().
 					GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
 					Return(request, nil).
-					Times(1)
+					Times(2)
 				mockRevocationStore.
 					EXPECT().
 					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).
@@ -1683,7 +1683,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					EXPECT().
 					GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
 					Return(request, nil).
-					Times(1)
+					Times(2)
 				mockRevocationStore.
 					EXPECT().
 					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).
@@ -1796,7 +1796,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 					EXPECT().
 					GetRefreshTokenSession(propagatedContext, gomock.Any(), nil).
 					Return(request, nil).
-					Times(1)
+					Times(2)
 				mockRevocationStore.
 					EXPECT().
 					RotateRefreshToken(propagatedContext, gomock.Any(), gomock.Any()).

@@ -32,6 +32,10 @@ type AuthorizeCodeStorage interface {
 	// InvalidateAuthorizeCodeSession is called when an authorize code is being used. The state of the authorization
 	// code should be set to invalid and consecutive requests to GetAuthorizeCodeSession should return the
 	// ErrInvalidatedAuthorizeCode error.
+	//
+	// It may return oauth2.ErrSerializationFailure when a concurrent transaction prevents it. GetAuthorizeCodeSession MUST
+	// then return ErrInvalidatedAuthorizeCode, with the oauth2.Requester, if that transaction committed the invalidation,
+	// when called with a context outside the transaction this request rolled back, so that the grant can be revoked.
 	InvalidateAuthorizeCodeSession(ctx context.Context, code string) (err error)
 }
 
@@ -85,6 +89,10 @@ type RefreshTokenStorage interface {
 	// This method should return the oauth2.ErrInactiveToken error when the refresh token was already deactivated, for
 	// example by a concurrent request that rotated it first. The refresh token grant handler treats that as a reused
 	// refresh token and revokes every token derived from the same authorization grant.
+	//
+	// It may return oauth2.ErrSerializationFailure when a concurrent transaction prevents it. GetRefreshTokenSession MUST
+	// then return oauth2.ErrInactiveToken if that transaction committed the rotation, when called with a context outside
+	// the transaction this request rolled back, so that the grant can be revoked.
 	//
 	// Implementations that support a refresh token grace period should instead mark the refresh token as expiring
 	// after the grace period rather than deactivating it immediately, so that concurrent requests made by the same

@@ -129,6 +129,57 @@ func TestTokenExchangeConcurrentRefreshTokenSubjectRevokesTheIssuedToken(t *test
 	}
 }
 
+func TestTokenExchangeSerializationFailure(t *testing.T) {
+	testCases := []struct {
+		name   string
+		winner bool
+	}{
+		{name: "ShouldRevokeWhenAnotherRequestRotatedTheToken", winner: true},
+		{name: "ShouldKeepTheTokenForContention"},
+	}
+
+	for _, sc := range bindingExchangeStores() {
+		for _, tokenType := range []string{consts.TokenTypeRFC8693AccessToken, consts.TokenTypeRFC8693RefreshToken} {
+			for _, tc := range testCases {
+				t.Run(sc.name+"/"+tokenType+"/"+tc.name, func(t *testing.T) {
+					f := newRotationFixture(t, sc.newStore())
+
+					signature := f.strategy.RefreshTokenSignature(t.Context(), f.subject)
+
+					request, err := f.store.GetRefreshTokenSession(t.Context(), signature, &oauth2.DefaultSession{})
+					require.NoError(t, err)
+
+					store := &rotationSerializationStore{TokenRevocationStorage: f.store}
+
+					if tc.winner {
+						store.failure = func(ctx context.Context) {
+							require.NoError(t, f.store.RotateRefreshToken(ctx, request.GetID(), signature))
+							require.NoError(t, f.store.CreateRefreshTokenSession(ctx, "winner-rt", "", request))
+						}
+					}
+
+					f.access.TokenRevocationStorage = store
+					f.refresh.TokenRevocationStorage = store
+
+					_, err = f.exchange(t, tokenType)
+					require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+
+					_, errSubject := f.store.GetRefreshTokenSession(t.Context(), signature, nil)
+
+					if !tc.winner {
+						assert.NoError(t, errSubject)
+
+						return
+					}
+
+					_, err = f.store.GetRefreshTokenSession(t.Context(), "winner-rt", nil)
+					assert.ErrorIs(t, err, oauth2.ErrInactiveToken)
+				})
+			}
+		}
+	}
+}
+
 func TestTokenExchangeDoesNotRotateWithoutIssuingARefreshToken(t *testing.T) {
 	for _, sc := range bindingExchangeStores() {
 		t.Run(sc.name, func(t *testing.T) {
@@ -186,6 +237,20 @@ func (b *rotationBarrier) RotateRefreshToken(ctx context.Context, requestID, sig
 	case <-time.After(10 * time.Second):
 		return errors.New("timed out waiting for the concurrent exchange")
 	}
+}
+
+type rotationSerializationStore struct {
+	hoauth2.TokenRevocationStorage
+
+	failure func(ctx context.Context)
+}
+
+func (s *rotationSerializationStore) RotateRefreshToken(ctx context.Context, _, _ string) error {
+	if s.failure != nil {
+		s.failure(ctx)
+	}
+
+	return oauth2.ErrSerializationFailure
 }
 
 type rotationFixture struct {

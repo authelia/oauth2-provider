@@ -38,6 +38,11 @@ type Storage interface {
 	// InvalidateDeviceCodeSession is called when a device code is being used. The state of the user
 	// code should be set to invalid and consecutive requests to GetDeviceCodeSession should return the
 	// oauth2.ErrInvalidatedDeviceCode error.
+	//
+	// It may return oauth2.ErrSerializationFailure when a concurrent transaction prevents it. GetDeviceCodeSession MUST
+	// then return oauth2.ErrInvalidatedDeviceCode, with the oauth2.Requester, if that transaction committed the
+	// invalidation, when called with a context outside the transaction this request rolled back, so that the grant can be
+	// revoked.
 	InvalidateDeviceCodeSession(ctx context.Context, signature string) (err error)
 }
 

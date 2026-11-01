@@ -398,12 +398,16 @@ func (c *TokenExchangeGrantHandler) consume(ctx context.Context, request oauth2.
 	}
 
 	for _, m := range markers {
-		if c.Storage.SetTokenExchangeCustomJWT(ctx, m.iss, m.jti, m.exp) != nil {
-			if err = storage.MaybeRollbackTx(ctx, c.Storage); err != nil {
-				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		if err = c.Storage.SetTokenExchangeCustomJWT(ctx, m.iss, m.jti, m.exp); err != nil {
+			if rollback := storage.MaybeRollbackTx(ctx, c.Storage); rollback != nil {
+				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(rollback).WithDebugError(rollback))
 			}
 
-			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from the token must be used only once."))
+			if errors.Is(err, oauth2.ErrJTIKnown) {
+				return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from the token must be used only once.").WithWrap(err))
+			}
+
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	}
 
@@ -537,6 +541,14 @@ func RequireActorToken(request oauth2.AccessRequester) (err error) {
 // CapToSubjectTokenExpiry returns the earlier of expires and the expiry of the validated 'subject_token'.
 func CapToSubjectTokenExpiry(request oauth2.Requester, expires time.Time) time.Time {
 	return capToSubjectTokenExpiry(request, expires)
+}
+
+func errExchangeTokenLookup(err error) error {
+	if errors.Is(err, oauth2.ErrNotFound) || errors.Is(err, oauth2.ErrInactiveToken) || hoauth2.IsTokenRejection(err) {
+		return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
+	}
+
+	return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 }
 
 func errExchangeTokenValidation(err error) error {

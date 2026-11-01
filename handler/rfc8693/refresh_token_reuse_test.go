@@ -274,7 +274,7 @@ func TestRefreshTokenTypeHandlerAppliesTheRefreshTokenGrantChecks(t *testing.T) 
 					assert.ErrorIs(t, aerr, oauth2.ErrNotFound)
 
 					_, err = store.GetRefreshTokenSession(ctx, family.presentedSignature, &oauth2.DefaultSession{})
-					assert.ErrorIs(t, err, oauth2.ErrNotFound)
+					assert.ErrorIs(t, err, oauth2.ErrInactiveToken)
 				} else {
 					assert.NoError(t, err)
 					assert.NoError(t, aerr)

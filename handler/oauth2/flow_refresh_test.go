@@ -562,11 +562,6 @@ func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					Times(1)
 				mockRevocationStore.
 					EXPECT().
-					DeleteRefreshTokenSession(ctx, gomock.Any()).
-					Return(nil).
-					Times(1)
-				mockRevocationStore.
-					EXPECT().
 					RevokeRefreshToken(ctx, gomock.Any()).
 					Return(nil).
 					Times(1)
@@ -1429,10 +1424,6 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 						Return(propagatedContext, nil),
 					mockRevocationStore.
 						EXPECT().
-						DeleteRefreshTokenSession(propagatedContext, gomock.Any()).
-						Return(nil),
-					mockRevocationStore.
-						EXPECT().
 						RevokeRefreshToken(propagatedContext, "req-id").
 						Return(nil),
 					mockRevocationStore.
@@ -1495,10 +1486,6 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 						EXPECT().
 						BeginTX(propagatedContext).
 						Return(propagatedContext, nil),
-					mockRevocationStore.
-						EXPECT().
-						DeleteRefreshTokenSession(propagatedContext, gomock.Any()).
-						Return(nil),
 					mockRevocationStore.
 						EXPECT().
 						RevokeRefreshToken(propagatedContext, "req-id").

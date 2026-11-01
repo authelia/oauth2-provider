@@ -6,6 +6,7 @@ package rfc8693_test
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"net/url"
 	"testing"
@@ -144,6 +145,10 @@ func TestCustomJWTSubjectLookupError(t *testing.T) {
 		{name: "ShouldAnswerServerErrorForAServerSideRFCError", err: oauth2.ErrTemporarilyUnavailable, expected: oauth2.ErrServerError},
 		{name: "ShouldAnswerInvalidRequestForAnUnknownSubject", err: oauth2.ErrNotFound, expected: oauth2.ErrInvalidRequest, hint: "The 'subject_token' does not identify a subject."},
 		{name: "ShouldKeepARejection", err: oauth2.ErrInvalidRequest.WithHint("No subject found."), expected: oauth2.ErrInvalidRequest, hint: "No subject found."},
+		{name: "ShouldAnswerServerErrorForADecodeError", err: base64.CorruptInputError(1), expected: oauth2.ErrServerError},
+		{name: "ShouldKeepAServerErrorWrappingAnUnknownSubject", err: oauth2.ErrServerError.WithWrap(oauth2.ErrNotFound), expected: oauth2.ErrServerError},
+		{name: "ShouldKeepARefusalWrappingAnUnknownSubject", err: oauth2.ErrAccessDenied.WithWrap(oauth2.ErrNotFound), expected: oauth2.ErrAccessDenied},
+		{name: "ShouldAnswerInvalidRequestForAWrappedUnknownSubject", err: errorsx.WithStack(oauth2.ErrNotFound), expected: oauth2.ErrInvalidRequest, hint: "The 'subject_token' does not identify a subject."},
 	}
 
 	for _, tc := range testCases {
@@ -157,6 +162,7 @@ func TestCustomJWTSubjectLookupError(t *testing.T) {
 			}))
 
 			require.ErrorIs(t, err, tc.expected)
+			assert.Equal(t, tc.expected.(*oauth2.RFC6749Error).ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
 
 			if tc.hint != "" {
 				assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)

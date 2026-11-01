@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"maps"
+	"net/http"
 	"reflect"
 	"slices"
 	"strings"
@@ -552,13 +553,15 @@ func errExchangeTokenLookup(err error) error {
 }
 
 func errExchangeSubjectLookup(err error) error {
+	var rfc *oauth2.RFC6749Error
+
 	switch {
-	case errors.Is(err, oauth2.ErrNotFound):
-		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' does not identify a subject.", consts.FormParameterSubjectToken).WithWrap(err).WithDebugError(err))
-	case hoauth2.IsTokenRejection(err):
-		return errors.WithStack(err)
-	default:
+	case !errors.As(err, &rfc), rfc.CodeField >= http.StatusInternalServerError:
 		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	case rfc.ErrorField == oauth2.ErrNotFound.ErrorField:
+		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' does not identify a subject.", consts.FormParameterSubjectToken).WithWrap(err).WithDebugError(err))
+	default:
+		return errors.WithStack(err)
 	}
 }
 

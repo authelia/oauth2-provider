@@ -1,0 +1,183 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package rfc8693_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"authelia.com/provider/oauth2"
+	. "authelia.com/provider/oauth2/handler/rfc8693"
+	"authelia.com/provider/oauth2/internal/consts"
+)
+
+func TestTokenExchangeRotatesRefreshTokenSubject(t *testing.T) {
+	testCases := []struct {
+		name          string
+		configDisable bool
+		clientDisable bool
+		override      bool
+		rotate        bool
+		rotated       bool
+	}{
+		{name: "ShouldRotateByDefault", rotated: true},
+		{name: "ShouldNotRotateWhenDisabledByConfig", configDisable: true},
+		{name: "ShouldNotRotateWhenDisabledByClient", clientDisable: true},
+		{name: "ShouldRotateWhenOverriddenOverConfig", configDisable: true, override: true, rotate: true, rotated: true},
+		{name: "ShouldRotateWhenOverriddenOverClient", clientDisable: true, override: true, rotate: true, rotated: true},
+		{name: "ShouldNotRotateWhenOverridden", override: true},
+		{name: "ShouldIgnoreTheValueWithoutTheOverride", rotate: true, configDisable: true},
+	}
+
+	requested := []string{consts.TokenTypeRFC8693AccessToken, consts.TokenTypeRFC8693RefreshToken}
+
+	for _, sc := range bindingExchangeStores() {
+		for _, tokenType := range requested {
+			for _, tc := range testCases {
+				t.Run(sc.name+"/"+tokenType+"/"+tc.name, func(t *testing.T) {
+					f := newRotationFixture(t, sc.newStore())
+					f.config.DisableRefreshTokenRotation = tc.configDisable
+					f.client.DisableRefreshTokenRotation = tc.clientDisable
+					f.client.TokenExchangeRefreshTokenRotationOverride = tc.override
+					f.client.TokenExchangeRefreshTokenRotation = tc.rotate
+
+					issued, err := f.exchange(t, tokenType)
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+					assert.NotEqual(t, f.subject, issued)
+
+					_, err = f.store.GetRefreshTokenSession(t.Context(), f.strategy.RefreshTokenSignature(t.Context(), f.subject), nil)
+
+					if tc.rotated {
+						assert.ErrorIs(t, err, oauth2.ErrInactiveToken)
+					} else {
+						assert.NoError(t, err)
+					}
+
+					_, err = f.store.GetRefreshTokenSession(t.Context(), f.strategy.RefreshTokenSignature(t.Context(), issued), nil)
+					assert.NoError(t, err)
+				})
+			}
+		}
+	}
+}
+
+func TestTokenExchangeRefreshTokenSubjectReplayRevokesTheIssuedToken(t *testing.T) {
+	for _, sc := range bindingExchangeStores() {
+		for _, tokenType := range []string{consts.TokenTypeRFC8693AccessToken, consts.TokenTypeRFC8693RefreshToken} {
+			t.Run(sc.name+"/"+tokenType, func(t *testing.T) {
+				f := newRotationFixture(t, sc.newStore())
+
+				issued, err := f.exchange(t, tokenType)
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				_, err = f.exchange(t, tokenType)
+				require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+
+				_, err = f.store.GetRefreshTokenSession(t.Context(), f.strategy.RefreshTokenSignature(t.Context(), issued), nil)
+				assert.Error(t, err)
+			})
+		}
+	}
+}
+
+func TestTokenExchangeDoesNotRotateWithoutIssuingARefreshToken(t *testing.T) {
+	for _, sc := range bindingExchangeStores() {
+		t.Run(sc.name, func(t *testing.T) {
+			f := newRotationFixture(t, sc.newStore())
+			f.client.TokenExchangeRefreshToken = false
+
+			_, err := f.exchange(t, consts.TokenTypeRFC8693AccessToken)
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			_, err = f.store.GetRefreshTokenSession(t.Context(), f.strategy.RefreshTokenSignature(t.Context(), f.subject), nil)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestTokenExchangeRotationRefusedWithoutRevocationStorage(t *testing.T) {
+	for _, sc := range bindingExchangeStores() {
+		t.Run(sc.name, func(t *testing.T) {
+			f := newRotationFixture(t, sc.newStore())
+			f.access.TokenRevocationStorage = nil
+
+			_, err := f.exchange(t, consts.TokenTypeRFC8693AccessToken)
+			require.ErrorIs(t, err, oauth2.ErrServerError)
+
+			_, err = f.store.GetRefreshTokenSession(t.Context(), f.strategy.RefreshTokenSignature(t.Context(), f.subject), nil)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+type rotationFixture struct {
+	config   *oauth2.Config
+	store    rfc8693ExchangeStore
+	strategy interface {
+		RefreshTokenSignature(ctx context.Context, token string) string
+	}
+	client  *oauth2.DefaultRegisteredClient
+	access  *AccessTokenTypeHandler
+	refresh *RefreshTokenTypeHandler
+	subject string
+}
+
+func newRotationFixture(t *testing.T, store rfc8693ExchangeStore) *rotationFixture {
+	t.Helper()
+
+	config, strategy := newBindingExchangeConfig()
+	config.RefreshTokenScopes = []string{}
+	config.RFC8693TokenTypes[consts.TokenTypeRFC8693RefreshToken] = &DefaultTokenType{Name: consts.TokenTypeRFC8693RefreshToken}
+
+	client := store.GetClients()["my-client"].(*oauth2.DefaultClient)
+
+	access := newLifetimeAccessTokenHandler(config, strategy, store)
+	access.RefreshTokenScopes = []string{}
+
+	refresh := newLifetimeRefreshTokenHandler(config, strategy, store)
+	refresh.RefreshTokenScopes = []string{}
+
+	return &rotationFixture{
+		config:   config,
+		store:    store,
+		strategy: strategy,
+		client:   &oauth2.DefaultRegisteredClient{DefaultClient: client, TokenExchangeRefreshToken: true},
+		access:   access,
+		refresh:  refresh,
+		subject:  chainSubjectToken(t, strategy, store, client, newOptInSubject(), true),
+	}
+}
+
+func (f *rotationFixture) exchange(t *testing.T, tokenType string) (issued string, err error) {
+	t.Helper()
+
+	request := newLifetimeExchangeRequest(f.store, consts.TokenTypeRFC8693RefreshToken, f.subject, tokenType)
+	request.Client = f.client
+
+	if err = f.refresh.HandleTokenEndpointRequest(t.Context(), request); err != nil {
+		return "", err
+	}
+
+	response := oauth2.NewAccessResponse()
+
+	if tokenType == consts.TokenTypeRFC8693RefreshToken {
+		if err = f.refresh.PopulateTokenEndpointResponse(t.Context(), request, response); err != nil {
+			return "", err
+		}
+
+		return response.GetAccessToken(), nil
+	}
+
+	if err = f.access.PopulateTokenEndpointResponse(t.Context(), request, response); err != nil {
+		return "", err
+	}
+
+	issued, _ = response.GetExtra(consts.FormParameterRefreshToken).(string)
+
+	return issued, nil
+}

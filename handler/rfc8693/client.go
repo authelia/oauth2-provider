@@ -82,6 +82,19 @@ type RefreshTokenIssuanceClient interface {
 	GetAllowTokenExchangeRefreshToken() (allow bool)
 }
 
+// RefreshTokenRotationOverrideClient is an optional client interface. A token exchange which issues a refresh token
+// rotates a refresh token 'subject_token' unless oauth2.IsRefreshTokenRotationDisabledForRequest disables rotation, and
+// this interface lets a client decide that for itself instead. It does not change the refresh token grant.
+type RefreshTokenRotationOverrideClient interface {
+	// GetOverrideTokenExchangeRefreshTokenRotation reports whether GetTokenExchangeRefreshTokenRotation decides if the
+	// token exchange rotates the client's refresh token 'subject_token'.
+	GetOverrideTokenExchangeRefreshTokenRotation() (override bool)
+
+	// GetTokenExchangeRefreshTokenRotation reports whether the token exchange rotates the client's refresh token
+	// 'subject_token' when GetOverrideTokenExchangeRefreshTokenRotation returns true.
+	GetTokenExchangeRefreshTokenRotation() (rotate bool)
+}
+
 // AuthorizationGrantIssuanceClient is an optional client interface. A client which does not implement it is not issued
 // a JWT authorization grant by a token exchange.
 type AuthorizationGrantIssuanceClient interface {

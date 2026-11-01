@@ -682,6 +682,8 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 		CoreStrategy:         coreStrategy,
 		ScopeStrategy:        cfg.ScopeStrategy,
 		Storage:              store,
+
+		TokenRevocationStorage: store,
 	}
 
 	refresh := &RefreshTokenTypeHandler{
@@ -690,6 +692,8 @@ func runTokenExchange(t *testing.T, requestedType string) *oauth2.AccessResponse
 		CoreStrategy:         coreStrategy,
 		ScopeStrategy:        cfg.ScopeStrategy,
 		Storage:              store,
+
+		TokenRevocationStorage: store,
 	}
 
 	idt := &IDTokenTypeHandler{

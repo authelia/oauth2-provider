@@ -100,6 +100,16 @@ type DefaultRegisteredClient struct {
 	// no registration metadata, so a client cannot grant it to itself.
 	TokenExchangeAuthorizationGrant bool `json:"token_exchange_authorization_grant"`
 
+	// TokenExchangeRefreshTokenRotationOverride makes TokenExchangeRefreshTokenRotation decide whether a token exchange
+	// rotates this client's refresh token 'subject_token', in place of the refresh token rotation options. It has no
+	// registration metadata, so a client cannot set it itself.
+	TokenExchangeRefreshTokenRotationOverride bool `json:"token_exchange_refresh_token_rotation_override"`
+
+	// TokenExchangeRefreshTokenRotation is whether a token exchange rotates this client's refresh token 'subject_token'
+	// when TokenExchangeRefreshTokenRotationOverride is set. It has no registration metadata, so a client cannot set it
+	// itself.
+	TokenExchangeRefreshTokenRotation bool `json:"token_exchange_refresh_token_rotation"`
+
 	// AuthorizationGrantProfilesSupported is the advisory list of authorization grant profiles the client implements.
 	AuthorizationGrantProfilesSupported []string `json:"authorization_grant_profiles_supported"`
 
@@ -613,6 +623,18 @@ func (c *DefaultRegisteredClient) GetAllowTokenExchangeRefreshToken() (allow boo
 // client.
 func (c *DefaultRegisteredClient) GetAllowTokenExchangeAuthorizationGrant() (allow bool) {
 	return c.TokenExchangeAuthorizationGrant
+}
+
+// GetOverrideTokenExchangeRefreshTokenRotation reports whether GetTokenExchangeRefreshTokenRotation decides if a token
+// exchange rotates this client's refresh token 'subject_token'.
+func (c *DefaultRegisteredClient) GetOverrideTokenExchangeRefreshTokenRotation() (override bool) {
+	return c.TokenExchangeRefreshTokenRotationOverride
+}
+
+// GetTokenExchangeRefreshTokenRotation reports whether a token exchange rotates this client's refresh token
+// 'subject_token' when GetOverrideTokenExchangeRefreshTokenRotation is true.
+func (c *DefaultRegisteredClient) GetTokenExchangeRefreshTokenRotation() (rotate bool) {
+	return c.TokenExchangeRefreshTokenRotation
 }
 
 var (

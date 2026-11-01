@@ -76,6 +76,8 @@ func (s *DefaultClientRegistrationStrategy) PatchClient(ctx context.Context, cli
 	replacement.TokenExchangeOwnAccessToken = registered.TokenExchangeOwnAccessToken
 	replacement.TokenExchangeRefreshToken = registered.TokenExchangeRefreshToken
 	replacement.TokenExchangeAuthorizationGrant = registered.TokenExchangeAuthorizationGrant
+	replacement.TokenExchangeRefreshTokenRotationOverride = registered.TokenExchangeRefreshTokenRotationOverride
+	replacement.TokenExchangeRefreshTokenRotation = registered.TokenExchangeRefreshTokenRotation
 
 	if secret == nil {
 		replacement.ClientSecret = registered.ClientSecret

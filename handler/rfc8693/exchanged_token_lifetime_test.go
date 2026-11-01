@@ -463,6 +463,8 @@ func newLifetimeAccessTokenHandler(config *oauth2.Config, coreStrategy hoauth2.C
 		CoreStrategy:         coreStrategy,
 		ScopeStrategy:        config.ScopeStrategy,
 		Storage:              store,
+
+		TokenRevocationStorage: store,
 	}
 }
 
@@ -473,6 +475,8 @@ func newLifetimeRefreshTokenHandler(config *oauth2.Config, coreStrategy hoauth2.
 		CoreStrategy:         coreStrategy,
 		ScopeStrategy:        config.ScopeStrategy,
 		Storage:              store,
+
+		TokenRevocationStorage: store,
 	}
 }
 

@@ -48,7 +48,9 @@ func RFC8693TokenExchangeGrantFactory(config oauth2.Configurator, storage any, _
 }
 
 // RFC8693AccessTokenTypeFactory creates the handler that exchanges to an opaque OAuth 2.0 access token. Pulls
-// AccessToken/RefreshToken lifespans from the configurator at construction time.
+// AccessToken/RefreshToken lifespans from the configurator at construction time. The storage must implement
+// hoauth2.TokenRevocationStorage, which rotates a refresh token 'subject_token' when a refresh token is issued with the
+// access token.
 func RFC8693AccessTokenTypeFactory(config oauth2.Configurator, storage any, strategy any) any {
 	ctx := context.Background()
 
@@ -60,6 +62,8 @@ func RFC8693AccessTokenTypeFactory(config oauth2.Configurator, storage any, stra
 		ScopeStrategy:        config.GetScopeStrategy(ctx),
 		CoreStrategy:         strategy.(hoauth2.CoreStrategy),
 		Storage:              storage.(rfc8693.Storage),
+
+		TokenRevocationStorage: storage.(hoauth2.TokenRevocationStorage),
 	}
 }
 

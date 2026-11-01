@@ -102,7 +102,9 @@ type Config struct {
 	// a new one. The refresh token keeps the expiry it was issued with, and access tokens previously issued for the
 	// grant are revoked. FAPI 2.0 Security Profile Section 5.3.2.1 permits rotation only in extraordinary circumstances.
 	// It does not apply to a public client whose refresh token is not sender-constrained by an enabled DPoP or mTLS
-	// binding, as RFC 9700 Section 4.14.2 requires such a refresh token to be rotated.
+	// binding, as RFC 9700 Section 4.14.2 requires such a refresh token to be rotated. A token exchange which issues a
+	// refresh token also keeps a refresh token 'subject_token', unless the client overrides this with
+	// rfc8693.RefreshTokenRotationOverrideClient.
 	DisableRefreshTokenRotation bool
 
 	// SendDebugMessagesToClients if set to true, includes error debug messages in response payloads. Be aware that sensitive

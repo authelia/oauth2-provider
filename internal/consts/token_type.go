@@ -21,4 +21,19 @@ const (
 	TokenTypeRFC8693SAML1        = "urn:ietf:params:oauth:token-type:saml1"         //nolint:gosec // This is a credential type, not a credential.
 	TokenTypeRFC8693SAML2        = "urn:ietf:params:oauth:token-type:saml2"         //nolint:gosec // This is a credential type, not a credential.
 	TokenTypeRFC8693IDJAG        = "urn:ietf:params:oauth:token-type:id-jag"        //nolint:gosec // This is a credential type, not a credential.
+
+	// TokenTypeRFC8693TxnToken identifies a Transaction Token.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.1
+	TokenTypeRFC8693TxnToken = "urn:ietf:params:oauth:token-type:txn_token" //nolint:gosec // This is a credential type, not a credential.
+
+	// TokenTypeRFC8693SelfSigned identifies a self-signed JWT subject token.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.2.1
+	TokenTypeRFC8693SelfSigned = "urn:ietf:params:oauth:token-type:self_signed" //nolint:gosec // This is a credential type, not a credential.
+
+	// TokenTypeRFC8693UnsignedJSON identifies an unsigned JSON subject token.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.2.2
+	TokenTypeRFC8693UnsignedJSON = "urn:ietf:params:oauth:token-type:unsigned_json" //nolint:gosec // This is a credential type, not a credential.
 )

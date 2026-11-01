@@ -127,7 +127,7 @@ func TestValidateHandlerOrderAuthorizeEndpoint(t *testing.T) {
 
 func TestValidateHandlerOrderRFC8693(t *testing.T) {
 	grant, access, refresh, validator := &rfc8693.TokenExchangeGrantHandler{}, &rfc8693.AccessTokenTypeHandler{}, &rfc8693.RefreshTokenTypeHandler{}, &rfc8693.ActorTokenValidationHandler{}
-	id, custom := &rfc8693.IDTokenTypeHandler{}, &rfc8693.CustomJWTTypeHandler{}
+	id, custom, txn := &rfc8693.IDTokenTypeHandler{}, &rfc8693.CustomJWTTypeHandler{}, &rfc8693.TxnTokenTypeHandler{}
 
 	testCases := []struct {
 		name     string
@@ -144,6 +144,11 @@ func TestValidateHandlerOrderRFC8693(t *testing.T) {
 		{name: "ShouldRejectTheValidationHandlerBeforeATypeHandler", handlers: oauth2.TokenEndpointHandlers{grant, validator, access}, err: "rfc8693.ActorTokenValidationHandler (RFC8693ActorTokenValidationFactory) must be registered after"},
 		{name: "ShouldRejectTheValidationHandlerBeforeTheIDTokenTypeHandler", handlers: oauth2.TokenEndpointHandlers{grant, access, validator, id}, err: "must be registered after every RFC 8693 token type handler"},
 		{name: "ShouldRejectAMissingValidationHandler", handlers: oauth2.TokenEndpointHandlers{grant, access}, err: "rfc8693.ActorTokenValidationHandler (RFC8693ActorTokenValidationFactory) must be registered with"},
+		{name: "ShouldPassWithTheTxnTokenTypeHandlerLast", handlers: oauth2.TokenEndpointHandlers{grant, access, refresh, id, custom, txn, validator}},
+		{name: "ShouldRejectTheGrantHandlerAfterTheTxnTokenTypeHandler", handlers: oauth2.TokenEndpointHandlers{txn, grant, validator}, err: "must be registered before every RFC 8693 token type handler"},
+		{name: "ShouldRejectTheValidationHandlerBeforeTheTxnTokenTypeHandler", handlers: oauth2.TokenEndpointHandlers{grant, validator, txn}, err: "must be registered after every RFC 8693 token type handler"},
+		{name: "ShouldRejectATypeHandlerAfterTheTxnTokenTypeHandler", handlers: oauth2.TokenEndpointHandlers{grant, txn, access, validator}, err: "rfc8693.TxnTokenTypeHandler (RFC8693TxnTokenTypeFactory) must be registered after every other RFC 8693 token type handler"},
+		{name: "ShouldRejectTheCustomJWTTypeHandlerAfterTheTxnTokenTypeHandler", handlers: oauth2.TokenEndpointHandlers{grant, txn, custom, validator}, err: "must be registered after every other RFC 8693 token type handler"},
 	}
 
 	for _, tc := range testCases {

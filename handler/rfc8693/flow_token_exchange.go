@@ -33,8 +33,9 @@ type TokenExchangeGrantHandler struct {
 	AudienceStrategy oauth2.AudienceStrategy
 	ResourceStrategy oauth2.ResourceStrategy
 
-	// Storage marks a custom JWT presented as a subject or actor token as used. It is required when a *JWTType
-	// sets ValidateJTI.
+	// Storage marks a custom or self-signed JWT presented as a subject or actor token as used. It is required when a
+	// *JWTType or *SelfSignedTokenType sets ValidateJTI, other than on a request for a Transaction Token, where
+	// TxnTokenTypeHandler.JTIStorage marks it once the token is signed.
 	Storage CustomJWTStorage
 }
 
@@ -149,7 +150,8 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
-	if tt := configTypesSupported[requestedTokenType]; tt == nil {
+	switch configTypesSupported[requestedTokenType].(type) {
+	case nil, *SelfSignedTokenType, *UnsignedJSONTokenType:
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
 	}
 
@@ -169,6 +171,12 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		}
 
 		return nil
+	}
+
+	if txnType, isTxn := configTypesSupported[requestedTokenType].(*TxnTokenType); isTxn && txnType != nil {
+		if err = validateTxnTokenRequest(ctx, request, c.Config, txnType); err != nil {
+			return err
+		}
 	}
 
 	if authorizationGrantType(ctx, request, c.Config) != nil {
@@ -329,7 +337,7 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		return err
 	}
 
-	if _, delegated := session.GetSubjectToken()[consts.ClaimActor]; delegated && act == nil && authorizationGrantType(ctx, request, c.Config) == nil {
+	if _, delegated := session.GetSubjectToken()[consts.ClaimActor]; delegated && act == nil && authorizationGrantType(ctx, request, c.Config) == nil && !isTxnTokenReplacement(ctx, request, c.Config) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The subject token has an '%s' claim so an '%s' is required.", consts.ClaimActor, consts.FormParameterActorToken))
 	}
 
@@ -337,8 +345,10 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		return errRefreshTokenIssuance()
 	}
 
-	if err = c.consume(ctx, request, session); err != nil {
-		return err
+	if !isTxnTokenRequest(ctx, request, c.Config) {
+		if err = consumeTokenJTIs(ctx, c.Config, c.Storage, request, session); err != nil {
+			return err
+		}
 	}
 
 	if act != nil {
@@ -348,9 +358,9 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 	return nil
 }
 
-func (c *TokenExchangeGrantHandler) consume(ctx context.Context, request oauth2.AccessRequester, session Session) (err error) {
+func consumeTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, store CustomJWTStorage, request oauth2.AccessRequester, session Session) (err error) {
 	form := request.GetRequestForm()
-	types := c.Config.GetRFC8693TokenTypes(ctx)
+	types := config.GetRFC8693TokenTypes(ctx)
 
 	presented := []struct {
 		kind   string
@@ -368,11 +378,11 @@ func (c *TokenExchangeGrantHandler) consume(ctx context.Context, request oauth2.
 	var markers []marker
 
 	for _, token := range presented {
-		if jwtType, ok := types[token.kind].(*JWTType); !ok || jwtType == nil || !jwtType.ValidateJTI {
+		if !validatesJTI(types[token.kind]) {
 			continue
 		}
 
-		if c.Storage == nil {
+		if store == nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the storage required to validate the 'jti' claim of a JSON Web Token is not configured."))
 		}
 
@@ -394,13 +404,13 @@ func (c *TokenExchangeGrantHandler) consume(ctx context.Context, request oauth2.
 		return nil
 	}
 
-	if ctx, err = storage.MaybeBeginTx(ctx, c.Storage); err != nil {
+	if ctx, err = storage.MaybeBeginTx(ctx, store); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	for _, m := range markers {
-		if err = c.Storage.SetTokenExchangeCustomJWT(ctx, m.iss, m.jti, m.exp); err != nil {
-			if rollback := storage.MaybeRollbackTx(ctx, c.Storage); rollback != nil {
+		if err = store.SetTokenExchangeCustomJWT(ctx, m.iss, m.jti, m.exp); err != nil {
+			if rollback := storage.MaybeRollbackTx(ctx, store); rollback != nil {
 				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(rollback).WithDebugError(rollback))
 			}
 
@@ -412,11 +422,22 @@ func (c *TokenExchangeGrantHandler) consume(ctx context.Context, request oauth2.
 		}
 	}
 
-	if err = storage.MaybeCommitTx(ctx, c.Storage); err != nil {
+	if err = storage.MaybeCommitTx(ctx, store); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	return nil
+}
+
+func validatesJTI(tokenType oauth2.RFC8693TokenType) bool {
+	switch t := tokenType.(type) {
+	case *JWTType:
+		return t != nil && t.ValidateJTI
+	case *SelfSignedTokenType:
+		return t != nil && t.ValidateJTI
+	default:
+		return false
+	}
 }
 
 // buildActClaim derives the RFC 8693 §4.1 'act' claim for the issued token from the actor_token's 'sub' and
@@ -1177,7 +1198,7 @@ func requireSubjectToken(request oauth2.AccessRequester) (err error) {
 
 	return errorsx.WithStack(oauth2.ErrInvalidRequest.
 		WithHintf("The '%s' token type is not supported as a '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType).
-		WithDebugf("The '%s' value '%s' is registered in the token types configuration but no token type handler validated a subject token for it, so the '%s' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types or a '*rfc8693.JWTType'.", consts.FormParameterSubjectTokenType, subjectTokenType, consts.FormParameterSubjectToken))
+		WithDebugf("The '%s' value '%s' is registered in the token types configuration but no token type handler validated a subject token for it, so the '%s' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types, a '*rfc8693.JWTType', or on a request for a Transaction Token a '*rfc8693.SelfSignedTokenType' or '*rfc8693.UnsignedJSONTokenType'.", consts.FormParameterSubjectTokenType, subjectTokenType, consts.FormParameterSubjectToken))
 }
 
 func requireActorToken(request oauth2.AccessRequester) (err error) {
@@ -1216,7 +1237,8 @@ func subjectTokenExpiry(request oauth2.Requester) time.Time {
 }
 
 func capToSubjectTokenExpiry(request oauth2.Requester, expires time.Time) time.Time {
-	if limit := subjectTokenExpiry(request); !limit.IsZero() && limit.Before(expires) {
+	// The comparison is of seconds, as a time.Time beyond its range compares as earlier than any other.
+	if limit := subjectTokenExpiry(request); !limit.IsZero() && limit.Unix() <= expires.Unix() {
 		return limit
 	}
 

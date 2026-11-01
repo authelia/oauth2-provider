@@ -117,7 +117,7 @@ func TestExchangeRejectsUnclaimedSubjectTokenType(t *testing.T) {
 	}
 
 	require.Error(t, err)
-	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'urn:ietf:params:oauth:token-type:saml2' token type is not supported as a 'subject_token_type'. The 'subject_token_type' value 'urn:ietf:params:oauth:token-type:saml2' is registered in the token types configuration but no token type handler validated a subject token for it, so the 'subject_token' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types or a '*rfc8693.JWTType'.")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'urn:ietf:params:oauth:token-type:saml2' token type is not supported as a 'subject_token_type'. The 'subject_token_type' value 'urn:ietf:params:oauth:token-type:saml2' is registered in the token types configuration but no token type handler validated a subject token for it, so the 'subject_token' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types, a '*rfc8693.JWTType', or on a request for a Transaction Token a '*rfc8693.SelfSignedTokenType' or '*rfc8693.UnsignedJSONTokenType'.")
 	assert.Empty(t, aresp.AccessToken)
 }
 
@@ -178,7 +178,7 @@ func TestExchangeWithoutActorTokenValidationRejectsUnclaimedSubjectTokenType(t *
 	err := runExchangeHandlers(t, handlers, areq, aresp)
 
 	require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
-	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'urn:ietf:params:oauth:token-type:saml2' token type is not supported as a 'subject_token_type'. The 'subject_token_type' value 'urn:ietf:params:oauth:token-type:saml2' is registered in the token types configuration but no token type handler validated a subject token for it, so the 'subject_token' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types or a '*rfc8693.JWTType'.")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'urn:ietf:params:oauth:token-type:saml2' token type is not supported as a 'subject_token_type'. The 'subject_token_type' value 'urn:ietf:params:oauth:token-type:saml2' is registered in the token types configuration but no token type handler validated a subject token for it, so the 'subject_token' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types, a '*rfc8693.JWTType', or on a request for a Transaction Token a '*rfc8693.SelfSignedTokenType' or '*rfc8693.UnsignedJSONTokenType'.")
 	assert.Empty(t, aresp.AccessToken)
 }
 
@@ -242,7 +242,7 @@ func TestExchangeRejectsUnclaimedSubjectTokenTypeWithAStaleSubjectToken(t *testi
 	err := runExchangeHandlers(t, handlers, areq, aresp)
 
 	require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
-	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'urn:ietf:params:oauth:token-type:saml2' token type is not supported as a 'subject_token_type'. The 'subject_token_type' value 'urn:ietf:params:oauth:token-type:saml2' is registered in the token types configuration but no token type handler validated a subject token for it, so the 'subject_token' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types or a '*rfc8693.JWTType'.")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'urn:ietf:params:oauth:token-type:saml2' token type is not supported as a 'subject_token_type'. The 'subject_token_type' value 'urn:ietf:params:oauth:token-type:saml2' is registered in the token types configuration but no token type handler validated a subject token for it, so the 'subject_token' was never read. A registered type must be claimed by one of the token type handlers, being one of the three built-in types, a '*rfc8693.JWTType', or on a request for a Transaction Token a '*rfc8693.SelfSignedTokenType' or '*rfc8693.UnsignedJSONTokenType'.")
 	assert.Empty(t, aresp.AccessToken)
 }
 

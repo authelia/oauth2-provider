@@ -57,4 +57,6 @@ const (
 	FormParameterDeviceCode                                = valueDeviceCode
 	FormParameterUserCode                                  = valueUserCode
 	FormParameterDPoPJKT                                   = "dpop_jkt"
+	FormParameterRequestContext                            = "request_context"
+	FormParameterRequestDetails                            = "request_details"
 )

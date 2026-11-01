@@ -253,7 +253,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 			return nil, err
 		}
 
-		if err = validateCustomJWTScope(request, role, claims); err != nil {
+		if err = validateCustomJWTScope(ctx, request, c.Config, role, claims); err != nil {
 			return nil, err
 		}
 	}
@@ -273,6 +273,10 @@ func validateCustomJWTType(ctx context.Context, jwtType *JWTType, token *jwt.Tok
 
 	if oauth2.IsIDJAGTokenType(typ) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("A '%s' cannot be exchanged.", consts.TokenTypeRFC8693IDJAG))
+	}
+
+	if oauth2.IsTxnTokenType(typ) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("A '%s' cannot be exchanged.", consts.TokenTypeRFC8693TxnToken))
 	}
 
 	// RFC 8725 Section 3.11 explicit typing keeps another kind of JWT signed by a trusted key, such as an RFC 9068
@@ -632,8 +636,16 @@ func validateCustomJWTAudience(request oauth2.AccessRequester, jwtType *JWTType,
 	return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'aud' from token must include the OAuth 2.0 Client '%s' or an expected audience of the token type.", clientID))
 }
 
-func validateCustomJWTScope(request oauth2.AccessRequester, role tokenRole, claims map[string]any) (err error) {
+// A token with no 'scope' member takes the ceiling of a Txn-Token request from TxnTokenTypeHandler, and a member that is
+// present is always the ceiling.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-13.14
+func validateCustomJWTScope(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, role tokenRole, claims map[string]any) (err error) {
 	if role != tokenRoleSubject {
+		return nil
+	}
+
+	if _, present := claims[consts.ClaimScope]; !present && isTxnTokenRequest(ctx, request, config) {
 		return nil
 	}
 

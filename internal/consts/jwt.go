@@ -67,6 +67,11 @@ const (
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-3.1
 	JSONWebTokenTypeIDJAG = "oauth-id-jag+jwt" //nolint:gosec // This is a credential type, not a credential.
+
+	// JSONWebTokenTypeTxnToken represents the JWT type value for a Transaction Token.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-9.1
+	JSONWebTokenTypeTxnToken = "txntoken+jwt" //nolint:gosec // This is a credential type, not a credential.
 )
 
 const (

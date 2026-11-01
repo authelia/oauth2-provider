@@ -248,6 +248,10 @@ func (c *Handler) validateTokenType(token *jwt.JSONWebToken) error {
 			continue
 		}
 
+		if oauth2.IsTxnTokenType(typ) {
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The JWT in 'assertion' request parameter is a transaction token, which cannot be used as an assertion."))
+		}
+
 		if !strings.EqualFold(typ, consts.JSONWebTokenTypeJWT) && !strings.EqualFold(typ, "application/jwt") {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The JWT in 'assertion' request parameter has an invalid 'typ' header value '%s'; expected 'JWT'.", typ))
 		}

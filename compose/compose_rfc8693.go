@@ -27,6 +27,7 @@ import (
 //	4. RFC8693IDTokenTypeFactory
 //	5. RFC8693CustomJWTTypeFactory
 //	   IDJAGIssueFactory                      (optional; ID-JAG token type handler)
+//	   RFC8693TxnTokenTypeFactory             (optional; Transaction Token type handler; after every other token type)
 //	6. RFC8693ActorTokenValidationFactory     (may_act validator; LAST)
 //
 // Any of the token type factories may be omitted as long as the relative order of the rest is preserved.
@@ -108,6 +109,27 @@ func RFC8693CustomJWTTypeFactory(config oauth2.Configurator, storage any, strate
 		Config:   config.(oauth2.RFC8693ConfigProvider),
 		Strategy: strategy.(jwt.Strategy),
 		Storage:  storage.(rfc8693.Storage),
+	}
+}
+
+// RFC8693TxnTokenTypeFactory creates the handler that issues a Transaction Token. It is not part of
+// RFC8693TokenExchangeFactories, so a server registers it, and a rfc8693.TxnTokenType on
+// oauth2.Config.RFC8693TokenTypes, to accept the requested_token_type of a Transaction Token. It MUST be registered
+// after every other token type factory and before RFC8693ActorTokenValidationFactory. The strategy must implement
+// jwt.Strategy, and the factory panics otherwise. The storage should implement rfc8693.TxnTokenStorage, without which
+// a request presenting a subject token that carries no scopes is refused, and must implement rfc8693.CustomJWTStorage
+// when a token type sets ValidateJTI.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.2
+func RFC8693TxnTokenTypeFactory(config oauth2.Configurator, storage any, strategy any) any {
+	store, _ := storage.(rfc8693.TxnTokenStorage)
+	jti, _ := storage.(rfc8693.CustomJWTStorage)
+
+	return &rfc8693.TxnTokenTypeHandler{
+		Config:     config,
+		Strategy:   strategy.(jwt.Strategy),
+		Storage:    store,
+		JTIStorage: jti,
 	}
 }
 

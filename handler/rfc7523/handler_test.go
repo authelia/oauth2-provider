@@ -90,6 +90,15 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to parse JSON Web Token passed in 'assertion' request parameter. go-jose/go-jose: compact JWS format must have three parts",
 		},
 		{
+			name: "ShouldRejectATransactionTokenBeforeAnyKeyLookup",
+			setup: func(f *jwtBearerFixture) {
+				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertionWithType(f.createStandardClaim(), keyID, consts.JSONWebTokenTypeTxnToken))
+			},
+			err:      oauth2.ErrInvalidGrant,
+			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The JWT in 'assertion' request parameter is a transaction token, which cannot be used as an assertion.",
+		},
+		{
 			name: "ShouldRejectAnAssertionWithoutAnIssuer",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}

@@ -180,7 +180,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 	case errors.Is(err, oauth2.ErrInactiveToken):
 		return nil, nil, c.handleRefreshTokenReuse(ctx, or, token, signature, err)
 	default:
-		return nil, nil, errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
+		return nil, nil, errExchangeTokenLookup(err)
 	}
 
 	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.GetScopeStrategy(ctx, client), or, role, true); err != nil {

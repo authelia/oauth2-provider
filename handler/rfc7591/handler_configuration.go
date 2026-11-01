@@ -243,12 +243,6 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return err
 	}
 
-	// The old session is deleted only after the replacement token is minted. A failed delete does not fail the request,
-	// as the client already holds the new token.
-	if oldSignature := requester.GetSignature(); oldSignature != "" {
-		_ = h.Store.DeleteClientRegistrationTokenSession(ctx, oldSignature)
-	}
-
 	var responseMetadata *oauth2.ClientRegistrationMetadata
 
 	if responseMetadata, err = strategy.MetadataFromClient(ctx, patched); err != nil {
@@ -257,6 +251,14 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 
 	if err = filter.FilterClientRegistrationMetadata(ctx, patched, responseMetadata); err != nil {
 		return err
+	}
+
+	// The old session is deleted only once nothing can prevent the replacement token being returned, as the client has
+	// no other means of obtaining one. A failed delete does not fail the request, as the client receives the new token.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc7592#section-5
+	if oldSignature := requester.GetSignature(); oldSignature != "" {
+		_ = h.Store.DeleteClientRegistrationTokenSession(ctx, oldSignature)
 	}
 
 	responder.SetMetadata(responseMetadata)

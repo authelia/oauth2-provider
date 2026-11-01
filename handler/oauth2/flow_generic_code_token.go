@@ -164,7 +164,25 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 	return nil
 }
 
+func (c *GenericCodeTokenEndpointHandler) isCodeInvalidated(ctx context.Context, request oauth2.AccessRequester) bool {
+	session := request.GetSession()
+
+	request.SetSession(session.Clone())
+
+	_, _, _, err := c.GetCodeAndSession(ctx, request)
+
+	request.SetSession(session)
+
+	return errors.Is(err, oauth2.ErrInvalidatedDeviceCode) || errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode)
+}
+
 // PopulateTokenEndpointResponse handles populating the access response.
+//
+// oauth2.ErrSerializationFailure does not show the code was replayed, as a store may also return it for lock contention,
+// so the code is read again once the transaction has rolled back. A code another request has invalidated is a replay,
+// and any other outcome is answered as a server error so the client can retry.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
 //
 //nolint:gocyclo
 func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
@@ -249,7 +267,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		if err != nil {
 			if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.CoreStorage); rollBackTxnErr != nil {
 				err = errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("error: %s; rollback error: %s", err, rollBackTxnErr))
-			} else if replayed {
+			} else if replayed || (errors.Is(err, oauth2.ErrSerializationFailure) && c.isCodeInvalidated(parent, request)) {
 				err = revokeCodeGrant(parent, c.TokenRevocationStorage, ar.GetID())
 			}
 		}

@@ -955,6 +955,146 @@ func TestDeviceAuthorizeCodeConcurrentReplayIsRefusedWithInvalidGrantNotServerEr
 	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
 }
 
+func TestDeviceAuthorizeCodeSerializationFailure(t *testing.T) {
+	testCases := []struct {
+		name     string
+		winner   bool
+		expected error
+	}{
+		{name: "ShouldRevokeWhenAnotherRequestInvalidatedTheCode", winner: true, expected: oauth2.ErrInvalidGrant},
+		{name: "ShouldAnswerAServerErrorForContention", expected: oauth2.ErrServerError},
+	}
+
+	stores := []struct {
+		name string
+		new  func() deviceSerializationStorage
+	}{
+		{"MemoryStore", func() deviceSerializationStorage { return storage.NewMemoryStore() }},
+		{"HydratingMemoryStore", func() deviceSerializationStorage { return storage.NewHydratingMemoryStore() }},
+	}
+
+	for _, s := range stores {
+		for _, tc := range testCases {
+			t.Run(s.name+"/"+tc.name, func(t *testing.T) {
+				strategy := &o2hmacshaStrategy
+				store := &deviceSerializationStore{deviceSerializationStorage: s.new()}
+
+				config := &oauth2.Config{
+					ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:    oauth2.DefaultAudienceStrategy,
+					AccessTokenLifespan: time.Minute,
+					RefreshTokenScopes:  []string{consts.ScopeOffline},
+				}
+
+				h := hoauth2.GenericCodeTokenEndpointHandler{
+					CodeTokenEndpointHandler: &DeviceCodeTokenHandler{Strategy: strategy, Storage: store, Config: config},
+					AccessTokenStrategy:      strategy,
+					RefreshTokenStrategy:     strategy,
+					Config:                   config,
+					CoreStorage:              store,
+					TokenRevocationStorage:   store,
+				}
+
+				requester := &oauth2.AccessRequest{
+					GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+					Request: oauth2.Request{
+						Client:       &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode}},
+						Form:         url.Values{},
+						GrantedScope: oauth2.Arguments{"foo"},
+						Session:      &oauth2.DefaultSession{},
+						RequestedAt:  time.Now().UTC(),
+					},
+				}
+
+				deviceRequester := oauth2.NewDeviceAuthorizeRequest()
+				deviceRequester.Merge(requester)
+				deviceRequester.SetID("req-id")
+
+				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+				require.NoError(t, err)
+
+				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
+				require.NoError(t, err)
+
+				deviceRequester.SetDeviceCodeSignature(dSig)
+				deviceRequester.SetUserCodeSignature(uSig)
+				deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+
+				require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
+
+				requester.Form.Add(consts.FormParameterDeviceCode, dCode)
+
+				require.NoError(t, h.HandleTokenEndpointRequest(t.Context(), requester))
+
+				store.armed = true
+
+				if tc.winner {
+					store.failure = func(ctx context.Context) {
+						require.NoError(t, store.deviceSerializationStorage.InvalidateDeviceCodeSession(ctx, dSig))
+						require.NoError(t, store.CreateAccessTokenSession(ctx, "winner-at", deviceRequester))
+						require.NoError(t, store.CreateRefreshTokenSession(ctx, "winner-rt", "winner-at", deviceRequester))
+					}
+				}
+
+				err = h.PopulateTokenEndpointResponse(t.Context(), requester, oauth2.NewAccessResponse())
+				require.ErrorIs(t, err, tc.expected)
+
+				if !tc.winner {
+					_, err = store.GetDeviceCodeSession(t.Context(), dSig, &oauth2.DefaultSession{})
+					assert.NoError(t, err)
+
+					return
+				}
+
+				_, err = store.GetAccessTokenSession(t.Context(), "winner-at", nil)
+				assert.ErrorIs(t, err, oauth2.ErrNotFound)
+
+				_, err = store.GetRefreshTokenSession(t.Context(), "winner-rt", nil)
+				assert.ErrorIs(t, err, oauth2.ErrInactiveToken)
+			})
+		}
+	}
+}
+
+type deviceSerializationStorage interface {
+	hoauth2.CoreStorage
+	hoauth2.TokenRevocationStorage
+	Storage
+}
+
+type deviceSerializationStore struct {
+	deviceSerializationStorage
+
+	armed   bool
+	failure func(ctx context.Context)
+}
+
+func (s *deviceSerializationStore) InvalidateDeviceCodeSession(ctx context.Context, signature string) error {
+	if !s.armed {
+		return s.deviceSerializationStorage.InvalidateDeviceCodeSession(ctx, signature)
+	}
+
+	s.armed = false
+
+	if s.failure != nil {
+		s.failure(ctx)
+	}
+
+	return oauth2.ErrSerializationFailure
+}
+
+func (s *deviceSerializationStore) BeginTX(ctx context.Context) (context.Context, error) {
+	return ctx, nil
+}
+
+func (s *deviceSerializationStore) Commit(_ context.Context) error {
+	return nil
+}
+
+func (s *deviceSerializationStore) Rollback(_ context.Context) error {
+	return nil
+}
+
 func TestDeviceAuthorizeCodeConcurrentPollIsAnsweredWithSlowDownNotServerError(t *testing.T) {
 	strategy := &o2hmacshaStrategy
 	store := storage.NewMemoryStore()

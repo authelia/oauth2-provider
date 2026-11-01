@@ -241,7 +241,17 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 	}
 
 	defer func() {
+		failure := err
+
 		err = c.handleRefreshTokenEndpointStorageError(ctx, err)
+
+		// oauth2.ErrSerializationFailure does not show the refresh token was replayed, as a store may also return it for
+		// lock contention, so the refresh token is read again once the transaction has rolled back.
+		if replayed == nil && errors.Is(failure, oauth2.ErrSerializationFailure) && !errors.Is(err, oauth2.ErrServerError) {
+			if _, e := c.TokenRevocationStorage.GetRefreshTokenSession(parent, signature, nil); errors.Is(e, oauth2.ErrInactiveToken) {
+				replayed = e
+			}
+		}
 
 		// RFC 9700 Section 4.14.2: a refresh token that another request already rotated is a replay, so the grant is
 		// revoked once this request's transaction has been rolled back.

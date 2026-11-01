@@ -170,6 +170,12 @@ func canIssueRefreshToken(ctx context.Context, c *AuthorizeExplicitGrantHandler,
 
 // PopulateTokenEndpointResponse implements oauth2.TokenEndpointHandler.
 //
+// oauth2.ErrSerializationFailure does not show the code was replayed, as a store may also return it for lock contention,
+// so the code is read again once the transaction has rolled back. A code another request has invalidated is a replay,
+// and any other outcome is answered as a server error so the client can retry.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+//
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
@@ -249,7 +255,7 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		if err != nil {
 			if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.CoreStorage); rollBackTxnErr != nil {
 				err = errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("error: %s; rollback error: %s", err, rollBackTxnErr))
-			} else if replayed {
+			} else if replayed || (errors.Is(err, oauth2.ErrSerializationFailure) && c.isCodeInvalidated(parent, signature, request)) {
 				err = revokeCodeGrant(parent, c.TokenRevocationStorage, ar.GetID())
 			}
 		}
@@ -294,6 +300,12 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	}
 
 	return nil
+}
+
+func (c *AuthorizeExplicitGrantHandler) isCodeInvalidated(ctx context.Context, signature string, request oauth2.AccessRequester) bool {
+	_, err := c.CoreStorage.GetAuthorizeCodeSession(ctx, signature, request.GetSession().Clone())
+
+	return errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode)
 }
 
 // CanHandleAuthorizationDetails implements oauth2.AuthorizationDetailsTokenEndpointHandler. The RFC 9396

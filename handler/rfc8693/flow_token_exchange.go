@@ -718,6 +718,14 @@ func commitSubjectRefreshTokenRotation(ctx context.Context, store hoauth2.TokenR
 		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("error: %s; rollback error: %s", err, rollback))
 	}
 
+	// oauth2.ErrSerializationFailure does not show the refresh token was replayed, as a store may also return it for lock
+	// contention, so the refresh token is read again now the transaction has rolled back.
+	if errors.Is(err, oauth2.ErrSerializationFailure) {
+		if _, e := store.GetRefreshTokenSession(parent, signature, nil); errors.Is(e, oauth2.ErrInactiveToken) {
+			return errSubjectRefreshTokenReplay(parent, store, signature, request, e)
+		}
+	}
+
 	var rfc *oauth2.RFC6749Error
 
 	switch {

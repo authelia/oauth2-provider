@@ -41,7 +41,9 @@ var (
 	ErrDuplicateUserCode = errors.New("user code is already in use")
 
 	// ErrSerializationFailure is an error indicating that the transactional capable storage could not guarantee
-	// consistency of Update & Delete operations on the same rows between multiple sessions.
+	// consistency of Update & Delete operations on the same rows between multiple sessions. It does not by itself mean a
+	// token was replayed. The token endpoint handlers read the code or refresh token again after rolling the transaction
+	// back, and treat the request as a replay only if another request has invalidated it.
 	ErrSerializationFailure = errors.New("The request could not be completed due to concurrent access")
 
 	ErrUnknownRequest = &RFC6749Error{

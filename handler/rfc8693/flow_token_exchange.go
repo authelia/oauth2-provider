@@ -727,7 +727,7 @@ func commitSubjectRefreshTokenRotation(ctx context.Context, store hoauth2.TokenR
 	}
 
 	if rollback := storage.MaybeRollbackTx(ctx, store); rollback != nil {
-		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("error: %s; rollback error: %s", err, rollback))
+		return errRollback(err, rollback)
 	}
 
 	// oauth2.ErrSerializationFailure does not show the refresh token was replayed, as a store may also return it for lock
@@ -750,6 +750,44 @@ func commitSubjectRefreshTokenRotation(ctx context.Context, store hoauth2.TokenR
 	default:
 		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
+}
+
+func createInTransaction(ctx context.Context, store any, create func(ctx context.Context) error) (err error) {
+	if ctx, err = storage.MaybeBeginTx(ctx, store); err != nil {
+		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	if err = create(ctx); err == nil {
+		err = storage.MaybeCommitTx(ctx, store)
+	}
+
+	if err == nil {
+		return nil
+	}
+
+	if rollback := storage.MaybeRollbackTx(ctx, store); rollback != nil {
+		return errRollback(err, rollback)
+	}
+
+	var rfc *oauth2.RFC6749Error
+
+	if errors.As(err, &rfc) {
+		return errors.WithStack(err)
+	}
+
+	return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+}
+
+func errRollback(err, rollback error) error {
+	cause := err.Error()
+
+	var rfc *oauth2.RFC6749Error
+
+	if errors.As(err, &rfc) && rfc.DebugField != "" {
+		cause = rfc.DebugField
+	}
+
+	return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("error: %s; rollback error: %s", cause, rollback))
 }
 
 func errSubjectRefreshTokenReplay(ctx context.Context, store hoauth2.TokenRevocationStorage, signature string, request oauth2.Requester, replay error) (err error) {

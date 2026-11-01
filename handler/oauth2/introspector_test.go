@@ -197,7 +197,7 @@ func TestIntrospectToken(t *testing.T) {
 			expected: oauth2.AccessToken,
 		},
 		{
-			name: "ShouldFailBecauseAccessTokenSignatureEmpty",
+			name: "ShouldReportUnknownBecauseAccessTokenSignatureEmpty",
 			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
 				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
 
@@ -212,8 +212,8 @@ func TestIntrospectToken(t *testing.T) {
 						Return(""),
 				)
 			},
-			error:    oauth2.ErrRequestUnauthorized,
-			errorStr: "The request could not be authorized. Check that you provided valid credentials in the right format. Could not find the requested resource(s).",
+			error:    oauth2.ErrUnknownRequest,
+			errorStr: oauth2.ErrUnknownRequest.DescriptionField,
 		},
 		{
 			name: "ShouldFailBecauseAccessTokenScopeNotGranted",
@@ -250,7 +250,7 @@ func TestIntrospectToken(t *testing.T) {
 			errorStr: "The requested scope is invalid, unknown, or malformed. The request scope 'admin' has not been granted or is not allowed to be requested.",
 		},
 		{
-			name: "ShouldFailBecauseRefreshTokenSignatureEmpty",
+			name: "ShouldReportUnknownBecauseRefreshTokenSignatureEmpty",
 			setup: func(t *testing.T, config *oauth2.Config, r *http.Request, strategy *mock.MockCoreStrategy, store *mock.MockCoreStorage, requester oauth2.AccessRequester) {
 				r.Header.Set(consts.HeaderAuthorization, "bearer 1234")
 
@@ -266,8 +266,8 @@ func TestIntrospectToken(t *testing.T) {
 				)
 			},
 			hint:     oauth2.RefreshToken,
-			error:    oauth2.ErrRequestUnauthorized,
-			errorStr: "The request could not be authorized. Check that you provided valid credentials in the right format. Could not find the requested resource(s).",
+			error:    oauth2.ErrUnknownRequest,
+			errorStr: oauth2.ErrUnknownRequest.DescriptionField,
 		},
 		{
 			name: "ShouldFailBecauseRefreshTokenValidationFails",
@@ -469,13 +469,23 @@ func TestCoreValidatorRoutesForeignPrefixedTokens(t *testing.T) {
 			expected: oauth2.ErrUnknownRequest,
 		},
 		{
-			name:     "ShouldRejectAnUnprefixedToken",
+			name:     "ShouldReportAnUnprefixedTokenAsUnknown",
 			token:    "not-a-token",
-			expected: oauth2.ErrRequestUnauthorized,
+			expected: oauth2.ErrUnknownRequest,
 		},
 		{
-			name:     "ShouldRejectAnAuthorizeCode",
+			name:     "ShouldReportAnAuthorizeCodeAsUnknown",
 			token:    "authelia_ac_notreal.notreal",
+			expected: oauth2.ErrUnknownRequest,
+		},
+		{
+			name:     "ShouldReportAThreeSegmentTokenAsUnknown",
+			token:    "aaa.bbb.ccc",
+			expected: oauth2.ErrUnknownRequest,
+		},
+		{ //nolint:gosec
+			name:     "ShouldRejectAnEncryptedJWT",
+			token:    "aaa.bbb.ccc.ddd.eee",
 			expected: oauth2.ErrRequestUnauthorized,
 		},
 	}

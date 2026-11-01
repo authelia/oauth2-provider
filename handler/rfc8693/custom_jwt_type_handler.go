@@ -336,7 +336,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	}
 
 	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
-		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(c.expiry(ctx, jwtType)))
+		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(c.expiry(ctx, request.GetClient(), jwtType)))
 	}
 
 	claims.ExpirationTime = jwt.NewNumericDate(capToSubjectTokenExpiry(request, claims.ExpirationTime.Time))
@@ -424,7 +424,7 @@ func (c *CustomJWTTypeHandler) issueAuthorizationGrant(ctx context.Context, requ
 	}
 
 	now := time.Now().UTC()
-	expires := capToSubjectTokenExpiry(request, now.Add(c.expiry(ctx, jwtType)))
+	expires := capToSubjectTokenExpiry(request, now.Add(c.expiry(ctx, request.GetClient(), jwtType)))
 
 	if expires.Unix() <= now.Unix() {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' expires too soon to issue a JWT authorization grant.", consts.FormParameterSubjectToken))
@@ -530,18 +530,20 @@ func (c *CustomJWTTypeHandler) validateIssuedIssuer(ctx context.Context, jwtType
 	return nil
 }
 
-func (c *CustomJWTTypeHandler) expiry(ctx context.Context, jwtType *JWTType) time.Duration {
+func (c *CustomJWTTypeHandler) expiry(ctx context.Context, client oauth2.Client, jwtType *JWTType) time.Duration {
 	if jwtType.Expiry > 0 {
 		return jwtType.Expiry
 	}
 
+	fallback := time.Hour
+
 	if provider, ok := c.Config.(oauth2.AccessTokenLifespanProvider); ok {
 		if lifespan := provider.GetAccessTokenLifespan(ctx); lifespan > 0 {
-			return lifespan
+			fallback = lifespan
 		}
 	}
 
-	return time.Hour
+	return oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeTokenExchange, oauth2.AccessToken, fallback)
 }
 
 func stripIDTokenConfirmationHeader(headers *jwt.Headers) (stripped *jwt.Headers) {

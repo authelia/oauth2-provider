@@ -114,6 +114,7 @@ func TestDefaultClientWithCustomTokenLifespansGetEffectiveLifespan(t *testing.T)
 		RefreshTokenGrantIDTokenLifespan:           &customLifespan,
 		TokenExchangeGrantAccessTokenLifespan:      &customLifespan,
 		TokenExchangeGrantRefreshTokenLifespan:     &customLifespan,
+		TokenExchangeGrantIDTokenLifespan:          &customLifespan,
 	}
 
 	testCases := []struct {
@@ -278,11 +279,11 @@ func TestDefaultClientWithCustomTokenLifespansGetEffectiveLifespan(t *testing.T)
 			expected: customLifespan,
 		},
 		{
-			name:     "ShouldReturnFallbackForTokenExchangeIDToken",
+			name:     "ShouldReturnCustomForTokenExchangeIDToken",
 			config:   full,
 			gt:       GrantTypeTokenExchange,
 			tt:       IDToken,
-			expected: fallback,
+			expected: customLifespan,
 		},
 		{
 			name:     "ShouldReturnFallbackForTokenExchangeWhenUnset",

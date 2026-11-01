@@ -28,7 +28,8 @@ type JWTIssueConfig struct {
 	Audience []string `json:"aud"`
 
 	// Expiry is the lifetime of an issued JWT, which never outlives the 'subject_token'. A value that is not positive
-	// uses the access token lifespan, or one hour when the configuration does not provide one.
+	// uses the client's access token lifespan for the token exchange grant, then the configured access token lifespan,
+	// or one hour when the configuration does not provide one.
 	Expiry time.Duration `json:"exp"`
 
 	// AuthorizationGrant issues the JWT as a JWT authorization grant for an authorization server in another trust

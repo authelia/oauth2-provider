@@ -793,7 +793,8 @@ func (s *MemoryStore) deactivateRefreshToken(requestID string) error {
 
 // RotateRefreshToken deactivates the refresh token and revokes the access tokens issued for the same request, which
 // the request ID locates. It returns oauth2.ErrInactiveToken when the refresh token with the given signature is
-// already inactive, as it is when a concurrent request rotated it first. A grace period is not implemented by the
+// already inactive, as it is when a concurrent request rotated it first, and oauth2.ErrNotFound when it does not exist. A
+// grace period is not implemented by the
 // memory store; implementations that need one should mark the refresh token as expiring after the grace period instead
 // of deactivating it here.
 func (s *MemoryStore) RotateRefreshToken(ctx context.Context, requestID string, signature string) error {
@@ -811,7 +812,12 @@ func (s *MemoryStore) rotateRefreshToken(requestID, signature string) error {
 	s.refreshTokensMutex.Lock()
 	defer s.refreshTokensMutex.Unlock()
 
-	if rel, exists := s.RefreshTokens[signature]; exists && !rel.active {
+	rel, exists := s.RefreshTokens[signature]
+
+	switch {
+	case !exists:
+		return oauth2.ErrNotFound
+	case !rel.active:
 		return oauth2.ErrInactiveToken
 	}
 

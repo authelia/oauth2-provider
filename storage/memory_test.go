@@ -191,6 +191,23 @@ func TestMemoryStoreRotateRefreshTokenReportsAnInactiveToken(t *testing.T) {
 	assert.ErrorIs(t, store.RotateRefreshToken(t.Context(), request.ID, "rt-sig"), oauth2.ErrInactiveToken)
 }
 
+func TestMemoryStoreRotateRefreshTokenReportsAMissingToken(t *testing.T) {
+	store := NewMemoryStore()
+
+	request := &oauth2.Request{ID: "req-id", Client: &oauth2.DefaultClient{ID: "foo"}}
+
+	require.NoError(t, store.CreateRefreshTokenSession(t.Context(), "rt-sig", "", request))
+
+	assert.ErrorIs(t, store.RotateRefreshToken(t.Context(), request.ID, "other-sig"), oauth2.ErrNotFound)
+
+	_, err := store.GetRefreshTokenSession(t.Context(), "rt-sig", nil)
+	assert.NoError(t, err)
+
+	require.NoError(t, store.DeleteRefreshTokenSession(t.Context(), "rt-sig"))
+
+	assert.ErrorIs(t, store.RotateRefreshToken(t.Context(), request.ID, "rt-sig"), oauth2.ErrNotFound)
+}
+
 func TestMemoryStore_RotateRefreshToken(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()

@@ -556,6 +556,8 @@ func errExchangeSubjectLookup(err error) error {
 	rfc := outermostRFC6749Error(err)
 
 	switch {
+	case errors.Is(err, oauth2.ErrUnknownRequest):
+		return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 	case rfc != nil && rfc.CodeField >= http.StatusInternalServerError, rfc == nil && !errors.Is(err, oauth2.ErrNotFound):
 		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	case rfc == nil, rfc.ErrorField == oauth2.ErrNotFound.ErrorField:
@@ -566,6 +568,14 @@ func errExchangeSubjectLookup(err error) error {
 }
 
 func outermostRFC6749Error(err error) *oauth2.RFC6749Error {
+	if custom, ok := err.(interface{ As(target any) bool }); ok { //nolint:errorlint
+		var rfc *oauth2.RFC6749Error
+
+		if custom.As(&rfc) && rfc != nil {
+			return rfc
+		}
+	}
+
 	switch e := err.(type) { //nolint:errorlint
 	case nil:
 		return nil

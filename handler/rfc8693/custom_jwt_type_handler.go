@@ -95,8 +95,6 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 			return err
 		}
 
-		session.SetSubjectToken(unpacked)
-
 		var subject string
 
 		// Get the subject and populate session.
@@ -104,6 +102,7 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 			return errExchangeSubjectLookup(err)
 		}
 
+		session.SetSubjectToken(unpacked)
 		session.SetSubject(subject)
 	}
 

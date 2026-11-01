@@ -154,6 +154,13 @@ func TestCustomJWTSubjectLookupError(t *testing.T) {
 		{name: "ShouldKeepAnOuterValueWrappingAnUnknownSubject", err: *oauth2.ErrAccessDenied.WithWrap(oauth2.ErrNotFound), expected: oauth2.ErrAccessDenied},
 		{name: "ShouldKeepAnOuterPointerWrappingAValue", err: oauth2.ErrAccessDenied.WithWrap(*oauth2.ErrNotFound), expected: oauth2.ErrAccessDenied},
 		{name: "ShouldUseTheFirstRFCErrorOfAJoinedError", err: errors.Join(errors.New("first"), *oauth2.ErrAccessDenied, oauth2.ErrNotFound), expected: oauth2.ErrAccessDenied},
+		{name: "ShouldUseACustomAsMethod", err: customRFCError{err: oauth2.ErrAccessDenied}, expected: oauth2.ErrAccessDenied},
+		{name: "ShouldUseAWrappedCustomAsMethod", err: errorsx.WithStack(customRFCError{err: oauth2.ErrAccessDenied}), expected: oauth2.ErrAccessDenied},
+		{name: "ShouldKeepAnOuterErrorOverACustomAsMethod", err: oauth2.ErrAccessDenied.WithWrap(customRFCError{err: oauth2.ErrNotFound}), expected: oauth2.ErrAccessDenied},
+		{name: "ShouldAnswerServerErrorForACustomAsMethodWithoutAMatch", err: customRFCError{}, expected: oauth2.ErrServerError},
+		{name: "ShouldNotReportAnUnknownRequest", err: oauth2.ErrUnknownRequest, expected: oauth2.ErrServerError},
+		{name: "ShouldNotReportAWrappedUnknownRequest", err: oauth2.ErrAccessDenied.WithWrap(oauth2.ErrUnknownRequest), expected: oauth2.ErrServerError},
+		{name: "ShouldNotReportAnUnknownRequestAsAValue", err: *oauth2.ErrUnknownRequest, expected: oauth2.ErrServerError},
 		{name: "ShouldAnswerServerErrorForADecodeError", err: base64.CorruptInputError(1), expected: oauth2.ErrServerError},
 		{name: "ShouldKeepAServerErrorWrappingAnUnknownSubject", err: oauth2.ErrServerError.WithWrap(oauth2.ErrNotFound), expected: oauth2.ErrServerError},
 		{name: "ShouldKeepARefusalWrappingAnUnknownSubject", err: oauth2.ErrAccessDenied.WithWrap(oauth2.ErrNotFound), expected: oauth2.ErrAccessDenied},
@@ -165,19 +172,42 @@ func TestCustomJWTSubjectLookupError(t *testing.T) {
 			f := newCustomJWTConsumeFixture(t, false)
 			f.custom.Storage = &failingSubjectStore{MemoryStore: f.store, err: tc.err}
 
-			err := f.custom.HandleTokenEndpointRequest(t.Context(), f.request(url.Values{
+			request := f.request(url.Values{
 				consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
 				consts.FormParameterSubjectToken:     {f.token(t, uuid.New().String())},
-			}))
+			})
+
+			err := f.custom.HandleTokenEndpointRequest(t.Context(), request)
 
 			require.ErrorIs(t, err, tc.expected)
 			assert.Equal(t, tc.expected.(*oauth2.RFC6749Error).ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
+			assert.NotErrorIs(t, err, oauth2.ErrUnknownRequest)
+			assert.Nil(t, request.GetSession().(*DefaultSession).GetSubjectToken())
 
 			if tc.hint != "" {
 				assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
 			}
 		})
 	}
+}
+
+type customRFCError struct {
+	err *oauth2.RFC6749Error
+}
+
+func (e customRFCError) Error() string {
+	return "the subject could not be resolved"
+}
+
+func (e customRFCError) As(target any) bool {
+	rfc, ok := target.(**oauth2.RFC6749Error)
+	if !ok || e.err == nil {
+		return false
+	}
+
+	*rfc = e.err
+
+	return true
 }
 
 type customNotFoundError struct{}

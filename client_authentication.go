@@ -292,6 +292,11 @@ func (c *EndpointClientAuthJWTClient) GetID() string {
 	return c.client.GetID()
 }
 
+// IsPublic returns true if the underlying client is a public client.
+func (c *EndpointClientAuthJWTClient) IsPublic() bool {
+	return c.client.IsPublic()
+}
+
 // GetClientSecretPlainText returns the underlying client's plaintext secret, used to verify 'client_secret_jwt'
 // assertions. See jwt.BaseClient for the semantics of the return values.
 func (c *EndpointClientAuthJWTClient) GetClientSecretPlainText() (secret []byte, ok bool, err error) {

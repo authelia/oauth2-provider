@@ -562,6 +562,10 @@ func validateAlgorithms(metadata *oauth2.ClientRegistrationMetadata) (err error)
 		}
 	}
 
+	if err = validatePublicClientAlgorithms(metadata); err != nil {
+		return err
+	}
+
 	algorithms := []signingOrEncryptionAlgorithm{
 		{consts.ClientMetadataIDTokenSignedResponseAlg, metadata.IDTokenSignedResponseAlg},
 		{consts.ClientMetadataIDTokenEncryptedResponseAlg, metadata.IDTokenEncryptedResponseAlg},
@@ -588,6 +592,49 @@ func validateAlgorithms(metadata *oauth2.ClientRegistrationMetadata) (err error)
 	}
 
 	return nil
+}
+
+// validatePublicClientAlgorithms implements OpenID Connect Core 1.0 Sections 10.1 and 10.2: symmetric signatures and
+// symmetric encryption MUST NOT be used by public clients.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#Signing
+// See: https://openid.net/specs/openid-connect-core-1_0.html#Encryption
+func validatePublicClientAlgorithms(metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	if metadata.TokenEndpointAuthMethod != consts.ClientAuthMethodNone {
+		return nil
+	}
+
+	for _, algorithm := range []signingOrEncryptionAlgorithm{
+		{consts.ClientMetadataIDTokenSignedResponseAlg, metadata.IDTokenSignedResponseAlg},
+		{consts.ClientMetadataUserinfoSignedResponseAlg, metadata.UserinfoSignedResponseAlg},
+		{consts.ClientMetadataRequestObjectSigningAlg, metadata.RequestObjectSigningAlg},
+		{consts.ClientMetadataAuthorizationSignedResponseAlg, metadata.AuthorizationSignedResponseAlg},
+		{consts.ClientMetadataIntrospectionSignedResponseAlg, metadata.IntrospectionSignedResponseAlg},
+		{consts.ClientMetadataAccessTokenSignedResponseAlg, metadata.AccessTokenSignedResponseAlg},
+	} {
+		if jwt.IsSignedJWTClientSecretAlgStr(algorithm.value) {
+			return errPublicClientAlgorithm(algorithm)
+		}
+	}
+
+	for _, algorithm := range []signingOrEncryptionAlgorithm{
+		{consts.ClientMetadataIDTokenEncryptedResponseAlg, metadata.IDTokenEncryptedResponseAlg},
+		{consts.ClientMetadataUserinfoEncryptedResponseAlg, metadata.UserinfoEncryptedResponseAlg},
+		{consts.ClientMetadataRequestObjectEncryptionAlg, metadata.RequestObjectEncryptionAlg},
+		{consts.ClientMetadataAuthorizationEncryptedResponseAlg, metadata.AuthorizationEncryptedResponseAlg},
+		{consts.ClientMetadataIntrospectionEncryptedResponseAlg, metadata.IntrospectionEncryptedResponseAlg},
+		{consts.ClientMetadataAccessTokenEncryptedResponseAlg, metadata.AccessTokenEncryptedResponseAlg},
+	} {
+		if jwt.IsEncryptedJWTClientSecretAlgStr(algorithm.value) {
+			return errPublicClientAlgorithm(algorithm)
+		}
+	}
+
+	return nil
+}
+
+func errPublicClientAlgorithm(algorithm signingOrEncryptionAlgorithm) (err error) {
+	return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is a symmetric algorithm which a client with the '%s' value '%s' must not use.", algorithm.name, algorithm.value, consts.ClientMetadataTokenEndpointAuthMethod, consts.ClientAuthMethodNone))
 }
 
 func isToken(s string) bool {

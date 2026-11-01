@@ -6,6 +6,7 @@ package rfc8693_test
 
 import (
 	"context"
+	"math"
 	"net/url"
 	"sync"
 	"testing"
@@ -270,6 +271,79 @@ func TestCustomJWTIsConsumedOnceByConcurrentRequests(t *testing.T) {
 	}
 
 	assert.Equal(t, 1, succeeded)
+}
+
+func TestCustomJWTExpiration(t *testing.T) {
+	const (
+		invalid = "Claim 'exp' from token is not a valid expiration time."
+		future  = "Claim 'exp' from token is too far in the future."
+	)
+
+	testCases := []struct {
+		name string
+		exp  any
+		hint string
+	}{
+		{name: "ShouldAcceptAFutureExpiration", exp: time.Now().Add(10 * time.Minute).Unix()},
+		{name: "ShouldAcceptAFractionalExpiration", exp: float64(time.Now().Add(10*time.Minute).Unix()) + 0.5},
+		{name: "ShouldRejectZero", exp: 0, hint: invalid},
+		{name: "ShouldRejectNull", exp: nil, hint: invalid},
+		{name: "ShouldRejectAFractionOfASecond", exp: 0.5, hint: invalid},
+		{name: "ShouldRejectBeyondTheWindow", exp: time.Now().Add(2 * time.Hour).Unix(), hint: future},
+		{name: "ShouldRejectAValueLargerThanAnInt64", exp: 1e300, hint: future},
+		{name: "ShouldRejectTheLargestInt64", exp: int64(math.MaxInt64), hint: future},
+	}
+
+	roles := []struct {
+		name string
+		form func(f *customJWTConsumeFixture, t *testing.T, token string) url.Values
+	}{
+		{
+			name: "Subject",
+			form: func(_ *customJWTConsumeFixture, _ *testing.T, token string) url.Values {
+				return url.Values{consts.FormParameterSubjectTokenType: {"urn:spec:jwt"}, consts.FormParameterSubjectToken: {token}}
+			},
+		},
+		{
+			name: "Actor",
+			form: func(f *customJWTConsumeFixture, t *testing.T, token string) url.Values {
+				return url.Values{
+					consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+					consts.FormParameterSubjectToken:     {f.token(t, uuid.New().String())},
+					consts.FormParameterActorTokenType:   {"urn:spec:jwt"},
+					consts.FormParameterActorToken:       {token},
+				}
+			},
+		},
+	}
+
+	for _, role := range roles {
+		for _, tc := range testCases {
+			t.Run(role.name+"/"+tc.name, func(t *testing.T) {
+				f := newCustomJWTConsumeFixture(t, true)
+
+				token := createJWT(t.Context(), f.client, f.strategy, jwt.MapClaims{
+					consts.ClaimIssuer:         "https://as.example.com",
+					consts.ClaimSubject:        "peter",
+					consts.ClaimAudience:       []string{f.client.GetID()},
+					consts.ClaimJWTID:          uuid.New().String(),
+					consts.ClaimExpirationTime: tc.exp,
+					"subject":                  "peter",
+				})
+
+				err := f.custom.HandleTokenEndpointRequest(t.Context(), f.request(role.form(f, t, token)))
+
+				if tc.hint == "" {
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+					return
+				}
+
+				require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+				assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+			})
+		}
+	}
 }
 
 func newCustomJWTConsumeFixture(t *testing.T, validate bool) *customJWTConsumeFixture {

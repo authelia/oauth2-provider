@@ -95,7 +95,8 @@ type Config struct {
 	// HashCost sets the cost of the password hashing cost. Defaults to 12.
 	HashCost int
 
-	// DisableRefreshTokenValidation sets the introspection endpoint to disable refresh token validation.
+	// DisableRefreshTokenValidation sets the introspection endpoint to disable refresh token validation. Access tokens
+	// are still resolved against storage, so a revoked JWT access token stays rejected.
 	DisableRefreshTokenValidation bool
 
 	// DisableRefreshTokenRotation keeps the presented refresh token during the refresh token grant rather than issuing

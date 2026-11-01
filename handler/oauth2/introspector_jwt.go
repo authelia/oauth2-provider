@@ -30,8 +30,11 @@ type StatelessJWTValidator struct {
 
 // IntrospectToken validates the token as an RFC 9068 JWT Profile access token without consulting storage, checks the
 // granted scopes against the required scopes, and merges the request reconstructed from the claims into the given
-// request. It returns oauth2.ErrUnknownRequest for an opaque access or refresh token, and when the context carries
-// ContextKeySkipStatelessIntrospection.
+// request. It returns oauth2.ErrUnknownRequest for a token which does not have the format of a compact serialized JWT,
+// so that other introspectors may resolve it as required by RFC 7662 Section 2.1, for an opaque access or refresh token,
+// and when the context carries ContextKeySkipStatelessIntrospection.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.1
 func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString string, tokenUse oauth2.TokenUse, request oauth2.AccessRequester, scopes []string) (use oauth2.TokenUse, err error) {
 	// This context value allows skipping the StatelessJWTValidator and continuing to the next.
 	if val := ctx.Value(ContextKeySkipStatelessIntrospection); val != nil {
@@ -41,6 +44,10 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 	}
 
 	if v.IsOpaqueAccessToken(ctx, tokenString) || v.IsOpaqueRefreshToken(ctx, tokenString) {
+		return "", oauth2.ErrUnknownRequest
+	}
+
+	if !jwt.IsSignedJWT(tokenString) && !jwt.IsEncryptedJWT(tokenString) {
 		return "", oauth2.ErrUnknownRequest
 	}
 

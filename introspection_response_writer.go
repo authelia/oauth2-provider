@@ -132,7 +132,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		for name, value := range extraClaims {
 			switch name {
 			// We do not allow these to be set through extra claims.
-			case jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername, jwt.ClaimConfirmation, jwt.ClaimAuthorizationDetails, policyClaim:
+			case jwt.ClaimActive, jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername, jwt.ClaimConfirmation, jwt.ClaimAuthorizationDetails, policyClaim:
 				continue
 			default:
 				response[name] = value

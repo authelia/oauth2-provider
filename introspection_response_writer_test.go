@@ -317,6 +317,39 @@ func TestWriteIntrospectionResponseOmitsTheRegistrationPolicy(t *testing.T) {
 	assert.Equal(t, "kept", params["other"])
 }
 
+func TestWriteIntrospectionResponseActiveIsNotSetByExtraClaims(t *testing.T) {
+	testCases := []struct {
+		name  string
+		value any
+	}{
+		{name: "ShouldKeepActiveAgainstFalse", value: false},
+		{name: "ShouldKeepActiveAgainstAString", value: "no"},
+		{name: "ShouldKeepActiveAgainstNull", value: nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := &Fosite{Config: &Config{}}
+
+			rw := httptest.NewRecorder()
+
+			provider.WriteIntrospectionResponse(t.Context(), rw, &IntrospectionResponse{
+				Active:   true,
+				TokenUse: AccessToken,
+				AccessRequester: NewAccessRequest(&DefaultSession{
+					Extra: map[string]any{jwt.ClaimActive: tc.value, "other": "kept"},
+				}),
+			})
+
+			params := map[string]any{}
+
+			require.NoError(t, json.Unmarshal(rw.Body.Bytes(), &params))
+			assert.Equal(t, true, params[jwt.ClaimActive])
+			assert.Equal(t, "kept", params["other"])
+		})
+	}
+}
+
 func TestWriteIntrospectionResponseBodyExpiryMatchesTokenUse(t *testing.T) {
 	accessExpiry := time.Now().Add(time.Hour).Truncate(time.Second)
 	refreshExpiry := time.Now().Add(time.Hour * 24).Truncate(time.Second)

@@ -359,7 +359,7 @@ func TestExchangedJWTLifetime(t *testing.T) {
 				Storage:  store,
 			},
 			typ:    "urn:spec:jwt",
-			claims: jwt.MapClaims{consts.ClaimIssuer: "https://as.example.com", "subject": "peter"},
+			claims: jwt.MapClaims{consts.ClaimIssuer: "https://as.example.com", consts.ClaimSubject: "peter"},
 		},
 	}
 

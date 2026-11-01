@@ -322,11 +322,10 @@ func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 	mkJWT := func(t *testing.T, iss string) string {
 		t.Helper()
 		token, _, err := strategy.Encode(context.Background(), jwt.MapClaims{
-			"iss":     iss,
-			"aud":     []string{"exchange-client"},
-			"sub":     "alice",
-			"subject": "alice",
-			"exp":     time.Now().Add(15 * time.Minute).Unix(),
+			"iss": iss,
+			"aud": []string{"exchange-client"},
+			"sub": "alice",
+			"exp": time.Now().Add(15 * time.Minute).Unix(),
 		})
 		require.NoError(t, err)
 		return token

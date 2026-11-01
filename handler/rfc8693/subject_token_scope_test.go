@@ -153,7 +153,6 @@ func TestCustomJWTSubjectTokenScope(t *testing.T) {
 			claims := jwt.MapClaims{
 				consts.ClaimIssuer:         "https://as.example.com",
 				consts.ClaimSubject:        "peter",
-				"subject":                  "peter",
 				consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
 				consts.ClaimIssuedAt:       time.Now().Unix(),
 			}
@@ -233,7 +232,7 @@ func TestSubjectTokenScopeIgnoresTheClientScopeStrategy(t *testing.T) {
 			name:    "ShouldRejectAScopeNotInTheCustomJWTScopeClaim",
 			handler: customHandler,
 			typ:     "urn:spec:jwt",
-			claims:  jwt.MapClaims{consts.ClaimIssuer: "https://as.example.com", "subject": "peter", consts.ClaimScope: "foo"},
+			claims:  jwt.MapClaims{consts.ClaimIssuer: "https://as.example.com", consts.ClaimSubject: "peter", consts.ClaimScope: "foo"},
 			scopes:  oauth2.Arguments{"bar"},
 			err:     "The requested scope is invalid, unknown, or malformed. The subject token is not granted 'bar' and so this scope cannot be requested.",
 		},
@@ -241,7 +240,7 @@ func TestSubjectTokenScopeIgnoresTheClientScopeStrategy(t *testing.T) {
 			name:    "ShouldMatchTheCustomJWTScopeClaimExactly",
 			handler: customHandler,
 			typ:     "urn:spec:jwt",
-			claims:  jwt.MapClaims{consts.ClaimIssuer: "https://as.example.com", "subject": "peter", consts.ClaimScope: "foo"},
+			claims:  jwt.MapClaims{consts.ClaimIssuer: "https://as.example.com", consts.ClaimSubject: "peter", consts.ClaimScope: "foo"},
 			scopes:  oauth2.Arguments{"foo.bar"},
 			err:     "The requested scope is invalid, unknown, or malformed. The subject token is not granted 'foo.bar' and so this scope cannot be requested.",
 		},
@@ -303,7 +302,6 @@ func TestCustomJWTSubjectTokenScopeDoesNotConsumeTheJTI(t *testing.T) {
 		consts.ClaimJWTID:          uuid.New().String(),
 		consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
 		consts.ClaimIssuedAt:       time.Now().Unix(),
-		"subject":                  "peter",
 	})
 
 	newRequest := func(scopes oauth2.Arguments) *oauth2.AccessRequest {
@@ -350,7 +348,6 @@ func TestCustomJWTSubjectTokenJTIIsScopedToTheIssuer(t *testing.T) {
 		consts.ClaimJWTID:          jti,
 		consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
 		consts.ClaimIssuedAt:       time.Now().Unix(),
-		"subject":                  "peter",
 	})
 
 	request := &oauth2.AccessRequest{

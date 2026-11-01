@@ -111,7 +111,6 @@ func customJWTWithConfirmation(t *testing.T, f *customJWTConsumeFixture, cnf any
 		consts.ClaimJWTID:          uuid.New().String(),
 		consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
 		consts.ClaimIssuedAt:       time.Now().Unix(),
-		"subject":                  "peter",
 	}
 
 	if cnf != nil {

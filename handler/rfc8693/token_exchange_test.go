@@ -145,11 +145,10 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 					Form: url.Values{
 						"subject_token_type": []string{jwtName},
 						"subject_token": []string{createJWT(context.Background(), store.Clients["my-client"], strategy, jwt.MapClaims{
-							"subject": "peter_for_jwt",
-							"jti":     uuid.New(),
-							"iss":     "https://customory.com",
-							"sub":     "peter",
-							"exp":     time.Now().Add(15 * time.Minute).Unix(),
+							"jti":               uuid.New(),
+							"iss":               "https://customory.com",
+							consts.ClaimSubject: "peter_for_jwt",
+							"exp":               time.Now().Add(15 * time.Minute).Unix(),
 						})},
 					},
 					Session: &DefaultSession{

@@ -125,7 +125,6 @@ func TestIssueHandlerWithABoundCustomJWTSubject(t *testing.T) {
 			claims := map[string]any{
 				consts.ClaimIssuer:         boundIssuer,
 				consts.ClaimSubject:        issueSubject,
-				"subject":                  issueSubject,
 				consts.ClaimAudience:       []string{boundClient},
 				consts.ClaimExpirationTime: time.Now().Add(30 * time.Minute).Unix(),
 				consts.ClaimIssuedAt:       time.Now().Unix(),

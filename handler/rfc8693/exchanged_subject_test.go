@@ -78,13 +78,13 @@ func TestExchangedTokenSubject(t *testing.T) {
 			name:    "ShouldIssueACustomJWTForTheExchangedSubjectWithAFreshSession",
 			handler: customHandler,
 			typ:     "urn:spec:jwt",
-			claims:  jwt.MapClaims{consts.ClaimIssuer: "https://as.example.com", "subject": "peter"},
+			claims:  jwt.MapClaims{consts.ClaimIssuer: "https://as.example.com", consts.ClaimSubject: "peter"},
 		},
 		{
 			name:    "ShouldIssueACustomJWTForTheExchangedSubjectWithASeededSession",
 			handler: customHandler,
 			typ:     "urn:spec:jwt",
-			claims:  jwt.MapClaims{consts.ClaimIssuer: "https://as.example.com", "subject": "peter"},
+			claims:  jwt.MapClaims{consts.ClaimIssuer: "https://as.example.com", consts.ClaimSubject: "peter"},
 			seeded:  "my-client",
 		},
 	}

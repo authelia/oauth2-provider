@@ -16,6 +16,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestMemoryStore_Authenticate(t *testing.T) {
@@ -189,6 +190,37 @@ func TestMemoryStoreRotateRefreshTokenReportsAnInactiveToken(t *testing.T) {
 	require.NoError(t, store.RotateRefreshToken(t.Context(), request.ID, "rt-sig"))
 
 	assert.ErrorIs(t, store.RotateRefreshToken(t.Context(), request.ID, "rt-sig"), oauth2.ErrInactiveToken)
+}
+
+func TestMemoryStoreGetSubjectForTokenExchange(t *testing.T) {
+	testCases := []struct {
+		name     string
+		claims   map[string]any
+		expected string
+		err      error
+	}{
+		{name: "ShouldReadTheSubClaim", claims: map[string]any{consts.ClaimSubject: "bdc@example.net"}, expected: "bdc@example.net"},
+		{name: "ShouldIgnoreANonstandardSubjectClaim", claims: map[string]any{consts.ClaimSubject: "victim", "subject": "attacker"}, expected: "victim"},
+		{name: "ShouldRefuseOnlyANonstandardSubjectClaim", claims: map[string]any{"subject": "peter"}, err: oauth2.ErrInvalidRequest},
+		{name: "ShouldRefuseAnEmptySubClaim", claims: map[string]any{consts.ClaimSubject: ""}, err: oauth2.ErrInvalidRequest},
+		{name: "ShouldRefuseASubClaimWhichIsNotAString", claims: map[string]any{consts.ClaimSubject: 1}, err: oauth2.ErrInvalidRequest},
+		{name: "ShouldRefuseNoClaims", err: oauth2.ErrInvalidRequest},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			subject, err := NewMemoryStore().GetSubjectForTokenExchange(t.Context(), nil, tc.claims)
+
+			if tc.err != nil {
+				assert.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, subject)
+		})
+	}
 }
 
 func TestMemoryStoreRotateRefreshTokenReportsAMissingToken(t *testing.T) {

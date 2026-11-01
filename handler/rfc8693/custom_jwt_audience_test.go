@@ -48,7 +48,6 @@ func TestCustomJWTAudience(t *testing.T) {
 			claims := jwt.MapClaims{
 				consts.ClaimIssuer:         "https://as.example.com",
 				consts.ClaimSubject:        "peter",
-				"subject":                  "peter",
 				consts.ClaimExpirationTime: time.Now().Add(time.Minute).Unix(),
 			}
 

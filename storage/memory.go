@@ -1113,11 +1113,11 @@ func (s *MemoryStore) SetTokenExchangeCustomJWT(_ context.Context, issuer, jti s
 	return s.setJTI(s.TokenExchangeJTIs, &s.tokenExchangeJTIsPruneAt, JTIMarker{Issuer: issuer, JTI: jti}, exp)
 }
 
-// GetSubjectForTokenExchange computes the session subject and is used for token types where there is no way
-// to know the subject value. For some token types, such as access and refresh tokens, the subject is well-defined
-// and this function is not called.
+// GetSubjectForTokenExchange computes the session subject from the 'sub' claim and is used for token types where there
+// is no way to know the subject value. For some token types, such as access and refresh tokens, the subject is
+// well-defined and this function is not called.
 func (s *MemoryStore) GetSubjectForTokenExchange(ctx context.Context, request oauth2.Requester, subjectToken map[string]any) (string, error) {
-	sub, _ := subjectToken["subject"].(string)
+	sub, _ := subjectToken[consts.ClaimSubject].(string)
 	if sub == "" {
 		return "", oauth2.ErrInvalidRequest.WithHint("No subject found.")
 	}

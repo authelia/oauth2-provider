@@ -328,7 +328,6 @@ func TestCustomJWTExpiration(t *testing.T) {
 					consts.ClaimAudience:       []string{f.client.GetID()},
 					consts.ClaimJWTID:          uuid.New().String(),
 					consts.ClaimExpirationTime: tc.exp,
-					"subject":                  "peter",
 				})
 
 				err := f.custom.HandleTokenEndpointRequest(t.Context(), f.request(role.form(f, t, token)))
@@ -381,7 +380,6 @@ func (f *customJWTConsumeFixture) token(t *testing.T, jti string) string {
 		consts.ClaimJWTID:          jti,
 		consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
 		consts.ClaimIssuedAt:       time.Now().Unix(),
-		"subject":                  "peter",
 	})
 }
 

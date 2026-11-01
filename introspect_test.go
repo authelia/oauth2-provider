@@ -103,6 +103,8 @@ func TestIntrospect(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "http://example.com/test", nil)
 	req.Header.Add(consts.HeaderAuthorization, "bearer some-token")
 
+	const errNoStrategy = "The request could not be authorized. Unable to find a suitable validation strategy for the token, thus it is invalid."
+
 	testCases := []struct {
 		name   string
 		scopes []string
@@ -110,10 +112,10 @@ func TestIntrospect(t *testing.T) {
 		err    string
 	}{
 		{
-			name:   "ShouldFailNoIntrospectors",
+			name:   "ShouldFailNoIntrospectorRecognizesTheToken",
 			scopes: []string{},
 			setup:  func(ctrl *gomock.Controller, config *Config, validator *mock.MockTokenIntrospector) {},
-			err:    "The request could not be authorized. Check that you provided valid credentials in the right format. Could not find the requested resource(s).",
+			err:    errNoStrategy,
 		},
 		{
 			name:   "ShouldFailIntrospectorReturnsErrUnknownRequest",
@@ -122,7 +124,7 @@ func TestIntrospect(t *testing.T) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(gomock.Any(), "some-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), ErrUnknownRequest)
 			},
-			err: "The request could not be authorized. Unable to find a suitable validation strategy for the token, thus it is invalid.",
+			err: errNoStrategy,
 		},
 		{
 			name:   "ShouldFailIntrospectorReturnsErrInvalidClient",

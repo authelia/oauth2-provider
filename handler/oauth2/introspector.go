@@ -9,6 +9,7 @@ import (
 	"errors"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -27,6 +28,11 @@ type CoreValidator struct {
 // hint first and the other kind second, and returns the kind it was accepted as. Only the access token path is tried
 // when refresh token validation is disabled. When both paths fail a definite rejection is returned in preference to
 // oauth2.ErrUnknownRequest.
+//
+// A token no path can derive a signature for has a format this validator does not issue, so oauth2.ErrUnknownRequest
+// lets the next oauth2.TokenIntrospector resolve it. A JWT which the access token path resolves by its signature and an
+// encrypted JWT are rejected instead: a stored JWT without a session has been revoked, and neither may be accepted by a
+// later oauth2.TokenIntrospector which does not consult storage.
 func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, tokenUseHint oauth2.TokenUse, request oauth2.AccessRequester, scopes []string) (use oauth2.TokenUse, err error) {
 	if len(token) == 0 {
 		return "", oauth2.ErrRequestUnauthorized.WithDebugf("The request either had a malformed Authorization header or didn't include a bearer token.")
@@ -123,37 +129,24 @@ func matchScopes(ss oauth2.ScopeStrategy, granted, scopes []string) error {
 	return nil
 }
 
-// clientRegistrationTokenFormatStrategy recognises an RFC 7591 / RFC 7592 client registration token by its format
-// alone, without resolving it. HMACCoreStrategy implements it, and JWTProfileCoreStrategy inherits it by embedding
-// that strategy; a CoreStrategy that does not implement it simply mints no distinguishable registration token format
-// and so has nothing for isClientRegistrationToken to recognise.
-type clientRegistrationTokenFormatStrategy interface {
-	IsOpaqueClientRegistrationToken(ctx context.Context, tokenString string) (is bool)
-}
+func (c *CoreValidator) errEmptySignature(ctx context.Context, token string) error {
+	if jwt.IsEncryptedJWT(token) || (jwt.IsSignedJWT(token) && len(c.AccessTokenSignature(ctx, token)) != 0) {
+		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebugError(oauth2.ErrNotFound))
+	}
 
-// isClientRegistrationToken reports whether the configured CoreStrategy recognises token as an RFC 7591 / RFC 7592
-// client registration token purely by its format - which, for a prefixed strategy, is exactly the case in which the
-// access and refresh token signatures come back empty. See introspectAccessToken for why that distinction matters.
-func (c *CoreValidator) isClientRegistrationToken(ctx context.Context, token string) (is bool) {
-	strategy, ok := c.CoreStrategy.(clientRegistrationTokenFormatStrategy)
-
-	return ok && strategy.IsOpaqueClientRegistrationToken(ctx, token)
+	return errorsx.WithStack(oauth2.ErrUnknownRequest)
 }
 
 // introspectAccessToken resolves and validates an access token for introspection.
 //
-// A session that is not found, or an empty signature on a token recognised as a client registration token, returns
-// oauth2.ErrUnknownRequest so Fosite.IntrospectToken continues to the next oauth2.TokenIntrospector, which aborts on
-// any other error. Every other failure MUST NOT be downgraded to ErrUnknownRequest.
+// A session that is not found, or an empty signature on a token of a foreign format, returns oauth2.ErrUnknownRequest
+// so Fosite.IntrospectToken continues to the next oauth2.TokenIntrospector, which aborts on any other error. Every other
+// failure MUST NOT be downgraded to ErrUnknownRequest.
 func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string, request oauth2.AccessRequester, scopes []string) (err error) {
 	signature := c.AccessTokenSignature(ctx, token)
 
 	if len(signature) == 0 {
-		if c.isClientRegistrationToken(ctx, token) {
-			return errorsx.WithStack(oauth2.ErrUnknownRequest)
-		}
-
-		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(oauth2.ErrNotFound).WithDebugError(oauth2.ErrNotFound))
+		return c.errEmptySignature(ctx, token)
 	}
 
 	var original oauth2.Requester
@@ -188,11 +181,7 @@ func (c *CoreValidator) introspectRefreshToken(ctx context.Context, token string
 	signature := c.RefreshTokenSignature(ctx, token)
 
 	if len(signature) == 0 {
-		if c.isClientRegistrationToken(ctx, token) {
-			return errorsx.WithStack(oauth2.ErrUnknownRequest)
-		}
-
-		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithWrap(oauth2.ErrNotFound).WithDebugError(oauth2.ErrNotFound))
+		return c.errEmptySignature(ctx, token)
 	}
 
 	var original oauth2.Requester

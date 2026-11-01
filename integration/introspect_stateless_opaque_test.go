@@ -33,13 +33,13 @@ func TestIntrospectOpaqueTokenWithStatelessIntrospector(t *testing.T) {
 	}
 
 	orders := map[string][]compose.Factory{
-		"CoreFirst":                 {compose.OAuth2TokenIntrospectionFactory, compose.OAuth2StatelessJWTIntrospectionFactory, compose.RFC7591ClientRegistrationTokenIntrospectionFactory},
-		"StatelessFirst":            {compose.OAuth2StatelessJWTIntrospectionFactory, compose.OAuth2TokenIntrospectionFactory, compose.RFC7591ClientRegistrationTokenIntrospectionFactory},
+		introspectFirstCore:         {compose.OAuth2TokenIntrospectionFactory, compose.OAuth2StatelessJWTIntrospectionFactory, compose.RFC7591ClientRegistrationTokenIntrospectionFactory},
+		introspectFirstStateless:    {compose.OAuth2StatelessJWTIntrospectionFactory, compose.OAuth2TokenIntrospectionFactory, compose.RFC7591ClientRegistrationTokenIntrospectionFactory},
 		"RegistrationThenCoreFirst": {compose.RFC7591ClientRegistrationTokenIntrospectionFactory, compose.OAuth2TokenIntrospectionFactory, compose.OAuth2StatelessJWTIntrospectionFactory},
 		"RegistrationThenStateless": {compose.RFC7591ClientRegistrationTokenIntrospectionFactory, compose.OAuth2StatelessJWTIntrospectionFactory, compose.OAuth2TokenIntrospectionFactory},
 	}
 
-	prefixes := map[string]string{"Unprefixed": "", "Prefixed": "authelia_%s_"}
+	prefixes := map[string]string{introspectUnprefixed: "", introspectPrefixed: introspectPrefix}
 
 	for storeName, newStore := range stores {
 		for orderName, factories := range orders {
@@ -94,7 +94,7 @@ func TestIntrospectOpaqueTokenWithStatelessIntrospector(t *testing.T) {
 
 func newStatelessOpaqueRequest() *oauth2.Request {
 	request := oauth2.NewRequest()
-	request.Client = &oauth2.DefaultClient{ID: "client"}
+	request.Client = &oauth2.DefaultClient{ID: introspectClientID}
 	request.Session = &oauth2.DefaultSession{
 		ExpiresAt: map[oauth2.TokenType]time.Time{
 			oauth2.AccessToken:  time.Now().Add(time.Hour),

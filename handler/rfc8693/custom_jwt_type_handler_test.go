@@ -135,7 +135,11 @@ func TestCustomJWTIssuedWithScopesCanBeExchangedForThem(t *testing.T) {
 	config := newSpecConfig(t)
 
 	store := storage.NewExampleStore()
-	client := store.Clients["my-client"]
+
+	client := store.Clients["my-client"].(*oauth2.DefaultClient)
+	client.Scopes = append(client.Scopes, "orders")
+
+	grant := &TokenExchangeGrantHandler{Config: config, ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.ExactAudienceStrategy, ResourceStrategy: oauth2.ExactResourceStrategy}
 
 	handler := &CustomJWTTypeHandler{
 		Config:   config,
@@ -151,12 +155,14 @@ func TestCustomJWTIssuedWithScopesCanBeExchangedForThem(t *testing.T) {
 	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), newCustomJWTScopeRequest(client, session, oauth2.Arguments{"orders"}), response)))
 
 	testCases := []struct {
-		name     string
-		scope    string
-		expected error
+		name  string
+		scope string
+		grant string
+		hint  string
 	}{
 		{name: "ShouldPermitTheIssuedScope", scope: "orders"},
-		{name: "ShouldRefuseAnotherScope", scope: "photos", expected: oauth2.ErrInvalidScope},
+		{name: "ShouldRefuseAScopeTheJWTWasNotIssued", scope: "photos", hint: "The subject token is not granted 'photos' and so this scope cannot be requested."},
+		{name: "ShouldRefuseAScopeTheClientMayNotRequest", scope: "contacts", grant: "The OAuth 2.0 Client is not allowed to request scope 'contacts'."},
 	}
 
 	for _, tc := range testCases {
@@ -176,15 +182,28 @@ func TestCustomJWTIssuedWithScopesCanBeExchangedForThem(t *testing.T) {
 				},
 			}
 
-			err := handler.HandleTokenEndpointRequest(t.Context(), request)
+			err := grant.HandleTokenEndpointRequest(t.Context(), request)
 
-			if tc.expected != nil {
-				assert.ErrorIs(t, err, tc.expected)
+			if tc.grant != "" {
+				require.ErrorIs(t, err, oauth2.ErrInvalidScope)
+				assert.Equal(t, tc.grant, oauth2.ErrorToRFC6749Error(err).HintField)
 
 				return
 			}
 
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			err = handler.HandleTokenEndpointRequest(t.Context(), request)
+
+			if tc.hint != "" {
+				require.ErrorIs(t, err, oauth2.ErrInvalidScope)
+				assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, oauth2.Arguments{tc.scope}, request.GetGrantedScopes())
 		})
 	}
 }

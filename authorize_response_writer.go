@@ -60,7 +60,7 @@ func (f *Fosite) NewAuthorizeResponse(ctx context.Context, request AuthorizeRequ
 
 func isEncryptedJARMClient(client Client) bool {
 	if c, ok := client.(jwt.JARMClient); ok {
-		return c.GetAuthorizationEncryptedResponseAlg() != ""
+		return !jwt.IsNoneAlg(c.GetAuthorizationEncryptedResponseAlg())
 	}
 
 	return false

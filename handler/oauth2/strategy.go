@@ -46,7 +46,9 @@ type AccessTokenStrategy interface {
 	// GenerateAccessToken generates a new Access Token.
 	GenerateAccessToken(ctx context.Context, request oauth2.Requester) (token string, signature string, err error)
 
-	// ValidateAccessToken validates the provided Access Token.
+	// ValidateAccessToken validates the provided Access Token. The integrity of the token MUST be verified before its
+	// expiry, as the token revocation handler treats an expired token as intact. The request may have no session, as that
+	// handler looks tokens up without one, in which case only the integrity of the token can be verified.
 	ValidateAccessToken(ctx context.Context, request oauth2.Requester, token string) (err error)
 }
 
@@ -64,6 +66,8 @@ type RefreshTokenStrategy interface {
 
 	// ValidateRefreshToken validates the provided Refresh Token. The integrity of the token MUST be verified before
 	// its expiry, so that oauth2.ErrTokenExpired is only returned for a genuine token.
+	// The request may have no session, as the token revocation handler looks tokens up without one, in which case only
+	// the integrity of the token can be verified.
 	ValidateRefreshToken(ctx context.Context, request oauth2.Requester, token string) (err error)
 }
 

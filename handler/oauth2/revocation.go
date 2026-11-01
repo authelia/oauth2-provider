@@ -26,9 +26,12 @@ type TokenRevocationHandler struct {
 // RevokeToken implements https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 // The token type hint indicates which token type check should be performed first.
 //
+// The signature of a token is the key it is stored under, so presenting one does not show possession of the token. A
+// token which is not intact is an invalid token, which RFC 7009 Section 2.2 answers with success and nothing revoked. An
+// expired token is intact.
+//
 // A rotated refresh token presented by the client it was issued to revokes the grant, as RFC 7009 Section 2.1 permits and
 // as the token endpoint does for a reused refresh token, so the tokens which replaced it do not outlive the revocation.
-// One which is not intact is an invalid token, which RFC 7009 Section 2.2 answers with success and nothing revoked.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
 // See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
@@ -122,17 +125,40 @@ func (r *TokenRevocationHandler) getRevokeRefreshTokensExplicitly(ctx context.Co
 func (r *TokenRevocationHandler) handleGetRefreshTokenRequester(ctx context.Context, token string) (request oauth2.Requester, tokenType oauth2.TokenType, err error) {
 	signature := r.RefreshTokenStrategy.RefreshTokenSignature(ctx, token)
 
-	request, err = r.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil)
+	if request, err = r.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); err != nil {
+		return request, consts.TokenTypeRefreshToken, err
+	}
 
-	return request, consts.TokenTypeRefreshToken, err
+	if err = validateRevokedToken(r.RefreshTokenStrategy.ValidateRefreshToken(ctx, request, token)); err != nil {
+		return nil, consts.TokenTypeRefreshToken, err
+	}
+
+	return request, consts.TokenTypeRefreshToken, nil
 }
 
 func (r *TokenRevocationHandler) handleGetAccessTokenRequester(ctx context.Context, token string) (request oauth2.Requester, tokenType oauth2.TokenType, err error) {
 	signature := r.AccessTokenStrategy.AccessTokenSignature(ctx, token)
 
-	request, err = r.TokenRevocationStorage.GetAccessTokenSession(ctx, signature, nil)
+	if request, err = r.TokenRevocationStorage.GetAccessTokenSession(ctx, signature, nil); err != nil {
+		return request, consts.TokenTypeAccessToken, err
+	}
 
-	return request, consts.TokenTypeAccessToken, err
+	if err = validateRevokedToken(r.AccessTokenStrategy.ValidateAccessToken(ctx, request, token)); err != nil {
+		return nil, consts.TokenTypeAccessToken, err
+	}
+
+	return request, consts.TokenTypeAccessToken, nil
+}
+
+func validateRevokedToken(err error) error {
+	switch {
+	case IsIntactToken(err):
+		return nil
+	case IsTokenRejection(err):
+		return oauth2.ErrNotFound
+	default:
+		return err
+	}
 }
 
 func (r *TokenRevocationHandler) handleErrors(errs []error) (err error) {

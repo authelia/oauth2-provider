@@ -114,7 +114,16 @@ func (s *HMACCoreStrategy) ValidateAccessToken(ctx context.Context, r oauth2.Req
 		return errorsx.WithStack(oauth2.ErrInvalidTokenFormat.WithHint("Provided Token does not appear to be an Access Token."))
 	}
 
-	var exp = r.GetSession().GetExpiresAt(oauth2.AccessToken)
+	if err = s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartAccessToken)); err != nil {
+		return err
+	}
+
+	session := r.GetSession()
+	if session == nil {
+		return nil
+	}
+
+	var exp = session.GetExpiresAt(oauth2.AccessToken)
 
 	if exp.IsZero() && r.GetRequestedAt().Add(s.Config.GetAccessTokenLifespan(ctx)).Before(time.Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Access Token expired at '%s'.", r.GetRequestedAt().Add(s.Config.GetAccessTokenLifespan(ctx))))
@@ -124,7 +133,7 @@ func (s *HMACCoreStrategy) ValidateAccessToken(ctx context.Context, r oauth2.Req
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Access Token expired at '%s'.", exp))
 	}
 
-	return s.Enigma.Validate(ctx, s.trimPrefix(tokenString, tokenPrefixPartAccessToken))
+	return nil
 }
 
 // IsOpaqueClientRegistrationToken returns true when the token carries this strategy's client registration token

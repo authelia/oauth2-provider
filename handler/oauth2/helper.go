@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"net/http"
 	"time"
 
 	"authelia.com/provider/oauth2"
@@ -70,7 +71,8 @@ func IsIntactToken(err error) bool {
 }
 
 // IsTokenRejection reports whether a token validation error rejects the token presented by the client, as opposed to
-// a server error that must be answered as one.
+// a server error that must be answered as one, which is any error with a 5xx status such as oauth2.ErrServerError,
+// oauth2.ErrTemporarilyUnavailable or oauth2.ErrMisconfiguration.
 func IsTokenRejection(err error) bool {
 	var (
 		rfc     *oauth2.RFC6749Error
@@ -81,7 +83,7 @@ func IsTokenRejection(err error) bool {
 	case errors.As(err, &corrupt):
 		return true
 	case errors.As(err, &rfc):
-		return !errors.Is(err, oauth2.ErrServerError)
+		return rfc.CodeField < http.StatusInternalServerError
 	default:
 		return false
 	}

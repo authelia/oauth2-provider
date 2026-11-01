@@ -468,7 +468,8 @@ func redirectURIHosts(redirectURIs []string) (hosts map[string]struct{}, hostles
 }
 
 // validateJSONWebKeys implements OpenID Connect Dynamic Client Registration 1.0 Section 2: 'jwks' and 'jwks_uri'
-// are mutually exclusive. An RSA key in 'jwks' larger than jwt.RSAMaximumKeySize is rejected.
+// are mutually exclusive and the JWK Set MUST NOT contain private or symmetric key values. An RSA key in 'jwks' larger
+// than jwt.RSAMaximumKeySize is rejected.
 //
 // See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 func validateJSONWebKeys(metadata *oauth2.ClientRegistrationMetadata) (err error) {
@@ -481,6 +482,10 @@ func validateJSONWebKeys(metadata *oauth2.ClientRegistrationMetadata) (err error
 	}
 
 	for i := range metadata.JSONWebKeys.Keys {
+		if !metadata.JSONWebKeys.Keys[i].IsPublic() {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' parameter must not contain private or symmetric key values.", consts.ClientMetadataJSONWebKeys))
+		}
+
 		if err = jwt.ValidateRSAKeyMaximumSize(&metadata.JSONWebKeys.Keys[i]); err != nil {
 			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' parameter is invalid: %s.", consts.ClientMetadataJSONWebKeys, err.Error()))
 		}
@@ -556,6 +561,8 @@ func validateAlgorithms(metadata *oauth2.ClientRegistrationMetadata) (err error)
 		{consts.ClientMetadataTokenEndpointAuthAlg, metadata.TokenEndpointAuthSigningAlg},
 		{consts.ClientMetadataIntrospectionEndpointAuthAlg, metadata.IntrospectionEndpointAuthSigningAlg},
 		{consts.ClientMetadataRevocationEndpointAuthAlg, metadata.RevocationEndpointAuthSigningAlg},
+		{consts.ClientMetadataAuthorizationSignedResponseAlg, metadata.AuthorizationSignedResponseAlg},
+		{consts.ClientMetadataAccessTokenSignedResponseAlg, metadata.AccessTokenSignedResponseAlg},
 	} {
 		if algorithm.value == consts.JSONWebTokenAlgNone {
 			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value must not be '%s'.", algorithm.name, consts.JSONWebTokenAlgNone))
@@ -579,6 +586,15 @@ func validateAlgorithms(metadata *oauth2.ClientRegistrationMetadata) (err error)
 		{consts.ClientMetadataTokenEndpointAuthAlg, metadata.TokenEndpointAuthSigningAlg},
 		{consts.ClientMetadataIntrospectionEndpointAuthAlg, metadata.IntrospectionEndpointAuthSigningAlg},
 		{consts.ClientMetadataRevocationEndpointAuthAlg, metadata.RevocationEndpointAuthSigningAlg},
+		{consts.ClientMetadataAuthorizationSignedResponseAlg, metadata.AuthorizationSignedResponseAlg},
+		{consts.ClientMetadataAuthorizationEncryptedResponseAlg, metadata.AuthorizationEncryptedResponseAlg},
+		{consts.ClientMetadataAuthorizationEncryptedResponseEnc, metadata.AuthorizationEncryptedResponseEnc},
+		{consts.ClientMetadataIntrospectionSignedResponseAlg, metadata.IntrospectionSignedResponseAlg},
+		{consts.ClientMetadataIntrospectionEncryptedResponseAlg, metadata.IntrospectionEncryptedResponseAlg},
+		{consts.ClientMetadataIntrospectionEncryptedResponseEnc, metadata.IntrospectionEncryptedResponseEnc},
+		{consts.ClientMetadataAccessTokenSignedResponseAlg, metadata.AccessTokenSignedResponseAlg},
+		{consts.ClientMetadataAccessTokenEncryptedResponseAlg, metadata.AccessTokenEncryptedResponseAlg},
+		{consts.ClientMetadataAccessTokenEncryptedResponseEnc, metadata.AccessTokenEncryptedResponseEnc},
 	}
 
 	for _, algorithm := range algorithms {
@@ -643,7 +659,7 @@ func isToken(s string) bool {
 	}
 
 	return !strings.ContainsFunc(s, func(r rune) bool {
-		return r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == '\v' || r == '\f'
+		return r <= ' ' || r >= 0x7F
 	})
 }
 

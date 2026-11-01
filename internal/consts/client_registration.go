@@ -60,10 +60,13 @@ const (
 const (
 	ClientMetadataAuthorizationSignedResponseAlg    = "authorization_signed_response_alg"
 	ClientMetadataAuthorizationEncryptedResponseAlg = "authorization_encrypted_response_alg"
+	ClientMetadataAuthorizationEncryptedResponseEnc = "authorization_encrypted_response_enc"
 	ClientMetadataIntrospectionSignedResponseAlg    = "introspection_signed_response_alg"
 	ClientMetadataIntrospectionEncryptedResponseAlg = "introspection_encrypted_response_alg"
+	ClientMetadataIntrospectionEncryptedResponseEnc = "introspection_encrypted_response_enc"
 	ClientMetadataAccessTokenSignedResponseAlg      = "access_token_signed_response_alg"
 	ClientMetadataAccessTokenEncryptedResponseAlg   = "access_token_encrypted_response_alg"
+	ClientMetadataAccessTokenEncryptedResponseEnc   = "access_token_encrypted_response_enc"
 )
 
 // Client metadata parameters naming a client authentication method, validated by name.

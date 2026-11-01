@@ -21,6 +21,8 @@ import (
 )
 
 func TestLocalValidator(t *testing.T) {
+	const errPrivateOrSymmetricKey = "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks' parameter must not contain private or symmetric key values."
+
 	config := &oauth2.Config{
 		ScopeStrategy:    oauth2.ExactScopeStrategy,
 		AudienceStrategy: oauth2.DefaultAudienceStrategy,
@@ -193,6 +195,99 @@ func TestLocalValidator(t *testing.T) {
 				JSONWebKeys:  &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: rsaPublicKeyOfSize(jwt.RSAMaximumKeySize + 1)}}},
 			},
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks' parameter is invalid: the JSON Web Key is a 16385 bit RSA key but keys of at most 16384 bits are permitted.",
+		},
+		{
+			name: "ShouldRejectASymmetricKey",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://example.com/cb"},
+				JSONWebKeys:  &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: []byte("0123456789abcdef"), KeyID: "symmetric"}}},
+			},
+			expected: errPrivateOrSymmetricKey,
+		},
+		{
+			name: "ShouldRejectAPrivateKey",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://example.com/cb"},
+				JSONWebKeys:  &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &rsa.PrivateKey{PublicKey: *rsaPublicKeyOfSize(2048)}}}},
+			},
+			expected: errPrivateOrSymmetricKey,
+		},
+		{
+			name: "ShouldRejectAPrivateKeyAfterAPublicKey",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://example.com/cb"},
+				JSONWebKeys:  &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: rsaPublicKeyOfSize(2048)}, {Key: &rsa.PrivateKey{PublicKey: *rsaPublicKeyOfSize(2048)}}}},
+			},
+			expected: errPrivateOrSymmetricKey,
+		},
+		{
+			name: "ShouldRejectNoneAuthorizationSignedResponseAlg",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:                   []string{"https://example.com/cb"},
+				AuthorizationSignedResponseAlg: consts.JSONWebTokenAlgNone,
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'authorization_signed_response_alg' value must not be 'none'.",
+		},
+		{
+			name: "ShouldRejectNoneAccessTokenSignedResponseAlg",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:                 []string{"https://example.com/cb"},
+				AccessTokenSignedResponseAlg: consts.JSONWebTokenAlgNone,
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'access_token_signed_response_alg' value must not be 'none'.",
+		},
+		{
+			name: "ShouldAcceptNoneIntrospectionSignedResponseAlg",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:                   []string{"https://example.com/cb"},
+				IntrospectionSignedResponseAlg: consts.JSONWebTokenAlgNone,
+			},
+		},
+		{
+			name: "ShouldAcceptNoneAuthorizationEncryptedResponseAlg",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:                      []string{"https://example.com/cb"},
+				AuthorizationEncryptedResponseAlg: consts.JSONWebTokenAlgNone,
+			},
+		},
+		{
+			name: "ShouldRejectAnIntrospectionSignedResponseAlgWithWhitespace",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:                   []string{"https://example.com/cb"},
+				IntrospectionSignedResponseAlg: "RS 256",
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'introspection_signed_response_alg' value 'RS 256' must be a non-empty token.",
+		},
+		{
+			name: "ShouldRejectAnAlgWithANullCharacter",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:             []string{"https://example.com/cb"},
+				IDTokenSignedResponseAlg: "RS256\x00",
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'id_token_signed_response_alg' value 'RS256\x00' must be a non-empty token.",
+		},
+		{
+			name: "ShouldRejectAnAlgWithADeleteCharacter",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:             []string{"https://example.com/cb"},
+				IDTokenSignedResponseAlg: "RS256\x7f",
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'id_token_signed_response_alg' value 'RS256\x7f' must be a non-empty token.",
+		},
+		{
+			name: "ShouldRejectAnAlgWithANonASCIICharacter",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:             []string{"https://example.com/cb"},
+				IDTokenSignedResponseAlg: "RS256é",
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'id_token_signed_response_alg' value 'RS256é' must be a non-empty token.",
+		},
+		{
+			name: "ShouldAcceptAnAlgInURIForm",
+			metadata: &oauth2.ClientRegistrationMetadata{ //nolint:gosec
+				RedirectURIs:             []string{"https://example.com/cb"},
+				IDTokenSignedResponseAlg: "https://example.com/alg#custom",
+			},
 		},
 		{
 			name: "ShouldRejectCodeResponseTypeWithoutAuthorizationCodeGrant",

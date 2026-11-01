@@ -259,6 +259,37 @@ func TestLocalValidator(t *testing.T) {
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'introspection_signed_response_alg' value 'RS 256' must be a non-empty token.",
 		},
 		{
+			name: "ShouldRejectAnAlgWithANullCharacter",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:             []string{"https://example.com/cb"},
+				IDTokenSignedResponseAlg: "RS256\x00",
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'id_token_signed_response_alg' value 'RS256\x00' must be a non-empty token.",
+		},
+		{
+			name: "ShouldRejectAnAlgWithADeleteCharacter",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:             []string{"https://example.com/cb"},
+				IDTokenSignedResponseAlg: "RS256\x7f",
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'id_token_signed_response_alg' value 'RS256\x7f' must be a non-empty token.",
+		},
+		{
+			name: "ShouldRejectAnAlgWithANonASCIICharacter",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:             []string{"https://example.com/cb"},
+				IDTokenSignedResponseAlg: "RS256é",
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'id_token_signed_response_alg' value 'RS256é' must be a non-empty token.",
+		},
+		{
+			name: "ShouldAcceptAnAlgInURIForm",
+			metadata: &oauth2.ClientRegistrationMetadata{ //nolint:gosec
+				RedirectURIs:             []string{"https://example.com/cb"},
+				IDTokenSignedResponseAlg: "https://example.com/alg#custom",
+			},
+		},
+		{
 			name: "ShouldRejectCodeResponseTypeWithoutAuthorizationCodeGrant",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				RedirectURIs:  []string{"https://example.com/cb"},

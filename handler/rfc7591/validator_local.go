@@ -659,7 +659,7 @@ func isToken(s string) bool {
 	}
 
 	return !strings.ContainsFunc(s, func(r rune) bool {
-		return r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == '\v' || r == '\f'
+		return r <= ' ' || r >= 0x7F
 	})
 }
 

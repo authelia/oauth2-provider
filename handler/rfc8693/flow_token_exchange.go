@@ -553,17 +553,38 @@ func errExchangeTokenLookup(err error) error {
 }
 
 func errExchangeSubjectLookup(err error) error {
-	var rfc *oauth2.RFC6749Error
-
-	found := errors.As(err, &rfc)
+	rfc := outermostRFC6749Error(err)
 
 	switch {
-	case found && rfc.CodeField >= http.StatusInternalServerError, !found && !errors.Is(err, oauth2.ErrNotFound):
+	case rfc != nil && rfc.CodeField >= http.StatusInternalServerError, rfc == nil && !errors.Is(err, oauth2.ErrNotFound):
 		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	case !found, rfc.ErrorField == oauth2.ErrNotFound.ErrorField:
+	case rfc == nil, rfc.ErrorField == oauth2.ErrNotFound.ErrorField:
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' does not identify a subject.", consts.FormParameterSubjectToken).WithWrap(err).WithDebugError(err))
 	default:
-		return errors.WithStack(err)
+		return errors.WithStack(rfc)
+	}
+}
+
+func outermostRFC6749Error(err error) *oauth2.RFC6749Error {
+	switch e := err.(type) { //nolint:errorlint
+	case nil:
+		return nil
+	case *oauth2.RFC6749Error:
+		return e
+	case oauth2.RFC6749Error:
+		return &e
+	case interface{ Unwrap() []error }:
+		for _, wrapped := range e.Unwrap() {
+			if rfc := outermostRFC6749Error(wrapped); rfc != nil {
+				return rfc
+			}
+		}
+
+		return nil
+	case interface{ Unwrap() error }:
+		return outermostRFC6749Error(e.Unwrap())
+	default:
+		return nil
 	}
 }
 

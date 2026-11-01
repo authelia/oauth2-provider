@@ -16,7 +16,6 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -24,7 +23,9 @@ import (
 //
 // A refresh token is only issued when the 'subject_token' is itself a refresh token, the case RFC 8693 Section 2.2.1
 // describes of a client that needs access once the original credential is no longer valid, and the client opts in with
-// GetAllowTokenExchangeRefreshToken. It never outlives the 'subject_token'.
+// GetAllowTokenExchangeRefreshToken. It never outlives the 'subject_token'. Issuing one rotates the 'subject_token' as
+// the refresh token grant does, per RFC 9700 Section 4.14.2, unless oauth2.IsRefreshTokenRotationDisabledForRequest or
+// RefreshTokenRotationOverrideClient disables rotation.
 //
 // RefreshTokenLifespan applies unless the client sets its own lifespan for the token exchange grant. A value of -1
 // removes the configured limit, but the refresh token still expires with the 'subject_token'.
@@ -43,8 +44,9 @@ type RefreshTokenTypeHandler struct {
 
 	Storage
 
-	// TokenRevocationStorage revokes the grant of a rotated refresh token presented as a 'subject_token' or
-	// 'actor_token'. A replayed refresh token is refused with a server error when it is nil.
+	// TokenRevocationStorage rotates a refresh token 'subject_token' and revokes the grant of a rotated refresh token
+	// presented as a 'subject_token' or 'actor_token'. A replayed refresh token, and an exchange which must rotate, are
+	// refused with a server error when it is nil.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 	TokenRevocationStorage hoauth2.TokenRevocationStorage
@@ -363,6 +365,16 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The token exchange request was not granted any of the scopes (%s) required by the authorization server to issue a refresh token.", strings.Join(c.RefreshTokenScopes, ", ")))
 	}
 
+	var subjectSignature string
+
+	rotate := rotatesSubjectRefreshToken(ctx, c.Config, request)
+
+	if rotate {
+		if subjectSignature, err = beginSubjectRefreshTokenRotation(ctx, c.CoreStrategy, c.TokenRevocationStorage, request); err != nil {
+			return err
+		}
+	}
+
 	recordSubjectTokenDeadline(request)
 
 	rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.RefreshToken, c.RefreshTokenLifespan)
@@ -374,15 +386,27 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 	}
 
-	if signature != "" {
+	create := func(ctx context.Context) (err error) {
+		if signature == "" {
+			return nil
+		}
+
 		// This exchange issues a refresh token only, so there is no paired access token signature to record.
 		if err = c.CreateRefreshTokenSession(ctx, signature, "", request.Sanitize([]string{})); err != nil {
-			if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.Storage); rollBackTxnErr != nil {
-				err = rollBackTxnErr
-			}
-
 			return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 		}
+
+		return nil
+	}
+
+	if rotate {
+		err = commitSubjectRefreshTokenRotation(ctx, c.TokenRevocationStorage, request, subjectSignature, create)
+	} else {
+		err = create(ctx)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	response.SetAccessToken(token)

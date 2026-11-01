@@ -13,7 +13,6 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -23,7 +22,9 @@ import (
 // Section 5 suggests a limited token lifetime to mitigate abuse of delegated rights. A refresh token is only issued
 // with the access token when the 'subject_token' is itself a refresh token and the client opts in with
 // GetAllowTokenExchangeRefreshToken: RFC 8693 Section 2.2.1 states one will typically not be issued when a temporary
-// credential is exchanged for another.
+// credential is exchanged for another. Issuing one rotates the 'subject_token' as the refresh token grant does, per RFC
+// 9700 Section 4.14.2, unless oauth2.IsRefreshTokenRotationDisabledForRequest or RefreshTokenRotationOverrideClient
+// disables rotation.
 //
 // AccessTokenLifespan and RefreshTokenLifespan apply unless the client sets its own lifespans for the token exchange
 // grant. A RefreshTokenLifespan of -1 removes the configured limit, but the refresh token still expires with the
@@ -43,6 +44,12 @@ type AccessTokenTypeHandler struct {
 	hoauth2.CoreStrategy
 
 	Storage
+
+	// TokenRevocationStorage rotates a refresh token 'subject_token' and revokes its grant when it is replayed. An
+	// exchange which must rotate is refused with a server error when it is nil.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+	TokenRevocationStorage hoauth2.TokenRevocationStorage
 }
 
 // HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.3.2
@@ -196,6 +203,18 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 		return err
 	}
 
+	issueRefreshToken := c.canIssueRefreshToken(request)
+
+	var subjectSignature string
+
+	rotate := issueRefreshToken && rotatesSubjectRefreshToken(ctx, c.Config, request)
+
+	if rotate {
+		if subjectSignature, err = beginSubjectRefreshTokenRotation(ctx, c.CoreStrategy, c.TokenRevocationStorage, request); err != nil {
+			return err
+		}
+	}
+
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.AccessToken, c.AccessTokenLifespan)
 
 	request.GetSession().SetExpiresAt(oauth2.AccessToken, capToSubjectTokenExpiry(request, time.Now().UTC().Add(atLifespan)))
@@ -204,31 +223,45 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 
 	if token, signature, err = c.GenerateAccessToken(ctx, request); err != nil {
 		return err
-	} else if err = c.CreateAccessTokenSession(ctx, signature, request.Sanitize([]string{})); err != nil {
-		return err
 	}
 
-	issueRefreshToken := c.canIssueRefreshToken(request)
+	create := func(ctx context.Context) (err error) {
+		if err = c.CreateAccessTokenSession(ctx, signature, request.Sanitize([]string{})); err != nil {
+			return err
+		}
 
-	if issueRefreshToken {
+		if !issueRefreshToken {
+			return nil
+		}
+
 		var refresh, refreshSignature string
 
 		recordSubjectTokenDeadline(request)
 		request.GetSession().SetExpiresAt(oauth2.RefreshToken, refreshTokenExpiry(request, oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.RefreshToken, c.RefreshTokenLifespan)))
+
 		if refresh, refreshSignature, err = c.GenerateRefreshToken(ctx, request); err != nil {
 			return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 		}
 
 		if refreshSignature != "" {
 			if err = c.CreateRefreshTokenSession(ctx, refreshSignature, signature, request.Sanitize([]string{})); err != nil {
-				if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.Storage); rollBackTxnErr != nil {
-					err = rollBackTxnErr
-				}
 				return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 			}
 		}
 
 		response.SetExtra(consts.FormParameterRefreshToken, refresh)
+
+		return nil
+	}
+
+	if rotate {
+		err = commitSubjectRefreshTokenRotation(ctx, c.TokenRevocationStorage, request, subjectSignature, create)
+	} else {
+		err = create(ctx)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	response.SetAccessToken(token)

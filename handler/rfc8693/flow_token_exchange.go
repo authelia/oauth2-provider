@@ -662,6 +662,84 @@ func allowsRefreshTokenIssuance(client oauth2.Client) bool {
 	return ok && c.GetAllowTokenExchangeRefreshToken()
 }
 
+func rotatesSubjectRefreshToken(ctx context.Context, config oauth2.RFC8693ConfigProvider, request oauth2.Requester) bool {
+	if c, ok := request.GetClient().(RefreshTokenRotationOverrideClient); ok && c.GetOverrideTokenExchangeRefreshTokenRotation() {
+		return c.GetTokenExchangeRefreshTokenRotation()
+	}
+
+	provider, _ := config.(oauth2.DisableRefreshTokenRotationProvider)
+
+	return !oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, provider, request)
+}
+
+func beginSubjectRefreshTokenRotation(ctx context.Context, strategy hoauth2.RefreshTokenStrategy, store hoauth2.TokenRevocationStorage, request oauth2.AccessRequester) (signature string, err error) {
+	if store == nil {
+		return "", errors.WithStack(oauth2.ErrServerError.WithDebug("The refresh token 'subject_token' must be rotated but the handler has no TokenRevocationStorage."))
+	}
+
+	signature = strategy.RefreshTokenSignature(ctx, request.GetRequestForm().Get(consts.FormParameterSubjectToken))
+
+	var original oauth2.Requester
+
+	switch original, err = store.GetRefreshTokenSession(ctx, signature, nil); {
+	case err == nil:
+		request.SetID(original.GetID())
+
+		return signature, nil
+	case errors.Is(err, oauth2.ErrInactiveToken) && original != nil:
+		request.SetID(original.GetID())
+
+		return "", errSubjectRefreshTokenReplay(ctx, store, signature, request, err)
+	case errors.Is(err, oauth2.ErrNotFound), errors.Is(err, oauth2.ErrInactiveToken):
+		return "", errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithDebugError(err))
+	default:
+		return "", errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+}
+
+func commitSubjectRefreshTokenRotation(ctx context.Context, store hoauth2.TokenRevocationStorage, request oauth2.AccessRequester, signature string, create func(ctx context.Context) error) (err error) {
+	parent := ctx
+
+	if ctx, err = storage.MaybeBeginTx(ctx, store); err != nil {
+		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	if err = store.RotateRefreshToken(ctx, request.GetID(), signature); err == nil {
+		if err = create(ctx); err == nil {
+			err = storage.MaybeCommitTx(ctx, store)
+		}
+	}
+
+	if err == nil {
+		return nil
+	}
+
+	if rollback := storage.MaybeRollbackTx(ctx, store); rollback != nil {
+		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("error: %s; rollback error: %s", err, rollback))
+	}
+
+	var rfc *oauth2.RFC6749Error
+
+	switch {
+	case errors.Is(err, oauth2.ErrInactiveToken):
+		return errSubjectRefreshTokenReplay(parent, store, signature, request, err)
+	case errors.Is(err, oauth2.ErrNotFound), errors.Is(err, oauth2.ErrSerializationFailure):
+		return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to exchange the refresh token because of multiple concurrent requests using the same token which is not allowed.").WithDebugError(err))
+	case errors.As(err, &rfc):
+		return errors.WithStack(err)
+	default:
+		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+}
+
+func errSubjectRefreshTokenReplay(ctx context.Context, store hoauth2.TokenRevocationStorage, signature string, request oauth2.Requester, replay error) (err error) {
+	if err = hoauth2.RevokeRefreshTokenFamily(ctx, store, signature, request); err != nil {
+		return errors.WithStack(err)
+	}
+
+	return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Token is not valid or has expired.").WithWrap(replay).WithDebugError(replay))
+}
+
 func allowsAuthorizationGrantIssuance(client oauth2.Client) bool {
 	c, ok := client.(AuthorizationGrantIssuanceClient)
 

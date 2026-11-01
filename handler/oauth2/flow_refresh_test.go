@@ -1383,8 +1383,8 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			},
 		},
 		{
-			name: "ShouldFailWithInvalidRequestWhenGetRefreshTokenSessionReturnsErrNotFound",
-			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Failed to refresh token because of multiple concurrent requests using the same token which is not allowed. not_found",
+			name: "ShouldFailWithInvalidGrantWhenGetRefreshTokenSessionReturnsErrNotFound",
+			err:  "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The refresh token has been revoked. Could not find the requested resource(s).",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 				mockTransactional.

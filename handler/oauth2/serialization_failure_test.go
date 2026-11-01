@@ -412,6 +412,78 @@ func TestSerializationFailureRereadsAfterRollback(t *testing.T) {
 	}
 }
 
+func TestRefreshTokenDeletedBetweenHandleAndPopulate(t *testing.T) {
+	testCases := []struct {
+		name  string
+		setup func(ctx context.Context, t *testing.T, store serializationStorage, signature string, original *oauth2.Request) serializationStorage
+	}{
+		{
+			name: "ShouldAnswerInvalidGrantWhenTheFamilyWasRevoked",
+			setup: func(ctx context.Context, t *testing.T, store serializationStorage, signature string, original *oauth2.Request) serializationStorage {
+				require.NoError(t, store.RotateRefreshToken(ctx, original.ID, signature))
+				require.NoError(t, RevokeRefreshTokenFamily(ctx, store, signature, original))
+
+				return store
+			},
+		},
+		{
+			name: "ShouldAnswerInvalidGrantWhenRotationFindsNoSession",
+			setup: func(_ context.Context, _ *testing.T, store serializationStorage, _ string, _ *oauth2.Request) serializationStorage {
+				return &rotationNotFoundStore{serializationStorage: store}
+			},
+		},
+	}
+
+	for _, s := range serializationFailureStores() {
+		for _, tc := range testCases {
+			t.Run(s.name+"/"+tc.name, func(t *testing.T) {
+				store := s.new()
+				strategy := &hmacshaStrategy
+
+				client := &oauth2.DefaultClient{ID: "foo", GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}, Scopes: []string{consts.ScopeOffline}}
+
+				original := &oauth2.Request{
+					ID:           "grant",
+					Client:       client,
+					GrantedScope: oauth2.Arguments{consts.ScopeOffline},
+					Session:      &oauth2.DefaultSession{ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.RefreshToken: time.Now().UTC().Add(time.Hour)}},
+					RequestedAt:  time.Now().UTC(),
+				}
+
+				token, signature, err := strategy.GenerateRefreshToken(t.Context(), nil)
+				require.NoError(t, err)
+				require.NoError(t, store.CreateRefreshTokenSession(t.Context(), signature, "", original))
+
+				handler := &RefreshTokenGrantHandler{
+					TokenRevocationStorage: store,
+					AccessTokenStrategy:    strategy,
+					RefreshTokenStrategy:   strategy,
+					Config: &oauth2.Config{
+						AccessTokenLifespan:  time.Hour,
+						RefreshTokenLifespan: time.Hour,
+						ScopeStrategy:        oauth2.HierarchicScopeStrategy,
+						AudienceStrategy:     oauth2.DefaultAudienceStrategy,
+						RefreshTokenScopes:   []string{consts.ScopeOffline},
+					},
+				}
+
+				request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+				request.Client = client
+				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				request.Form = url.Values{consts.FormParameterRefreshToken: {token}}
+
+				require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), request))
+
+				handler.TokenRevocationStorage = tc.setup(t.Context(), t, store, signature, original)
+
+				err = handler.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())
+				require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+				assert.NotErrorIs(t, err, oauth2.ErrInvalidRequest)
+			})
+		}
+	}
+}
+
 func serializationFailureStores() []struct {
 	name string
 	new  func() serializationStorage
@@ -626,4 +698,12 @@ func (s *transactionalFailureStore) RevokeRefreshToken(ctx context.Context, requ
 	}
 
 	return s.serializationStorage.RevokeRefreshToken(ctx, requestID)
+}
+
+type rotationNotFoundStore struct {
+	serializationStorage
+}
+
+func (s *rotationNotFoundStore) RotateRefreshToken(_ context.Context, _, _ string) error {
+	return oauth2.ErrNotFound
 }

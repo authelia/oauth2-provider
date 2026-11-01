@@ -90,6 +90,9 @@ type RefreshTokenStorage interface {
 	// example by a concurrent request that rotated it first. The refresh token grant handler treats that as a reused
 	// refresh token and revokes every token derived from the same authorization grant.
 	//
+	// This method should return the oauth2.ErrNotFound error when no session exists for the signature, which the refresh
+	// token grant handler answers as a revoked refresh token.
+	//
 	// It may return oauth2.ErrSerializationFailure when a concurrent transaction prevents it. GetRefreshTokenSession MUST
 	// then return oauth2.ErrInactiveToken if that transaction committed the rotation, when called with a context outside
 	// the transaction this request rolled back, so that the grant can be revoked.

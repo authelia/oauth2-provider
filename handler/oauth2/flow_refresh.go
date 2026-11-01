@@ -232,7 +232,7 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 
 	signature := c.RefreshTokenStrategy.RefreshTokenSignature(ctx, request.GetRequestForm().Get(consts.FormParameterRefreshToken))
 
-	var replayed error
+	var replayed, revoked error
 
 	parent := ctx
 
@@ -262,6 +262,12 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 				err = errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(replayed).WithDebugError(replayed))
 			}
 		}
+
+		// RFC 6749 Section 5.2: a revoked refresh token is an 'invalid_grant', and revoking a family deletes the presented
+		// refresh token.
+		if revoked != nil && !errors.Is(err, oauth2.ErrServerError) {
+			err = errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The refresh token has been revoked.").WithWrap(revoked).WithDebugError(revoked))
+		}
 	}()
 
 	srequester, srtrequester := request.Sanitize(nil), request.Sanitize(nil)
@@ -276,6 +282,10 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 			replayed = err
 
 			return err
+		} else if errors.Is(err, oauth2.ErrNotFound) {
+			revoked = err
+
+			return err
 		} else if err != nil {
 			return err
 		}
@@ -286,6 +296,10 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 
 	if err = c.TokenRevocationStorage.RotateRefreshToken(ctx, request.GetID(), signature); errors.Is(err, oauth2.ErrInactiveToken) {
 		replayed = err
+
+		return err
+	} else if errors.Is(err, oauth2.ErrNotFound) {
+		revoked = err
 
 		return err
 	} else if err != nil {

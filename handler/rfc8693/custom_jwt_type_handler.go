@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"maps"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -207,8 +208,16 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'exp' from token is missing."))
 	}
 
-	expiry := toInt64(claims[consts.ClaimExpirationTime])
-	if time.Now().Add(window).Before(time.Unix(expiry, 0)) {
+	// RFC 7519 Section 4.1.4 defines 'exp' as a NumericDate. The claims validation treats a value which truncates to 0 as
+	// absent, and comparing it as a float keeps a value too large for an int64 from wrapping around.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4
+	expiry, ok := numericDate(claims[consts.ClaimExpirationTime])
+
+	switch {
+	case !ok || expiry < 1:
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'exp' from token is not a valid expiration time."))
+	case expiry > float64(time.Now().Add(window).Unix()):
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'exp' from token is too far in the future."))
 	}
 
@@ -555,6 +564,25 @@ func stripIDTokenConfirmationHeader(headers *jwt.Headers) (stripped *jwt.Headers
 	}
 
 	return stripped
+}
+
+func numericDate(claim any) (date float64, ok bool) {
+	switch t := claim.(type) {
+	case float64:
+		date = t
+	case int64:
+		date = float64(t)
+	case json.Number:
+		var err error
+
+		if date, err = t.Float64(); err != nil {
+			return 0, false
+		}
+	default:
+		return 0, false
+	}
+
+	return date, !math.IsNaN(date) && !math.IsInf(date, 0)
 }
 
 func toInt64(claim any) int64 {

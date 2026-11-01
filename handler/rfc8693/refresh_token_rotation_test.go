@@ -180,6 +180,77 @@ func TestTokenExchangeSerializationFailure(t *testing.T) {
 	}
 }
 
+func TestTokenExchangeWritesTheTokensAtomicallyWithoutRotation(t *testing.T) {
+	testCases := []struct {
+		name      string
+		issue     bool
+		create    error
+		commit    error
+		rollback  error
+		expected  error
+		debug     string
+		begins    int
+		commits   int
+		rollbacks int
+		applied   int
+	}{
+		{name: "ShouldCommitBothTokens", issue: true, begins: 1, commits: 1, applied: 2},
+		{name: "ShouldRollBackWhenTheRefreshTokenCannotBeWritten", issue: true, create: errors.New("real db failure"), expected: oauth2.ErrServerError, debug: "real db failure", begins: 1, rollbacks: 1},
+		{name: "ShouldRollBackWhenTheCommitFails", issue: true, commit: errors.New("commit failure"), expected: oauth2.ErrServerError, debug: "commit failure", begins: 1, commits: 1, rollbacks: 1},
+		{name: "ShouldKeepTheCauseWhenTheRollbackFails", issue: true, create: errors.New("real db failure"), rollback: errors.New("rollback failure"), expected: oauth2.ErrServerError, debug: "real db failure", begins: 1, rollbacks: 1},
+		{name: "ShouldNotBeginATransactionForASingleWrite", applied: 1},
+	}
+
+	for _, sc := range bindingExchangeStores() {
+		for _, tc := range testCases {
+			t.Run(sc.name+"/"+tc.name, func(t *testing.T) {
+				f := newRotationFixture(t, sc.newStore())
+				f.config.DisableRefreshTokenRotation = true
+				f.client.TokenExchangeRefreshToken = tc.issue
+
+				store := &bufferedExchangeStore{rfc8693ExchangeStore: f.store, create: tc.create, commit: tc.commit, rollback: tc.rollback}
+
+				f.access.Storage = store
+
+				_, err := f.exchange(t, consts.TokenTypeRFC8693AccessToken)
+
+				if tc.expected != nil {
+					require.ErrorIs(t, err, tc.expected)
+					assert.Contains(t, oauth2.ErrorToRFC6749Error(err).DebugField, tc.debug)
+				} else {
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				}
+
+				assert.Equal(t, tc.begins, store.begins)
+				assert.Equal(t, tc.commits, store.commits)
+				assert.Equal(t, tc.rollbacks, store.rollbacks)
+				assert.Equal(t, tc.applied, store.applied)
+			})
+		}
+	}
+}
+
+func TestTokenExchangeRotationKeepsTheCauseWhenTheRollbackFails(t *testing.T) {
+	for _, sc := range bindingExchangeStores() {
+		t.Run(sc.name, func(t *testing.T) {
+			f := newRotationFixture(t, sc.newStore())
+
+			store := &bufferedExchangeStore{rfc8693ExchangeStore: f.store, create: errors.New("real db failure"), rollback: errors.New("rollback failure")}
+
+			f.access.Storage = store
+			f.access.TokenRevocationStorage = store
+
+			_, err := f.exchange(t, consts.TokenTypeRFC8693AccessToken)
+			require.ErrorIs(t, err, oauth2.ErrServerError)
+
+			debug := oauth2.ErrorToRFC6749Error(err).DebugField
+
+			assert.Contains(t, debug, "real db failure")
+			assert.Contains(t, debug, "rollback failure")
+		})
+	}
+}
+
 func TestTokenExchangeDoesNotRotateWithoutIssuingARefreshToken(t *testing.T) {
 	for _, sc := range bindingExchangeStores() {
 		t.Run(sc.name, func(t *testing.T) {
@@ -251,6 +322,78 @@ func (s *rotationSerializationStore) RotateRefreshToken(ctx context.Context, _, 
 	}
 
 	return oauth2.ErrSerializationFailure
+}
+
+type bufferedExchangeKey struct{}
+
+type bufferedExchangeWrites struct {
+	writes []func(ctx context.Context) error
+}
+
+type bufferedExchangeStore struct {
+	rfc8693ExchangeStore
+
+	create, commit, rollback error
+
+	begins, commits, rollbacks, applied int
+}
+
+func (s *bufferedExchangeStore) write(ctx context.Context, write func(ctx context.Context) error) error {
+	if tx, ok := ctx.Value(bufferedExchangeKey{}).(*bufferedExchangeWrites); ok {
+		tx.writes = append(tx.writes, write)
+
+		return nil
+	}
+
+	s.applied++
+
+	return write(ctx)
+}
+
+func (s *bufferedExchangeStore) CreateAccessTokenSession(ctx context.Context, signature string, request oauth2.Requester) error {
+	return s.write(ctx, func(ctx context.Context) error {
+		return s.rfc8693ExchangeStore.CreateAccessTokenSession(ctx, signature, request)
+	})
+}
+
+func (s *bufferedExchangeStore) CreateRefreshTokenSession(ctx context.Context, signature, accessSignature string, request oauth2.Requester) error {
+	if s.create != nil {
+		return s.create
+	}
+
+	return s.write(ctx, func(ctx context.Context) error {
+		return s.rfc8693ExchangeStore.CreateRefreshTokenSession(ctx, signature, accessSignature, request)
+	})
+}
+
+func (s *bufferedExchangeStore) BeginTX(ctx context.Context) (context.Context, error) {
+	s.begins++
+
+	return context.WithValue(ctx, bufferedExchangeKey{}, &bufferedExchangeWrites{}), nil
+}
+
+func (s *bufferedExchangeStore) Commit(ctx context.Context) error {
+	s.commits++
+
+	if s.commit != nil {
+		return s.commit
+	}
+
+	for _, write := range ctx.Value(bufferedExchangeKey{}).(*bufferedExchangeWrites).writes {
+		if err := write(context.Background()); err != nil {
+			return err
+		}
+
+		s.applied++
+	}
+
+	return nil
+}
+
+func (s *bufferedExchangeStore) Rollback(_ context.Context) error {
+	s.rollbacks++
+
+	return s.rollback
 }
 
 type rotationFixture struct {

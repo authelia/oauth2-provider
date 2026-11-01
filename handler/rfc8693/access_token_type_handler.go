@@ -254,9 +254,12 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 		return nil
 	}
 
-	if rotate {
+	switch {
+	case rotate:
 		err = commitSubjectRefreshTokenRotation(ctx, c.TokenRevocationStorage, request, subjectSignature, create)
-	} else {
+	case issueRefreshToken:
+		err = createInTransaction(ctx, c.Storage, create)
+	default:
 		err = create(ctx)
 	}
 

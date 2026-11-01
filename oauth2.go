@@ -676,6 +676,9 @@ type IDTokenValidationOpts struct {
 
 	// AllowUnverified skips signature verification and all claim validation.
 	AllowUnverified bool
+
+	// IDTokenHint permits an ID Token signed with the client secret of a client registered for that algorithm.
+	IDTokenHint bool
 }
 
 // IDTokenValidationOpt configures IDTokenValidationOpts.
@@ -713,6 +716,15 @@ func WithAllowExpired() IDTokenValidationOpt {
 func WithAllowUnverified() IDTokenValidationOpt {
 	return func(opts *IDTokenValidationOpts) {
 		opts.AllowUnverified = true
+	}
+}
+
+// WithIDTokenHint validates the ID Token as an 'id_token_hint', so one signed with the client secret of a client
+// registered for that algorithm verifies. The client holds that secret and so can forge such a token, which means this
+// may only be used for a value which is a hint and never to establish the identity of an End-User.
+func WithIDTokenHint() IDTokenValidationOpt {
+	return func(opts *IDTokenValidationOpts) {
+		opts.IDTokenHint = true
 	}
 }
 

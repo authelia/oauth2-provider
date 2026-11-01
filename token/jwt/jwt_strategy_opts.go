@@ -24,6 +24,7 @@ type StrategyOpts struct {
 	jweKeyFunc KeyFuncJWE
 
 	allowUnverified  bool
+	idTokenHint      bool
 	issuerSigningAlg string
 }
 
@@ -76,6 +77,21 @@ func WithIDTokenClient(client any) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		if c, ok := client.(IDTokenClient); ok {
 			opts.client = &decoratedIDTokenClient{IDTokenClient: c}
+		}
+
+		return nil
+	}
+}
+
+// WithIDTokenHintClient sets the client as WithIDTokenClient does for decoding an 'id_token_hint'. An ID Token signed
+// with the client secret also verifies when the client is registered for that algorithm with no signing key identifier,
+// which is the condition Encode signs one under. The client holds that secret and so can forge such a token, which means
+// it may only be used for a value which is a hint and never to establish the identity of an End-User.
+func WithIDTokenHintClient(client any) StrategyOpt {
+	return func(opts *StrategyOpts) (err error) {
+		if c, ok := client.(IDTokenClient); ok {
+			opts.client = &decoratedIDTokenClient{IDTokenClient: c}
+			opts.idTokenHint = true
 		}
 
 		return nil

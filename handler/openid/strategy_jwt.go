@@ -314,7 +314,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		if tokenHintString := request.GetRequestForm().Get(consts.FormParameterIDTokenHint); tokenHintString != "" {
 			var tokenHint *jwt.Token
 
-			tokenHint, err = h.Decode(ctx, tokenHintString, jwt.WithClient(jwtClient))
+			tokenHint, err = h.Decode(ctx, tokenHintString, jwt.WithIDTokenHintClient(request.GetClient()))
 
 			var ve *jwt.ValidationError
 			if errors.As(err, &ve) && ve.IsExactly(jwt.ValidationErrorExpired) {

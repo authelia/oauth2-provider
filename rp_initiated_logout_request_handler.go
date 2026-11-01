@@ -148,7 +148,7 @@ func (f *Fosite) validateRPInitiatedLogoutIDTokenHint(ctx context.Context, reque
 
 	var claims jwt.MapClaims
 
-	if claims, err = strategy.ValidateIDToken(ctx, &Request{Client: request.Client}, request.IDTokenHint, WithAllowExpired()); err != nil {
+	if claims, err = strategy.ValidateIDToken(ctx, &Request{Client: request.Client}, request.IDTokenHint, WithAllowExpired(), WithIDTokenHint()); err != nil {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' could not be validated.").WithWrap(err).WithDebugError(err))
 	}
 

@@ -272,15 +272,17 @@ func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessReq
 
 	claims := session.IDTokenClaims()
 
+	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+
 	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {
-		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(c.Config.GetIDTokenLifespan(ctx)))
+		claims.ExpirationTime = jwt.NewNumericDate(time.Now().Add(lifespan))
 	}
 
 	claims.ExpirationTime = jwt.NewNumericDate(capToSubjectTokenExpiry(request, claims.ExpirationTime.Time))
 
 	var token string
 
-	if token, err = c.IssueStrategy.GenerateIDToken(ctx, c.Config.GetIDTokenLifespan(ctx), request); err != nil {
+	if token, err = c.IssueStrategy.GenerateIDToken(ctx, lifespan, request); err != nil {
 		return err
 	}
 

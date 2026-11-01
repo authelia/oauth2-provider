@@ -397,3 +397,47 @@ func BenchmarkIntrospectJWT(b *testing.B) {
 
 	assert.NoError(b, err)
 }
+
+func TestStatelessJWTValidatorTokenFormat(t *testing.T) {
+	const prefix = "authelia_%s_"
+
+	config := &oauth2.Config{GlobalSecret: []byte("foofoofoofoofoofoofoofoofoofoofoo")}
+
+	testCases := []struct {
+		name     string
+		prefix   string
+		token    string
+		definite bool
+	}{
+		{name: "ShouldSkipAnUnprefixedOpaqueToken", token: "key.signature"},
+		{name: "ShouldSkipATokenWithoutSegments", token: "token"},
+		{name: "ShouldSkipAnEmptyToken", token: ""},
+		{name: "ShouldSkipAPrefixedAccessToken", prefix: prefix, token: "authelia_at_key.signature"},       //nolint:gosec
+		{name: "ShouldSkipAPrefixedRegistrationToken", prefix: prefix, token: "authelia_cr_key.signature"}, //nolint:gosec
+		{name: "ShouldRejectAMalformedSignedJWT", token: "header.payload.signature", definite: true},
+		{name: "ShouldRejectAMalformedEncryptedJWT", token: "header.key.iv.ciphertext.tag", definite: true}, //nolint:gosec
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validator := &StatelessJWTValidator{
+				StatelessJWTStrategy: &JWTProfileCoreStrategy{
+					HMACCoreStrategy: NewHMACCoreStrategy(config, tc.prefix),
+					Strategy:         &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())},
+					Config:           config,
+				},
+				Config: &oauth2.Config{ScopeStrategy: oauth2.HierarchicScopeStrategy},
+			}
+
+			_, err := validator.IntrospectToken(t.Context(), tc.token, oauth2.AccessToken, oauth2.NewAccessRequest(&JWTSession{}), nil)
+
+			require.Error(t, err)
+
+			if tc.definite {
+				assert.NotErrorIs(t, err, oauth2.ErrUnknownRequest)
+			} else {
+				assert.ErrorIs(t, err, oauth2.ErrUnknownRequest)
+			}
+		})
+	}
+}

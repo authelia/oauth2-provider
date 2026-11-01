@@ -227,6 +227,20 @@ func TestDefaultStrategyRefusesSymmetricAlgorithmsForAPublicClient(t *testing.T)
 	assert.ErrorContains(t, err, "must not use symmetric algorithms")
 }
 
+func TestDefaultStrategyRefusesSymmetricEncryptionWithAKeyIDForAPublicClient(t *testing.T) {
+	jwks := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: []byte("0123456789abcdef"), KeyID: "symmetric", Algorithm: string(jose.A128KW), Use: JSONWebTokenUseEncryption}}}
+
+	strategy := &DefaultStrategy{Config: &testConfig{}, Issuer: NewDefaultIssuerRS256Unverified(mustRSAKey(t, 2048))}
+
+	claims := MapClaims{ClaimSubject: "peter"}
+
+	_, _, err := strategy.Encode(t.Context(), claims, WithClient(&testClient{alg: string(jose.RS256), encKID: "symmetric", encAlg: string(jose.A128KW), jwks: jwks}))
+	require.NoError(t, err)
+
+	_, _, err = strategy.Encode(t.Context(), claims, WithClient(&testClient{alg: string(jose.RS256), encKID: "symmetric", encAlg: string(jose.A128KW), jwks: jwks, public: true}))
+	assert.ErrorContains(t, err, "must not use symmetric algorithms")
+}
+
 func TestNewClientSecretJWKFromClientHonoursTheSecretExpiry(t *testing.T) {
 	secret := []byte("super-secret-value-padded-to-thirty-two-octets")
 

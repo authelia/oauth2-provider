@@ -126,6 +126,11 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 		return EncodeCompactSigned(ctx, claims, o.headers, keySig)
 	}
 
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#Encryption
+	if o.client.IsPublic() && IsEncryptedJWTClientSecretAlgStr(alg) {
+		return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client configuration. %w", &JWKLookupError{Description: descriptionPublicClientSymmetric}))
+	}
+
 	if len(enc) == 0 {
 		enc = string(jose.A128CBC_HS256)
 	}

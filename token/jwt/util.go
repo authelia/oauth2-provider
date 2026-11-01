@@ -372,6 +372,8 @@ func isJWKUsableWithAlg(jwk jose.JSONWebKey, alg, use string) bool {
 	return false
 }
 
+const descriptionPublicClientSymmetric = "The client is a public client which must not use symmetric algorithms"
+
 // NewClientSecretJWKFromClient returns a client secret based JWK from a client. OpenID Connect Core 1.0 Sections 10.1 and
 // 10.2 state symmetric signatures and symmetric encryption MUST NOT be used by public clients, so there is no such JWK
 // for one.
@@ -385,7 +387,7 @@ func NewClientSecretJWKFromClient(ctx context.Context, client BaseClient, kid, a
 	)
 
 	if client.IsPublic() {
-		return nil, &JWKLookupError{Description: "The client is a public client which must not use symmetric algorithms"}
+		return nil, &JWKLookupError{Description: descriptionPublicClientSymmetric}
 	}
 
 	if secret, ok, err = client.GetClientSecretPlainText(); err != nil {

@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"strings"
 	"testing"
@@ -15,9 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 func TestRevokeTokenVerifiesTheToken(t *testing.T) {
@@ -209,29 +212,112 @@ func TestRevokeTokenWithoutAHydratedSession(t *testing.T) {
 }
 
 func TestRevokeTokenAnswersAValidationFailure(t *testing.T) {
-	store := storage.NewMemoryStore()
-
-	access, _, client := newVerifiedRevocationGrant(t, store, false)
-
-	handler := &TokenRevocationHandler{
-		TokenRevocationStorage: store,
-		RefreshTokenStrategy:   &hmacshaStrategy,
-		AccessTokenStrategy:    &failingAccessTokenStrategy{AccessTokenStrategy: &hmacshaStrategy},
-		Config:                 &oauth2.Config{},
+	failures := []struct {
+		name string
+		err  error
+	}{
+		{name: "ShouldAnswerAnUnknownError", err: errors.New("the secret could not be retrieved")},
+		{name: "ShouldAnswerAServerError", err: oauth2.ErrServerError.WithDebug("debug")},
+		{name: "ShouldAnswerATemporaryFailure", err: oauth2.ErrTemporarilyUnavailable.WithDebug("debug")},
+		{name: "ShouldAnswerAMisconfiguration", err: oauth2.ErrMisconfiguration.WithDebug("debug")},
 	}
 
-	assert.ErrorIs(t, handler.RevokeToken(t.Context(), access, oauth2.AccessToken, client), oauth2.ErrTemporarilyUnavailable)
+	for _, tc := range failures {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("AccessToken", func(t *testing.T) {
+				store := storage.NewMemoryStore()
 
-	_, err := store.GetAccessTokenSession(t.Context(), hmacshaStrategy.AccessTokenSignature(t.Context(), access), &oauth2.DefaultSession{})
-	assert.NoError(t, err)
+				access, _, client := newVerifiedRevocationGrant(t, store, false)
+
+				handler := &TokenRevocationHandler{
+					TokenRevocationStorage: store,
+					RefreshTokenStrategy:   &hmacshaStrategy,
+					AccessTokenStrategy:    &failingTokenStrategy{CoreStrategy: &hmacshaStrategy, err: tc.err},
+					Config:                 &oauth2.Config{},
+				}
+
+				assert.ErrorIs(t, handler.RevokeToken(t.Context(), access, oauth2.AccessToken, client), oauth2.ErrTemporarilyUnavailable)
+
+				_, err := store.GetAccessTokenSession(t.Context(), hmacshaStrategy.AccessTokenSignature(t.Context(), access), &oauth2.DefaultSession{})
+				assert.NoError(t, err)
+			})
+
+			t.Run("RefreshToken", func(t *testing.T) {
+				store := storage.NewMemoryStore()
+
+				_, refresh, client := newVerifiedRevocationGrant(t, store, false)
+
+				handler := &TokenRevocationHandler{
+					TokenRevocationStorage: store,
+					RefreshTokenStrategy:   &failingTokenStrategy{CoreStrategy: &hmacshaStrategy, err: tc.err},
+					AccessTokenStrategy:    &hmacshaStrategy,
+					Config:                 &oauth2.Config{},
+				}
+
+				assert.ErrorIs(t, handler.RevokeToken(t.Context(), refresh, oauth2.RefreshToken, client), oauth2.ErrTemporarilyUnavailable)
+
+				_, err := store.GetRefreshTokenSession(t.Context(), hmacshaStrategy.RefreshTokenSignature(t.Context(), refresh), &oauth2.DefaultSession{})
+				assert.NoError(t, err)
+			})
+
+			t.Run("RotatedRefreshToken", func(t *testing.T) {
+				store := storage.NewMemoryStore()
+				client := &oauth2.DefaultClient{ID: "foo", GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}, Scopes: []string{"foo", consts.ScopeOffline}}
+
+				rotated, _, refresh := newRotatedRefreshToken(t, store, client)
+
+				handler := &TokenRevocationHandler{
+					TokenRevocationStorage: store,
+					RefreshTokenStrategy:   &failingTokenStrategy{CoreStrategy: &hmacshaStrategy, err: tc.err},
+					AccessTokenStrategy:    &hmacshaStrategy,
+					Config:                 &oauth2.Config{},
+				}
+
+				assert.ErrorIs(t, handler.RevokeToken(t.Context(), rotated, oauth2.RefreshToken, client), oauth2.ErrTemporarilyUnavailable)
+
+				_, err := store.GetRefreshTokenSession(t.Context(), hmacshaStrategy.RefreshTokenSignature(t.Context(), refresh), &oauth2.DefaultSession{})
+				assert.NoError(t, err)
+			})
+		})
+	}
 }
 
-type failingAccessTokenStrategy struct {
-	AccessTokenStrategy
+func TestIsTokenRejection(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{name: "ShouldRejectASignatureMismatch", err: oauth2.ErrTokenSignatureMismatch, expected: true},
+		{name: "ShouldRejectAnInvalidFormat", err: oauth2.ErrInvalidTokenFormat.WithDebug("debug"), expected: true},
+		{name: "ShouldRejectAnInvalidClaim", err: oauth2.ErrTokenClaim, expected: true},
+		{name: "ShouldRejectACorruptToken", err: base64.CorruptInputError(1), expected: true},
+		{name: "ShouldNotRejectAServerError", err: oauth2.ErrServerError},
+		{name: "ShouldNotRejectATemporaryFailure", err: oauth2.ErrTemporarilyUnavailable},
+		{name: "ShouldNotRejectAMisconfiguration", err: oauth2.ErrMisconfiguration},
+		{name: "ShouldNotRejectAWrappedServerSideError", err: errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("debug"))},
+		{name: "ShouldNotRejectAnUnknownError", err: errors.New("unknown")},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsTokenRejection(tc.err))
+		})
+	}
 }
 
-func (s *failingAccessTokenStrategy) ValidateAccessToken(_ context.Context, _ oauth2.Requester, _ string) error {
-	return errors.New("the secret could not be retrieved")
+type failingTokenStrategy struct {
+	CoreStrategy
+
+	err error
+}
+
+func (s *failingTokenStrategy) ValidateAccessToken(_ context.Context, _ oauth2.Requester, _ string) error {
+	return s.err
+}
+
+func (s *failingTokenStrategy) ValidateRefreshToken(_ context.Context, _ oauth2.Requester, _ string) error {
+	return s.err
 }
 
 type unhydratedRevocationStore struct {

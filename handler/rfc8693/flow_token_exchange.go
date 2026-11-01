@@ -555,10 +555,12 @@ func errExchangeTokenLookup(err error) error {
 func errExchangeSubjectLookup(err error) error {
 	var rfc *oauth2.RFC6749Error
 
+	found := errors.As(err, &rfc)
+
 	switch {
-	case !errors.As(err, &rfc), rfc.CodeField >= http.StatusInternalServerError:
+	case found && rfc.CodeField >= http.StatusInternalServerError, !found && !errors.Is(err, oauth2.ErrNotFound):
 		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	case rfc.ErrorField == oauth2.ErrNotFound.ErrorField:
+	case !found, rfc.ErrorField == oauth2.ErrNotFound.ErrorField:
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' does not identify a subject.", consts.FormParameterSubjectToken).WithWrap(err).WithDebugError(err))
 	default:
 		return errors.WithStack(err)

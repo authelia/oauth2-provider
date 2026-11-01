@@ -145,6 +145,8 @@ func TestCustomJWTSubjectLookupError(t *testing.T) {
 		{name: "ShouldAnswerServerErrorForAServerSideRFCError", err: oauth2.ErrTemporarilyUnavailable, expected: oauth2.ErrServerError},
 		{name: "ShouldAnswerInvalidRequestForAnUnknownSubject", err: oauth2.ErrNotFound, expected: oauth2.ErrInvalidRequest, hint: "The 'subject_token' does not identify a subject."},
 		{name: "ShouldKeepARejection", err: oauth2.ErrInvalidRequest.WithHint("No subject found."), expected: oauth2.ErrInvalidRequest, hint: "No subject found."},
+		{name: "ShouldAnswerInvalidRequestForACustomUnknownSubject", err: customNotFoundError{}, expected: oauth2.ErrInvalidRequest, hint: "The 'subject_token' does not identify a subject."},
+		{name: "ShouldKeepAServerErrorWrappingACustomUnknownSubject", err: oauth2.ErrServerError.WithWrap(customNotFoundError{}), expected: oauth2.ErrServerError},
 		{name: "ShouldAnswerServerErrorForADecodeError", err: base64.CorruptInputError(1), expected: oauth2.ErrServerError},
 		{name: "ShouldKeepAServerErrorWrappingAnUnknownSubject", err: oauth2.ErrServerError.WithWrap(oauth2.ErrNotFound), expected: oauth2.ErrServerError},
 		{name: "ShouldKeepARefusalWrappingAnUnknownSubject", err: oauth2.ErrAccessDenied.WithWrap(oauth2.ErrNotFound), expected: oauth2.ErrAccessDenied},
@@ -169,6 +171,16 @@ func TestCustomJWTSubjectLookupError(t *testing.T) {
 			}
 		})
 	}
+}
+
+type customNotFoundError struct{}
+
+func (customNotFoundError) Error() string {
+	return "the subject does not exist"
+}
+
+func (customNotFoundError) Is(target error) bool {
+	return target == oauth2.ErrNotFound //nolint:errorlint
 }
 
 type failingSubjectStore struct {

@@ -123,7 +123,8 @@ type IDJAGResourceKey struct {
 }
 
 // MemoryStore is a reference storage implementation which keeps every record in memory. It is intended for tests and
-// examples rather than production use.
+// examples rather than production use. It does not implement Transactional, so a replay made while another request is
+// writing its tokens does not revoke them.
 //
 // The used 'jti' values are kept in a separate map per purpose: ClientAssertionJTIs for client assertions,
 // RFC7523JTIs for RFC 7523 authorization grants, TokenExchangeJTIs for RFC 8693 custom JWT subject and actor

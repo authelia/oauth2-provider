@@ -20,6 +20,16 @@ import (
 // Implementations for `Commit` & `Rollback` should look for the transaction object inside the supplied context using the same
 // key used by `BeginTX`. If these methods have been called, it is expected that a txn object should be available in the provided
 // context.
+//
+// A store MUST implement this interface for the revocation of a replayed authorization code, device code or refresh token
+// to be complete, as RFC 6749 Section 4.1.2 and RFC 9700 Section 4.14.2 describe. The handlers invalidate or rotate the
+// token before they write the tokens which replace it. Without a transaction a replay in that window is refused but revokes
+// nothing, and the tokens written afterwards stay live. Within a transaction, an invalidation or rotation which has not
+// been committed MUST NOT be visible to another request, and a concurrent update of the same token MUST either wait for it
+// or fail with oauth2.ErrSerializationFailure.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 type Transactional interface {
 	BeginTX(ctx context.Context) (context.Context, error)
 	Commit(ctx context.Context) error

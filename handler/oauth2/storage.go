@@ -31,7 +31,8 @@ type AuthorizeCodeStorage interface {
 
 	// InvalidateAuthorizeCodeSession is called when an authorize code is being used. The state of the authorization
 	// code should be set to invalid and consecutive requests to GetAuthorizeCodeSession should return the
-	// ErrInvalidatedAuthorizeCode error.
+	// ErrInvalidatedAuthorizeCode error. See storage.Transactional, which a store must implement for the revocation of a
+	// replayed authorization code to be complete.
 	//
 	// It may return oauth2.ErrSerializationFailure when a concurrent transaction prevents it. GetAuthorizeCodeSession MUST
 	// then return ErrInvalidatedAuthorizeCode, with the oauth2.Requester, if that transaction committed the invalidation,
@@ -85,7 +86,8 @@ type RefreshTokenStorage interface {
 
 	// RotateRefreshToken deactivates the refresh token with the given signature and revokes the access tokens
 	// associated with the given request ID. Consecutive requests to GetRefreshTokenSession for that signature should
-	// return the oauth2.ErrInactiveToken error.
+	// return the oauth2.ErrInactiveToken error. See storage.Transactional, which a store must implement for the revocation
+	// of a replayed refresh token to be complete.
 	//
 	// This method should return the oauth2.ErrInactiveToken error when the refresh token was already deactivated, for
 	// example by a concurrent request that rotated it first. The refresh token grant handler treats that as a reused

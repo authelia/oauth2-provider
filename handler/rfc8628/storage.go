@@ -37,7 +37,8 @@ type Storage interface {
 
 	// InvalidateDeviceCodeSession is called when a device code is being used. The state of the user
 	// code should be set to invalid and consecutive requests to GetDeviceCodeSession should return the
-	// oauth2.ErrInvalidatedDeviceCode error.
+	// oauth2.ErrInvalidatedDeviceCode error. See storage.Transactional, which a store must implement for the revocation of
+	// a replayed device code to be complete.
 	//
 	// It may return oauth2.ErrSerializationFailure when a concurrent transaction prevents it. GetDeviceCodeSession MUST
 	// then return oauth2.ErrInvalidatedDeviceCode, with the oauth2.Requester, if that transaction committed the

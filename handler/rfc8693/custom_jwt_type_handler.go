@@ -95,15 +95,14 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 			return err
 		}
 
-		session.SetSubjectToken(unpacked)
-
 		var subject string
 
 		// Get the subject and populate session.
 		if subject, err = c.GetSubjectForTokenExchange(ctx, request, unpacked); err != nil {
-			return err
+			return errExchangeSubjectLookup(err)
 		}
 
+		session.SetSubjectToken(unpacked)
 		session.SetSubject(subject)
 	}
 

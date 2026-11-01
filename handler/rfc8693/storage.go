@@ -33,5 +33,8 @@ type Storage interface {
 	// GetSubjectForTokenExchange computes the session subject and is used for token types where there is no way
 	// to know the subject value. For some token types, such as access and refresh tokens, the subject is well-defined
 	// and this function is not called.
+	//
+	// A subject token which does not identify a subject MUST return oauth2.ErrNotFound or a client-facing
+	// oauth2.RFC6749Error such as oauth2.ErrInvalidRequest. Any other error is answered as a server error.
 	GetSubjectForTokenExchange(ctx context.Context, request oauth2.Requester, subjectToken map[string]any) (subject string, err error)
 }

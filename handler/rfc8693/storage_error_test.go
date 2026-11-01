@@ -6,6 +6,7 @@ package rfc8693_test
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"net/url"
 	"testing"
@@ -18,6 +19,7 @@ import (
 	"authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -129,6 +131,119 @@ func TestCustomJWTMarkError(t *testing.T) {
 			assert.ErrorIs(t, f.grant.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse()), tc.expected)
 		})
 	}
+}
+
+func TestCustomJWTSubjectLookupError(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		expected error
+		hint     string
+	}{
+		{name: "ShouldAnswerServerErrorForAStorageFailure", err: errors.New("connection refused"), expected: oauth2.ErrServerError},
+		{name: "ShouldAnswerServerErrorForASerializationFailure", err: oauth2.ErrSerializationFailure, expected: oauth2.ErrServerError},
+		{name: "ShouldAnswerServerErrorForAServerSideRFCError", err: oauth2.ErrTemporarilyUnavailable, expected: oauth2.ErrServerError},
+		{name: "ShouldAnswerInvalidRequestForAnUnknownSubject", err: oauth2.ErrNotFound, expected: oauth2.ErrInvalidRequest, hint: "The 'subject_token' does not identify a subject."},
+		{name: "ShouldKeepARejection", err: oauth2.ErrInvalidRequest.WithHint("No subject found."), expected: oauth2.ErrInvalidRequest, hint: "No subject found."},
+		{name: "ShouldAnswerInvalidRequestForACustomUnknownSubject", err: customNotFoundError{}, expected: oauth2.ErrInvalidRequest, hint: "The 'subject_token' does not identify a subject."},
+		{name: "ShouldKeepAServerErrorWrappingACustomUnknownSubject", err: oauth2.ErrServerError.WithWrap(customNotFoundError{}), expected: oauth2.ErrServerError},
+		{name: "ShouldKeepARejectionAsAValue", err: *oauth2.ErrInvalidRequest.WithHint("No subject found."), expected: oauth2.ErrInvalidRequest, hint: "No subject found."},
+		{name: "ShouldKeepAWrappedRejectionAsAValue", err: errorsx.WithStack(*oauth2.ErrAccessDenied), expected: oauth2.ErrAccessDenied},
+		{name: "ShouldAnswerInvalidRequestForAnUnknownSubjectAsAValue", err: *oauth2.ErrNotFound, expected: oauth2.ErrInvalidRequest, hint: "The 'subject_token' does not identify a subject."},
+		{name: "ShouldAnswerServerErrorForAServerSideRFCErrorAsAValue", err: *oauth2.ErrTemporarilyUnavailable, expected: oauth2.ErrServerError},
+		{name: "ShouldKeepAnOuterValueWrappingAnUnknownSubject", err: *oauth2.ErrAccessDenied.WithWrap(oauth2.ErrNotFound), expected: oauth2.ErrAccessDenied},
+		{name: "ShouldKeepAnOuterPointerWrappingAValue", err: oauth2.ErrAccessDenied.WithWrap(*oauth2.ErrNotFound), expected: oauth2.ErrAccessDenied},
+		{name: "ShouldUseTheFirstRFCErrorOfAJoinedError", err: errors.Join(errors.New("first"), *oauth2.ErrAccessDenied, oauth2.ErrNotFound), expected: oauth2.ErrAccessDenied},
+		{name: "ShouldUseACustomAsMethod", err: customRFCError{err: oauth2.ErrAccessDenied}, expected: oauth2.ErrAccessDenied},
+		{name: "ShouldUseAWrappedCustomAsMethod", err: errorsx.WithStack(customRFCError{err: oauth2.ErrAccessDenied}), expected: oauth2.ErrAccessDenied},
+		{name: "ShouldKeepAnOuterErrorOverACustomAsMethod", err: oauth2.ErrAccessDenied.WithWrap(customRFCError{err: oauth2.ErrNotFound}), expected: oauth2.ErrAccessDenied},
+		{name: "ShouldAnswerServerErrorForACustomAsMethodWithoutAMatch", err: customRFCError{}, expected: oauth2.ErrServerError},
+		{name: "ShouldNotReportAnUnknownRequest", err: oauth2.ErrUnknownRequest, expected: oauth2.ErrServerError},
+		{name: "ShouldNotReportAWrappedUnknownRequest", err: oauth2.ErrAccessDenied.WithWrap(oauth2.ErrUnknownRequest), expected: oauth2.ErrServerError},
+		{name: "ShouldNotReportAnUnknownRequestAsAValue", err: *oauth2.ErrUnknownRequest, expected: oauth2.ErrServerError},
+		{name: "ShouldAnswerServerErrorForADecodeError", err: base64.CorruptInputError(1), expected: oauth2.ErrServerError},
+		{name: "ShouldKeepAServerErrorWrappingAnUnknownSubject", err: oauth2.ErrServerError.WithWrap(oauth2.ErrNotFound), expected: oauth2.ErrServerError},
+		{name: "ShouldKeepARefusalWrappingAnUnknownSubject", err: oauth2.ErrAccessDenied.WithWrap(oauth2.ErrNotFound), expected: oauth2.ErrAccessDenied},
+		{name: "ShouldAnswerInvalidRequestForAWrappedUnknownSubject", err: errorsx.WithStack(oauth2.ErrNotFound), expected: oauth2.ErrInvalidRequest, hint: "The 'subject_token' does not identify a subject."},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newCustomJWTConsumeFixture(t, false)
+			f.custom.Storage = &failingSubjectStore{MemoryStore: f.store, err: tc.err}
+
+			request := f.request(url.Values{
+				consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+				consts.FormParameterSubjectToken:     {f.token(t, uuid.New().String())},
+			})
+
+			err := f.custom.HandleTokenEndpointRequest(t.Context(), request)
+
+			require.ErrorIs(t, err, tc.expected)
+			assert.Equal(t, tc.expected.(*oauth2.RFC6749Error).ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
+			assert.NotErrorIs(t, err, oauth2.ErrUnknownRequest)
+			assert.Nil(t, request.GetSession().(*DefaultSession).GetSubjectToken())
+
+			if tc.hint != "" {
+				assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+			}
+		})
+	}
+}
+
+func TestCustomJWTSubjectLookupErrorKeepsTheStorageCause(t *testing.T) {
+	cause := errors.New("connection refused")
+
+	f := newCustomJWTConsumeFixture(t, false)
+	f.custom.Storage = &failingSubjectStore{MemoryStore: f.store, err: cause}
+
+	err := f.custom.HandleTokenEndpointRequest(t.Context(), f.request(url.Values{
+		consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+		consts.FormParameterSubjectToken:     {f.token(t, uuid.New().String())},
+	}))
+
+	require.ErrorIs(t, err, oauth2.ErrServerError)
+	assert.ErrorIs(t, err, cause)
+	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).DebugField, cause.Error())
+}
+
+type customRFCError struct {
+	err *oauth2.RFC6749Error
+}
+
+func (e customRFCError) Error() string {
+	return "the subject could not be resolved"
+}
+
+func (e customRFCError) As(target any) bool {
+	rfc, ok := target.(**oauth2.RFC6749Error)
+	if !ok || e.err == nil {
+		return false
+	}
+
+	*rfc = e.err
+
+	return true
+}
+
+type customNotFoundError struct{}
+
+func (customNotFoundError) Error() string {
+	return "the subject does not exist"
+}
+
+func (customNotFoundError) Is(target error) bool {
+	return target == oauth2.ErrNotFound //nolint:errorlint
+}
+
+type failingSubjectStore struct {
+	*storage.MemoryStore
+
+	err error
+}
+
+func (s *failingSubjectStore) GetSubjectForTokenExchange(_ context.Context, _ oauth2.Requester, _ map[string]any) (string, error) {
+	return "", s.err
 }
 
 type failingLookupStore struct {

@@ -191,6 +191,22 @@ func TestCustomJWTSubjectLookupError(t *testing.T) {
 	}
 }
 
+func TestCustomJWTSubjectLookupErrorKeepsTheStorageCause(t *testing.T) {
+	cause := errors.New("connection refused")
+
+	f := newCustomJWTConsumeFixture(t, false)
+	f.custom.Storage = &failingSubjectStore{MemoryStore: f.store, err: cause}
+
+	err := f.custom.HandleTokenEndpointRequest(t.Context(), f.request(url.Values{
+		consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+		consts.FormParameterSubjectToken:     {f.token(t, uuid.New().String())},
+	}))
+
+	require.ErrorIs(t, err, oauth2.ErrServerError)
+	assert.ErrorIs(t, err, cause)
+	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).DebugField, cause.Error())
+}
+
 type customRFCError struct {
 	err *oauth2.RFC6749Error
 }

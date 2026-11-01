@@ -6,12 +6,16 @@ package rfc8693_test
 
 import (
 	"context"
+	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/internal/consts"
 )
@@ -85,6 +89,46 @@ func TestTokenExchangeRefreshTokenSubjectReplayRevokesTheIssuedToken(t *testing.
 	}
 }
 
+func TestTokenExchangeConcurrentRefreshTokenSubjectRevokesTheIssuedToken(t *testing.T) {
+	for _, sc := range bindingExchangeStores() {
+		for _, tokenType := range []string{consts.TokenTypeRFC8693AccessToken, consts.TokenTypeRFC8693RefreshToken} {
+			t.Run(sc.name+"/"+tokenType, func(t *testing.T) {
+				f := newRotationFixture(t, sc.newStore())
+
+				barrier := newRotationBarrier(f.store)
+				f.access.TokenRevocationStorage = barrier
+				f.refresh.TokenRevocationStorage = barrier
+
+				type result struct {
+					issued string
+					err    error
+				}
+
+				results := make(chan result, 2)
+
+				for range 2 {
+					go func() {
+						issued, err := f.exchange(t, tokenType)
+
+						results <- result{issued: issued, err: err}
+					}()
+				}
+
+				winner := <-results
+				close(barrier.release)
+				loser := <-results
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(winner.err))
+				require.NotEmpty(t, winner.issued)
+				require.ErrorIs(t, loser.err, oauth2.ErrInvalidRequest)
+
+				_, err := f.store.GetRefreshTokenSession(t.Context(), f.strategy.RefreshTokenSignature(t.Context(), winner.issued), nil)
+				assert.Error(t, err)
+			})
+		}
+	}
+}
+
 func TestTokenExchangeDoesNotRotateWithoutIssuingARefreshToken(t *testing.T) {
 	for _, sc := range bindingExchangeStores() {
 		t.Run(sc.name, func(t *testing.T) {
@@ -112,6 +156,35 @@ func TestTokenExchangeRotationRefusedWithoutRevocationStorage(t *testing.T) {
 			_, err = f.store.GetRefreshTokenSession(t.Context(), f.strategy.RefreshTokenSignature(t.Context(), f.subject), nil)
 			assert.NoError(t, err)
 		})
+	}
+}
+
+type rotationBarrier struct {
+	hoauth2.TokenRevocationStorage
+
+	calls   atomic.Int32
+	arrived chan struct{}
+	release chan struct{}
+}
+
+func newRotationBarrier(store hoauth2.TokenRevocationStorage) *rotationBarrier {
+	return &rotationBarrier{TokenRevocationStorage: store, arrived: make(chan struct{}), release: make(chan struct{})}
+}
+
+func (b *rotationBarrier) RotateRefreshToken(ctx context.Context, requestID, signature string) (err error) {
+	wait := b.arrived
+
+	if b.calls.Add(1) == 2 {
+		close(b.arrived)
+
+		wait = b.release
+	}
+
+	select {
+	case <-wait:
+		return b.TokenRevocationStorage.RotateRefreshToken(ctx, requestID, signature)
+	case <-time.After(10 * time.Second):
+		return errors.New("timed out waiting for the concurrent exchange")
 	}
 }
 

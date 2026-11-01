@@ -551,6 +551,17 @@ func errExchangeTokenLookup(err error) error {
 	return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 }
 
+func errExchangeSubjectLookup(err error) error {
+	switch {
+	case errors.Is(err, oauth2.ErrNotFound):
+		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' does not identify a subject.", consts.FormParameterSubjectToken).WithWrap(err).WithDebugError(err))
+	case hoauth2.IsTokenRejection(err):
+		return errors.WithStack(err)
+	default:
+		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+}
+
 func errExchangeTokenValidation(err error) error {
 	if !hoauth2.IsTokenRejection(err) {
 		return errors.WithStack(err)

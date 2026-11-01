@@ -18,6 +18,7 @@ import (
 	"authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -129,6 +130,49 @@ func TestCustomJWTMarkError(t *testing.T) {
 			assert.ErrorIs(t, f.grant.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse()), tc.expected)
 		})
 	}
+}
+
+func TestCustomJWTSubjectLookupError(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		expected error
+		hint     string
+	}{
+		{name: "ShouldAnswerServerErrorForAStorageFailure", err: errors.New("connection refused"), expected: oauth2.ErrServerError},
+		{name: "ShouldAnswerServerErrorForASerializationFailure", err: oauth2.ErrSerializationFailure, expected: oauth2.ErrServerError},
+		{name: "ShouldAnswerServerErrorForAServerSideRFCError", err: oauth2.ErrTemporarilyUnavailable, expected: oauth2.ErrServerError},
+		{name: "ShouldAnswerInvalidRequestForAnUnknownSubject", err: oauth2.ErrNotFound, expected: oauth2.ErrInvalidRequest, hint: "The 'subject_token' does not identify a subject."},
+		{name: "ShouldKeepARejection", err: oauth2.ErrInvalidRequest.WithHint("No subject found."), expected: oauth2.ErrInvalidRequest, hint: "No subject found."},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newCustomJWTConsumeFixture(t, false)
+			f.custom.Storage = &failingSubjectStore{MemoryStore: f.store, err: tc.err}
+
+			err := f.custom.HandleTokenEndpointRequest(t.Context(), f.request(url.Values{
+				consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+				consts.FormParameterSubjectToken:     {f.token(t, uuid.New().String())},
+			}))
+
+			require.ErrorIs(t, err, tc.expected)
+
+			if tc.hint != "" {
+				assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+			}
+		})
+	}
+}
+
+type failingSubjectStore struct {
+	*storage.MemoryStore
+
+	err error
+}
+
+func (s *failingSubjectStore) GetSubjectForTokenExchange(_ context.Context, _ oauth2.Requester, _ map[string]any) (string, error) {
+	return "", s.err
 }
 
 type failingLookupStore struct {

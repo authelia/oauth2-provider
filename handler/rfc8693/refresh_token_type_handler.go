@@ -273,6 +273,12 @@ func (c *RefreshTokenTypeHandler) handleRefreshTokenReuse(ctx context.Context, o
 }
 
 func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, request oauth2.AccessRequester, original oauth2.Requester) (err error) {
+	// The requested values have the meaning of the Authorization Server the audience identifies, so the relationship
+	// governs them and the comparison with the refresh token applies only when that is this server (Section 4.3.3).
+	if !c.isOwnAudience(ctx, request) {
+		return nil
+	}
+
 	client := request.GetClient()
 
 	audience := oauth2.GetAudienceStrategy(ctx, c.Config, client)
@@ -293,12 +299,6 @@ func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, reques
 
 	if err = resource(original.GetGrantedResource(), request.GetRequestedResource()); err != nil {
 		return errors.WithStack(err)
-	}
-
-	// The requested 'scope' and 'authorization_details' have the meaning of the Authorization Server the audience
-	// identifies, so the RFC 6749 Section 6 comparison applies only when that is this server (Section 4.3.3).
-	if !c.isOwnAudience(ctx, request) {
-		return nil
 	}
 
 	strategy := c.GetScopeStrategy(ctx, client)

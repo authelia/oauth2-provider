@@ -164,7 +164,7 @@ func TestIDJAG(t *testing.T) {
 				assert.Equal(t, float64(authTime.Unix()), claims[consts.ClaimAuthenticationTime])
 			})
 
-			t.Run("ShouldBoundARefreshTokenSubjectByItsGrant", func(t *testing.T) {
+			t.Run("ShouldGovernARefreshTokenSubjectByTheRelationship", func(t *testing.T) {
 				testCases := []struct {
 					name            string
 					grantedScopes   []string
@@ -177,17 +177,16 @@ func TestIDJAG(t *testing.T) {
 				}{
 					// Section 4.3.3: the scopes have the meaning of the Resource Authorization Server.
 					{name: "ShouldAcceptAScopeNotGranted", grantedScopes: []string{idjagOtherScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, expected: idjagScope},
-					// Section 4.3.3: the audience and resources are not restricted by the IdP.
-					{name: "ShouldRejectAnAudienceNotGranted", grantedScopes: []string{idjagScope}, grantedAudience: idjagOtherTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, err: oauth2.ErrInvalidTarget.ErrorField},
-					{name: "ShouldRejectAnAudienceWhenNoneWasGranted", grantedScopes: []string{idjagScope}, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, err: oauth2.ErrInvalidTarget.ErrorField},
-					{name: "ShouldRejectAResourceNotGranted", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagOtherTarget, requestedScope: idjagScope, err: oauth2.ErrInvalidTarget.ErrorField},
-					{name: "ShouldRejectAResourceWhenNoneWasGranted", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, requestedScope: idjagScope, err: oauth2.ErrInvalidTarget.ErrorField},
-					// Section 4.3.3: the refresh token is validated as for a refresh_token grant, against the current registration.
+					// Section 4.3.3: the audience and resources of another server are governed by the relationship.
+					{name: "ShouldAcceptAnAudienceNotGranted", grantedScopes: []string{idjagScope}, grantedAudience: idjagOtherTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, expected: idjagScope},
+					{name: "ShouldAcceptAnAudienceWhenNoneWasGranted", grantedScopes: []string{idjagScope}, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, expected: idjagScope},
+					{name: "ShouldAcceptAResourceNotGranted", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagOtherTarget, requestedScope: idjagScope, expected: idjagScope},
+					{name: "ShouldAcceptAResourceWhenNoneWasGranted", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, requestedScope: idjagScope, expected: idjagScope},
 					{name: "ShouldAcceptAScopeRemovedFromTheClient", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, narrow: func(_ *idjagEnvironment, client *oauth2.DefaultClient) { client.Scopes = []string{idjagOtherScope} }, expected: idjagScope},
-					{name: "ShouldRejectAnAudienceRemovedFromTheClient", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, narrow: func(env *idjagEnvironment, client *oauth2.DefaultClient) {
+					{name: "ShouldAcceptAnAudienceRemovedFromTheClient", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, narrow: func(env *idjagEnvironment, client *oauth2.DefaultClient) {
 						client.Audience = []string{env.rs.URL + idjagResourcePath}
-					}, err: oauth2.ErrInvalidTarget.ErrorField},
-					{name: "ShouldRejectAResourceRemovedFromTheClient", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, narrow: func(env *idjagEnvironment, client *oauth2.DefaultClient) { client.Resource = nil }, err: oauth2.ErrInvalidTarget.ErrorField},
+					}, expected: idjagScope},
+					{name: "ShouldAcceptAResourceRemovedFromTheClient", grantedScopes: []string{idjagScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope, narrow: func(env *idjagEnvironment, client *oauth2.DefaultClient) { client.Resource = nil }, expected: idjagScope},
 					// Section 4.3.3: the relationship policy still narrows the granted scopes.
 					{name: "ShouldNarrowByTheRelationship", grantedScopes: []string{idjagScope, idjagOtherScope}, grantedAudience: idjagEnvironmentTarget, grantedResource: idjagEnvironmentTarget, requestedScope: idjagScope + " " + idjagOtherScope, expected: idjagScope},
 				}
@@ -236,6 +235,27 @@ func TestIDJAG(t *testing.T) {
 						assert.Equal(t, tc.expected, claims[consts.ClaimScope])
 					})
 				}
+			})
+
+			t.Run("ShouldRejectARefreshTokenSubjectOutsideTheRelationship", func(t *testing.T) {
+				env := newIDJAGEnvironment(t, s.new)
+
+				form := env.exchangeForm(env.refreshToken(t, []string{idjagScope}, nil, nil), consts.TokenTypeRFC8693RefreshToken, env.rs.URL+idjagResourcePath)
+
+				status, token, errBody := postIDJAGToken(t, env.idp, idjagIdPClientID, form, "")
+
+				assert.Equal(t, http.StatusBadRequest, status)
+				assert.Equal(t, oauth2.ErrInvalidTarget.ErrorField, errBody.Error)
+				assert.Empty(t, token.AccessToken)
+
+				form = env.exchangeForm(env.refreshToken(t, []string{idjagScope}, nil, nil), consts.TokenTypeRFC8693RefreshToken, env.rs.URL)
+				form.Set(consts.FormParameterResource, env.rs.URL+"/other")
+
+				status, token, errBody = postIDJAGToken(t, env.idp, idjagIdPClientID, form, "")
+
+				assert.Equal(t, http.StatusBadRequest, status)
+				assert.Equal(t, oauth2.ErrInvalidTarget.ErrorField, errBody.Error)
+				assert.Empty(t, token.AccessToken)
 			})
 
 			t.Run("ShouldBindWithDPoP", func(t *testing.T) {

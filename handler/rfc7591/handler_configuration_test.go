@@ -6,7 +6,9 @@ package rfc7591
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -718,6 +720,84 @@ func TestClientConfigurationHandlerReportsRegistrationTimes(t *testing.T) {
 				"reporting 0 would state the secret does not expire when it does")
 		})
 	}
+}
+
+func TestClientConfigurationHandlerUpdateChangesNothingWhenTheResponseFails(t *testing.T) {
+	testCases := []struct {
+		name      string
+		configure func(config *oauth2.Config)
+	}{
+		{
+			name: "ShouldLeaveThemWhenBuildingTheResponseMetadataFails",
+			configure: func(config *oauth2.Config) {
+				config.RFC7591ClientRegistrationStrategy = &failingResponseMetadataStrategy{ClientRegistrationStrategy: config.RFC7591ClientRegistrationStrategy}
+			},
+		},
+		{
+			name: "ShouldLeaveThemWhenFilteringTheResponseMetadataFails",
+			configure: func(config *oauth2.Config) {
+				config.RFC7591ClientRegistrationMetadataStrategy = &failingResponseMetadataFilter{}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			handler, registrar, config, store := newConfigurationHandler(t)
+
+			created := registerClient(t, ctx, registrar)
+			id := created["client_id"].(string)
+			signature := handler.Strategy.ClientRegistrationTokenSignature(ctx, created["registration_access_token"].(string))
+
+			tc.configure(config)
+
+			requester := oauth2.NewClientConfigurationRequest()
+			requester.Method = http.MethodPut
+			requester.ClientID = id
+			requester.Signature = signature
+			requester.Metadata = &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{testPatchedRedirectURI},
+			}
+
+			responder := oauth2.NewClientRegistrationResponse()
+
+			require.Error(t, handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, responder))
+			assert.NotContains(t, responder.ToMap(), "registration_access_token")
+
+			_, err := store.GetClientRegistrationTokenSession(ctx, signature, &oauth2.DefaultSession{})
+			require.NoError(t, err)
+			assert.Len(t, store.ClientRegistrationTokens, 1)
+
+			client, err := store.GetClient(ctx, id)
+			require.NoError(t, err)
+			assert.Equal(t, []string{"https://example.com/cb"}, client.GetRedirectURIs())
+		})
+	}
+}
+
+const testPatchedRedirectURI = "https://example.com/other"
+
+type failingResponseMetadataStrategy struct {
+	oauth2.ClientRegistrationStrategy
+}
+
+func (s *failingResponseMetadataStrategy) MetadataFromClient(ctx context.Context, client oauth2.Client) (*oauth2.ClientRegistrationMetadata, error) {
+	if slices.Contains(client.GetRedirectURIs(), testPatchedRedirectURI) {
+		return nil, errors.New("metadata from client failed")
+	}
+
+	return s.ClientRegistrationStrategy.MetadataFromClient(ctx, client)
+}
+
+type failingResponseMetadataFilter struct{}
+
+func (s *failingResponseMetadataFilter) FilterClientRegistrationMetadata(_ context.Context, client oauth2.Client, _ *oauth2.ClientRegistrationMetadata) error {
+	if client != nil && slices.Contains(client.GetRedirectURIs(), testPatchedRedirectURI) {
+		return errors.New("filter metadata failed")
+	}
+
+	return nil
 }
 
 func newConfigurationHandler(t *testing.T) (*ClientConfigurationHandler, *ClientRegistrationHandler, *oauth2.Config, *storage.MemoryStore) {

@@ -9,7 +9,7 @@ go 1.27.0
 toolchain go1.27.3
 
 require (
-	authelia.com/provider/jose v0.1.0
+	authelia.com/provider/jose v0.2.1
 	github.com/dgraph-io/ristretto/v2 v2.4.2
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-retryablehttp v0.7.8

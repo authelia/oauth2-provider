@@ -349,9 +349,9 @@ func TestParseProofRSAKeySizeMaximum(t *testing.T) {
 		bits     int
 		expected string
 	}{
-		{"ShouldRejectAboveTheMaximum", RSAMaximumKeySize + 8, fmt.Sprintf("The DPoP proof is missing or invalid. The DPoP proof 'jwk' header contains a %d bit RSA key but keys of at most %d bits are accepted.", RSAMaximumKeySize+8, RSAMaximumKeySize)},
-		{"ShouldRejectFarAboveTheMaximum", 262144, fmt.Sprintf("The DPoP proof is missing or invalid. The DPoP proof 'jwk' header contains a 262144 bit RSA key but keys of at most %d bits are accepted.", RSAMaximumKeySize)},
-		{"ShouldCheckTheSignatureAtTheMaximum", RSAMaximumKeySize, "The DPoP proof is missing or invalid. The DPoP proof signature is invalid."},
+		{"ShouldRejectAboveTheParserLimit", jose.MaxRSAModulusBits + 8, "The DPoP proof is missing or invalid. The DPoP proof could not be parsed: failed to unmarshal JWK: go-jose/go-jose: invalid RSA key, modulus too large."},
+		{"ShouldRejectFarAboveTheParserLimit", 262144, "The DPoP proof is missing or invalid. The DPoP proof could not be parsed: failed to unmarshal JWK: go-jose/go-jose: invalid RSA key, modulus too large."},
+		{"ShouldCheckTheSignatureAtTheParserLimit", jose.MaxRSAModulusBits, "The DPoP proof is missing or invalid. The DPoP proof signature is invalid."},
 	}
 
 	for _, tc := range testCases {
@@ -381,6 +381,37 @@ func TestParseProofRSAKeySizeMaximum(t *testing.T) {
 			raw := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload) + "." + base64.RawURLEncoding.EncodeToString(make([]byte, len(n.Bytes())))
 
 			_, err = ParseProof(raw, []jose.SignatureAlgorithm{jose.RS256})
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
+		})
+	}
+}
+
+func TestValidateProofKeyStrength(t *testing.T) {
+	testCases := []struct {
+		name     string
+		bits     int
+		expected string
+	}{
+		{"ShouldRejectBelowTheMinimum", RSAMinimumKeySize - 8, fmt.Sprintf("The DPoP proof is missing or invalid. The DPoP proof 'jwk' header contains a %d bit RSA key but keys of at least %d bits are required.", RSAMinimumKeySize-8, RSAMinimumKeySize)},
+		{"ShouldAcceptTheMinimum", RSAMinimumKeySize, ""},
+		{"ShouldAcceptTheMaximum", RSAMaximumKeySize, ""},
+		{"ShouldRejectAboveTheMaximum", RSAMaximumKeySize + 8, fmt.Sprintf("The DPoP proof is missing or invalid. The DPoP proof 'jwk' header contains a %d bit RSA key but keys of at most %d bits are accepted.", RSAMaximumKeySize+8, RSAMaximumKeySize)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := new(big.Int).Lsh(big.NewInt(1), uint(tc.bits-1))
+			n.Add(n, big.NewInt(1))
+
+			err := validateProofKeyStrength(&jose.JSONWebKey{Key: &rsa.PublicKey{N: n, E: 65537}})
+
+			if tc.expected == "" {
+				assert.NoError(t, err)
+
+				return
+			}
 
 			require.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)

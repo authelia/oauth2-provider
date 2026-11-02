@@ -177,6 +177,8 @@ func TestIssueHandlerWithABoundIDTokenSubject(t *testing.T) {
 
 			require.NoError(t, json.Unmarshal(issued.UnsafePayloadWithoutVerification(), &result))
 
+			assert.Equal(t, issueMapped, result[consts.ClaimSubject])
+
 			if tc.expected == "" {
 				assert.NotContains(t, result, consts.ClaimConfirmation)
 

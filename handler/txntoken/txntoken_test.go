@@ -317,7 +317,7 @@ func mint(t *testing.T, key any, alg jose.SignatureAlgorithm, header, overrides 
 	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: key}, opts)
 	require.NoError(t, err)
 
-	raw, err := josejwt.Signed(signer).Claims(claims).Serialize()
+	raw, err := josejwt.Signed(signer).UnsafeSkipClaimsValidation().Claims(claims).Serialize()
 	require.NoError(t, err)
 
 	return raw

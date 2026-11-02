@@ -16,6 +16,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/jose"
+	josejwt "authelia.com/provider/jose/jwt"
+
 	"authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -322,7 +325,7 @@ func TestCustomJWTExpiration(t *testing.T) {
 			t.Run(role.name+"/"+tc.name, func(t *testing.T) {
 				f := newCustomJWTConsumeFixture(t, true)
 
-				token := createJWT(t.Context(), f.client, f.strategy, jwt.MapClaims{
+				token := f.malformedToken(t, map[string]any{
 					consts.ClaimIssuer:         "https://as.example.com",
 					consts.ClaimSubject:        "peter",
 					consts.ClaimAudience:       []string{f.client.GetID()},
@@ -357,6 +360,7 @@ func newCustomJWTConsumeFixture(t *testing.T, validate bool) *customJWTConsumeFi
 	return &customJWTConsumeFixture{
 		store:    store,
 		client:   store.Clients["my-client"],
+		key:      key,
 		strategy: strategy,
 		custom:   &CustomJWTTypeHandler{Config: cfg, Strategy: strategy, Storage: store},
 		grant:    &TokenExchangeGrantHandler{Config: cfg, Storage: store},
@@ -364,6 +368,7 @@ func newCustomJWTConsumeFixture(t *testing.T, validate bool) *customJWTConsumeFi
 }
 
 type customJWTConsumeFixture struct {
+	key      any
 	store    *storage.MemoryStore
 	client   oauth2.Client
 	strategy jwt.Strategy
@@ -381,6 +386,18 @@ func (f *customJWTConsumeFixture) token(t *testing.T, jti string) string {
 		consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
 		consts.ClaimIssuedAt:       time.Now().Unix(),
 	})
+}
+
+func (f *customJWTConsumeFixture) malformedToken(t *testing.T, claims map[string]any) string {
+	t.Helper()
+
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: &jose.JSONWebKey{Key: f.key, KeyID: "default"}}, (&jose.SignerOptions{}).WithType(jwt.JSONWebTokenTypeJWT))
+	require.NoError(t, err)
+
+	token, err := josejwt.Signed(signer).UnsafeSkipClaimsValidation().Claims(claims).Serialize()
+	require.NoError(t, err)
+
+	return token
 }
 
 func (f *customJWTConsumeFixture) request(form url.Values) *oauth2.AccessRequest {

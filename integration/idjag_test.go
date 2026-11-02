@@ -652,6 +652,19 @@ func TestIDJAG(t *testing.T) {
 				assert.Empty(t, redeemed.AccessToken)
 			})
 
+			// Section 4.3.4.3: a recognized target the client may not use is told apart from an unknown one.
+			t.Run("ShouldDenyAnAudienceTrustedForAnotherClient", func(t *testing.T) {
+				env := newIDJAGEnvironment(t, s.new)
+
+				other := "https://recognized.example/"
+				env.idpMemory.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: idjagRSClientID, Audience: other}] = oauth2.IDJAGRelationship{Issuer: other, ClientID: idjagRSClientID}
+
+				_, token, errBody := postIDJAGToken(t, env.idp, idjagIdPClientID, env.exchangeForm(env.idToken(t), consts.TokenTypeRFC8693IDToken, other), "")
+
+				assert.Equal(t, oauth2.ErrAccessDenied.ErrorField, errBody.Error)
+				assert.Empty(t, token.AccessToken)
+			})
+
 			t.Run("ShouldRejectUnknownAudience", func(t *testing.T) {
 				env := newIDJAGEnvironment(t, s.new)
 
@@ -694,6 +707,7 @@ type idjagEnvironment struct {
 	rsMemory    *storage.MemoryStore
 	idpClient   oauth2.Client
 	idpStore    hoauth2.CoreStorage
+	idpMemory   *storage.MemoryStore
 	idpJWT      jwt.Strategy
 	idpStrategy hoauth2.CoreStrategy
 }
@@ -748,7 +762,7 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 	idpJWT := &jwt.DefaultStrategy{Config: idpConfig, Issuer: jwt.NewDefaultIssuerRS256Unverified(env.idpKey)}
 	idpStrategy := compose.NewOAuth2HMACStrategy(idpConfig)
 
-	env.idpStore, env.idpJWT, env.idpStrategy = idpStore, idpJWT, idpStrategy
+	env.idpStore, env.idpMemory, env.idpJWT, env.idpStrategy = idpStore, idpMemory, idpJWT, idpStrategy
 
 	idpProvider := compose.Compose(
 		idpConfig,

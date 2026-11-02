@@ -58,6 +58,16 @@ func TestMemoryStoreIDJAG(t *testing.T) {
 	_, err = store.GetIDJAGRelationship(ctx, request, "https://unknown.example/")
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 
+	otherIssuer := "https://recognized.example/"
+
+	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: "another-client", Audience: "urn:example:other"}] = oauth2.IDJAGRelationship{Issuer: otherIssuer, ClientID: "a3"}
+
+	_, err = store.GetIDJAGRelationship(ctx, request, "urn:example:other")
+	assert.ErrorIs(t, err, oauth2.ErrAccessDenied)
+
+	_, err = store.GetIDJAGRelationship(ctx, request, otherIssuer)
+	assert.ErrorIs(t, err, oauth2.ErrAccessDenied)
+
 	_, err = store.GetIDJAGTrustedIssuer(ctx, idjagTestIssuer)
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 

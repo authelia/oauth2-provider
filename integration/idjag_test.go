@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -442,6 +443,22 @@ func TestIDJAG(t *testing.T) {
 				assert.Equal(t, oauth2.DPoPAccessToken, redeemed.TokenType)
 			})
 
+			t.Run("ShouldRejectAnActorToken", func(t *testing.T) {
+				env := newIDJAGEnvironment(t, s.new)
+
+				subject := env.idTokenWithClaims(t, jwt.MapClaims{consts.ClaimAuthorizedActor: map[string]any{consts.ClaimSubject: idjagSubject}})
+
+				form := env.exchangeForm(subject, consts.TokenTypeRFC8693IDToken, env.rs.URL)
+				form.Set(consts.FormParameterActorToken, env.idToken(t))
+				form.Set(consts.FormParameterActorTokenType, consts.TokenTypeRFC8693IDToken)
+
+				status, token, errBody := postIDJAGToken(t, env.idp, idjagIdPClientID, form, "")
+
+				assert.Equal(t, http.StatusBadRequest, status)
+				assert.Equal(t, oauth2.ErrInvalidRequest.ErrorField, errBody.Error)
+				assert.Empty(t, token.AccessToken)
+			})
+
 			// RFC 8707 Section 2.2: a requested resource must be within the grant.
 			t.Run("ShouldRejectARequestedResourceOutsideTheGrant", func(t *testing.T) {
 				env := newIDJAGEnvironment(t, s.new)
@@ -805,9 +822,15 @@ func newIDJAGEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, *st
 func (env *idjagEnvironment) idToken(t *testing.T) string {
 	t.Helper()
 
+	return env.idTokenWithClaims(t, nil)
+}
+
+func (env *idjagEnvironment) idTokenWithClaims(t *testing.T, extra jwt.MapClaims) string {
+	t.Helper()
+
 	now := time.Now().UTC()
 
-	token, _, err := env.idpJWT.Encode(context.Background(), jwt.MapClaims{
+	claims := jwt.MapClaims{
 		consts.ClaimAudience:                            []string{idjagIdPClientID},
 		consts.ClaimSubject:                             idjagSubject,
 		consts.ClaimIssuer:                              env.idp.URL,
@@ -816,7 +839,11 @@ func (env *idjagEnvironment) idToken(t *testing.T) string {
 		consts.ClaimAuthenticationTime:                  now.Add(-idjagAuthAge).Unix(),
 		consts.ClaimAuthenticationContextClassReference: idjagACR,
 		consts.ClaimAuthenticationMethodsReference:      []string{idjagAMR},
-	}, jwt.WithIDTokenClient(env.idpClient))
+	}
+
+	maps.Copy(claims, extra)
+
+	token, _, err := env.idpJWT.Encode(context.Background(), claims, jwt.WithIDTokenClient(env.idpClient))
 	require.NoError(t, err)
 
 	return token

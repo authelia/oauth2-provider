@@ -31,6 +31,9 @@ const (
 // 'requested_token_type' is 'urn:ietf:params:oauth:token-type:id-jag'. It MUST be registered after the
 // rfc8693.TokenExchangeGrantHandler and before the rfc8693.ActorTokenValidationHandler.
 //
+// The rfc8693.TokenExchangeGrantHandler refuses a request with an 'actor_token', as Section 4.3 defines no processing
+// for it and the grant would not identify the actor.
+//
 // The granted scopes are the requested scopes the relationship permits. They have the meaning of the Resource
 // Authorization Server rather than the OpenID Connect meaning, so no value requests identity claims. For a refresh
 // token 'subject_token' the rfc8693.RefreshTokenTypeHandler also rejects any requested 'audience' or 'resource' outside

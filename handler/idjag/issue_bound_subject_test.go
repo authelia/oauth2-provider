@@ -36,14 +36,13 @@ import (
 
 const (
 	boundEndpoint = "https://idp.example.com/token"
-	boundType     = "urn:bound:jwt"
 	boundIssuer   = "https://assertions.example.com"
 	boundClient   = "bound-client"
 	boundSecret   = "foobarfoobarfoobarfoobarfoobar12"
 )
 
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-9.11.1.1
-func TestIssueHandlerWithABoundCustomJWTSubject(t *testing.T) {
+func TestIssueHandlerWithABoundIDTokenSubject(t *testing.T) {
 	signing := gen.MustRSAKey()
 
 	newKey := func() *ecdsa.PrivateKey {
@@ -108,17 +107,12 @@ func TestIssueHandlerWithABoundCustomJWTSubject(t *testing.T) {
 				GlobalSecret:                            []byte("super-duper-secret-that-is-at-least-32-bytes"),
 				RFC7591ClientRegistrationGlobalSecret:   []byte("a-completely-different-secret-at-least-32b"),
 				AuthorizationServerIdentificationIssuer: redeemIssuer,
+				IDTokenIssuer:                           boundIssuer,
 				DPoPEnabled:                             tc.dpop,
 				MTLSEnabled:                             tc.mtls,
 				RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
-					consts.TokenTypeRFC8693IDJAG: &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693IDJAG},
-					boundType: &rfc8693.JWTType{
-						Name:   boundType,
-						Issuer: boundIssuer,
-						JWTValidationConfig: rfc8693.JWTValidationConfig{
-							ValidateFunc: jwt.Keyfunc(func(*jwt.Token) (any, error) { return &signing.PublicKey, nil }),
-						},
-					},
+					consts.TokenTypeRFC8693IDJAG:   &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693IDJAG},
+					consts.TokenTypeRFC8693IDToken: &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693IDToken},
 				},
 			}
 
@@ -137,7 +131,7 @@ func TestIssueHandlerWithABoundCustomJWTSubject(t *testing.T) {
 			form := url.Values{
 				consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
 				consts.FormParameterSubjectToken:       {signBound(t, signing, jose.RS256, "JWT", false, claims)},
-				consts.FormParameterSubjectTokenType:   {boundType},
+				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693IDToken},
 				consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693IDJAG},
 				consts.FormParameterAudience:           {redeemAudience},
 				consts.FormParameterScope:              {redeemRead},
@@ -182,6 +176,8 @@ func TestIssueHandlerWithABoundCustomJWTSubject(t *testing.T) {
 			var result map[string]any
 
 			require.NoError(t, json.Unmarshal(issued.UnsafePayloadWithoutVerification(), &result))
+
+			assert.Equal(t, issueMapped, result[consts.ClaimSubject])
 
 			if tc.expected == "" {
 				assert.NotContains(t, result, consts.ClaimConfirmation)

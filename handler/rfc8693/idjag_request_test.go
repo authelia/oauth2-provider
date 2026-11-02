@@ -34,6 +34,8 @@ func TestIDJAGRequestGrantHandler(t *testing.T) {
 		{name: "ShouldAcceptARefreshToken", subjectTokenType: consts.TokenTypeRFC8693RefreshToken, audience: idjagAudience},
 		{name: "ShouldRejectAnAccessTokenSubject", subjectTokenType: consts.TokenTypeRFC8693AccessToken, err: oauth2.ErrInvalidRequest},
 		{name: "ShouldRejectAnIDJAG", subjectTokenType: consts.TokenTypeRFC8693IDJAG, err: oauth2.ErrInvalidRequest},
+		// Section 4.3.3: the subject token is one the IdP issued for that purpose.
+		{name: "ShouldRejectACustomJWTSubject", subjectTokenType: idjagSubjectType, audience: idjagAudience, err: oauth2.ErrInvalidRequest},
 	}
 
 	for _, tc := range testCases {
@@ -490,29 +492,18 @@ func TestIDJAGCustomJWTNeverIssuesIDJAG(t *testing.T) {
 	assert.Empty(t, response.GetAccessToken())
 }
 
-func TestIDJAGRequestCustomJWTSubject(t *testing.T) {
+func TestCustomJWTSubjectOutsideAnIDJAGRequest(t *testing.T) {
 	testCases := []struct {
-		name      string
-		requested string
-		aud       any
-		typ       string
-		scope     string
-		err       error
+		name  string
+		aud   any
+		typ   string
+		scope string
+		err   error
 	}{
-		// Section 4.3.3: the audience of the assertion MUST match the requesting client.
-		{name: "ShouldAcceptAnAssertionIssuedToTheClient", requested: consts.TokenTypeRFC8693IDJAG, aud: []string{idjagClientID}},
-		{name: "ShouldAcceptAStringAudience", requested: consts.TokenTypeRFC8693IDJAG, aud: idjagClientID},
-		{name: "ShouldRejectAnAssertionIssuedToAnotherClient", requested: consts.TokenTypeRFC8693IDJAG, aud: []string{idjagOtherClient}, err: oauth2.ErrInvalidRequest},
-		{name: "ShouldRejectAnAssertionWithoutAudience", requested: consts.TokenTypeRFC8693IDJAG, err: oauth2.ErrInvalidRequest},
-		// Section 4.3: the subject token is an Identity Assertion, never an access token.
-		{name: "ShouldRejectAnAccessTokenAssertion", requested: consts.TokenTypeRFC8693IDJAG, aud: []string{idjagClientID}, typ: consts.JSONWebTokenTypeAccessToken, err: oauth2.ErrInvalidRequest},
-		{name: "ShouldRejectAnApplicationAccessToken", requested: consts.TokenTypeRFC8693IDJAG, aud: []string{idjagClientID}, typ: "application/AT+JWT", err: oauth2.ErrInvalidRequest},
-		// Section 4.3.3: the requested scopes are governed by the relationship, not the assertion.
-		{name: "ShouldAllowAScopeTheAssertionDoesNotCarry", requested: consts.TokenTypeRFC8693IDJAG, aud: []string{idjagClientID}, scope: idjagScope},
-		{name: "ShouldRejectOtherExchangesWithoutAudience", requested: consts.TokenTypeRFC8693AccessToken, err: oauth2.ErrInvalidRequest},
-		{name: "ShouldLeaveOtherExchangesAddressedToTheClient", requested: consts.TokenTypeRFC8693AccessToken, aud: idjagClientID},
-		{name: "ShouldLeaveOtherExchangesWithAnAccessToken", requested: consts.TokenTypeRFC8693AccessToken, aud: idjagClientID, typ: consts.JSONWebTokenTypeAccessToken},
-		{name: "ShouldKeepTheScopeRuleForOtherExchanges", requested: consts.TokenTypeRFC8693AccessToken, aud: idjagClientID, scope: idjagScope, err: oauth2.ErrInvalidScope},
+		{name: "ShouldRejectWithoutAudience", err: oauth2.ErrInvalidRequest},
+		{name: "ShouldAcceptAnAssertionAddressedToTheClient", aud: idjagClientID},
+		{name: "ShouldAcceptAnAccessTokenAssertion", aud: idjagClientID, typ: consts.JSONWebTokenTypeAccessToken},
+		{name: "ShouldRejectAScopeTheAssertionDoesNotCarry", aud: idjagClientID, scope: idjagScope, err: oauth2.ErrInvalidScope},
 	}
 
 	for _, tc := range testCases {
@@ -548,7 +539,7 @@ func TestIDJAGRequestCustomJWTSubject(t *testing.T) {
 			request := newExchangeRequest(t, store.Clients[idjagClientID], newSpecSession(idjagSubject), url.Values{
 				consts.FormParameterSubjectToken:       {token},
 				consts.FormParameterSubjectTokenType:   {idjagSubjectType},
-				consts.FormParameterRequestedTokenType: {tc.requested},
+				consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693AccessToken},
 			})
 
 			if tc.scope != "" {

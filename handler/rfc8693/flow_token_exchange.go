@@ -160,8 +160,13 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 	}
 
 	if requestedTokenType == consts.TokenTypeRFC8693IDJAG {
+		// The IdP MUST determine that it issued the subject token for that purpose, which only an ID Token or a refresh
+		// token establishes.
+		//
+		// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
 		switch subjectTokenType {
-		case consts.TokenTypeRFC8693AccessToken, consts.TokenTypeRFC8693IDJAG:
+		case consts.TokenTypeRFC8693IDToken, consts.TokenTypeRFC8693RefreshToken:
+		default:
 			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s' when the '%s' is '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
 		}
 

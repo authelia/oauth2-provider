@@ -186,9 +186,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the JSON web token").WithWrap(err).WithDebugError(err))
 	}
 
-	idjag := role == tokenRoleSubject && IsIDJAGRequest(ctx, request, c.Config)
-
-	if err = validateCustomJWTType(ctx, jwtType, ftoken, idjag); err != nil {
+	if err = validateCustomJWTType(ctx, jwtType, ftoken); err != nil {
 		return nil, err
 	}
 
@@ -242,20 +240,12 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", jwtType.Issuer))
 	}
 
-	if idjag {
-		// Draft ID-JAG Section 4.3.3: the audience of the assertion MUST match the authenticated client, and the
-		// requested scopes are governed by the relationship rather than the assertion.
-		if clientID := request.GetClient().GetID(); !claims.VerifyAudience(clientID, true) {
-			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'aud' from token must include the OAuth 2.0 Client '%s'.", clientID))
-		}
-	} else {
-		if err = validateCustomJWTAudience(request, jwtType, claims); err != nil {
-			return nil, err
-		}
+	if err = validateCustomJWTAudience(request, jwtType, claims); err != nil {
+		return nil, err
+	}
 
-		if err = validateCustomJWTScope(ctx, request, c.Config, role, claims); err != nil {
-			return nil, err
-		}
+	if err = validateCustomJWTScope(ctx, request, c.Config, role, claims); err != nil {
+		return nil, err
 	}
 
 	// The JTI is marked as used by TokenExchangeGrantHandler.PopulateTokenEndpointResponse.
@@ -268,7 +258,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 	return claims, nil
 }
 
-func validateCustomJWTType(ctx context.Context, jwtType *JWTType, token *jwt.Token, idjag bool) error {
+func validateCustomJWTType(ctx context.Context, jwtType *JWTType, token *jwt.Token) error {
 	typ, _ := token.Header[jwt.JSONWebTokenHeaderType].(string)
 
 	if oauth2.IsIDJAGTokenType(typ) {
@@ -285,11 +275,6 @@ func validateCustomJWTType(ctx context.Context, jwtType *JWTType, token *jwt.Tok
 	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.11
 	if err := token.Valid(jwt.ValidateTypes(jwtType.GetTypes()...), jwt.ValidateAllowEmptyType(true)); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The 'typ' header '%s' is not permitted for the token type '%s'.", typ, jwtType.GetName(ctx)).WithWrap(err).WithDebugError(err))
-	}
-
-	// Draft ID-JAG Section 4.3: the subject token is an Identity Assertion or a Refresh Token.
-	if idjag && (strings.EqualFold(typ, consts.JSONWebTokenTypeAccessToken) || strings.EqualFold(typ, "application/"+consts.JSONWebTokenTypeAccessToken)) {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("An access token is not supported as a '%s' when the '%s' is '%s'.", consts.FormParameterSubjectToken, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
 	}
 
 	return nil

@@ -872,6 +872,46 @@ func TestAuthorizeJWTGrantAudience(t *testing.T) {
 	}
 }
 
+// See: https://datatracker.ietf.org/doc/html/draft-parecki-oauth-jwt-dpop-grant-02#section-5.2
+func TestAuthorizeJWTGrantConfirmation(t *testing.T) {
+	testCases := []struct {
+		name string
+		cnf  any
+	}{
+		{name: "ShouldRejectAJWKThumbprint", cnf: map[string]any{consts.ClaimConfirmationJWKThumbprint: "thumbprint"}},
+		{name: "ShouldRejectACertificateThumbprint", cnf: map[string]any{consts.ClaimConfirmationX509SHA256Thumbprint: "certificate"}},
+		{name: "ShouldRejectAnUnknownMethod", cnf: map[string]any{"jwk": map[string]any{}}},
+		{name: "ShouldRejectAnEmptyConfirmation", cnf: map[string]any{}},
+		{name: "ShouldRejectANullConfirmation", cnf: nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newJWTBearerFixture(t)
+
+			keyID := "my_key"
+			cl := f.createStandardClaim()
+			pubKey := f.createJWK(f.privateKey.Public(), keyID)
+
+			sig, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: jose.JSONWebKey{Key: f.privateKey, KeyID: keyID, Algorithm: string(jose.RS256)}}, (&jose.SignerOptions{}).WithType(consts.JSONWebTokenTypeJWT))
+			require.NoError(t, err)
+
+			assertion, err := jwt.Signed(sig).Claims(cl).Claims(map[string]any{consts.ClaimConfirmation: tc.cnf}).Serialize()
+			require.NoError(t, err)
+
+			f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+			f.requester.Form.Add(consts.FormParameterAssertion, assertion)
+
+			f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+			f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{}, nil).AnyTimes()
+			f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil).AnyTimes()
+
+			require.ErrorIs(t, f.handler.HandleTokenEndpointRequest(f.ctx, f.requester), oauth2.ErrInvalidGrant)
+			assert.Empty(t, f.requester.GetSession().GetSubject())
+		})
+	}
+}
+
 func newJWTBearerFixture(t *testing.T) *jwtBearerFixture {
 	t.Helper()
 

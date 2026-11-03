@@ -91,10 +91,17 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return err
 	}
 
-	claims := jwt.Claims{}
+	claims, extra := jwt.Claims{}, map[string]any{}
 
-	if err = token.Claims(key, &claims); err != nil {
+	if err = token.Claims(key, &claims, &extra); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hintAssertionUnverified).WithWrap(err).WithDebugError(err))
+	}
+
+	// A bearer assertion has no proof of possession, so a key bound assertion is never accepted as one.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-parecki-oauth-jwt-dpop-grant-02#section-5.2
+	if _, bound := extra[consts.ClaimConfirmation]; bound {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The JWT in 'assertion' request parameter contains a '%s' (confirmation) claim, which cannot be used with authorization grant '%s'.", consts.ClaimConfirmation, consts.GrantTypeOAuthJWTBearer))
 	}
 
 	if err = c.validateTokenClaims(ctx, claims, key); err != nil {

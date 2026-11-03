@@ -175,6 +175,13 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Exactly one '%s' is required when the '%s' is '%s'.", consts.FormParameterAudience, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
 		}
 
+		// Section 4.3 defines no processing for the 'actor_token' and the grant would not identify the actor.
+		//
+		// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
+		if actorToken != "" {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' is not supported when the '%s' is '%s'.", consts.FormParameterActorToken, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693IDJAG))
+		}
+
 		return nil
 	}
 

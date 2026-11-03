@@ -292,6 +292,25 @@ func TestIDJAGRequestRefreshTokenSubjectAuthorizationDetails(t *testing.T) {
 	}
 }
 
+func TestIDJAGRequestRejectsAnActorToken(t *testing.T) {
+	cfg := newIDJAGSpecConfig(t)
+	store := storage.NewExampleStore()
+
+	request := newExchangeRequest(t, store.Clients[idjagClientID], newSpecSession(idjagSubject), url.Values{
+		consts.FormParameterSubjectToken:       {idjagSubjectToken},
+		consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693IDToken},
+		consts.FormParameterActorToken:         {idjagSubjectToken},
+		consts.FormParameterActorTokenType:     {consts.TokenTypeRFC8693IDToken},
+		consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693IDJAG},
+	})
+	request.RequestedAudience = oauth2.Arguments{idjagAudience}
+
+	err := runGrantHandler(t, cfg, request)
+
+	require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "is not supported when")
+}
+
 func TestIDJAGRequestRefreshTokenActor(t *testing.T) {
 	testCases := []struct {
 		name            string

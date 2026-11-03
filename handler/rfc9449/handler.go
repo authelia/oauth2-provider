@@ -21,6 +21,11 @@ import (
 // the session, and oauth2.(*Fosite).NewAccessResponse runs its populate after every grant handler has set a token
 // type. A binding handler that consumes the published proof, such as oidckb.Handler or idjag.RedeemHandler, must be
 // registered after it.
+//
+// A proof is required for every token request of a client registered with 'dpop_bound_access_tokens', as RFC 9449
+// Section 5.2 requires, and for every token request when DPoPEnforce is set. That includes a token exchange for an
+// ID-JAG, which draft-ietf-oauth-identity-assertion-authz-grant-06 Section 9.11.1.1 would otherwise issue without a
+// 'cnf' claim.
 type Handler struct {
 	Config interface {
 		oauth2.DPoPConfigProvider

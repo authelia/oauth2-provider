@@ -27,6 +27,11 @@ type IssueStorage interface {
 	// subject identifiers are pairwise. It MUST return the same value for an End-User in every grant for the same
 	// Resource Authorization Server and 'aud_tenant' regardless of the requesting client (Section 5.2). It returns
 	// oauth2.ErrNotFound when the End-User has none, which answers access_denied.
+	//
+	// The session subject depends on the 'subject_token_type' of the request form: for an ID Token it is the 'sub'
+	// claim of the ID Token, which is pairwise for the requesting client when subject identifiers are pairwise, and for
+	// a refresh token it is the subject of the session the refresh token was issued for. Both MUST resolve to the same
+	// value for the same End-User.
 	GetIDJAGSubject(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship) (subject string, err error)
 }
 

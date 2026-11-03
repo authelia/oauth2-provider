@@ -71,11 +71,21 @@ const (
 // supply 'tenant' when the issuer is multi-tenant (Section 6). A 'sub_id' claim using a transient SAML NameID Format is
 // refused (Section 3.2.2).
 //
+// The IdP Authorization Server SHOULD record the audience, resource, scope and authenticated client of each Token
+// Exchange request (Section 9.2), which the token endpoint calling NewAccessRequest and NewAccessResponse can do for a
+// granted and a refused request alike. When granted, GetClient is the authenticated client, GetGrantedAudience is the
+// issuer identifier of the Resource Authorization Server rather than any alias the client sent, and GetGrantedResource
+// and GetGrantedScopes are what the grant carries. When refused, the request carries what was requested as
+// GetRequestedAudience, GetRequestedResource and GetRequestedScopes, and GetClient once the client authenticated. The
+// 'subject_token' and 'actor_token' form parameters should not be recorded, and the records kept only as long as
+// security and audit require (Section 10).
+//
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-3.1
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-5
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-6
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-9.2
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-9.3
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-9.11.1.1
 // See: https://datatracker.ietf.org/doc/html/rfc9470#section-3

@@ -724,6 +724,7 @@ func TestRedeemHandlerCertificateBinding(t *testing.T) {
 		cert    *x509.Certificate
 		grant   string
 		noHTTP  bool
+		garbled bool
 		err     error
 	}{
 		// Section 9.11.2.2.
@@ -737,6 +738,8 @@ func TestRedeemHandlerCertificateBinding(t *testing.T) {
 		// Section 9.11: an unsupported confirmation method.
 		{name: "ShouldRejectACertificateBoundGrantWhenMTLSIsDisabled", bound: true, cert: certificate, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldFailClosedWithoutTheHTTPRequest", mtls: true, bound: true, noHTTP: true, err: oauth2.ErrServerError},
+		{name: "ShouldFailClosedWithoutTheHTTPRequestWhenEnforced", mtls: true, enforce: true, noHTTP: true, err: oauth2.ErrServerError},
+		{name: "ShouldRejectAnUnreadableCertificateWhenEnforced", mtls: true, enforce: true, garbled: true, err: oauth2.ErrInvalidGrant},
 	}
 
 	for _, tc := range testCases {
@@ -765,6 +768,11 @@ func TestRedeemHandlerCertificateBinding(t *testing.T) {
 				r := httptest.NewRequest(http.MethodPost, redeemEndpoint, nil)
 				if tc.cert != nil {
 					r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{tc.cert}}
+				}
+
+				if tc.garbled {
+					fixture.config.MTLSClientCertificateHeader = redeemCertificateHeader
+					r.Header.Set(redeemCertificateHeader, "not-a-certificate")
 				}
 
 				ctx = context.WithValue(ctx, oauth2.RequestContextKey, r)

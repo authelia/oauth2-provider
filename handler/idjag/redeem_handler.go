@@ -776,12 +776,22 @@ func (h *RedeemHandler) requireCertificate(ctx context.Context, client oauth2.Cl
 		required = true
 	}
 
-	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
-	if !required || r == nil {
+	if !required {
 		return nil
 	}
 
-	if cert, err := oauth2.ClientCertificateFromRequest(r, h.Config.GetMTLSClientCertificateHeader(ctx)); err == nil && cert == nil {
+	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
+	if r == nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The HTTP request needed to read the client certificate is not available."))
+	}
+
+	// Section 9.11.2.2: a required sender constraint that cannot be met fails with invalid_grant.
+	cert, err := oauth2.ClientCertificateFromRequest(r, h.Config.GetMTLSClientCertificateHeader(ctx))
+
+	switch {
+	case err != nil:
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The client certificate could not be read.").WithWrap(err).WithDebugError(err))
+	case cert == nil:
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("A sender-constrained access token is required, and the request has no client certificate."))
 	}
 

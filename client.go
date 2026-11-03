@@ -472,6 +472,18 @@ type DPoPStrictRefreshTokenBindingClient interface {
 	Client
 }
 
+// IDJAGResourceOptionalClient is a client which may omit the 'resource' parameter when requesting an Identity Assertion
+// JWT Authorization Grant even though its relationship lists resources. The requirement is waived when either this or
+// the provider-wide option is set; see IDJAGConfigProvider.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
+type IDJAGResourceOptionalClient interface {
+	// GetIDJAGResourceOptional returns true if this client may omit the 'resource' parameter.
+	GetIDJAGResourceOptional() (optional bool)
+
+	Client
+}
+
 // IntrospectionTokenTypeClient is a client which, when it calls the introspection endpoint, decides whether the
 // response includes the RFC 7662 Section 2.2 'token_type' member. When implemented it overrides
 // IntrospectionTokenTypeEnabledProvider.

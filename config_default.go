@@ -434,6 +434,10 @@ type Config struct {
 	// grant when negative.
 	IDJAGAccessTokenAllowance time.Duration
 
+	// IDJAGResourceOptional lets a client omit the 'resource' parameter when its Identity Assertion JWT Authorization
+	// Grant relationship lists resources, which issues a grant not restricted to a protected resource.
+	IDJAGResourceOptional bool
+
 	// JWTClockSkew is how far into the future an 'iat' or 'nbf' claim may be in a JWT received from a client: a client
 	// assertion, a request object, or an RFC 7523 authorization grant. Defaults to 10 seconds when zero, is disabled
 	// when negative, and is capped at 60 seconds.
@@ -1348,6 +1352,12 @@ func (c *Config) GetIDJAGSingleUse(ctx context.Context) (single bool) {
 // Grant it was issued for.
 func (c *Config) GetIDJAGAccessTokenAllowance(ctx context.Context) (allowance time.Duration) {
 	return c.IDJAGAccessTokenAllowance
+}
+
+// GetIDJAGResourceOptional returns true when a client may omit the 'resource' parameter even though its Identity
+// Assertion JWT Authorization Grant relationship lists resources.
+func (c *Config) GetIDJAGResourceOptional(ctx context.Context) (optional bool) {
+	return c.IDJAGResourceOptional
 }
 
 // GetRFC8628UserVerificationURL returns the URL of the device verification endpoint.

@@ -283,12 +283,13 @@ func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, reques
 
 	audience := oauth2.GetAudienceStrategy(ctx, c.Config, client)
 
+	// This server is a recognized target, so an audience the client may not use is denied (Section 4.3.4.3).
 	if err = audience(client.GetAudience(), request.GetRequestedAudience()); err != nil {
-		return errors.WithStack(err)
+		return errors.WithStack(oauth2.ErrAccessDenied.WithHint("The OAuth 2.0 Client is not authorized for the requested audience.").WithWrap(err).WithDebugError(err))
 	}
 
 	if err = audience(original.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
-		return errors.WithStack(err)
+		return errors.WithStack(oauth2.ErrAccessDenied.WithHint("The refresh token is not authorized for the requested audience.").WithWrap(err).WithDebugError(err))
 	}
 
 	resource := oauth2.GetResourceStrategy(ctx, c.Config, client)

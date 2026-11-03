@@ -930,13 +930,33 @@ func (s *MemoryStore) MarkRFC7523JWTUsedForTime(_ context.Context, issuer, jti s
 	return s.setJTI(s.RFC7523JTIs, &s.rfc7523JTIsPruneAt, JTIMarker{Issuer: issuer, JTI: jti}, exp)
 }
 
-// GetIDJAGRelationship returns a copy of the relationship registered for the client and audience.
+// GetIDJAGRelationship returns a copy of the relationship registered for the client and audience, or of the client's
+// relationship whose issuer is the audience, oauth2.ErrAccessDenied when the audience is only registered for another
+// client, and oauth2.ErrNotFound when it is not registered at all.
 func (s *MemoryStore) GetIDJAGRelationship(_ context.Context, request oauth2.AccessRequester, audience string) (*oauth2.IDJAGRelationship, error) {
 	s.idjagMutex.RLock()
 	defer s.idjagMutex.RUnlock()
 
-	relationship, ok := s.IDJAGRelationships[IDJAGRelationshipKey{ClientID: request.GetClient().GetID(), Audience: audience}]
+	clientID := request.GetClient().GetID()
+
+	relationship, ok := s.IDJAGRelationships[IDJAGRelationshipKey{ClientID: clientID, Audience: audience}]
 	if !ok {
+		for key, other := range s.IDJAGRelationships {
+			if key.ClientID == clientID && other.Issuer == audience {
+				relationship, ok = other, true
+
+				break
+			}
+		}
+	}
+
+	if !ok {
+		for key, other := range s.IDJAGRelationships {
+			if key.Audience == audience || other.Issuer == audience {
+				return nil, oauth2.ErrAccessDenied.WithHintf("The OAuth 2.0 Client is not authorized for the audience '%s'.", audience)
+			}
+		}
+
 		return nil, oauth2.ErrNotFound
 	}
 

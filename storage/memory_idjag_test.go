@@ -58,6 +58,29 @@ func TestMemoryStoreIDJAG(t *testing.T) {
 	_, err = store.GetIDJAGRelationship(ctx, request, "https://unknown.example/")
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 
+	otherIssuer := "https://recognized.example/"
+
+	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: "another-client", Audience: "urn:example:other"}] = oauth2.IDJAGRelationship{Issuer: otherIssuer, ClientID: "a3"}
+
+	_, err = store.GetIDJAGRelationship(ctx, request, "urn:example:other")
+	assert.ErrorIs(t, err, oauth2.ErrAccessDenied)
+
+	_, err = store.GetIDJAGRelationship(ctx, request, otherIssuer)
+	assert.ErrorIs(t, err, oauth2.ErrAccessDenied)
+
+	// Section 4.3: the audience may be the issuer identifier of a relationship registered under an alias.
+	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: "another-client", Audience: "urn:example:other-chat"}] = oauth2.IDJAGRelationship{Issuer: "https://chat.example/", ClientID: "a4"}
+
+	relationship, err = store.GetIDJAGRelationship(ctx, request, "https://chat.example/")
+	require.NoError(t, err)
+	assert.Equal(t, "f53f", relationship.ClientID)
+
+	relationship.Scopes[0] = idjagTestMutated
+
+	again, err = store.GetIDJAGRelationship(ctx, request, "https://chat.example/")
+	require.NoError(t, err)
+	assert.Equal(t, "chat.read", again.Scopes[0])
+
 	_, err = store.GetIDJAGTrustedIssuer(ctx, idjagTestIssuer)
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 

@@ -29,7 +29,7 @@ type IDJAGRelationship struct {
 
 	// Resources is the set of resource indicators that may be requested. When not empty a request without the
 	// 'resource' parameter answers invalid_target, so every grant is restricted to some of them, unless
-	// IDJAGConfigProvider.GetIDJAGResourceOptional or IDJAGResourceOptionalClient waives it (Section 4.3.3).
+	// IDJAGResourceOptionalProvider.GetIDJAGResourceOptional or IDJAGResourceOptionalClient waives it (Section 4.3.3).
 	Resources []string
 
 	// AuthorizationDetailsTypes is the set of RFC 9396 authorization details types that may be granted. Every type

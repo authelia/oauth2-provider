@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/idjag"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -67,6 +68,24 @@ func TestIssueHandlerRequiresResource(t *testing.T) {
 			assert.Equal(t, tc.resource, request.GetGrantedResource())
 		})
 	}
+}
+
+func TestIssueHandlerRequiresResourceWithoutTheOptionalProvider(t *testing.T) {
+	handler, config, _ := newIssueFixture(t, false)
+	config.IDJAGResourceOptional = true
+
+	handler.Config = issueConfigOnly{IssueConfig: config}
+
+	request := newIssueRequest(t, newIssueSession(time.Now().Add(time.Hour)), nil)
+	request.RequestedAudience = oauth2.Arguments{redeemAudience}
+	request.RequestedResource = nil
+
+	require.ErrorIs(t, handler.HandleTokenEndpointRequest(t.Context(), request), oauth2.ErrInvalidTarget)
+}
+
+// issueConfigOnly hides every method of the wrapped configuration outside idjag.IssueConfig.
+type issueConfigOnly struct {
+	idjag.IssueConfig
 }
 
 type resourceOptionalClient struct {

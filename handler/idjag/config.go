@@ -37,6 +37,7 @@ type RedeemConfig interface {
 }
 
 var (
-	_ IssueConfig  = (*oauth2.Config)(nil)
-	_ RedeemConfig = (*oauth2.Config)(nil)
+	_ IssueConfig                          = (*oauth2.Config)(nil)
+	_ RedeemConfig                         = (*oauth2.Config)(nil)
+	_ oauth2.IDJAGResourceOptionalProvider = (*oauth2.Config)(nil)
 )

@@ -129,7 +129,7 @@ func (h *IssueHandler) HandleTokenEndpointRequest(ctx context.Context, request o
 }
 
 func (h *IssueHandler) resourceOptional(ctx context.Context, client oauth2.Client) bool {
-	if h.Config.GetIDJAGResourceOptional(ctx) {
+	if provider, ok := h.Config.(oauth2.IDJAGResourceOptionalProvider); ok && provider.GetIDJAGResourceOptional(ctx) {
 		return true
 	}
 

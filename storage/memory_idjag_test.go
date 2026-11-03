@@ -130,6 +130,22 @@ func TestMemoryStoreIDJAGClaims(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, map[string]any{consts.ClaimPreferredEmail: idjagTestEmail}, claims)
 
+	nested := func() map[string]any {
+		return map[string]any{"address": map[string]any{"country": "AU"}, consts.ClaimGroups: []any{"admins"}}
+	}
+
+	store.IDJAGAudienceClaims[storage.IDJAGAudienceSubjectKey{Issuer: "https://chat.example/", Subject: "peter"}] = nested()
+
+	claims, err = store.GetIDJAGClaims(t.Context(), request, relationship)
+	require.NoError(t, err)
+
+	claims["address"].(map[string]any)["country"] = "NZ"
+	claims[consts.ClaimGroups].([]any)[0] = "users"
+
+	claims, err = store.GetIDJAGClaims(t.Context(), request, relationship)
+	require.NoError(t, err)
+	assert.Equal(t, nested(), claims)
+
 	claims, err = store.GetIDJAGClaims(t.Context(), request, &oauth2.IDJAGRelationship{Issuer: "https://pay.example/"})
 	require.NoError(t, err)
 	assert.Nil(t, claims)

@@ -7,7 +7,6 @@ package storage
 import (
 	"context"
 	"errors"
-	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/clone"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -964,13 +964,13 @@ func (s *MemoryStore) GetIDJAGSubject(_ context.Context, request oauth2.AccessRe
 	return "", oauth2.ErrNotFound
 }
 
-// GetIDJAGClaims returns a copy of the claims registered for the session subject at the Resource Authorization Server
-// of the relationship, or nil when none are registered.
+// GetIDJAGClaims returns a deep copy of the claims registered for the session subject at the Resource Authorization
+// Server of the relationship, or nil when none are registered.
 func (s *MemoryStore) GetIDJAGClaims(_ context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship) (map[string]any, error) {
 	s.idjagMutex.RLock()
 	defer s.idjagMutex.RUnlock()
 
-	return maps.Clone(s.IDJAGAudienceClaims[IDJAGAudienceSubjectKey{Issuer: relationship.Issuer, Subject: request.GetSession().GetSubject()}]), nil
+	return clone.Map(s.IDJAGAudienceClaims[IDJAGAudienceSubjectKey{Issuer: relationship.Issuer, Subject: request.GetSession().GetSubject()}]), nil
 }
 
 // GetIDJAGTrustedIssuer returns a copy of the trust configuration registered for the issuer.

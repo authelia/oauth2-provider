@@ -68,10 +68,14 @@ func TestRedeemHandlerValidation(t *testing.T) {
 		{name: "ShouldAcceptSingleElementAudienceArray", mutate: func(c map[string]any) { c["aud"] = []string{redeemAudience} }, subject: redeemSubject, scopes: []string{redeemRead, redeemHistory}},
 		{name: "ShouldRejectRequestedScopeOutsideGrant", scope: oauth2.Arguments{redeemAdmin}, err: oauth2.ErrInvalidScope},
 		{name: "ShouldRejectUntrustedIssuer", mutate: func(c map[string]any) { c["iss"] = redeemEvil }, err: oauth2.ErrInvalidGrant},
-		{name: "ShouldRejectClientNotPermittedForIssuer", setup: func(store *storage.MemoryStore) {
-			trusted := store.IDJAGTrustedIssuers[redeemIssuer]
-			trusted.Clients = []string{"someone-else"}
-			store.IDJAGTrustedIssuers[redeemIssuer] = trusted
+		// Section 4.4.3: access_denied is for a valid grant, so validation comes first.
+		{name: "ShouldDenyClientNotPermittedForIssuer", setup: excludeRedeemClient, err: oauth2.ErrAccessDenied},
+		{name: "ShouldRejectExpiredGrantOfClientNotPermittedForIssuer", setup: excludeRedeemClient, mutate: func(c map[string]any) { c["exp"] = time.Now().Add(-time.Minute).Unix() }, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldRejectForgedGrantOfClientNotPermittedForIssuer", setup: excludeRedeemClient, forge: func(t *testing.T, f *redeemFixture, _ string, claims map[string]any) string {
+			other, err := rsa.GenerateKey(rand.Reader, 2048)
+			require.NoError(t, err)
+
+			return (&redeemFixture{private: other}).sign(t, claims, "", "", "")
 		}, err: oauth2.ErrInvalidGrant},
 		// Section 9.4: the server MUST NOT redeem an ID-JAG it issued itself.
 		{name: "ShouldRejectSelfIssued", setup: func(store *storage.MemoryStore) {
@@ -1172,4 +1176,10 @@ func (f *redeemFixture) signWithoutKeyID(t *testing.T, claims map[string]any) st
 	require.NoError(t, err)
 
 	return raw
+}
+
+func excludeRedeemClient(store *storage.MemoryStore) {
+	trusted := store.IDJAGTrustedIssuers[redeemIssuer]
+	trusted.Clients = []string{"someone-else"}
+	store.IDJAGTrustedIssuers[redeemIssuer] = trusted
 }

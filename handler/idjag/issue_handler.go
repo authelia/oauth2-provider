@@ -42,7 +42,7 @@ const (
 //
 // The 'auth_time', 'acr' and 'amr' claims describe one authentication of the End-User, so they are taken together
 // from a single source: the validated 'subject_token' when it is an ID token or a refresh token and carries any of
-// them, otherwise the ID token claims of the session, otherwise Session.IDJAGClaims (Section 3.1). Those of any other
+// them, otherwise the ID token claims of the session, otherwise IssueStorage.GetIDJAGClaims (Section 3.1). Those of any other
 // 'subject_token' are not issued. For a refresh token 'subject_token' the rfc8693.RefreshTokenTypeHandler supplies
 // them from the ID token claims of the session the refresh token was issued for (Section 4.3.3).
 //
@@ -67,8 +67,8 @@ const (
 // 3.1).
 //
 // The 'sub' claim is the subject identifier IssueStorage.GetIDJAGSubject returns for the Resource Authorization Server
-// (Section 5.2). The 'tenant', 'aud_tenant' and 'aud_sub' claims are supplied through Session.IDJAGClaims, which MUST
-// supply 'tenant' when the issuer is multi-tenant (Section 6). A 'sub_id' claim using a transient SAML NameID Format is
+// (Section 5.2). Claims such as 'email', 'aud_sub', 'tenant', 'aud_tenant' and 'sub_id' are supplied through
+// IssueStorage.GetIDJAGClaims, which MUST supply 'tenant' when the issuer is multi-tenant (Section 6). A 'sub_id' claim using a transient SAML NameID Format is
 // refused (Section 3.2.2).
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-3.1
@@ -173,7 +173,10 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 
 	grantAuthorizationDetails(request, relationship)
 
-	claims := h.claims(ctx, request, relationship, issuer, subject, now, expires)
+	claims, err := h.claims(ctx, request, relationship, issuer, subject, now, expires)
+	if err != nil {
+		return err
+	}
 
 	if isTransientSubjectIdentifier(claims) {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The 'sub_id' claim uses a transient SAML NameID Format."))
@@ -227,12 +230,20 @@ func (h *IssueHandler) CanHandleAuthorizationDetails(ctx context.Context, reques
 	return rfc8693.IsIDJAGRequest(ctx, request, h.Config)
 }
 
-func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship, issuer, subject string, now, expires time.Time) (claims jwt.MapClaims) {
+func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship, issuer, subject string, now, expires time.Time) (claims jwt.MapClaims, err error) {
+	extra, err := h.Storage.GetIDJAGClaims(ctx, request, relationship)
+	if err != nil {
+		var rfc *oauth2.RFC6749Error
+		if errors.As(err, &rfc) {
+			return nil, errorsx.WithStack(err)
+		}
+
+		return nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
 	claims = jwt.MapClaims{}
 
-	if session, ok := request.GetSession().(Session); ok {
-		maps.Copy(claims, session.IDJAGClaims(ctx, relationship))
-	}
+	maps.Copy(claims, extra)
 
 	delete(claims, consts.ClaimConfirmation)
 	delete(claims, consts.ClaimActor)
@@ -292,7 +303,7 @@ func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequeste
 		claims[consts.ClaimConfirmation] = map[string]any{member: value}
 	}
 
-	return claims
+	return claims, nil
 }
 
 func (h *IssueHandler) confirmation(ctx context.Context, session oauth2.Session) (member, value string) {

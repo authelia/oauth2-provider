@@ -7,6 +7,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -159,6 +160,7 @@ type MemoryStore struct {
 	IDJAGTrustedIssuers      map[string]oauth2.IDJAGTrustedIssuer
 	IDJAGSubjects            map[IDJAGSubjectKey]string
 	IDJAGAudienceSubjects    map[IDJAGAudienceSubjectKey]string
+	IDJAGAudienceClaims      map[IDJAGAudienceSubjectKey]map[string]any
 	IDJAGTenants             map[IDJAGTenantKey]struct{}
 	IDJAGResources           map[IDJAGResourceKey]struct{}
 	IDJAGJTIs                map[JTIMarker]time.Time
@@ -221,6 +223,7 @@ func NewMemoryStore() *MemoryStore {
 		IDJAGTrustedIssuers:      make(map[string]oauth2.IDJAGTrustedIssuer),
 		IDJAGSubjects:            make(map[IDJAGSubjectKey]string),
 		IDJAGAudienceSubjects:    make(map[IDJAGAudienceSubjectKey]string),
+		IDJAGAudienceClaims:      make(map[IDJAGAudienceSubjectKey]map[string]any),
 		IDJAGTenants:             make(map[IDJAGTenantKey]struct{}),
 		IDJAGResources:           make(map[IDJAGResourceKey]struct{}),
 		IDJAGJTIs:                make(map[JTIMarker]time.Time),
@@ -959,6 +962,15 @@ func (s *MemoryStore) GetIDJAGSubject(_ context.Context, request oauth2.AccessRe
 	}
 
 	return "", oauth2.ErrNotFound
+}
+
+// GetIDJAGClaims returns a copy of the claims registered for the session subject at the Resource Authorization Server
+// of the relationship, or nil when none are registered.
+func (s *MemoryStore) GetIDJAGClaims(_ context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship) (map[string]any, error) {
+	s.idjagMutex.RLock()
+	defer s.idjagMutex.RUnlock()
+
+	return maps.Clone(s.IDJAGAudienceClaims[IDJAGAudienceSubjectKey{Issuer: relationship.Issuer, Subject: request.GetSession().GetSubject()}]), nil
 }
 
 // GetIDJAGTrustedIssuer returns a copy of the trust configuration registered for the issuer.

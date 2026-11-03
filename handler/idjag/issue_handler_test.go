@@ -271,12 +271,41 @@ func TestIssueHandlerSubject(t *testing.T) {
 	}
 }
 
+func TestIssueHandlerClaimsStorageError(t *testing.T) {
+	testCases := []struct {
+		name string
+		err  error
+		code error
+	}{
+		{name: "ShouldReturnServerErrorWhenTheStorageFails", err: errors.New("connection refused"), code: oauth2.ErrServerError},
+		{name: "ShouldReturnTheErrorOfTheStorage", err: oauth2.ErrAccessDenied, code: oauth2.ErrAccessDenied},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, _, _ := newIssueFixture(t, false)
+
+			handler.Storage = &claimsStorage{MemoryStore: handler.Storage.(*storage.MemoryStore), err: tc.err}
+
+			request := newIssueRequest(t, newIssueSession(time.Now().Add(time.Hour)), nil)
+			request.RequestedAudience = oauth2.Arguments{redeemAudience}
+
+			require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), request))
+
+			response := oauth2.NewAccessResponse()
+
+			require.ErrorIs(t, handler.PopulateTokenEndpointResponse(t.Context(), request, response), tc.code)
+			assert.Empty(t, response.GetAccessToken())
+		})
+	}
+}
+
 // Section 3.2.2: a transient NameID Format cannot serve as a cross-trust-domain identifier.
 func TestIssueHandlerRefusesATransientSubjectIdentifier(t *testing.T) {
 	handler, _, _ := newIssueFixture(t, false)
 
 	session := newIssueSession(time.Now().Add(time.Hour))
-	session.extra = map[string]any{consts.ClaimSubjectIdentifier: map[string]any{issueMemberFormat: issueNameIDFormat, issueMemberNameIDFormat: issueNameIDTransient}}
+	setIssueClaims(handler, map[string]any{consts.ClaimSubjectIdentifier: map[string]any{issueMemberFormat: issueNameIDFormat, issueMemberNameIDFormat: issueNameIDTransient}})
 
 	request := newIssueRequest(t, session, nil)
 	request.RequestedAudience = oauth2.Arguments{redeemAudience}
@@ -285,11 +314,11 @@ func TestIssueHandlerRefusesATransientSubjectIdentifier(t *testing.T) {
 	require.ErrorIs(t, handler.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse()), oauth2.ErrServerError)
 }
 
-func TestIssueHandlerSessionCannotOverrideRegisteredClaims(t *testing.T) {
+func TestIssueHandlerStorageClaimsCannotOverrideRegisteredClaims(t *testing.T) {
 	handler, _, key := newIssueFixture(t, false)
 
 	session := newIssueSession(time.Now().Add(time.Hour))
-	session.extra = map[string]any{consts.ClaimAudience: redeemEvil, consts.ClaimClientIdentifier: "evil", consts.ClaimConfirmation: map[string]any{"jkt": "x"}, consts.ClaimTenant: "acme"}
+	setIssueClaims(handler, map[string]any{consts.ClaimAudience: redeemEvil, consts.ClaimClientIdentifier: "evil", consts.ClaimConfirmation: map[string]any{"jkt": "x"}, consts.ClaimTenant: "acme"})
 
 	request := newIssueRequest(t, session, nil)
 	request.RequestedAudience = oauth2.Arguments{redeemAudience}
@@ -367,7 +396,7 @@ func TestIssueHandlerAuthenticationClaims(t *testing.T) {
 			expected: map[string]any{consts.ClaimAuthenticationTime: float64(idTokenAuthTime), consts.ClaimAuthenticationContextClassReference: issueACRSilver, consts.ClaimAuthenticationMethodsReference: []any{issueAMRPassword}},
 		},
 		{
-			name:     "ShouldPermitSessionClaimsWhenNeitherSourceHasThem",
+			name:     "ShouldPermitStorageClaimsWhenNeitherSourceHasThem",
 			extra:    map[string]any{consts.ClaimAuthenticationContextClassReference: issueACRBronze},
 			expected: map[string]any{consts.ClaimAuthenticationContextClassReference: issueACRBronze},
 		},
@@ -388,7 +417,7 @@ func TestIssueHandlerAuthenticationClaims(t *testing.T) {
 			handler, _, key := newIssueFixture(t, false)
 
 			session := newIssueSession(time.Now().Add(time.Hour))
-			session.extra = tc.extra
+			setIssueClaims(handler, tc.extra)
 
 			maps.Copy(session.SubjectToken, tc.subject)
 
@@ -627,18 +656,13 @@ func TestIssueHandlerCanHandleAuthorizationDetails(t *testing.T) {
 
 type issueSession struct {
 	*rfc8693.DefaultSession
-
-	extra map[string]any
 }
 
-func (s *issueSession) IDJAGClaims(_ context.Context, _ *oauth2.IDJAGRelationship) map[string]any {
+func setIssueClaims(handler *idjag.IssueHandler, extra map[string]any) {
 	claims := map[string]any{consts.ClaimPreferredEmail: issueEmail}
+	maps.Copy(claims, extra)
 
-	for k, v := range s.extra {
-		claims[k] = v
-	}
-
-	return claims
+	handler.Storage.(*storage.MemoryStore).IDJAGAudienceClaims[storage.IDJAGAudienceSubjectKey{Issuer: redeemAudience, Subject: issueSubject}] = claims
 }
 
 func newIssueSession(subjectExp time.Time) *issueSession {
@@ -680,6 +704,7 @@ func newIssueFixture(t *testing.T, dpop bool) (*idjag.IssueHandler, *oauth2.Conf
 	}
 
 	store.IDJAGAudienceSubjects[storage.IDJAGAudienceSubjectKey{Issuer: redeemAudience, Subject: issueSubject}] = issueMapped
+	store.IDJAGAudienceClaims[storage.IDJAGAudienceSubjectKey{Issuer: redeemAudience, Subject: issueSubject}] = map[string]any{consts.ClaimPreferredEmail: issueEmail}
 	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: issueClient, Audience: redeemAudience}] = relationship
 	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: issueClient, Audience: issueAudienceURN}] = relationship
 
@@ -747,6 +772,16 @@ type subjectStorage struct {
 
 func (s *subjectStorage) GetIDJAGSubject(_ context.Context, _ oauth2.AccessRequester, _ *oauth2.IDJAGRelationship) (string, error) {
 	return "", s.err
+}
+
+type claimsStorage struct {
+	*storage.MemoryStore
+
+	err error
+}
+
+func (s *claimsStorage) GetIDJAGClaims(_ context.Context, _ oauth2.AccessRequester, _ *oauth2.IDJAGRelationship) (map[string]any, error) {
+	return nil, s.err
 }
 
 type otherTypeHandler struct {

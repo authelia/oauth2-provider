@@ -63,8 +63,9 @@ type IDJAGTrustedIssuer struct {
 	// 'jwks_uri' of the RFC 8414 metadata of the issuer (Section 4.4.1).
 	JSONWebKeysURI string
 
-	// SigningAlgs is the set of permitted JWS algorithms. RS256 when empty. Symmetric algorithms and 'none' are always
-	// rejected.
+	// SigningAlgs is the set of permitted JWS algorithms. RS256 when empty. Only the RS, PS and ES algorithms of RFC 7518
+	// verify: symmetric algorithms and 'none' are always rejected, and a grant signed with EdDSA is not recognized as an
+	// ID-JAG, so listing EdDSA has no effect.
 	SigningAlgs []string
 
 	// MultiTenant marks an issuer whose grants MUST carry a 'tenant' claim that is trusted for the recipient tenant

@@ -19,6 +19,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 func TestWriteAccessError(t *testing.T) {
@@ -39,6 +40,13 @@ func TestWriteAccessError(t *testing.T) {
 			err:       ErrServerError,
 			requester: nil,
 			code:      http.StatusInternalServerError,
+		},
+		// RFC 6749 Section 5.2.
+		{
+			name:      "ShouldWriteAccessDeniedAsBadRequest",
+			err:       errorsx.WithStack(ErrAccessDenied.WithHint("hint")),
+			requester: nil,
+			code:      http.StatusBadRequest,
 		},
 		{
 			name: "ShouldUseRequesterForLocalization",
@@ -70,6 +78,8 @@ func TestWriteAccessError(t *testing.T) {
 			assert.Equal(t, consts.PragmaNoCache, header.Get(consts.HeaderPragma))
 		})
 	}
+
+	assert.Equal(t, http.StatusForbidden, ErrAccessDenied.CodeField)
 }
 
 func TestWriteAccessErrorRFC6749(t *testing.T) {

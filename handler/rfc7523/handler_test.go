@@ -630,7 +630,7 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 				assert.Equal(t, token, f.responder.AccessToken)
 				assert.Equal(t, oauth2.BearerAccessToken, f.responder.TokenType)
 				assert.Equal(t, int64(f.handler.HandleHelper.Config.GetAccessTokenLifespan(f.ctx).Seconds()), f.responder.GetExtra(consts.AccessResponseExpiresIn))
-				assert.Equal(t, "", f.responder.GetExtra(consts.AccessResponseScope))
+				assert.Nil(t, f.responder.GetExtra(consts.AccessResponseScope))
 				assert.Nil(t, f.responder.GetExtra(consts.AccessResponseRefreshToken))
 			},
 		},
@@ -654,7 +654,7 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 				assert.Equal(t, token, f.responder.AccessToken)
 				assert.Equal(t, oauth2.BearerAccessToken, f.responder.TokenType)
 				assert.Equal(t, int64(internal.TestLifespans.JwtBearerGrantAccessTokenLifespan.Seconds()), f.responder.GetExtra(consts.AccessResponseExpiresIn))
-				assert.Equal(t, "", f.responder.GetExtra(consts.AccessResponseScope))
+				assert.Nil(t, f.responder.GetExtra(consts.AccessResponseScope))
 				assert.Nil(t, f.responder.GetExtra(consts.AccessResponseRefreshToken))
 			},
 		},

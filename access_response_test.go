@@ -89,8 +89,9 @@ func TestAccessResponseGettersAndSetters(t *testing.T) {
 func TestAccessResponseSetScopes(t *testing.T) {
 	testCases := []struct {
 		name     string
+		previous Arguments
 		scopes   Arguments
-		expected string
+		expected any
 	}{
 		{
 			name:     "ShouldStoreSingleScope",
@@ -102,18 +103,32 @@ func TestAccessResponseSetScopes(t *testing.T) {
 			scopes:   Arguments{"openid", "profile", "email"},
 			expected: "openid profile email",
 		},
+		// RFC 6749 Section 3.3.
 		{
-			name:     "ShouldStoreEmptyStringForEmptyScopes",
-			scopes:   Arguments{},
-			expected: "",
+			name:   "ShouldOmitEmptyScopes",
+			scopes: Arguments{},
+		},
+		{
+			name:     "ShouldRemoveScopesSetBefore",
+			previous: Arguments{"openid"},
+			scopes:   nil,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ar := NewAccessResponse()
+
+			if tc.previous != nil {
+				ar.SetScopes(tc.previous)
+			}
+
 			ar.SetScopes(tc.scopes)
 			assert.Equal(t, tc.expected, ar.GetExtra(consts.AccessResponseScope))
+
+			if tc.expected == nil {
+				assert.NotContains(t, ar.ToMap(), consts.AccessResponseScope)
+			}
 		})
 	}
 }

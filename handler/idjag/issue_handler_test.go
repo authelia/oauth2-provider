@@ -311,16 +311,34 @@ func TestIssueHandlerClaimsStorageError(t *testing.T) {
 
 // Section 3.2.2: a transient NameID Format cannot serve as a cross-trust-domain identifier.
 func TestIssueHandlerRefusesATransientSubjectIdentifier(t *testing.T) {
-	handler, _, _ := newIssueFixture(t, false)
+	type identifier struct {
+		Format       string `json:"format"`
+		NameIDFormat string `json:"nameid_format"`
+	}
 
-	session := newIssueSession(time.Now().Add(time.Hour))
-	setIssueClaims(handler, map[string]any{consts.ClaimSubjectIdentifier: map[string]any{issueMemberFormat: issueNameIDFormat, issueMemberNameIDFormat: issueNameIDTransient}})
+	testCases := []struct {
+		name  string
+		value any
+	}{
+		{name: "ShouldRefuseAMap", value: map[string]any{issueMemberFormat: issueNameIDFormat, issueMemberNameIDFormat: issueNameIDTransient}},
+		{name: "ShouldRefuseAStringMap", value: map[string]string{issueMemberFormat: issueNameIDFormat, issueMemberNameIDFormat: issueNameIDTransient}},
+		{name: "ShouldRefuseAStruct", value: identifier{Format: issueNameIDFormat, NameIDFormat: issueNameIDTransient}},
+		{name: "ShouldRefuseAStructPointer", value: &identifier{Format: issueNameIDFormat, NameIDFormat: issueNameIDTransient}},
+	}
 
-	request := newIssueRequest(t, session, nil)
-	request.RequestedAudience = oauth2.Arguments{redeemAudience}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, _, _ := newIssueFixture(t, false)
 
-	require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), request))
-	require.ErrorIs(t, handler.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse()), oauth2.ErrServerError)
+			setIssueClaims(handler, map[string]any{consts.ClaimSubjectIdentifier: tc.value})
+
+			request := newIssueRequest(t, newIssueSession(time.Now().Add(time.Hour)), nil)
+			request.RequestedAudience = oauth2.Arguments{redeemAudience}
+
+			require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), request))
+			require.ErrorIs(t, handler.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse()), oauth2.ErrServerError)
+		})
+	}
 }
 
 func TestIssueHandlerStorageClaimsCannotOverrideRegisteredClaims(t *testing.T) {

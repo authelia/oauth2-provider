@@ -358,7 +358,17 @@ func (h *IssueHandler) confirmation(ctx context.Context, session oauth2.Session)
 }
 
 func isTransientSubjectIdentifier(claims map[string]any) bool {
-	identifier, _ := claims[consts.ClaimSubjectIdentifier].(map[string]any)
+	value := claims[consts.ClaimSubjectIdentifier]
+
+	identifier, ok := value.(map[string]any)
+
+	// The claim is serialized as JSON, so a typed value is read as the issued grant will carry it.
+	if !ok && value != nil {
+		if encoded, err := json.Marshal(value); err == nil {
+			_ = json.Unmarshal(encoded, &identifier)
+		}
+	}
+
 	format, _ := identifier[subjectIdentifierNameIDFormat].(string)
 
 	return format == nameIDFormatTransient

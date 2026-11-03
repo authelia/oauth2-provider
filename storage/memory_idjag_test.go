@@ -132,6 +132,48 @@ func TestMemoryStoreIDJAGSubject(t *testing.T) {
 	require.ErrorIs(t, err, oauth2.ErrNotFound)
 }
 
+func TestMemoryStoreIDJAGClaims(t *testing.T) {
+	store := storage.NewMemoryStore()
+	request := &oauth2.AccessRequest{Request: oauth2.Request{Session: &oauth2.DefaultSession{Subject: "peter"}}}
+	relationship := &oauth2.IDJAGRelationship{Issuer: "https://chat.example/"}
+
+	claims, err := store.GetIDJAGClaims(t.Context(), request, relationship)
+	require.NoError(t, err)
+	assert.Nil(t, claims)
+
+	store.IDJAGAudienceClaims[storage.IDJAGAudienceSubjectKey{Issuer: "https://chat.example/", Subject: "peter"}] = map[string]any{consts.ClaimPreferredEmail: idjagTestEmail}
+
+	claims, err = store.GetIDJAGClaims(t.Context(), request, relationship)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{consts.ClaimPreferredEmail: idjagTestEmail}, claims)
+
+	claims[consts.ClaimPreferredEmail] = "changed@example.com"
+
+	claims, err = store.GetIDJAGClaims(t.Context(), request, relationship)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{consts.ClaimPreferredEmail: idjagTestEmail}, claims)
+
+	nested := func() map[string]any {
+		return map[string]any{"address": map[string]any{"country": "AU"}, consts.ClaimGroups: []any{"admins"}}
+	}
+
+	store.IDJAGAudienceClaims[storage.IDJAGAudienceSubjectKey{Issuer: "https://chat.example/", Subject: "peter"}] = nested()
+
+	claims, err = store.GetIDJAGClaims(t.Context(), request, relationship)
+	require.NoError(t, err)
+
+	claims["address"].(map[string]any)["country"] = "NZ"
+	claims[consts.ClaimGroups].([]any)[0] = "users"
+
+	claims, err = store.GetIDJAGClaims(t.Context(), request, relationship)
+	require.NoError(t, err)
+	assert.Equal(t, nested(), claims)
+
+	claims, err = store.GetIDJAGClaims(t.Context(), request, &oauth2.IDJAGRelationship{Issuer: "https://pay.example/"})
+	require.NoError(t, err)
+	assert.Nil(t, claims)
+}
+
 func TestMemoryStoreResolveIDJAGSubject(t *testing.T) {
 	store := storage.NewMemoryStore()
 	store.IDJAGSubjects[storage.IDJAGSubjectKey{Issuer: idjagTestIssuer, Subject: idjagTestSubject}] = idjagTestAlice
@@ -179,4 +221,5 @@ const (
 	idjagTestTenant  = "t1"
 	idjagTestAlice   = "alice"
 	idjagTestBob     = "bob"
+	idjagTestEmail   = "peter@example.com"
 )

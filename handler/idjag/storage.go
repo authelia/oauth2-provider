@@ -13,7 +13,7 @@ import (
 
 // IssueStorage is the storage interface for ID-JAG token issuance. The relationship maps the requesting client to its
 // client at the Resource Authorization Server, and the subject maps the End-User to the subject identifier the Resource
-// Authorization Server knows (Section 5); the tenant claims are taken from the session, see IssueHandler.
+// Authorization Server knows (Section 5).
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-5
 type IssueStorage interface {
 	// GetIDJAGRelationship returns oauth2.ErrNotFound when the audience identifies no Resource Authorization Server the
@@ -33,6 +33,15 @@ type IssueStorage interface {
 	// a refresh token it is the subject of the session the refresh token was issued for. Both MUST resolve to the same
 	// value for the same End-User.
 	GetIDJAGSubject(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship) (subject string, err error)
+
+	// GetIDJAGClaims returns additional claims about the End-User of the session for the grant issued to the Resource
+	// Authorization Server of the relationship, such as 'email', 'aud_sub', 'tenant', 'aud_tenant' or 'sub_id', and nil
+	// when there are none (Section 3.1). It is called for every grant, so the claims can reflect the current attributes
+	// of the End-User (Section 4.3.3), and it MUST return 'tenant' when the issuer is multi-tenant (Section 6). The
+	// claims cannot override the registered claims, 'cnf', 'act', 'authorization_details', 'resource' or 'scope', and
+	// 'auth_time', 'acr' and 'amr' are used only when neither the subject token nor the session ID token claims carry
+	// any of them. An *oauth2.RFC6749Error is returned to the client, and any other error answers server_error.
+	GetIDJAGClaims(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship) (claims map[string]any, err error)
 }
 
 // RedeemStorage is the storage interface for ID-JAG token redemption.

@@ -1017,6 +1017,7 @@ func postIDJAGTokenWithCertificate(t *testing.T, ts *httptest.Server, clientID s
 	return resp.StatusCode, token, errBody
 }
 
+// postIDJAGToken decodes the token fields of an error response too, so a test can assert that it carries no token.
 func postIDJAGToken(t *testing.T, ts *httptest.Server, clientID string, form url.Values, dpopProof string) (status int, token idjagTokenResponse, errBody oidckbErrorResponse) {
 	t.Helper()
 
@@ -1042,9 +1043,9 @@ func postIDJAGToken(t *testing.T, ts *httptest.Server, clientID string, form url
 
 	if resp.StatusCode >= http.StatusBadRequest {
 		require.NoError(t, json.Unmarshal(body, &errBody), "error response: %s", body)
-	} else {
-		require.NoError(t, json.Unmarshal(body, &token), "token response: %s", body)
 	}
+
+	require.NoError(t, json.Unmarshal(body, &token), "token response: %s", body)
 
 	return resp.StatusCode, token, errBody
 }

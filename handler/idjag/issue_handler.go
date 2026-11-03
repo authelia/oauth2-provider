@@ -413,7 +413,7 @@ func (h *IssueHandler) subject(ctx context.Context, request oauth2.AccessRequest
 
 	switch {
 	case errors.Is(err, oauth2.ErrNotFound):
-		return "", errorsx.WithStack(oauth2.ErrAccessDenied.WithHintf("The subject is not authorized for the audience '%s'.", relationship.Issuer))
+		return "", errorsx.WithStack(oauth2.ErrAccessDenied.WithDebugf("The subject is not authorized for the audience '%s'.", relationship.Issuer))
 	case err != nil:
 		var rfc *oauth2.RFC6749Error
 		if errors.As(err, &rfc) {

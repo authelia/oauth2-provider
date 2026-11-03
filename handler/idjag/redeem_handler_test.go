@@ -53,6 +53,7 @@ func TestRedeemHandlerValidation(t *testing.T) {
 		dpop    bool
 		setup   func(store *storage.MemoryStore)
 		err     error
+		debug   string
 		subject string
 		scopes  []string
 	}{
@@ -61,9 +62,10 @@ func TestRedeemHandlerValidation(t *testing.T) {
 		{name: "ShouldResolveSubject", setup: func(store *storage.MemoryStore) {
 			store.IDJAGSubjects[storage.IDJAGSubjectKey{Issuer: redeemIssuer, Subject: redeemSubject}] = redeemAlice
 		}, subject: redeemAlice, scopes: []string{redeemRead, redeemHistory}},
+		// Section 10: the hint discloses no more about the End-User than the code.
 		{name: "ShouldRejectUnresolvedSubject", setup: func(store *storage.MemoryStore) {
 			clear(store.IDJAGSubjects)
-		}, err: oauth2.ErrInvalidGrant},
+		}, err: oauth2.ErrInvalidGrant, debug: "The subject of the Identity Assertion JWT Authorization Grant could not be resolved."},
 		{name: "ShouldNarrowToRequestedScope", scope: oauth2.Arguments{redeemRead}, subject: redeemSubject, scopes: []string{redeemRead}},
 		{name: "ShouldAcceptSingleElementAudienceArray", mutate: func(c map[string]any) { c["aud"] = []string{redeemAudience} }, subject: redeemSubject, scopes: []string{redeemRead, redeemHistory}},
 		{name: "ShouldRejectRequestedScopeOutsideGrant", scope: oauth2.Arguments{redeemAdmin}, err: oauth2.ErrInvalidScope},
@@ -190,6 +192,12 @@ func TestRedeemHandlerValidation(t *testing.T) {
 
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
+
+				if tc.debug != "" {
+					rfc := oauth2.ErrorToRFC6749Error(err)
+					assert.Empty(t, rfc.HintField)
+					assert.Equal(t, tc.debug, rfc.DebugField)
+				}
 
 				return
 			}

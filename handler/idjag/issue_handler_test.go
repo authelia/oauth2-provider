@@ -235,12 +235,14 @@ func TestIssueHandlerSubject(t *testing.T) {
 		name    string
 		storage func(store *storage.MemoryStore) idjag.IssueStorage
 		err     error
+		debug   string
 	}{
+		// Section 10: the hint discloses no more about the End-User than the code.
 		{name: "ShouldRejectASubjectWithoutAnIdentifierForTheAudience", storage: func(store *storage.MemoryStore) idjag.IssueStorage {
 			clear(store.IDJAGAudienceSubjects)
 
 			return store
-		}, err: oauth2.ErrAccessDenied},
+		}, err: oauth2.ErrAccessDenied, debug: "The subject is not authorized for the audience '" + redeemAudience + "'."},
 		{name: "ShouldReturnServerErrorForAnEmptyIdentifier", storage: func(store *storage.MemoryStore) idjag.IssueStorage {
 			return &subjectStorage{MemoryStore: store}
 		}, err: oauth2.ErrServerError},
@@ -265,8 +267,15 @@ func TestIssueHandlerSubject(t *testing.T) {
 
 			response := oauth2.NewAccessResponse()
 
-			require.ErrorIs(t, handler.PopulateTokenEndpointResponse(t.Context(), request, response), tc.err)
+			err := handler.PopulateTokenEndpointResponse(t.Context(), request, response)
+			require.ErrorIs(t, err, tc.err)
 			assert.Empty(t, response.GetAccessToken())
+
+			if tc.debug != "" {
+				rfc := oauth2.ErrorToRFC6749Error(err)
+				assert.Equal(t, oauth2.ErrAccessDenied.HintField, rfc.HintField)
+				assert.Equal(t, tc.debug, rfc.DebugField)
+			}
 		})
 	}
 }

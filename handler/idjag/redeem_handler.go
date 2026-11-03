@@ -126,7 +126,7 @@ func (h *RedeemHandler) HandleTokenEndpointRequest(ctx context.Context, request 
 
 	switch {
 	case errors.Is(err, oauth2.ErrNotFound):
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The subject of the Identity Assertion JWT Authorization Grant could not be resolved."))
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithDebug("The subject of the Identity Assertion JWT Authorization Grant could not be resolved."))
 	case err != nil:
 		var rfc *oauth2.RFC6749Error
 		if errors.As(err, &rfc) {

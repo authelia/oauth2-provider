@@ -24,8 +24,15 @@ type AccessResponse struct {
 	TokenType   string
 }
 
-// SetScopes records the granted scopes as a space-separated 'scope' parameter on the response.
+// SetScopes records the granted scopes as a space-separated 'scope' parameter on the response. The parameter is omitted
+// when no scope is granted, as RFC 6749 section 3.3 does not allow an empty value.
 func (a *AccessResponse) SetScopes(scopes Arguments) {
+	if len(scopes) == 0 {
+		delete(a.Extra, consts.AccessResponseScope)
+
+		return
+	}
+
 	a.SetExtra(consts.AccessResponseScope, strings.Join(scopes, " "))
 }
 

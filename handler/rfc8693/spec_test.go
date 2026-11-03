@@ -255,7 +255,7 @@ func TestSpec_2_2_ResponseShape_AccessToken(t *testing.T) {
 	assert.NotEmpty(t, resp.AccessToken, "REQUIRED: access_token")
 	assert.Equal(t, oauth2.BearerAccessToken, resp.TokenType, "REQUIRED: token_type for OAuth access tokens MUST be 'Bearer'")
 	assert.NotNil(t, resp.GetExtra(consts.AccessResponseExpiresIn), "RECOMMENDED: expires_in")
-	assert.NotNil(t, resp.GetExtra(consts.AccessResponseScope), "REQUIRED when scope differs from requested: scope (and AS sets unconditionally)")
+	assert.Nil(t, resp.GetExtra(consts.AccessResponseScope), "OPTIONAL when identical to requested, and RFC 6749 §3.3 has no empty value: scope")
 	assert.Equal(t, consts.TokenTypeRFC8693AccessToken, resp.GetExtra(consts.FormParameterIssuedTokenType), "REQUIRED: issued_token_type")
 }
 
@@ -294,7 +294,7 @@ func TestSpec_2_2_ResponseShape_RefreshToken(t *testing.T) {
 	assert.NotEmpty(t, resp.AccessToken, "REQUIRED: access_token (refresh token value placed here)")
 	assert.Equal(t, oauth2.RFC8693NAToken, resp.TokenType, "REQUIRED: token_type for non-OAuth tokens MUST be 'N_A'")
 	assert.NotNil(t, resp.GetExtra(consts.AccessResponseExpiresIn), "RECOMMENDED: expires_in")
-	assert.NotNil(t, resp.GetExtra(consts.AccessResponseScope), "REQUIRED when scope differs from requested: scope")
+	assert.Nil(t, resp.GetExtra(consts.AccessResponseScope), "OPTIONAL when identical to requested, and RFC 6749 §3.3 has no empty value: scope")
 	assert.Equal(t, consts.TokenTypeRFC8693RefreshToken, resp.GetExtra(consts.FormParameterIssuedTokenType), "REQUIRED: issued_token_type")
 }
 
@@ -305,7 +305,7 @@ func TestSpec_2_2_ResponseShape_IDToken(t *testing.T) {
 	assert.NotEmpty(t, resp.AccessToken, "REQUIRED: access_token (id token value placed here)")
 	assert.Equal(t, oauth2.RFC8693NAToken, resp.TokenType, "REQUIRED: token_type for non-OAuth tokens MUST be 'N_A'")
 	assert.NotNil(t, resp.GetExtra(consts.AccessResponseExpiresIn), "RECOMMENDED: expires_in")
-	assert.NotNil(t, resp.GetExtra(consts.AccessResponseScope), "REQUIRED when scope differs from requested: scope")
+	assert.Nil(t, resp.GetExtra(consts.AccessResponseScope), "OPTIONAL when identical to requested, and RFC 6749 §3.3 has no empty value: scope")
 	assert.Equal(t, consts.TokenTypeRFC8693IDToken, resp.GetExtra(consts.FormParameterIssuedTokenType), "REQUIRED: issued_token_type")
 }
 
@@ -317,7 +317,7 @@ func TestSpec_2_2_ResponseShape_CustomJWT(t *testing.T) {
 	assert.NotEmpty(t, resp.AccessToken, "REQUIRED: access_token")
 	assert.Equal(t, oauth2.RFC8693NAToken, resp.TokenType, "REQUIRED: token_type for non-OAuth tokens MUST be 'N_A'")
 	assert.NotNil(t, resp.GetExtra(consts.AccessResponseExpiresIn), "RECOMMENDED: expires_in")
-	assert.NotNil(t, resp.GetExtra(consts.AccessResponseScope), "REQUIRED when scope differs from requested: scope")
+	assert.Nil(t, resp.GetExtra(consts.AccessResponseScope), "OPTIONAL when identical to requested, and RFC 6749 §3.3 has no empty value: scope")
 	assert.Equal(t, "urn:spec:jwt", resp.GetExtra(consts.FormParameterIssuedTokenType), "REQUIRED: issued_token_type")
 }
 

@@ -14,8 +14,13 @@ import (
 
 // WriteAccessError writes an error response for the token endpoint per RFC 6749 section 5.2. The response is encoded as
 // JSON with cache-control headers set to 'no-store' and 'no-cache' as required by the specification. When request is
-// non-nil its language preference is used to localize the error description.
+// non-nil its language preference is used to localize the error description. An access_denied error is written with
+// HTTP 400, as section 5.2 requires for every error other than invalid_client.
 func (f *Fosite) WriteAccessError(ctx context.Context, rw http.ResponseWriter, request AccessRequester, err error) {
+	if rfc := ErrorToRFC6749Error(err); rfc.ErrorField == errAccessDeniedName && rfc.CodeField == http.StatusForbidden {
+		err = rfc.WithCode(http.StatusBadRequest)
+	}
+
 	if f.isErrUseDPoPNonce(ctx, err) {
 		f.writeErrorDPoPJSON(ctx, rw, request, err)
 	} else {

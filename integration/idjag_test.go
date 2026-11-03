@@ -627,6 +627,33 @@ func TestIDJAG(t *testing.T) {
 				assert.NotContains(t, claims, consts.ClaimAuthorizationDetails)
 			})
 
+			// Section 4.3.4.3 and RFC 6749 Section 5.2: access_denied is a token error response with HTTP 400.
+			t.Run("ShouldDenyASubjectWithoutAnIdentifierForTheAudience", func(t *testing.T) {
+				env := newIDJAGEnvironment(t, s.new)
+
+				subject := env.idTokenWithClaims(t, jwt.MapClaims{consts.ClaimSubject: "unmapped"})
+
+				status, token, errBody := postIDJAGToken(t, env.idp, idjagIdPClientID, env.exchangeForm(subject, consts.TokenTypeRFC8693IDToken, env.rs.URL), "")
+
+				assert.Equal(t, http.StatusBadRequest, status)
+				assert.Equal(t, oauth2.ErrAccessDenied.ErrorField, errBody.Error)
+				assert.Empty(t, token.AccessToken)
+			})
+
+			t.Run("ShouldDenyAGrantWhoseResourcesTheClientMayNotUse", func(t *testing.T) {
+				env := newIDJAGEnvironment(t, s.new)
+
+				grant := env.grant(t)
+
+				env.rsMemory.Clients[idjagRSClientID].(*oauth2.DefaultClient).Resource = []string{idjagOtherTarget}
+
+				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(grant), "")
+
+				assert.Equal(t, http.StatusBadRequest, status)
+				assert.Equal(t, oauth2.ErrAccessDenied.ErrorField, errBody.Error)
+				assert.Empty(t, redeemed.AccessToken)
+			})
+
 			// Section 4.4: the Resource Authorization Server SHOULD require client authentication.
 			t.Run("ShouldRejectPublicClient", func(t *testing.T) {
 				env := newIDJAGEnvironment(t, s.new)

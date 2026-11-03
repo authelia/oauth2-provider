@@ -539,7 +539,7 @@ func TestIDJAG(t *testing.T) {
 				}{
 					{name: "ShouldAcceptDetailsNotGranted", granted: oauth2.AuthorizationDetails{initiate}, requested: idjagDetailsStatus},
 					{name: "ShouldAcceptDetailsWhenNoneWereGranted", requested: idjagDetailsInitiate},
-					{name: "ShouldRejectDetailsTheTypeHandlerRefuses", requested: `[{"type":"payment_initiation"}]`, err: oauth2.ErrInvalidAuthorizationDetails.ErrorField},
+					{name: "ShouldNotApplyTheLocalTypeHandler", requested: `[{"type":"payment_initiation"}]`},
 				}
 
 				for _, tc := range testCases {
@@ -596,6 +596,20 @@ func TestIDJAG(t *testing.T) {
 				session, ok := requester.GetSession().(oauth2.MTLSBoundSession)
 				require.True(t, ok)
 				assert.Equal(t, thumbprint, session.GetClientCertificateSHA256Thumbprint())
+			})
+
+			// Section 4.3.3: a type only the Resource Authorization Server knows is evaluated by policy at the IdP.
+			t.Run("ShouldCarryAuthorizationDetailsOfATypeTheIdPDoesNotKnow", func(t *testing.T) {
+				env := newIDJAGEnvironment(t, s.new, idjagOptions{rar: true})
+
+				form := env.exchangeForm(env.idToken(t), consts.TokenTypeRFC8693IDToken, env.rs.URL)
+				form.Set(consts.FormParameterAuthorizationDetails, idjagDetailsForeign)
+
+				status, token, errBody := postIDJAGToken(t, env.idp, idjagIdPClientID, form, "")
+				require.Equal(t, http.StatusOK, status, "exchange error: %+v", errBody)
+
+				_, claims := env.decodeIDJAG(t, token.AccessToken)
+				assert.Equal(t, []any{map[string]any{"type": "chat_read", "actions": []any{"read"}}}, claims[consts.ClaimAuthorizationDetails])
 			})
 
 			t.Run("ShouldCarryAuthorizationDetailsNumbersExactly", func(t *testing.T) {

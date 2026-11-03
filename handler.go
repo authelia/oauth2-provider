@@ -49,6 +49,15 @@ type AuthorizationDetailsTokenEndpointHandler interface {
 	CanHandleAuthorizationDetails(ctx context.Context, request AccessRequester) (handle bool)
 }
 
+// AuthorizationDetailsTypeValidatingHandler is an AuthorizationDetailsTokenEndpointHandler which validates the types of
+// the requested authorization details itself, because whether a type is acceptable depends on what the handler
+// resolves from the request. NewAccessRequest then parses the details without ValidateAuthorizationDetailsTypes.
+type AuthorizationDetailsTypeValidatingHandler interface {
+	// ValidatesAuthorizationDetailsTypes returns true when the handler validates the types of the requested
+	// authorization details of the request. It is called after client authentication.
+	ValidatesAuthorizationDetailsTypes(ctx context.Context, request AccessRequester) (validates bool)
+}
+
 // AuthorizeEndpointBindingHandler records a proof-of-possession binding onto the session of an authorize request
 // before any handler persists that session.
 //

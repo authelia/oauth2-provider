@@ -96,7 +96,7 @@ func (h *RedeemHandler) HandleTokenEndpointRequest(ctx context.Context, request 
 		return err
 	}
 
-	trusted, header, err := h.trust(ctx, client, token, issuer)
+	trusted, header, err := h.trust(ctx, token, issuer)
 	if err != nil {
 		return err
 	}
@@ -120,6 +120,10 @@ func (h *RedeemHandler) HandleTokenEndpointRequest(ctx context.Context, request 
 
 	if err = h.unused(ctx, claims); err != nil {
 		return err
+	}
+
+	if len(trusted.Clients) != 0 && !slices.Contains(trusted.Clients, client.GetID()) {
+		return errorsx.WithStack(oauth2.ErrAccessDenied.WithHintf("The OAuth 2.0 Client is not permitted to present grants from the issuer '%s'.", issuer))
 	}
 
 	subject, err := h.Storage.ResolveIDJAGSubject(ctx, client, raw)
@@ -303,7 +307,7 @@ func (h *RedeemHandler) consume(ctx context.Context, assertion string) (err erro
 	return nil
 }
 
-func (h *RedeemHandler) trust(ctx context.Context, client oauth2.Client, token *josejwt.JSONWebToken, issuer string) (trusted *oauth2.IDJAGTrustedIssuer, header jose.Header, err error) {
+func (h *RedeemHandler) trust(ctx context.Context, token *josejwt.JSONWebToken, issuer string) (trusted *oauth2.IDJAGTrustedIssuer, header jose.Header, err error) {
 	trusted, err = h.Storage.GetIDJAGTrustedIssuer(ctx, issuer)
 
 	switch {
@@ -311,10 +315,6 @@ func (h *RedeemHandler) trust(ctx context.Context, client oauth2.Client, token *
 		return nil, header, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The issuer '%s' is not trusted.", issuer))
 	case err != nil:
 		return nil, header, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	}
-
-	if len(trusted.Clients) != 0 && !slices.Contains(trusted.Clients, client.GetID()) {
-		return nil, header, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The OAuth 2.0 Client is not permitted to present grants from the issuer '%s'.", issuer))
 	}
 
 	header = token.Headers[0]

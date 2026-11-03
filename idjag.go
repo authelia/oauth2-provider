@@ -71,7 +71,8 @@ type IDJAGTrustedIssuer struct {
 	// (Section 4.4.1).
 	MultiTenant bool
 
-	// Clients is the set of client identifiers permitted to present grants from this issuer. Any client when empty.
+	// Clients is the set of client identifiers permitted to present grants from this issuer. Any client when empty. Any
+	// other client presenting a valid grant is answered access_denied (Section 4.4.3).
 	Clients []string
 }
 

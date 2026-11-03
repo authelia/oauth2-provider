@@ -41,7 +41,7 @@ func TestIssueHandlerHandle(t *testing.T) {
 		scopes    []string
 		resources []string
 	}{
-		{name: "ShouldGrantPermittedScopesOnly", audience: oauth2.Arguments{issueAudienceURN}, scope: oauth2.Arguments{redeemRead, redeemAdmin}, scopes: []string{redeemRead}},
+		{name: "ShouldGrantPermittedScopesOnly", audience: oauth2.Arguments{issueAudienceURN}, resource: oauth2.Arguments{redeemResource}, scope: oauth2.Arguments{redeemRead, redeemAdmin}, scopes: []string{redeemRead}, resources: []string{redeemResource}},
 		{name: "ShouldGrantPermittedResource", audience: oauth2.Arguments{redeemAudience}, resource: oauth2.Arguments{redeemResource}, resources: []string{redeemResource}},
 		{name: "ShouldRejectMissingAudience", err: oauth2.ErrInvalidRequest},
 		{name: "ShouldRejectMultipleAudiences", audience: oauth2.Arguments{redeemAudience, issueAudienceURN}, err: oauth2.ErrInvalidRequest},
@@ -98,9 +98,9 @@ func TestIssueHandlerPopulate(t *testing.T) {
 		{name: "ShouldIssueTheClaimSet", subjectExp: time.Now().Add(time.Hour), resources: oauth2.Arguments{redeemResource}},
 		{name: "ShouldIssueResourceArray", subjectExp: time.Now().Add(time.Hour), resources: oauth2.Arguments{redeemResource, issueFiles}},
 		// Section 9.11.1.1: 'cnf' only when a proof was validated on this request.
-		{name: "ShouldBindWhenDPoPEnabled", dpop: true, jkt: redeemJKT, subjectExp: time.Now().Add(time.Hour), expectCNF: true},
-		{name: "ShouldNotBindWhenDPoPDisabled", jkt: redeemJKT, subjectExp: time.Now().Add(time.Hour)},
-		{name: "ShouldCapToSubjectTokenExpiry", subjectExp: time.Now().Add(time.Minute), expectExpCap: true},
+		{name: "ShouldBindWhenDPoPEnabled", dpop: true, jkt: redeemJKT, subjectExp: time.Now().Add(time.Hour), resources: oauth2.Arguments{redeemResource}, expectCNF: true},
+		{name: "ShouldNotBindWhenDPoPDisabled", jkt: redeemJKT, subjectExp: time.Now().Add(time.Hour), resources: oauth2.Arguments{redeemResource}},
+		{name: "ShouldCapToSubjectTokenExpiry", subjectExp: time.Now().Add(time.Minute), resources: oauth2.Arguments{redeemResource}, expectExpCap: true},
 	}
 
 	for _, tc := range testCases {
@@ -716,10 +716,11 @@ func newIssueRequest(t *testing.T, session oauth2.Session, extra url.Values) *oa
 	return &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
 		Request: oauth2.Request{
-			ID:      uuid.New().String(),
-			Client:  storage.NewExampleStore().Clients[issueClient],
-			Form:    form,
-			Session: session,
+			ID:                uuid.New().String(),
+			Client:            storage.NewExampleStore().Clients[issueClient],
+			Form:              form,
+			Session:           session,
+			RequestedResource: oauth2.Arguments{redeemResource},
 		},
 	}
 }

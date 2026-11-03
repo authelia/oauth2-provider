@@ -723,6 +723,13 @@ type IDJAGConfigProvider interface {
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc7521#section-4.1
 	GetIDJAGAccessTokenAllowance(ctx context.Context) (allowance time.Duration)
+
+	// GetIDJAGResourceOptional returns true when a client may omit the 'resource' parameter even though its
+	// relationship lists resources, which issues a grant not restricted to a protected resource. This defaults to
+	// false, which answers invalid_target. A client implementing IDJAGResourceOptionalClient can also waive it.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
+	GetIDJAGResourceOptional(ctx context.Context) (optional bool)
 }
 
 // UseLegacyErrorFormatProvider returns the provider for configuring whether to use the legacy error format.

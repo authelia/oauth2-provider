@@ -103,6 +103,10 @@ func (h *IssueHandler) HandleTokenEndpointRequest(ctx context.Context, request o
 		return err
 	}
 
+	if len(relationship.Resources) != 0 && len(request.GetRequestedResource()) == 0 && !h.resourceOptional(ctx, request.GetClient()) {
+		return errorsx.WithStack(oauth2.ErrInvalidTarget.WithHint("The 'resource' parameter is required for the requested audience."))
+	}
+
 	for _, resource := range request.GetRequestedResource() {
 		if !slices.Contains(relationship.Resources, resource) {
 			return errorsx.WithStack(oauth2.ErrInvalidTarget.WithHintf("The resource '%s' is not permitted for the requested audience.", resource))
@@ -122,6 +126,16 @@ func (h *IssueHandler) HandleTokenEndpointRequest(ctx context.Context, request o
 	request.GrantAudience(relationship.Issuer)
 
 	return nil
+}
+
+func (h *IssueHandler) resourceOptional(ctx context.Context, client oauth2.Client) bool {
+	if h.Config.GetIDJAGResourceOptional(ctx) {
+		return true
+	}
+
+	c, ok := client.(oauth2.IDJAGResourceOptionalClient)
+
+	return ok && c.GetIDJAGResourceOptional()
 }
 
 // PopulateTokenEndpointResponse issues the grant.

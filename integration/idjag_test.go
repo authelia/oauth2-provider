@@ -640,6 +640,20 @@ func TestIDJAG(t *testing.T) {
 				assert.Empty(t, token.AccessToken)
 			})
 
+			t.Run("ShouldDenyAGrantWhoseResourcesTheClientMayNotUse", func(t *testing.T) {
+				env := newIDJAGEnvironment(t, s.new)
+
+				grant := env.grant(t)
+
+				env.rsMemory.Clients[idjagRSClientID].(*oauth2.DefaultClient).Resource = []string{idjagOtherTarget}
+
+				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(grant), "")
+
+				assert.Equal(t, http.StatusBadRequest, status)
+				assert.Equal(t, oauth2.ErrAccessDenied.ErrorField, errBody.Error)
+				assert.Empty(t, redeemed.AccessToken)
+			})
+
 			// Section 4.4: the Resource Authorization Server SHOULD require client authentication.
 			t.Run("ShouldRejectPublicClient", func(t *testing.T) {
 				env := newIDJAGEnvironment(t, s.new)

@@ -316,6 +316,10 @@ func TestIssueHandlerRefusesATransientSubjectIdentifier(t *testing.T) {
 		NameIDFormat string `json:"nameid_format"`
 	}
 
+	type nameIDFormat string
+
+	transient := issueNameIDTransient
+
 	testCases := []struct {
 		name  string
 		value any
@@ -324,6 +328,8 @@ func TestIssueHandlerRefusesATransientSubjectIdentifier(t *testing.T) {
 		{name: "ShouldRefuseAStringMap", value: map[string]string{issueMemberFormat: issueNameIDFormat, issueMemberNameIDFormat: issueNameIDTransient}},
 		{name: "ShouldRefuseAStruct", value: identifier{Format: issueNameIDFormat, NameIDFormat: issueNameIDTransient}},
 		{name: "ShouldRefuseAStructPointer", value: &identifier{Format: issueNameIDFormat, NameIDFormat: issueNameIDTransient}},
+		{name: "ShouldRefuseANamedStringInAMap", value: map[string]any{issueMemberFormat: issueNameIDFormat, issueMemberNameIDFormat: nameIDFormat(issueNameIDTransient)}},
+		{name: "ShouldRefuseAStringPointerInAMap", value: map[string]any{issueMemberFormat: issueNameIDFormat, issueMemberNameIDFormat: &transient}},
 	}
 
 	for _, tc := range testCases {

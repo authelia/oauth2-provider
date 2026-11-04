@@ -21,6 +21,16 @@ type CustomJWTStorage interface {
 	SetTokenExchangeCustomJWT(ctx context.Context, issuer, jti string, exp time.Time) (err error)
 }
 
+// IDJAGRelationshipStorage resolves the 'audience' of an ID-JAG request, as idjag.IssueStorage does. When the Storage
+// of a RefreshTokenTypeHandler implements it, an 'audience' that resolves to this server is compared with the refresh
+// token as the issuer identifier is (draft-ietf-oauth-identity-assertion-authz-grant-06 Section 4.3.3).
+//
+// An 'audience' which identifies no known Resource Authorization Server MUST return oauth2.ErrNotFound, which skips the
+// comparison. A client-facing oauth2.RFC6749Error is returned unchanged. Any other error is answered as a server error.
+type IDJAGRelationshipStorage interface {
+	GetIDJAGRelationship(ctx context.Context, request oauth2.AccessRequester, audience string) (relationship *oauth2.IDJAGRelationship, err error)
+}
+
 type Storage interface {
 	hoauth2.CoreStorage
 

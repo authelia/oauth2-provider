@@ -275,7 +275,12 @@ func (c *RefreshTokenTypeHandler) handleRefreshTokenReuse(ctx context.Context, o
 func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, request oauth2.AccessRequester, original oauth2.Requester) (err error) {
 	// The requested values have the meaning of the Authorization Server the audience identifies, so the relationship
 	// governs them and the comparison with the refresh token applies only when that is this server (Section 4.3.3).
-	if !c.isOwnAudience(ctx, request) {
+	audiences, err := c.ownAudience(ctx, request)
+
+	switch {
+	case err != nil:
+		return err
+	case audiences == nil:
 		return nil
 	}
 
@@ -284,11 +289,11 @@ func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, reques
 	audience := oauth2.GetAudienceStrategy(ctx, c.Config, client)
 
 	// This server is a recognized target, so an audience the client may not use is denied (Section 4.3.4.3).
-	if err = audience(client.GetAudience(), request.GetRequestedAudience()); err != nil {
+	if err = audience(client.GetAudience(), audiences); err != nil {
 		return errors.WithStack(oauth2.ErrAccessDenied.WithHint("The OAuth 2.0 Client is not authorized for the requested audience.").WithWrap(err).WithDebugError(err))
 	}
 
-	if err = audience(original.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
+	if err = audience(original.GetGrantedAudience(), audiences); err != nil {
 		return errors.WithStack(oauth2.ErrAccessDenied.WithHint("The refresh token is not authorized for the requested audience.").WithWrap(err).WithDebugError(err))
 	}
 
@@ -327,15 +332,48 @@ func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, reques
 	return nil
 }
 
-func (c *RefreshTokenTypeHandler) isOwnAudience(ctx context.Context, request oauth2.AccessRequester) bool {
+// ownAudience returns the audience to compare with the refresh token when the requested 'audience' identifies this
+// server, by its issuer identifier or an alias the relationship resolves to it (Section 4.3), and nil otherwise.
+func (c *RefreshTokenTypeHandler) ownAudience(ctx context.Context, request oauth2.AccessRequester) (audiences []string, err error) {
 	config, ok := c.Config.(oauth2.AuthorizationServerIssuerIdentificationProvider)
 	if !ok {
-		return false
+		return nil, nil
 	}
 
 	issuer := config.GetAuthorizationServerIdentificationIssuer(ctx)
+	requested := request.GetRequestedAudience()
 
-	return issuer != "" && slices.Contains(request.GetRequestedAudience(), issuer)
+	switch {
+	case issuer == "":
+		return nil, nil
+	case slices.Contains(requested, issuer):
+		return requested, nil
+	case len(requested) != 1:
+		return nil, nil
+	}
+
+	store, ok := c.Storage.(IDJAGRelationshipStorage)
+	if !ok {
+		return nil, nil
+	}
+
+	relationship, err := store.GetIDJAGRelationship(ctx, request, requested[0])
+
+	switch {
+	case errors.Is(err, oauth2.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		var rfc *oauth2.RFC6749Error
+		if errors.As(err, &rfc) {
+			return nil, errorsx.WithStack(err)
+		}
+
+		return nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	case relationship == nil || relationship.Issuer != issuer:
+		return nil, nil
+	}
+
+	return []string{issuer}, nil
 }
 
 func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {

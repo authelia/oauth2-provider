@@ -474,10 +474,10 @@ func TestSpec_2_4_Errors_CustomJWTUndeterminableAudienceReturnsInvalidTarget(t *
 	cfg := newSpecConfig(t)
 
 	cfg.RFC8693TokenTypes["urn:spec:jwt"] = &JWTType{
-		Name:           "urn:spec:jwt",
-		Issuer:         "https://as.example.com",
-		JWTIssueConfig: JWTIssueConfig{Expiry: 5 * time.Minute},
-		JWTValidationConfig: JWTValidationConfig{
+		Name:  "urn:spec:jwt",
+		Issue: &JWTIssueConfig{Issuer: "https://as.example.com", Expiry: 5 * time.Minute},
+		Validate: &JWTValidationConfig{
+			Issuer:       "https://as.example.com",
 			ValidateFunc: jwt.Keyfunc(func(_ *jwt.Token) (any, error) { return key.PublicKey, nil }),
 		},
 	}
@@ -569,10 +569,10 @@ func newSpecConfig(t *testing.T) *oauth2.Config {
 			consts.TokenTypeRFC8693RefreshToken: &DefaultTokenType{Name: consts.TokenTypeRFC8693RefreshToken},
 			consts.TokenTypeRFC8693IDToken:      &DefaultTokenType{Name: consts.TokenTypeRFC8693IDToken},
 			"urn:spec:jwt": &JWTType{
-				Name:           "urn:spec:jwt",
-				Issuer:         "https://as.example.com",
-				JWTIssueConfig: JWTIssueConfig{Audience: []string{"https://api.example.com"}, Expiry: 5 * time.Minute},
-				JWTValidationConfig: JWTValidationConfig{
+				Name:  "urn:spec:jwt",
+				Issue: &JWTIssueConfig{Issuer: "https://as.example.com", Audience: []string{"https://api.example.com"}, Expiry: 5 * time.Minute},
+				Validate: &JWTValidationConfig{
+					Issuer:       "https://as.example.com",
 					ValidateFunc: jwt.Keyfunc(func(_ *jwt.Token) (any, error) { return key.PublicKey, nil }),
 				},
 			},

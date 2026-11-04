@@ -34,7 +34,7 @@ type TokenExchangeGrantHandler struct {
 	ResourceStrategy oauth2.ResourceStrategy
 
 	// Storage marks a custom or self-signed JWT presented as a subject or actor token as used. It is required when a
-	// *JWTType or *SelfSignedTokenType sets ValidateJTI, other than on a request for a Transaction Token, where
+	// *JWTType validation or *SelfSignedTokenType sets ValidateJTI, other than on a request for a Transaction Token, where
 	// TxnTokenTypeHandler.JTIStorage marks it once the token is signed.
 	Storage CustomJWTStorage
 }
@@ -110,7 +110,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("Mandatory parameter '%s' is missing.", consts.FormParameterSubjectTokenType))
 	}
 
-	if tt := configTypesSupported[subjectTokenType]; tt == nil {
+	if !isAcceptedTokenType(configTypesSupported[subjectTokenType]) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType))
 	}
 
@@ -133,7 +133,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 			return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' is empty even though the '%s' is not empty.", consts.FormParameterActorTokenType, consts.FormParameterActorToken))
 		}
 
-		if tt := configTypesSupported[actorTokenType]; tt == nil {
+		if !isAcceptedTokenType(configTypesSupported[actorTokenType]) {
 			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", actorTokenType, consts.FormParameterActorTokenType))
 		}
 
@@ -150,9 +150,17 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
-	switch configTypesSupported[requestedTokenType].(type) {
+	switch tokenType := configTypesSupported[requestedTokenType].(type) {
 	case nil, *SelfSignedTokenType, *UnsignedJSONTokenType:
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
+	case *JWTType:
+		if tokenType == nil || tokenType.Issue == nil {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
+		}
+
+		if tokenType.Issue.Issuer == "" {
+			return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The JSON Web Token type '%s' has no issuer.", requestedTokenType))
+		}
 	}
 
 	if len(supportedRequestTypes) > 0 && !supportedRequestTypes.Has(requestedTokenType) {
@@ -441,10 +449,18 @@ func consumeTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, 
 	return nil
 }
 
+func isAcceptedTokenType(tokenType oauth2.RFC8693TokenType) bool {
+	if jwtType, ok := tokenType.(*JWTType); ok {
+		return jwtType != nil && jwtType.Validate != nil
+	}
+
+	return tokenType != nil
+}
+
 func validatesJTI(tokenType oauth2.RFC8693TokenType) bool {
 	switch t := tokenType.(type) {
 	case *JWTType:
-		return t != nil && t.ValidateJTI
+		return t != nil && t.Validate != nil && t.Validate.ValidateJTI
 	case *SelfSignedTokenType:
 		return t != nil && t.ValidateJTI
 	default:
@@ -534,7 +550,7 @@ func IsIDJAGRequest(ctx context.Context, request oauth2.Requester, config oauth2
 }
 
 func authorizationGrantType(ctx context.Context, request oauth2.Requester, config oauth2.RFC8693ConfigProvider) *JWTType {
-	if jwtType, ok := resolveRequestedTokenType(ctx, request, config).(*JWTType); ok && jwtType != nil && jwtType.AuthorizationGrant {
+	if jwtType, ok := resolveRequestedTokenType(ctx, request, config).(*JWTType); ok && jwtType != nil && jwtType.Issue != nil && jwtType.Issue.AuthorizationGrant {
 		return jwtType
 	}
 

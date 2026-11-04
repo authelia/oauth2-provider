@@ -12,7 +12,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 )
 
-// CustomJWTStorage records the custom JWTs consumed by a token exchange, for a *JWTType with ValidateJTI set.
+// CustomJWTStorage records the custom JWTs consumed by a token exchange, for a *JWTType whose Validate sets ValidateJTI.
 type CustomJWTStorage interface {
 	// SetTokenExchangeCustomJWT marks a JTI as known for the issuer until the given expiry time. It should atomically
 	// check if the JTI already exists for the issuer and MUST return an error matching oauth2.ErrJTIKnown if found. Any

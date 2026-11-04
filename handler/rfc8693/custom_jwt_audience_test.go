@@ -43,7 +43,7 @@ func TestCustomJWTAudience(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := newSpecConfig(t)
-			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).ExpectedAudience = tc.expected
+			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Validate.ExpectedAudience = tc.expected
 
 			claims := jwt.MapClaims{
 				consts.ClaimIssuer:         "https://as.example.com",
@@ -84,7 +84,7 @@ func TestCustomJWTIssuerFailsClosed(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := newSpecConfig(t)
-			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Issuer = ""
+			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Validate.Issuer = ""
 
 			err := validateCustomJWTToken(t, config, jwt.MapClaims{
 				consts.ClaimIssuer:         tc.iss,

@@ -45,8 +45,8 @@ func TestCustomJWTUsesTheLifespanOfTheClient(t *testing.T) {
 			config.AccessTokenLifespan = 30 * time.Minute
 
 			jwtType := config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType)
-			jwtType.Expiry = tc.expiry
-			jwtType.AuthorizationGrant = tc.grant
+			jwtType.Issue.Expiry = tc.expiry
+			jwtType.Issue.AuthorizationGrant = tc.grant
 
 			store := storage.NewExampleStore()
 

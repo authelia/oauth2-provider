@@ -353,7 +353,7 @@ func newCustomJWTConsumeFixture(t *testing.T, validate bool) *customJWTConsumeFi
 
 	store := storage.NewExampleStore()
 	cfg := newSpecConfig(t)
-	cfg.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).ValidateJTI = validate
+	cfg.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Validate.ValidateJTI = validate
 
 	strategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 

@@ -41,8 +41,8 @@ func clientAllowedIssuers(client oauth2.Client, role tokenRole) []string {
 // ValidateIssuer enforces issuer trust for a JWT-typed token in token exchange:
 //   - If the client publishes a non-empty issuer allow-list for this role, the JWT's
 //     'iss' MUST be in that list.
-//   - Otherwise, fall back to fallbackIssuer (typically JWTType.Issuer or the AS's
-//     own issuer). An empty fallback accepts no issuer.
+//   - Otherwise, fall back to fallbackIssuer (typically JWTValidationConfig.Issuer or
+//     the AS's own issuer). An empty fallback accepts no issuer.
 //
 // Returns the issuer that was matched (for diagnostics) and true on success.
 func ValidateIssuer(iss, fallbackIssuer string, allowed []string) (matched string, ok bool) {

@@ -939,9 +939,9 @@ func newTxnIssueFixture(t *testing.T, store txnIssueStore) *txnIssueFixture {
 	cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693SelfSigned] = &SelfSignedTokenType{Name: consts.TokenTypeRFC8693SelfSigned, Identifier: txnIdentifier}
 	cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693UnsignedJSON] = &UnsignedJSONTokenType{Name: consts.TokenTypeRFC8693UnsignedJSON}
 	cfg.RFC8693TokenTypes[txnJWTType] = &JWTType{
-		Name:   txnJWTType,
-		Issuer: txnJWTIssuer,
-		JWTValidationConfig: JWTValidationConfig{
+		Name: txnJWTType,
+		Validate: &JWTValidationConfig{
+			Issuer:       txnJWTIssuer,
 			ValidateFunc: jwt.Keyfunc(func(_ *jwt.Token) (any, error) { return key.PublicKey, nil }),
 		},
 	}

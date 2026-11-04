@@ -65,8 +65,8 @@ type TxnTokenTypeHandler struct {
 	Storage TxnTokenStorage
 
 	// JTIStorage marks a custom or self-signed JWT presented as a subject or actor token as used, once the token is
-	// signed, so a request refused before then can be retried. It is required when a *JWTType or *SelfSignedTokenType
-	// sets ValidateJTI.
+	// signed, so a request refused before then can be retried. It is required when a *JWTType validation or
+	// *SelfSignedTokenType sets ValidateJTI.
 	JTIStorage CustomJWTStorage
 }
 

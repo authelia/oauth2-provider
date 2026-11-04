@@ -111,7 +111,7 @@ func TestAuthorizationGrantTarget(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newGrantFixture(t, func(jwtType *JWTType) {
-				jwtType.Audience = []string{grantOther}
+				jwtType.Issue.Audience = []string{grantOther}
 			})
 
 			response, err := f.exchange(t, grantExchange{audience: tc.audience, resource: tc.resource})
@@ -142,7 +142,7 @@ func TestAuthorizationGrantSubjectToken(t *testing.T) {
 
 	t.Run("ShouldStillRejectTheOwnTokenForAnotherJWTType", func(t *testing.T) {
 		f := newGrantFixture(t, func(jwtType *JWTType) {
-			jwtType.AuthorizationGrant = false
+			jwtType.Issue.AuthorizationGrant = false
 		})
 
 		_, err := f.exchange(t, grantExchange{audience: []string{grantTarget}})
@@ -224,7 +224,7 @@ func TestAuthorizationGrantExpiresTooSoon(t *testing.T) {
 func TestAuthorizationGrantTranscribeClaims(t *testing.T) {
 	t.Run("ShouldDiscardAnInPlaceChangeToTheAudience", func(t *testing.T) {
 		f := newGrantFixture(t, func(jwtType *JWTType) {
-			jwtType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, claims map[string]any) error {
+			jwtType.Issue.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, claims map[string]any) error {
 				claims[consts.ClaimAudience].([]string)[0] = "https://evil.example"
 
 				return nil
@@ -241,7 +241,7 @@ func TestAuthorizationGrantTranscribeClaims(t *testing.T) {
 
 	t.Run("ShouldApplyTheChanges", func(t *testing.T) {
 		f := newGrantFixture(t, func(jwtType *JWTType) {
-			jwtType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, claims map[string]any) error {
+			jwtType.Issue.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, claims map[string]any) error {
 				claims[consts.ClaimSubject] = "doe.john@b.example"
 				claims["transaction_limit"] = "10000"
 				delete(claims, consts.ClaimScope)
@@ -262,7 +262,7 @@ func TestAuthorizationGrantTranscribeClaims(t *testing.T) {
 
 	t.Run("ShouldDiscardChangesToProtectedClaims", func(t *testing.T) {
 		f := newGrantFixture(t, func(jwtType *JWTType) {
-			jwtType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, claims map[string]any) error {
+			jwtType.Issue.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, claims map[string]any) error {
 				claims[consts.ClaimIssuer] = "https://evil.example"
 				claims[consts.ClaimAudience] = []string{"https://evil.example"}
 				claims[consts.ClaimExpirationTime] = int64(4102444800)
@@ -289,7 +289,7 @@ func TestAuthorizationGrantTranscribeClaims(t *testing.T) {
 
 	t.Run("ShouldRestoreARemovedProtectedClaim", func(t *testing.T) {
 		f := newGrantFixture(t, func(jwtType *JWTType) {
-			jwtType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, claims map[string]any) error {
+			jwtType.Issue.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, claims map[string]any) error {
 				delete(claims, consts.ClaimAudience)
 
 				return nil
@@ -311,7 +311,7 @@ func TestAuthorizationGrantTranscribeClaims(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newGrantFixture(t, func(jwtType *JWTType) {
-				jwtType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, claims map[string]any) error {
+				jwtType.Issue.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, claims map[string]any) error {
 					mutate(claims)
 
 					return nil
@@ -326,7 +326,7 @@ func TestAuthorizationGrantTranscribeClaims(t *testing.T) {
 
 	t.Run("ShouldDenyTheRequestWithTheReturnedError", func(t *testing.T) {
 		f := newGrantFixture(t, func(jwtType *JWTType) {
-			jwtType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, _ map[string]any) error {
+			jwtType.Issue.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, _ map[string]any) error {
 				return oauth2.ErrInvalidRequest.WithHint("The subject is unknown to the trust domain.")
 			}
 		})
@@ -341,8 +341,8 @@ func TestAuthorizationGrantTranscribeClaims(t *testing.T) {
 		called := false
 
 		f := newGrantFixture(t, func(jwtType *JWTType) {
-			jwtType.AuthorizationGrant = false
-			jwtType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, _ map[string]any) error {
+			jwtType.Issue.AuthorizationGrant = false
+			jwtType.Issue.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, _ map[string]any) error {
 				called = true
 
 				return errors.New("unexpected")
@@ -377,7 +377,7 @@ func TestAuthorizationGrantSigning(t *testing.T) {
 
 	t.Run("ShouldSelectTheIssuerKeyWithTheSigningAlg", func(t *testing.T) {
 		f := newGrantFixture(t, func(jwtType *JWTType) {
-			jwtType.SigningAlg = "ES256"
+			jwtType.Issue.SigningAlg = "ES256"
 		})
 
 		_, err := f.exchange(t, grantExchange{audience: []string{grantTarget}})
@@ -390,7 +390,7 @@ func TestAuthorizationGrantSigning(t *testing.T) {
 		require.NoError(t, err)
 
 		f := newGrantFixture(t, func(jwtType *JWTType) {
-			jwtType.SigningAlg = "ES256"
+			jwtType.Issue.SigningAlg = "ES256"
 		})
 
 		f.strategy.Issuer, err = jwt.NewDefaultIssuer(
@@ -421,7 +421,7 @@ func TestAuthorizationGrantSigning(t *testing.T) {
 
 	t.Run("ShouldRejectAnEmptyIssuer", func(t *testing.T) {
 		f := newGrantFixture(t, func(jwtType *JWTType) {
-			jwtType.Issuer = ""
+			jwtType.Issue.Issuer = ""
 		})
 
 		_, err := f.exchange(t, grantExchange{audience: []string{grantTarget}})
@@ -443,7 +443,7 @@ func TestAuthorizationGrantResponse(t *testing.T) {
 
 	t.Run("ShouldReportTheTranscribedScope", func(t *testing.T) {
 		f := newGrantFixture(t, func(jwtType *JWTType) {
-			jwtType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, claims map[string]any) error {
+			jwtType.Issue.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, claims map[string]any) error {
 				delete(claims, consts.ClaimScope)
 
 				return nil
@@ -472,7 +472,7 @@ func TestAuthorizationGrantResponse(t *testing.T) {
 // RFC 8725 Section 3.12 and Section 2.3.3: a grant is not a token this server accepts from a client.
 func TestAuthorizationGrantIsNotAcceptedBack(t *testing.T) {
 	trusting := func(jwtType *JWTType) {
-		jwtType.ValidateFunc = func(_ *jwt.Token) (any, error) { return key.PublicKey, nil }
+		jwtType.Validate = &JWTValidationConfig{Issuer: grantIssuer, ValidateFunc: func(_ *jwt.Token) (any, error) { return key.PublicKey, nil }}
 	}
 
 	t.Run("ShouldRejectAGrantAsTheSubjectToken", func(t *testing.T) {
@@ -531,7 +531,7 @@ func TestAuthorizationGrantSubjectIdentity(t *testing.T) {
 
 	t.Run("ShouldAcceptASubjectAssignedByTranscription", func(t *testing.T) {
 		f := newGrantFixture(t, func(jwtType *JWTType) {
-			jwtType.TranscribeClaims = func(_ context.Context, request oauth2.AccessRequester, claims map[string]any) error {
+			jwtType.Issue.TranscribeClaims = func(_ context.Context, request oauth2.AccessRequester, claims map[string]any) error {
 				claims[consts.ClaimSubject] = request.GetClient().GetID()
 
 				return nil
@@ -744,9 +744,9 @@ func newGrantFixtureWithStore(t *testing.T, store grantStore, configure func(jwt
 	cfg := newSpecConfig(t)
 
 	jwtType := &JWTType{
-		Name:   consts.TokenTypeRFC8693JWT,
-		Issuer: grantIssuer,
-		JWTIssueConfig: JWTIssueConfig{
+		Name: consts.TokenTypeRFC8693JWT,
+		Issue: &JWTIssueConfig{
+			Issuer:             grantIssuer,
 			AuthorizationGrant: true,
 			Expiry:             5 * time.Minute,
 		},

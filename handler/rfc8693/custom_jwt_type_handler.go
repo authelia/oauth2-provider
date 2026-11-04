@@ -24,9 +24,11 @@ import (
 
 // CustomJWTTypeHandler handles the token types configured as a *JWTType.
 //
-// A custom JWT presented as a 'subject_token' or 'actor_token' must have an 'iss' claim the client's permitted issuer
-// list or JWTType.Issuer trusts, and an 'aud' claim which includes the requesting client or a value of
-// JWTType.ExpectedAudience. RFC 8693 Section 5 requires the token be verified as appropriate for the exchange.
+// A custom JWT is only accepted as a 'subject_token' or 'actor_token' when its JWTType sets Validate, and only issued
+// when its JWTType sets Issue. An accepted JWT must have an 'iss' claim the client's permitted issuer list or
+// JWTValidationConfig.Issuer trusts, and an 'aud' claim which includes the requesting client or a value of
+// JWTValidationConfig.ExpectedAudience. An issued JWT always has the 'iss' claim JWTIssueConfig.Issuer. RFC 8693
+// Section 5 requires the token be verified as appropriate for the exchange.
 //
 // A token exchange with a custom JWT as the 'subject_token' may only request the scopes in the token's 'scope' claim,
 // either the space-delimited list RFC 8693 Section 4.2 defines or an array of strings, and cannot request a scope
@@ -177,11 +179,17 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 	}
 
 	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
-	if jwtType.AuthorizationGrant {
+	if jwtType.Issue != nil && jwtType.Issue.AuthorizationGrant {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("A JWT authorization grant of the type '%s' cannot be exchanged.", jwtType.GetName(ctx)))
 	}
 
-	ftoken, err := jwt.ParseWithClaims(token, jwt.MapClaims{}, jwtType.ValidateFunc)
+	validation := jwtType.Validate
+
+	if validation == nil {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not accepted as %s.", jwtType.GetName(ctx), role.hint()))
+	}
+
+	ftoken, err := jwt.ParseWithClaims(token, jwt.MapClaims{}, validation.ValidateFunc)
 	if err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the JSON web token").WithWrap(err).WithDebugError(err))
 	}
@@ -190,7 +198,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, err
 	}
 
-	window := jwtType.JWTLifetimeToleranceWindow
+	window := validation.JWTLifetimeToleranceWindow
 	if window == 0 {
 		window = 1 * time.Hour
 	}
@@ -228,19 +236,19 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 
 	allowed := clientAllowedIssuers(request.GetClient(), role)
 
-	if _, ok = ValidateIssuer(iss, jwtType.Issuer, allowed); !ok {
+	if _, ok = ValidateIssuer(iss, validation.Issuer, allowed); !ok {
 		if len(allowed) > 0 {
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not in the OAuth 2.0 Client's permitted issuer list."))
 		}
 
-		if jwtType.Issuer == "" {
-			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not a trusted issuer.").WithDebugf("The JSON Web Token type '%s' has no 'Issuer' and the OAuth 2.0 Client has no permitted issuer list, so no issuer is trusted.", jwtType.GetName(ctx)))
+		if validation.Issuer == "" {
+			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not a trusted issuer.").WithDebugf("The JSON Web Token type '%s' has no validation 'Issuer' and the OAuth 2.0 Client has no permitted issuer list, so no issuer is trusted.", jwtType.GetName(ctx)))
 		}
 
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", jwtType.Issuer))
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", validation.Issuer))
 	}
 
-	if err = validateCustomJWTAudience(request, jwtType, claims); err != nil {
+	if err = validateCustomJWTAudience(request, validation, claims); err != nil {
 		return nil, err
 	}
 
@@ -249,7 +257,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 	}
 
 	// The JTI is marked as used by TokenExchangeGrantHandler.PopulateTokenEndpointResponse.
-	if jwtType.ValidateJTI {
+	if validation.ValidateJTI {
 		if jti, _ := claims[consts.ClaimJWTID].(string); jti == "" {
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from token is missing."))
 		}
@@ -309,7 +317,15 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 			oauth2.ErrServerError.WithDebugf("Token type '%s' is supposed to be of type JWT but is not castable to 'JWTType'", tokenType.GetName(ctx)))
 	}
 
-	if jwtType.AuthorizationGrant {
+	if jwtType.Issue == nil {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", jwtType.GetName(ctx), consts.FormParameterRequestedTokenType))
+	}
+
+	if jwtType.Issue.Issuer == "" {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The JSON Web Token type '%s' has no issuer.", jwtType.GetName(ctx)))
+	}
+
+	if jwtType.Issue.AuthorizationGrant {
 		return c.issueAuthorizationGrant(ctx, request, jwtType, response)
 	}
 
@@ -331,9 +347,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 
 	claims.ExpirationTime = jwt.NewNumericDate(capToSubjectTokenExpiry(request, claims.ExpirationTime.Time))
 
-	if claims.Issuer == "" {
-		claims.Issuer = jwtType.Issuer
-	}
+	claims.Issuer = jwtType.Issue.Issuer
 
 	// The token is signed with the ID Token key and typed 'JWT', so an ID Token issuer would make it valid as an ID
 	// Token. RFC 8725 Section 3.12 requires mutually exclusive validation rules for JWTs from one issuer.
@@ -348,8 +362,8 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	switch {
 	case len(request.GetGrantedAudience()) > 0 || len(request.GetGrantedResource()) > 0:
 		claims.Audience = oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource())
-	case len(jwtType.Audience) > 0:
-		claims.Audience = append([]string(nil), jwtType.Audience...)
+	case len(jwtType.Issue.Audience) > 0:
+		claims.Audience = append([]string(nil), jwtType.Issue.Audience...)
 	default:
 		return errorsx.WithStack(oauth2.ErrInvalidTarget.
 			WithHint("Unable to determine the audience for the issued JSON Web Token.").
@@ -409,11 +423,7 @@ func (c *CustomJWTTypeHandler) issueAuthorizationGrant(ctx context.Context, requ
 		return errorsx.WithStack(oauth2.ErrInvalidTarget.WithHint("A JWT authorization grant must identify a single authorization server."))
 	}
 
-	if jwtType.Issuer == "" {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The JSON Web Token type '%s' has no issuer.", jwtType.GetName(ctx)))
-	}
-
-	if err = c.validateIssuedIssuer(ctx, jwtType, jwtType.Issuer); err != nil {
+	if err = c.validateIssuedIssuer(ctx, jwtType, jwtType.Issue.Issuer); err != nil {
 		return err
 	}
 
@@ -429,7 +439,7 @@ func (c *CustomJWTTypeHandler) issueAuthorizationGrant(ctx context.Context, requ
 	}
 
 	protected := map[string]any{
-		consts.ClaimIssuer:         jwtType.Issuer,
+		consts.ClaimIssuer:         jwtType.Issue.Issuer,
 		consts.ClaimAudience:       slices.Clone([]string(targets)),
 		consts.ClaimExpirationTime: expires.Unix(),
 		consts.ClaimIssuedAt:       now.Unix(),
@@ -462,10 +472,10 @@ func (c *CustomJWTTypeHandler) issueAuthorizationGrant(ctx context.Context, requ
 
 	maps.Copy(claims, protected)
 
-	if jwtType.TranscribeClaims != nil {
+	if jwtType.Issue.TranscribeClaims != nil {
 		claims[consts.ClaimAudience] = slices.Clone([]string(targets))
 
-		if err = jwtType.TranscribeClaims(ctx, request, claims); err != nil {
+		if err = jwtType.Issue.TranscribeClaims(ctx, request, claims); err != nil {
 			return errorsx.WithStack(err)
 		}
 
@@ -483,7 +493,7 @@ func (c *CustomJWTTypeHandler) issueAuthorizationGrant(ctx context.Context, requ
 
 	var token string
 
-	if token, _, err = c.Encode(ctx, jwt.MapClaims(claims), jwt.WithIssuerSigningAlg(jwtType.SigningAlg)); err != nil {
+	if token, _, err = c.Encode(ctx, jwt.MapClaims(claims), jwt.WithIssuerSigningAlg(jwtType.Issue.SigningAlg)); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -529,8 +539,8 @@ func (c *CustomJWTTypeHandler) validateIssuedIssuer(ctx context.Context, jwtType
 }
 
 func (c *CustomJWTTypeHandler) expiry(ctx context.Context, client oauth2.Client, jwtType *JWTType) time.Duration {
-	if jwtType.Expiry > 0 {
-		return jwtType.Expiry
+	if jwtType.Issue != nil && jwtType.Issue.Expiry > 0 {
+		return jwtType.Issue.Expiry
 	}
 
 	fallback := time.Hour
@@ -605,14 +615,14 @@ func toInt64(claim any) int64 {
 	return 0
 }
 
-func validateCustomJWTAudience(request oauth2.AccessRequester, jwtType *JWTType, claims jwt.MapClaims) error {
+func validateCustomJWTAudience(request oauth2.AccessRequester, validation *JWTValidationConfig, claims jwt.MapClaims) error {
 	clientID := request.GetClient().GetID()
 
 	if claims.VerifyAudience(clientID, true) {
 		return nil
 	}
 
-	for _, audience := range jwtType.ExpectedAudience {
+	for _, audience := range validation.ExpectedAudience {
 		if claims.VerifyAudience(audience, true) {
 			return nil
 		}

@@ -534,7 +534,7 @@ func TestTxnTokenJTICustomJWTSubject(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newTxnIssueFixture(t, storage.NewExampleStore())
 			f.scopes.scopes = []string{"trade.stocks"}
-			f.cfg.RFC8693TokenTypes[txnJWTType].(*JWTType).ValidateJTI = true
+			f.cfg.RFC8693TokenTypes[txnJWTType].(*JWTType).Validate.ValidateJTI = true
 			f.txn.JTIStorage = store
 
 			e := txnExchange{subjectType: txnJWTType, subjectToken: f.customJWT(t, map[string]any{consts.ClaimJWTID: uuid.New().String()}), scopes: []string{"trade.stocks"}}

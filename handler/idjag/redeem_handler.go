@@ -227,19 +227,20 @@ func (h *RedeemHandler) finish(ctx context.Context, request oauth2.AccessRequest
 		rfc7523.Session
 		oauth2.Session
 	})
+
 	if !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The session must implement rfc7523.Session but got type: %T", request.GetSession()))
 	}
 
-	if err := h.confirm(ctx, request, session, raw); err != nil {
+	if err = h.confirm(ctx, request, session, raw); err != nil {
 		return err
 	}
 
-	if err := h.requireProof(ctx, request, client, raw); err != nil {
+	if err = h.requireProof(ctx, request, client, raw); err != nil {
 		return err
 	}
 
-	if err := h.requireCertificate(ctx, client); err != nil {
+	if err = h.requireCertificate(ctx, client, session); err != nil {
 		return err
 	}
 
@@ -765,7 +766,9 @@ func (h *RedeemHandler) confirmCertificate(ctx context.Context, session oauth2.S
 	return nil
 }
 
-func (h *RedeemHandler) requireCertificate(ctx context.Context, client oauth2.Client) (err error) {
+// requireCertificate records the certificate of a request for which a certificate-bound access token is required, so
+// the token is bound whether or not rfc8705.Handler is composed.
+func (h *RedeemHandler) requireCertificate(ctx context.Context, client oauth2.Client, session oauth2.Session) (err error) {
 	if !h.Config.GetMTLSEnabled(ctx) {
 		return nil
 	}
@@ -776,14 +779,37 @@ func (h *RedeemHandler) requireCertificate(ctx context.Context, client oauth2.Cl
 		required = true
 	}
 
-	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
-	if !required || r == nil {
+	if !required {
 		return nil
 	}
 
-	if cert, err := oauth2.ClientCertificateFromRequest(r, h.Config.GetMTLSClientCertificateHeader(ctx)); err == nil && cert == nil {
+	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
+	if r == nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The HTTP request needed to read the client certificate is not available."))
+	}
+
+	// Section 9.11.2.2: a required sender constraint that cannot be met fails with invalid_grant.
+	cert, err := oauth2.ClientCertificateFromRequest(r, h.Config.GetMTLSClientCertificateHeader(ctx))
+
+	switch {
+	case err != nil:
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The client certificate could not be read.").WithWrap(err).WithDebugError(err))
+	case cert == nil:
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("A sender-constrained access token is required, and the request has no client certificate."))
 	}
+
+	bound, ok := session.(oauth2.MTLSBoundSession)
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The session does not support mutual-TLS certificate binding."))
+	}
+
+	x5t := oauth2.X509CertificateSHA256Thumbprint(cert)
+
+	if existing := bound.GetClientCertificateSHA256Thumbprint(); existing != "" && subtle.ConstantTimeCompare([]byte(existing), []byte(x5t)) != 1 {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The client certificate does not match the certificate the authorization grant is bound to."))
+	}
+
+	bound.SetClientCertificateSHA256Thumbprint(x5t)
 
 	return nil
 }

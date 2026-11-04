@@ -724,6 +724,7 @@ func TestRedeemHandlerCertificateBinding(t *testing.T) {
 		cert    *x509.Certificate
 		grant   string
 		noHTTP  bool
+		garbled bool
 		err     error
 	}{
 		// Section 9.11.2.2.
@@ -734,9 +735,13 @@ func TestRedeemHandlerCertificateBinding(t *testing.T) {
 		{name: "ShouldAcceptAnUnboundGrantWithACertificate", mtls: true, cert: certificate},
 		{name: "ShouldAcceptAnUnboundGrantWithoutACertificate", mtls: true},
 		{name: "ShouldRejectAnUnboundGrantWithoutACertificateWhenEnforced", mtls: true, enforce: true, err: oauth2.ErrInvalidGrant},
+		{name: "ShouldBindAnUnboundGrantToTheCertificateWhenEnforced", mtls: true, enforce: true, cert: certificate},
+		{name: "ShouldAcceptAMatchingCertificateWhenEnforced", mtls: true, enforce: true, bound: true, cert: certificate},
 		// Section 9.11: an unsupported confirmation method.
 		{name: "ShouldRejectACertificateBoundGrantWhenMTLSIsDisabled", bound: true, cert: certificate, err: oauth2.ErrInvalidGrant},
 		{name: "ShouldFailClosedWithoutTheHTTPRequest", mtls: true, bound: true, noHTTP: true, err: oauth2.ErrServerError},
+		{name: "ShouldFailClosedWithoutTheHTTPRequestWhenEnforced", mtls: true, enforce: true, noHTTP: true, err: oauth2.ErrServerError},
+		{name: "ShouldRejectAnUnreadableCertificateWhenEnforced", mtls: true, enforce: true, garbled: true, err: oauth2.ErrInvalidGrant},
 	}
 
 	for _, tc := range testCases {
@@ -767,6 +772,11 @@ func TestRedeemHandlerCertificateBinding(t *testing.T) {
 					r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{tc.cert}}
 				}
 
+				if tc.garbled {
+					fixture.config.MTLSClientCertificateHeader = redeemCertificateHeader
+					r.Header.Set(redeemCertificateHeader, "not-a-certificate")
+				}
+
 				ctx = context.WithValue(ctx, oauth2.RequestContextKey, r)
 			}
 
@@ -783,7 +793,7 @@ func TestRedeemHandlerCertificateBinding(t *testing.T) {
 			session, ok := request.GetSession().(oauth2.MTLSBoundSession)
 			require.True(t, ok)
 
-			if tc.bound {
+			if tc.bound || tc.enforce {
 				assert.Equal(t, thumbprint, session.GetClientCertificateSHA256Thumbprint())
 			} else {
 				assert.Empty(t, session.GetClientCertificateSHA256Thumbprint())

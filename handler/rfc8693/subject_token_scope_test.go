@@ -284,7 +284,7 @@ func TestSubjectTokenScopeIgnoresTheClientScopeStrategy(t *testing.T) {
 func TestCustomJWTSubjectTokenScopeDoesNotConsumeTheJTI(t *testing.T) {
 	store := storage.NewExampleStore()
 	cfg := newSpecConfig(t)
-	cfg.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).ValidateJTI = true
+	cfg.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Validate.ValidateJTI = true
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
@@ -328,7 +328,7 @@ func TestCustomJWTSubjectTokenScopeDoesNotConsumeTheJTI(t *testing.T) {
 func TestCustomJWTSubjectTokenJTIIsScopedToTheIssuer(t *testing.T) {
 	store := storage.NewExampleStore()
 	cfg := newSpecConfig(t)
-	cfg.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).ValidateJTI = true
+	cfg.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Validate.ValidateJTI = true
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 

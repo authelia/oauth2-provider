@@ -46,7 +46,7 @@ func TestCustomJWTRefusesTxnTokenType(t *testing.T) {
 	for _, typ := range []string{consts.JSONWebTokenTypeTxnToken, "TXNTOKEN+JWT", "application/txntoken+jwt"} {
 		t.Run(typ, func(t *testing.T) {
 			config := newSpecConfig(t)
-			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Types = []string{typ, consts.JSONWebTokenTypeTxnToken}
+			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Validate.Types = []string{typ, consts.JSONWebTokenTypeTxnToken}
 
 			store := storage.NewExampleStore()
 			strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}

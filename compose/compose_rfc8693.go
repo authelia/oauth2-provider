@@ -35,7 +35,7 @@ import (
 // RFC8693TokenExchangeGrantFactory creates the request-validation + act-claim writer for the OAuth 2.0 Token
 // Exchange grant. It MUST be registered FIRST in the RFC 8693 chain so the act claim is set before any token-type
 // handler issues a token. For the same reason it is the handler that marks a custom JWT as used, so storage should
-// implement rfc8693.CustomJWTStorage when a rfc8693.JWTType sets ValidateJTI.
+// implement rfc8693.CustomJWTStorage when the Validate of a rfc8693.JWTType sets ValidateJTI.
 func RFC8693TokenExchangeGrantFactory(config oauth2.Configurator, storage any, _ any) any {
 	store, _ := storage.(rfc8693.CustomJWTStorage)
 

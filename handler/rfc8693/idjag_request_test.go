@@ -499,7 +499,7 @@ func TestIDJAGCustomJWTSubjectRejected(t *testing.T) {
 func TestIDJAGCustomJWTNeverIssuesIDJAG(t *testing.T) {
 	store := storage.NewExampleStore()
 	cfg := newIDJAGSpecConfig(t)
-	cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693IDJAG] = &JWTType{Name: consts.TokenTypeRFC8693IDJAG, Issuer: idjagIssuer}
+	cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693IDJAG] = &JWTType{Name: consts.TokenTypeRFC8693IDJAG, Issue: &JWTIssueConfig{Issuer: idjagIssuer}}
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 	handler := &CustomJWTTypeHandler{Config: cfg, Strategy: jwtStrategy, Storage: store}
@@ -535,7 +535,7 @@ func TestCustomJWTSubjectOutsideAnIDJAGRequest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store := storage.NewExampleStore()
 			cfg := newIDJAGSpecConfig(t)
-			cfg.RFC8693TokenTypes[idjagSubjectType].(*JWTType).Types = []string{consts.JSONWebTokenTypeJWT, consts.JSONWebTokenTypeAccessToken}
+			cfg.RFC8693TokenTypes[idjagSubjectType].(*JWTType).Validate.Types = []string{consts.JSONWebTokenTypeJWT, consts.JSONWebTokenTypeAccessToken}
 
 			jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 			handler := &CustomJWTTypeHandler{Config: cfg, Strategy: jwtStrategy, Storage: store}

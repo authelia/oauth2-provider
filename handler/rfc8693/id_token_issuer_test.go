@@ -138,7 +138,7 @@ func TestCustomJWTIsNotAcceptedAsIDTokenSubjectToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := newSpecConfig(t)
 			config.IDTokenIssuer = "https://as.example.com"
-			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Issuer = tc.issuer
+			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Issue.Issuer = tc.issuer
 
 			store := storage.NewExampleStore()
 			client := store.Clients["my-client"]

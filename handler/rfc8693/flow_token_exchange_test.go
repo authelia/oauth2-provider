@@ -307,9 +307,9 @@ func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 			RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
 				consts.TokenTypeRFC8693AccessToken: &DefaultTokenType{Name: consts.TokenTypeRFC8693AccessToken},
 				jwtType: &JWTType{
-					Name:   jwtType,
-					Issuer: issuerAccepted,
-					JWTValidationConfig: JWTValidationConfig{
+					Name: jwtType,
+					Validate: &JWTValidationConfig{
+						Issuer:                     issuerAccepted,
 						ValidateFunc:               jwt.Keyfunc(func(t *jwt.Token) (any, error) { return rsa.PublicKey, nil }),
 						JWTLifetimeToleranceWindow: 15 * time.Minute,
 					},

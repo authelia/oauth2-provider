@@ -254,7 +254,7 @@ func TestCustomJWTTypeHandlerExpiry(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := newSpecConfig(t)
 			config.AccessTokenLifespan = 30 * time.Minute
-			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Expiry = tc.expiry
+			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Issue.Expiry = tc.expiry
 
 			store := storage.NewExampleStore()
 

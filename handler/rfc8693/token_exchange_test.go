@@ -31,17 +31,18 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 
 	customJWTType := &JWTType{
 		Name: jwtName,
-		JWTValidationConfig: JWTValidationConfig{
+		Validate: &JWTValidationConfig{
+			Issuer:      "https://customory.com",
 			ValidateJTI: true,
 			ValidateFunc: jwt.Keyfunc(func(t *jwt.Token) (any, error) {
 				return key.PublicKey, nil
 			}),
 			JWTLifetimeToleranceWindow: 15 * time.Minute,
 		},
-		JWTIssueConfig: JWTIssueConfig{
+		Issue: &JWTIssueConfig{
+			Issuer:   "https://customory.com",
 			Audience: []string{"https://resource1.com"},
 		},
-		Issuer: "https://customory.com",
 	}
 
 	config := &oauth2.Config{

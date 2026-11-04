@@ -78,7 +78,7 @@ func TestCustomJWTSubjectTokenType(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := newSpecConfig(t)
-			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Types = tc.types
+			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Validate.Types = tc.types
 
 			err := runCustomJWTSubjectToken(t, config, "https://as.example.com", tc.typ)
 

@@ -287,6 +287,9 @@ func TestValidateAuthorizationDetailsTypes(t *testing.T) {
 		{name: "ShouldAcceptNilAllowList", config: newRARConfig(), client: &internal.AuthorizationDetailsClient{DefaultClient: &oauth2.DefaultClient{}}, details: details},
 		{name: "ShouldRejectEmptyAllowList", config: newRARConfig(), client: &internal.AuthorizationDetailsClient{DefaultClient: &oauth2.DefaultClient{}, AuthorizationDetailsTypes: []string{}}, details: details, hint: testRARHintTypeNotAllowed},
 		{name: "ShouldRejectMissingHandler", config: &oauth2.Config{}, client: &oauth2.DefaultClient{}, details: details, hint: "The authorization details type 'payment_initiation' is not supported."},
+		{name: "ShouldRejectNilAllowListForDocumentClient", config: newRARConfig(), client: &documentRARClient{AuthorizationDetailsClient: &internal.AuthorizationDetailsClient{DefaultClient: &oauth2.DefaultClient{}}}, details: details, hint: testRARHintTypeNotAllowed},
+		{name: "ShouldRejectDocumentClientWithoutAllowList", config: newRARConfig(), client: &documentRARDefaultClient{DefaultClient: &oauth2.DefaultClient{}}, details: details, hint: testRARHintTypeNotAllowed},
+		{name: "ShouldAcceptAllowListForDocumentClient", config: newRARConfig(), client: &documentRARClient{AuthorizationDetailsClient: &internal.AuthorizationDetailsClient{DefaultClient: &oauth2.DefaultClient{}, AuthorizationDetailsTypes: []string{internal.AuthorizationDetailsTypePaymentInitiation}}}, details: details},
 	}
 
 	for _, tc := range testCases {
@@ -491,6 +494,18 @@ func newRARDetails(n int) oauth2.AuthorizationDetails {
 func newRARConfig() *oauth2.Config {
 	return &oauth2.Config{AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}}
 }
+
+type documentRARClient struct {
+	*internal.AuthorizationDetailsClient
+}
+
+func (c *documentRARClient) IsClientIDMetadataDocumentClient() bool { return true }
+
+type documentRARDefaultClient struct {
+	*oauth2.DefaultClient
+}
+
+func (c *documentRARDefaultClient) IsClientIDMetadataDocumentClient() bool { return true }
 
 type rfcErrorTypeHandler struct {
 	internal.PaymentInitiationTypeHandler

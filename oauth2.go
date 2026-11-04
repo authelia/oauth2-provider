@@ -669,6 +669,16 @@ type RFC8693TokenType interface {
 	GetType(ctx context.Context) (tokenType string)
 }
 
+// RFC8693TokenTypeIdentifiersProvider is optionally implemented by an RFC8693TokenType to report the identifiers it
+// configures which identify this authorization server or a party it trusts, such as the issuer of the tokens it issues
+// or accepts. A Client Identifier URL equal to one of them is not resolved.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-10.1
+type RFC8693TokenTypeIdentifiersProvider interface {
+	// GetIdentifiers returns the identifiers, which may include empty values.
+	GetIdentifiers(ctx context.Context) (identifiers []string)
+}
+
 // IDTokenValidationOpts are the resolved options for TokenValidationStrategy.ValidateIDToken.
 type IDTokenValidationOpts struct {
 	// AllowExpired permits an ID Token whose 'exp' claim is in the past to validate successfully.

@@ -7,6 +7,7 @@ package rfc8693
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"maps"
 	"math"
 	"slices"
@@ -252,6 +253,10 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, err
 	}
 
+	if err = c.validateCustomJWTOwner(ctx, request, role, token, claims); err != nil {
+		return nil, err
+	}
+
 	if err = validateCustomJWTScope(ctx, request, c.Config, role, claims); err != nil {
 		return nil, err
 	}
@@ -264,6 +269,42 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 	}
 
 	return claims, nil
+}
+
+// validateCustomJWTOwner applies the exchange permission of the client a custom JWT this authorization server issued
+// was requested by, which its 'client_id' claim identifies, when another client presents it. A 'client_id' claim
+// identifies a client of the issuer, so the claim of a token which is not signed with a key of this authorization
+// server is not a client of this authorization server.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-4.3
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-5
+func (c *CustomJWTTypeHandler) validateCustomJWTOwner(ctx context.Context, request oauth2.AccessRequester, role tokenRole, token string, claims jwt.MapClaims) (err error) {
+	client := request.GetClient()
+
+	id, _ := claims[consts.ClaimClientIdentifier].(string)
+
+	if id == "" || id == client.GetID() || c.Strategy == nil {
+		return nil
+	}
+
+	if _, err = c.Decode(ctx, token); err != nil {
+		return nil
+	}
+
+	var owner oauth2.Client
+
+	switch owner, err = oauth2.GetClient(ctx, c.Config, c.Storage, id); {
+	case errors.Is(err, oauth2.ErrTemporarilyUnavailable):
+		return err
+	case err != nil:
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 client %s the token was issued to could not be resolved.", id).WithWrap(err).WithDebugError(err))
+	}
+
+	if !permitsExchange(owner, client, resolveRequestedTokenType(ctx, request, c.Config), role) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 client is not permitted to exchange %s issued to client %s", role.hint(), id))
+	}
+
+	return nil
 }
 
 func validateCustomJWTType(ctx context.Context, jwtType *JWTType, token *jwt.Token) error {
@@ -391,6 +432,9 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	if _, exists := mapped[consts.ClaimScope]; !exists && len(request.GetGrantedScopes()) > 0 {
 		mapped[consts.ClaimScope] = strings.Join(request.GetGrantedScopes(), " ")
 	}
+
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-4.3
+	mapped[consts.ClaimClientIdentifier] = request.GetClient().GetID()
 
 	headers := stripIDTokenConfirmationHeader(session.IDTokenHeaders())
 

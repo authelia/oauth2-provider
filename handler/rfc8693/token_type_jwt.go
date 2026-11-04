@@ -92,6 +92,23 @@ type JWTValidationConfig struct {
 	Types []string `json:"types"`
 }
 
+// GetIdentifiers returns the issuer this type issues JWTs as and the issuer it accepts JWTs from.
+func (c *JWTType) GetIdentifiers(_ context.Context) (identifiers []string) {
+	if c == nil {
+		return nil
+	}
+
+	if c.Issue != nil {
+		identifiers = append(identifiers, c.Issue.Issuer)
+	}
+
+	if c.Validate != nil {
+		identifiers = append(identifiers, c.Validate.Issuer)
+	}
+
+	return identifiers
+}
+
 // GetName returns the name of the token type.
 func (c *JWTType) GetName(ctx context.Context) string {
 	return c.Name
@@ -110,3 +127,9 @@ func (c *JWTType) GetTypes() []string {
 func (c *JWTType) GetType(ctx context.Context) string {
 	return consts.TokenTypeRFC8693JWT
 }
+
+var (
+	_ oauth2.RFC8693TokenTypeIdentifiersProvider = (*JWTType)(nil)
+	_ oauth2.RFC8693TokenTypeIdentifiersProvider = (*TxnTokenType)(nil)
+	_ oauth2.RFC8693TokenTypeIdentifiersProvider = (*SelfSignedTokenType)(nil)
+)

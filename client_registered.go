@@ -576,6 +576,15 @@ func (c *DefaultRegisteredClient) GetAuthorizationGrantProfilesSupported() (prof
 	return c.AuthorizationGrantProfilesSupported
 }
 
+// GetTokenExchangePermittedClientIDs returns the clients permitted to exchange a token issued to this one. An empty
+// list permits any client through GetTokenExchangePermitted, but no client when this client was resolved from a Client
+// ID Metadata Document.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-5
+func (c *DefaultRegisteredClient) GetTokenExchangePermittedClientIDs() (ids []string) {
+	return c.TokenExchangePermittedClientIDs
+}
+
 // GetTokenExchangePermitted reports whether client may exchange a token issued to this one, per RFC 8693 Section 5's
 // recommendation that the exchange be restricted "to only those clients explicitly authorized to perform the exchange
 // operation".

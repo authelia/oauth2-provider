@@ -183,7 +183,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 		return nil, nil, errExchangeTokenLookup(err)
 	}
 
-	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.GetScopeStrategy(ctx, client), or, role, true); err != nil {
+	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.Storage, c.GetScopeStrategy(ctx, client), or, role, true); err != nil {
 		return nil, nil, err
 	}
 

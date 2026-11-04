@@ -324,6 +324,29 @@ type Config struct {
 	// HTTPClient is the HTTP client to use for requests.
 	HTTPClient *retryablehttp.Client
 
+	// ClientIDMetadataDocumentResolver resolves a Client Identifier URL which is not a registered client. Client ID
+	// Metadata Documents are disabled when it is nil.
+	ClientIDMetadataDocumentResolver ClientIDMetadataDocumentResolver
+
+	// ClientIDMetadataDocumentHTTPClient is the HTTP client used to fetch a URL taken from a Client ID Metadata
+	// Document. See NewSpecialUseAddressGuardedHTTPClient.
+	ClientIDMetadataDocumentHTTPClient *retryablehttp.Client
+
+	// ClientIDMetadataDocumentJWKSFetcherStrategy fetches the 'jwks_uri' of a Client ID Metadata Document. It should
+	// be built on ClientIDMetadataDocumentHTTPClient.
+	ClientIDMetadataDocumentJWKSFetcherStrategy jwt.JWKSFetcherStrategy
+
+	// ClientIDMetadataDocumentAllowedDomainSuffixes restricts the hosts whose Client ID Metadata Documents are
+	// resolved to those with one of these domain suffixes. A suffix matches the domain itself and its subdomains, or
+	// only its subdomains when it begins with a dot. Every host is permitted when it is empty.
+	ClientIDMetadataDocumentAllowedDomainSuffixes []string
+
+	// ClientIDMetadataDocumentReservedIdentifiers is the identifiers of the authorization servers and resource servers
+	// this authorization server trusts. A Client Identifier URL equal to one of them, to an issuer identifier or
+	// accepted assertion audience of this authorization server, or to an identifier a token exchange token type
+	// configures, is not resolved. See ClientIDMetadataDocumentReservedIdentifiersProvider for what it must include.
+	ClientIDMetadataDocumentReservedIdentifiers []string
+
 	// AuthorizeEndpointHandlers is a list of handlers that are called before the authorization endpoint is served.
 	AuthorizeEndpointHandlers AuthorizeEndpointHandlers
 
@@ -704,6 +727,35 @@ func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {
 	})
 
 	return c.HTTPClient
+}
+
+// GetClientIDMetadataDocumentResolver returns the Client ID Metadata Document resolver, or nil when disabled.
+func (c *Config) GetClientIDMetadataDocumentResolver(_ context.Context) ClientIDMetadataDocumentResolver {
+	return c.ClientIDMetadataDocumentResolver
+}
+
+// GetClientIDMetadataDocumentHTTPClient returns the HTTP client used to fetch a URL taken from a Client ID Metadata
+// Document. There is no default.
+func (c *Config) GetClientIDMetadataDocumentHTTPClient(_ context.Context) *retryablehttp.Client {
+	return c.ClientIDMetadataDocumentHTTPClient
+}
+
+// GetClientIDMetadataDocumentJWKSFetcherStrategy returns the strategy used to fetch the 'jwks_uri' of a Client ID
+// Metadata Document. There is no default.
+func (c *Config) GetClientIDMetadataDocumentJWKSFetcherStrategy(_ context.Context) jwt.JWKSFetcherStrategy {
+	return c.ClientIDMetadataDocumentJWKSFetcherStrategy
+}
+
+// GetClientIDMetadataDocumentReservedIdentifiers returns the identifiers of the authorization servers and resource
+// servers this authorization server trusts.
+func (c *Config) GetClientIDMetadataDocumentReservedIdentifiers(_ context.Context) []string {
+	return c.ClientIDMetadataDocumentReservedIdentifiers
+}
+
+// GetClientIDMetadataDocumentAllowedDomainSuffixes returns the domain suffixes a Client Identifier URL host must have
+// for its Client ID Metadata Document to be resolved. It is empty by default, which permits every host.
+func (c *Config) GetClientIDMetadataDocumentAllowedDomainSuffixes(_ context.Context) []string {
+	return c.ClientIDMetadataDocumentAllowedDomainSuffixes
 }
 
 // GetAllowedJWTAssertionAudiences returns the permitted client assertion audiences.
@@ -1141,6 +1193,17 @@ func (c *Config) GetJWKSFetcherStrategy(_ context.Context) jwt.JWKSFetcherStrate
 	})
 
 	return c.JWKSFetcherStrategy
+}
+
+// GetClientJWKSFetcherStrategy returns the strategy used to fetch the 'jwks_uri' of the given client, which is the
+// ClientIDMetadataDocumentJWKSFetcherStrategy for a client resolved from a Client ID Metadata Document, or for any
+// client whose identifier is a Client Identifier URL while the feature is enabled, and may then be nil.
+func (c *Config) GetClientJWKSFetcherStrategy(ctx context.Context, client any) jwt.JWKSFetcherStrategy {
+	if isClientIDMetadataDocumentFetchClient(ctx, c, client) {
+		return c.ClientIDMetadataDocumentJWKSFetcherStrategy
+	}
+
+	return c.GetJWKSFetcherStrategy(ctx)
 }
 
 // GetTokenEntropy returns the entropy of the "message" part of a HMAC Token. Defaults to 32.
@@ -1658,6 +1721,7 @@ func (c *Config) GetRFC7591ClientRegistrationScopes(ctx context.Context) (scopes
 }
 
 var (
+	_ jwt.ClientJWKSFetcherStrategyProvider                 = (*Config)(nil)
 	_ AuthorizeCodeLifespanProvider                         = (*Config)(nil)
 	_ RefreshTokenLifespanProvider                          = (*Config)(nil)
 	_ AccessTokenLifespanProvider                           = (*Config)(nil)
@@ -1708,6 +1772,8 @@ var (
 	_ AllowedIntrospectionAudiencesProvider                 = (*Config)(nil)
 	_ AllowedIntrospectionScopesProvider                    = (*Config)(nil)
 	_ HTTPClientProvider                                    = (*Config)(nil)
+	_ ClientIDMetadataDocumentConfigProvider                = (*Config)(nil)
+	_ ClientIDMetadataDocumentReservedIdentifiersProvider   = (*Config)(nil)
 	_ HMACHashingProvider                                   = (*Config)(nil)
 	_ AuthorizeEndpointHandlersProvider                     = (*Config)(nil)
 	_ TokenEndpointHandlersProvider                         = (*Config)(nil)

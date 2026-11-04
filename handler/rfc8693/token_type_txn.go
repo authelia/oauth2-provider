@@ -202,6 +202,15 @@ type TxnTokenStorage interface {
 	GetTxnTokenSubjectScopes(ctx context.Context, client oauth2.Client, subjectTokenType, subject string, claims map[string]any) (scopes []string, err error)
 }
 
+// GetIdentifiers returns the issuer and Trust Domain of the Transaction Tokens this type issues.
+func (c *TxnTokenType) GetIdentifiers(_ context.Context) (identifiers []string) {
+	if c == nil {
+		return nil
+	}
+
+	return []string{c.Issuer, c.TrustDomain}
+}
+
 // GetName returns the name of the token type.
 func (c *TxnTokenType) GetName(ctx context.Context) string {
 	return c.Name
@@ -254,6 +263,15 @@ func (c *TxnTokenType) signingAlg() string {
 	}
 
 	return c.SigningAlg
+}
+
+// GetIdentifiers returns the Transaction Token Service identifier a self-signed token is addressed to.
+func (c *SelfSignedTokenType) GetIdentifiers(_ context.Context) (identifiers []string) {
+	if c == nil {
+		return nil
+	}
+
+	return []string{c.Identifier}
 }
 
 // GetName returns the name of the token type.

@@ -161,6 +161,13 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context
 		return nil, errInvalidAccessToken(err)
 	}
 
+	// A client resolved from a Client ID Metadata Document is not registered and never registers clients.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-9.1
+	if jwt.IsClientIDMetadataDocumentClient(requester.GetClient()) {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The provided Access Token is not valid.").WithDebug("The Access Token was issued to a client resolved from a Client ID Metadata Document."))
+	}
+
 	if err = oauth2.ValidateBearerAuthorization(ctx, s.Config, r, requester, tokenString, oauth2.BearerAuthorization{
 		Audiences: s.Config.GetRFC7591ClientRegistrationEndpointAudiences(ctx),
 		Endpoint:  s.Config.GetRFC7591ClientRegistrationEndpointURL(ctx),

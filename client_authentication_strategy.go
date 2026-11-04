@@ -96,8 +96,8 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 	}
 
 	if client == nil {
-		if client, err = s.Store.GetClient(ctx, id); err != nil {
-			return nil, "", errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithWrap(err).WithDebugError(err))
+		if client, err = GetClient(ctx, s.Config, s.Store, id); err != nil {
+			return nil, "", errClientLookup(err, ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithWrap(err).WithDebugError(err))
 		}
 	}
 
@@ -186,6 +186,10 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 // DefaultClientAuthenticationStrategy accepts such an assertion by resolving the client from the 'client_id'
 // parameter first. See ClientAssertionClientSecretEncryptionDisabledProvider.
 func NewClientAssertion(ctx context.Context, strategyJWT jwt.Strategy, store ClientManager, assertion, assertionType string, strategy EndpointClientAuthStrategy) (a *ClientAssertion, err error) {
+	return newClientAssertionWithConfig(ctx, nil, strategyJWT, store, assertion, assertionType, strategy)
+}
+
+func newClientAssertionWithConfig(ctx context.Context, config any, strategyJWT jwt.Strategy, store ClientManager, assertion, assertionType string, strategy EndpointClientAuthStrategy) (a *ClientAssertion, err error) {
 	var token *jwt.Token
 
 	switch assertionType {
@@ -205,14 +209,14 @@ func NewClientAssertion(ctx context.Context, strategyJWT jwt.Strategy, store Cli
 		return &ClientAssertion{Assertion: assertion, Type: assertionType}, resolveJWTErrorToRFCError(err)
 	}
 
-	return newClientAssertionFromToken(ctx, store, token, assertion, assertionType)
+	return newClientAssertionFromToken(ctx, config, store, token, assertion, assertionType)
 }
 
 func (s *DefaultClientAuthenticationStrategy) newClientAssertion(ctx context.Context, id, assertion, assertionType string, strategy EndpointClientAuthStrategy) (a *ClientAssertion, err error) {
 	alg, ok := getClientSecretEncryptedJWTAlg(assertion)
 
 	if !ok || assertionType != consts.ClientAssertionTypeJWTBearer {
-		return NewClientAssertion(ctx, s.Config.GetJWTStrategy(ctx), s.Store, assertion, assertionType, strategy)
+		return newClientAssertionWithConfig(ctx, s.Config, s.Config.GetJWTStrategy(ctx), s.Store, assertion, assertionType, strategy)
 	}
 
 	a = &ClientAssertion{Assertion: assertion, Type: assertionType}
@@ -230,8 +234,8 @@ func (s *DefaultClientAuthenticationStrategy) newClientAssertion(ctx context.Con
 		token  *jwt.Token
 	)
 
-	if client, err = s.Store.GetClient(ctx, id); err != nil {
-		return a, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithWrap(err).WithDebugf("The client with id '%s' from the 'client_id' parameter could not be found.", id))
+	if client, err = GetClient(ctx, s.Config, s.Store, id); err != nil {
+		return a, errClientLookup(err, ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithWrap(err).WithDebugf("The client with id '%s' from the 'client_id' parameter could not be found.", id))
 	}
 
 	c, ok := client.(AuthenticationMethodClient)
@@ -243,10 +247,10 @@ func (s *DefaultClientAuthenticationStrategy) newClientAssertion(ctx context.Con
 		return a, resolveJWTErrorToRFCError(err)
 	}
 
-	return newClientAssertionFromToken(ctx, s.Store, token, assertion, assertionType)
+	return newClientAssertionFromToken(ctx, s.Config, s.Store, token, assertion, assertionType)
 }
 
-func newClientAssertionFromToken(ctx context.Context, store ClientManager, token *jwt.Token, assertion, assertionType string) (a *ClientAssertion, err error) {
+func newClientAssertionFromToken(ctx context.Context, config any, store ClientManager, token *jwt.Token, assertion, assertionType string) (a *ClientAssertion, err error) {
 	var (
 		id, method string
 		client     Client
@@ -258,7 +262,7 @@ func newClientAssertionFromToken(ctx context.Context, store ClientManager, token
 		}
 	}
 
-	if client, err = store.GetClient(ctx, id); err != nil {
+	if client, err = GetClient(ctx, config, store, id); err != nil {
 		return &ClientAssertion{Assertion: assertion, Type: assertionType, ID: id}, nil
 	}
 
@@ -655,4 +659,16 @@ func fmtHeaderValue(header map[string]any, key string) string {
 	default:
 		return fmt.Sprintf("%v", v)
 	}
+}
+
+// errClientLookup returns err unchanged when it is ErrTemporarilyUnavailable, such as when a Client ID Metadata
+// Document could not be retrieved transiently, and fallback otherwise.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1
+func errClientLookup(err error, fallback *RFC6749Error) error {
+	if errors.Is(err, ErrTemporarilyUnavailable) {
+		return err
+	}
+
+	return errorsx.WithStack(fallback)
 }

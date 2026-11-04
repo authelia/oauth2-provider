@@ -316,6 +316,8 @@ func (h *RedeemHandler) trust(ctx context.Context, token *josejwt.JSONWebToken, 
 		return nil, header, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The issuer '%s' is not trusted.", issuer))
 	case err != nil:
 		return nil, header, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	case trusted == nil:
+		return nil, header, errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The trusted issuer '%s' is nil.", issuer))
 	}
 
 	header = token.Headers[0]

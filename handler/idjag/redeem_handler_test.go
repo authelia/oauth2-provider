@@ -1201,3 +1201,20 @@ func excludeRedeemClient(store *storage.MemoryStore) {
 	trusted.Clients = []string{"someone-else"}
 	store.IDJAGTrustedIssuers[redeemIssuer] = trusted
 }
+
+func TestRedeemHandlerRejectsANilTrustedIssuer(t *testing.T) {
+	fixture := newRedeemFixture(t, false)
+	fixture.handler.Storage = nilTrustedIssuerStorage{RedeemStorage: fixture.store}
+
+	request := newRedeemRequest(fixture.store.Clients[redeemClient], fixture.sign(t, fixture.claims(), "", "", ""), nil)
+
+	require.ErrorIs(t, fixture.handler.HandleTokenEndpointRequest(t.Context(), request), oauth2.ErrServerError)
+}
+
+type nilTrustedIssuerStorage struct {
+	idjag.RedeemStorage
+}
+
+func (nilTrustedIssuerStorage) GetIDJAGTrustedIssuer(context.Context, string) (*oauth2.IDJAGTrustedIssuer, error) {
+	return nil, nil
+}

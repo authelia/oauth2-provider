@@ -675,7 +675,7 @@ func errExchangeTokenValidation(err error) error {
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.2
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-10.4
-func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, strategy oauth2.ScopeStrategy, original oauth2.Requester, role tokenRole, refresh bool) error {
+func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, store oauth2.ClientGetter, strategy oauth2.ScopeStrategy, original oauth2.Requester, role tokenRole, refresh bool) (err error) {
 	client := request.GetClient()
 	originalClientID := original.GetClient().GetID()
 	self := client.GetID() == originalClientID
@@ -711,8 +711,8 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 			return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The audience of %s does not include the OAuth 2.0 client.", role.hint()))
 		}
 
-		if !permitsExchange(original.GetClient(), client, resolveRequestedTokenType(ctx, request, config), role) {
-			return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 client is not permitted to exchange %s issued to client %s", role.hint(), originalClientID))
+		if err = validateExchangeOwner(ctx, request, config, store, original.GetClient(), role); err != nil {
+			return err
 		}
 	}
 
@@ -724,6 +724,17 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 }
 
 func permitsExchange(owner, client oauth2.Client, requested oauth2.RFC8693TokenType, role tokenRole) bool {
+	// A client resolved from a Client ID Metadata Document permits only the clients the operator lists for it, and no
+	// other client by default.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-5
+	if jwt.IsClientIDMetadataDocumentClient(owner) {
+		listed, ok := owner.(TokenExchangePermittedClientsClient)
+		if !ok || !slices.Contains(listed.GetTokenExchangePermittedClientIDs(), client.GetID()) {
+			return false
+		}
+	}
+
 	if role == tokenRoleActor {
 		if c, ok := owner.(ActorTokenExchangeClient); ok {
 			return c.GetActorTokenExchangePermitted(client, requested)
@@ -902,6 +913,44 @@ func allowsAuthorizationGrantIssuance(client oauth2.Client) bool {
 
 func errRefreshTokenIssuance() error {
 	return errors.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not permitted to be issued a refresh token via token exchange."))
+}
+
+func validateExchangeOwner(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, store oauth2.ClientGetter, original oauth2.Client, role tokenRole) (err error) {
+	var owner oauth2.Client
+
+	if owner, err = exchangeOwner(ctx, config, store, original); err != nil {
+		return err
+	}
+
+	if !permitsExchange(owner, request.GetClient(), resolveRequestedTokenType(ctx, request, config), role) {
+		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 client is not permitted to exchange %s issued to client %s", role.hint(), original.GetID()))
+	}
+
+	return nil
+}
+
+// exchangeOwner returns the client a token was issued to. A client which is not marked as resolved from a Client ID
+// Metadata Document, but has a Client Identifier URL as its identifier while the feature is enabled, may be a document
+// client a store rebuilt without oauth2.GetClient, so it is resolved again by oauth2.GetClient, where a registered
+// client takes precedence.
+func exchangeOwner(ctx context.Context, config any, store oauth2.ClientGetter, original oauth2.Client) (owner oauth2.Client, err error) {
+	if store == nil || jwt.IsClientIDMetadataDocumentClient(original) || !oauth2.IsClientIdentifierURL(original.GetID()) {
+		return original, nil
+	}
+
+	if provider, ok := config.(oauth2.ClientIDMetadataDocumentConfigProvider); !ok || provider.GetClientIDMetadataDocumentResolver(ctx) == nil {
+		return original, nil
+	}
+
+	if owner, err = oauth2.GetClient(ctx, config, store, original.GetID()); err == nil {
+		return owner, nil
+	}
+
+	if errors.Is(err, oauth2.ErrTemporarilyUnavailable) {
+		return nil, err
+	}
+
+	return nil, errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 client %s the token was issued to could not be resolved.", original.GetID()).WithWrap(err).WithDebugError(err))
 }
 
 func validateSubjectTokenScope(request oauth2.AccessRequester, granted []string) (err error) {

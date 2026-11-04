@@ -76,6 +76,7 @@ func TestCustomJWTTypeHandler_OmitsIDTokenKeyBindingConfirmation(t *testing.T) {
 
 	_, ok := claims[consts.ClaimConfirmation]
 	assert.False(t, ok, "the exchanged token carried a 'cnf' claim")
+	assert.Equal(t, "my-client", claims[consts.ClaimClientIdentifier])
 
 	typ, _ := token.Headers[0].ExtraHeaders[consts.JSONWebTokenHeaderType].(string)
 	assert.NotEqual(t, consts.JSONWebTokenTypeDPoPIDToken, typ, "the exchanged token carried a 'dpop+id_token' type")

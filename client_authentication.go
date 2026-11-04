@@ -18,6 +18,7 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -295,6 +296,12 @@ func (c *EndpointClientAuthJWTClient) GetID() string {
 // IsPublic returns true if the underlying client is a public client.
 func (c *EndpointClientAuthJWTClient) IsPublic() bool {
 	return c.client.IsPublic()
+}
+
+// IsClientIDMetadataDocumentClient returns true when the underlying client was resolved from a Client ID Metadata
+// Document.
+func (c *EndpointClientAuthJWTClient) IsClientIDMetadataDocumentClient() (is bool) {
+	return jwt.IsClientIDMetadataDocumentClient(c.client)
 }
 
 // GetClientSecretPlainText returns the underlying client's plaintext secret, used to verify 'client_secret_jwt'

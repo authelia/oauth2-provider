@@ -15,6 +15,7 @@ import (
 	"slices"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -378,9 +379,11 @@ func IsAuthorizationDetailsEnabled(ctx context.Context, config any) bool {
 }
 
 // ValidateAuthorizationDetailsTypes rejects details of a type the client may not request or of a type with no
-// configured handler. It does not call the type handler's Validate.
+// configured handler. It does not call the type handler's Validate. A client with no list of types may request every
+// type, except a client resolved from a Client ID Metadata Document, which may then request none.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9396#section-5
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-10
 func ValidateAuthorizationDetailsTypes(ctx context.Context, config any, client Client, details AuthorizationDetails) (err error) {
 	if len(details) == 0 {
 		return nil
@@ -392,6 +395,10 @@ func ValidateAuthorizationDetailsTypes(ctx context.Context, config any, client C
 
 	if c, ok := client.(AuthorizationDetailsClient); ok {
 		allowed = c.GetAuthorizationDetailsTypes()
+	}
+
+	if allowed == nil && jwt.IsClientIDMetadataDocumentClient(client) {
+		allowed = []string{}
 	}
 
 	for _, detail := range details {

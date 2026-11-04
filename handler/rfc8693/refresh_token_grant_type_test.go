@@ -5,6 +5,8 @@
 package rfc8693_test
 
 import (
+	"context"
+	"errors"
 	"net/url"
 	"testing"
 
@@ -88,4 +90,46 @@ func TestRefreshTokenRequiresTheRefreshTokenGrant(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRefreshTokenOfAClientIDMetadataDocumentClientIsRefusedBeforeResolving(t *testing.T) {
+	const id = "https://client.example.com/metadata.json"
+
+	cfg, store, strategy := newExchangeFixture(t)
+	cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693RefreshToken] = &DefaultTokenType{Name: consts.TokenTypeRFC8693RefreshToken}
+
+	resolver := &failingDocumentResolver{err: errors.New("the resolver is unavailable")}
+
+	cfg.ClientIDMetadataDocumentResolver = resolver
+	cfg.AuthorizationServerIdentificationIssuer = "https://as.example.com"
+
+	owner := &oauth2.DefaultClient{ID: id, GrantTypes: []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken}, Scopes: []string{consts.ScopeOpenID}}
+
+	original := newIssuedRequest(owner, "peter", []string{consts.ScopeOpenID}, oauth2.RefreshToken)
+
+	token, signature, err := strategy.GenerateRefreshToken(t.Context(), original)
+	require.NoError(t, err)
+	require.NoError(t, store.CreateRefreshTokenSession(t.Context(), signature, "", original.Sanitize(nil)))
+
+	request := newExchangeRequest(t, store.Clients["my-client"], newSpecSession(""), url.Values{
+		consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693RefreshToken},
+		consts.FormParameterSubjectToken:     {token},
+	})
+
+	err = newRefreshTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(t.Context(), request)
+
+	require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "was not issued to the OAuth 2.0 client")
+	assert.Equal(t, 0, resolver.calls)
+}
+
+type failingDocumentResolver struct {
+	err   error
+	calls int
+}
+
+func (r *failingDocumentResolver) ResolveClientIDMetadataDocumentClient(_ context.Context, _ string) (oauth2.Client, error) {
+	r.calls++
+
+	return nil, r.err
 }

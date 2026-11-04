@@ -6,7 +6,9 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -131,7 +133,7 @@ type IDJAGResourceKey struct {
 // RFC7523JTIs for RFC 7523 authorization grants, TokenExchangeJTIs for RFC 8693 custom JWT subject and actor
 // tokens, and IDJAGJTIs for ID-JAG redemptions. Expired 'jti' values, DPoP proof markers and DPoP nonces are no
 // longer recognised once they expire, and are removed by the next insert into the same map once the prune interval
-// has elapsed.
+// has elapsed. Expired Client ID Metadata Document records are removed by DeleteExpiredClientIDMetadataDocuments.
 //
 // AccessTokenRequestIDs indexes every access token signature issued for a request ID, as one request may own several
 // live access tokens (e.g. the OpenID Connect hybrid flow).
@@ -165,7 +167,8 @@ type MemoryStore struct {
 	IDJAGResources           map[IDJAGResourceKey]struct{}
 	IDJAGJTIs                map[JTIMarker]time.Time
 
-	ClientRegistrationCounts map[string]int64
+	ClientRegistrationCounts  map[string]int64
+	ClientIDMetadataDocuments map[string]StoreClientIDMetadataDocument
 
 	clientsMutex                  sync.RWMutex
 	authorizeCodesMutex           sync.RWMutex
@@ -185,6 +188,8 @@ type MemoryStore struct {
 	dpopNoncesMutex               sync.RWMutex
 	idjagMutex                    sync.RWMutex
 	clientRegistrationCountsMutex sync.Mutex
+
+	clientIDMetadataDocumentsMutex sync.RWMutex
 
 	clientAssertionJTIsPruneAt time.Time
 	rfc7523JTIsPruneAt         time.Time
@@ -228,7 +233,16 @@ func NewMemoryStore() *MemoryStore {
 		IDJAGResources:           make(map[IDJAGResourceKey]struct{}),
 		IDJAGJTIs:                make(map[JTIMarker]time.Time),
 		ClientRegistrationCounts: make(map[string]int64),
+
+		ClientIDMetadataDocuments: make(map[string]StoreClientIDMetadataDocument),
 	}
+}
+
+// StoreClientIDMetadataDocument is a serialized Client ID Metadata Document record and its expiry.
+type StoreClientIDMetadataDocument struct {
+	Data      []byte
+	Domain    string
+	ExpiresAt time.Time
 }
 
 type StoreAuthorizeCode struct {
@@ -390,6 +404,106 @@ func (s *MemoryStore) GetClient(_ context.Context, id string) (oauth2.Client, er
 		return nil, oauth2.ErrNotFound
 	}
 	return cl, nil
+}
+
+// GetClientIDMetadataDocument returns the stored record for id, or oauth2.ErrNotFound.
+func (s *MemoryStore) GetClientIDMetadataDocument(_ context.Context, id string) (record *oauth2.ClientIDMetadataDocumentRecord, err error) {
+	s.clientIDMetadataDocumentsMutex.RLock()
+	stored, ok := s.ClientIDMetadataDocuments[id]
+	s.clientIDMetadataDocumentsMutex.RUnlock()
+
+	if !ok {
+		return nil, oauth2.ErrNotFound
+	}
+
+	record = &oauth2.ClientIDMetadataDocumentRecord{}
+
+	if err = json.Unmarshal(stored.Data, record); err != nil {
+		return nil, err
+	}
+
+	return record, nil
+}
+
+// SetClientIDMetadataDocument creates or replaces the record for record.ID. The record is stored in its serialized
+// form, as a persistent store would.
+func (s *MemoryStore) SetClientIDMetadataDocument(_ context.Context, record *oauth2.ClientIDMetadataDocumentRecord) (err error) {
+	if record == nil {
+		return errors.New("the client id metadata document record is nil")
+	}
+
+	var data []byte
+
+	if data, err = json.Marshal(record); err != nil {
+		return err
+	}
+
+	s.clientIDMetadataDocumentsMutex.Lock()
+	defer s.clientIDMetadataDocumentsMutex.Unlock()
+
+	if s.ClientIDMetadataDocuments == nil {
+		s.ClientIDMetadataDocuments = map[string]StoreClientIDMetadataDocument{}
+	}
+
+	s.ClientIDMetadataDocuments[record.ID] = StoreClientIDMetadataDocument{Data: data, Domain: record.Domain, ExpiresAt: record.ExpiresAt}
+
+	return nil
+}
+
+// DeleteClientIDMetadataDocument removes the record for id.
+func (s *MemoryStore) DeleteClientIDMetadataDocument(_ context.Context, id string) (err error) {
+	s.clientIDMetadataDocumentsMutex.Lock()
+	defer s.clientIDMetadataDocumentsMutex.Unlock()
+
+	delete(s.ClientIDMetadataDocuments, id)
+
+	return nil
+}
+
+// DeleteExpiredClientIDMetadataDocuments removes every record whose ExpiresAt is before the given time.
+func (s *MemoryStore) DeleteExpiredClientIDMetadataDocuments(_ context.Context, before time.Time) (err error) {
+	s.clientIDMetadataDocumentsMutex.Lock()
+	defer s.clientIDMetadataDocumentsMutex.Unlock()
+
+	maps.DeleteFunc(s.ClientIDMetadataDocuments, func(_ string, stored StoreClientIDMetadataDocument) bool {
+		return stored.ExpiresAt.Before(before)
+	})
+
+	return nil
+}
+
+// CountClientIDMetadataDocuments returns the number of stored records whose Domain is domain.
+func (s *MemoryStore) CountClientIDMetadataDocuments(_ context.Context, domain string) (count int, err error) {
+	s.clientIDMetadataDocumentsMutex.RLock()
+	defer s.clientIDMetadataDocumentsMutex.RUnlock()
+
+	for _, stored := range s.ClientIDMetadataDocuments {
+		if stored.Domain == domain {
+			count++
+		}
+	}
+
+	return count, nil
+}
+
+// RevokeClientIDMetadataDocumentRefreshTokens deactivates every refresh token issued to the client with the identifier
+// id.
+func (s *MemoryStore) RevokeClientIDMetadataDocumentRefreshTokens(_ context.Context, id string) (err error) {
+	s.refreshTokensMutex.Lock()
+	defer s.refreshTokensMutex.Unlock()
+
+	for signature, rel := range s.RefreshTokens {
+		if rel.Requester == nil {
+			continue
+		}
+
+		if client := rel.GetClient(); client != nil && client.GetID() == id {
+			rel.active = false
+			s.RefreshTokens[signature] = rel
+		}
+	}
+
+	return nil
 }
 
 // CreateClient stores the client, returning an error when a client with the same id already exists.

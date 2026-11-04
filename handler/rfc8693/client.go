@@ -107,6 +107,18 @@ type AuthorizationGrantIssuanceClient interface {
 	GetAllowTokenExchangeAuthorizationGrant() (allow bool)
 }
 
+// TokenExchangePermittedClientsClient is an optional interface a client may implement to list the clients permitted to
+// exchange a token issued to it. A client resolved from a Client ID Metadata Document permits only the clients it lists,
+// and none when it does not implement this interface. The list of such a client is never taken from its document, so
+// it is empty unless the operator sets it, for example with cimd.Config.Filter.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-5
+type TokenExchangePermittedClientsClient interface {
+	// GetTokenExchangePermittedClientIDs returns the identifiers of the clients permitted to exchange a token issued
+	// to this client.
+	GetTokenExchangePermittedClientIDs() (ids []string)
+}
+
 // ActorTokenPolicyClient is an optional Client subset that controls actor-token authorization for RFC 8693 delegation.
 // When the request supplies an actor_token but the subject_token carries no 'may_act' (§4.4) claim authorizing
 // delegation, the authorization server has no in-token signal that the actor is permitted to act on behalf of the

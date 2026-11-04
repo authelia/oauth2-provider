@@ -13,6 +13,7 @@ import (
 
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jarm"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -98,6 +99,8 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 			handler.WriteParameters(ctx, request, parameters)
 		}
 	}
+
+	setClientIDMetadataDocumentIssuer(ctx, h.Config, request, rm, parameters)
 
 	switch rm {
 	case ResponseModeFormPost, ResponseModeFormPostJWT:
@@ -188,6 +191,35 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeErrorFieldResponseJSON(
 
 	rw.WriteHeader(rfc.CodeField)
 	_, _ = rw.Write(data)
+}
+
+// setClientIDMetadataDocumentIssuer sets the RFC 9207 'iss' parameter of an authorization response to a client resolved
+// from a Client ID Metadata Document when no ResponseModeParameterHandler set it. A JWT response mode carries the
+// issuer in the response JWT instead.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-7
+func setClientIDMetadataDocumentIssuer(ctx context.Context, config any, request AuthorizeRequester, rm ResponseModeType, parameters url.Values) {
+	switch rm {
+	case ResponseModeQueryJWT, ResponseModeFragmentJWT, ResponseModeFormPostJWT:
+		return
+	}
+
+	if parameters.Has(consts.FormParameterIssuer) {
+		return
+	}
+
+	if cimd, ok := config.(ClientIDMetadataDocumentConfigProvider); !ok || cimd.GetClientIDMetadataDocumentResolver(ctx) == nil {
+		return
+	}
+
+	provider, ok := config.(AuthorizationServerIssuerIdentificationProvider)
+	if !ok {
+		return
+	}
+
+	if issuer := provider.GetAuthorizationServerIdentificationIssuer(ctx); len(issuer) != 0 && jwt.IsClientIDMetadataDocumentClient(request.GetClient()) {
+		parameters.Set(consts.FormParameterIssuer, issuer)
+	}
 }
 
 // RFC9207ResponseModeParameterHandler adds the RFC9207

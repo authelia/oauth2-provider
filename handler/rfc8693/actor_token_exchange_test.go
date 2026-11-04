@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/cimd"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -151,6 +152,92 @@ func TestSpec_2_1_SubjectToken_ForeignTokenStillGatedByExchangePolicy(t *testing
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 	assert.ErrorContains(t, oauth2.ErrorToDebugRFC6749Error(err), "The OAuth 2.0 client is not permitted to exchange a subject token issued to client subject-token-client")
+}
+
+func TestSpec_5_ForeignTokenOfADocumentClientIsGatedByItsPermittedClients(t *testing.T) {
+	const id = "https://client.example.com/cimd.json"
+
+	registered := func(permitted ...string) *oauth2.DefaultRegisteredClient {
+		return &oauth2.DefaultRegisteredClient{
+			DefaultClient: &oauth2.DefaultClient{
+				ID:         id,
+				GrantTypes: []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+				Scopes:     []string{consts.ScopeOpenID, consts.ScopeOffline},
+			},
+			TokenExchangePermittedClientIDs: permitted,
+		}
+	}
+
+	originals := []struct {
+		name     string
+		original oauth2.Client
+		subject  bool
+		actor    bool
+	}{
+		{name: "ShouldRefuseADocumentClientPermittingNoClient", original: &cimd.Client{DefaultRegisteredClient: registered()}},
+		{name: "ShouldRefuseADocumentClientPermittingAnotherClient", original: &cimd.Client{DefaultRegisteredClient: registered("other")}},
+		{name: "ShouldAllowADocumentClientPermittingTheClient", original: &cimd.Client{DefaultRegisteredClient: registered("exchange-client")}, subject: true, actor: true},
+		{name: "ShouldRefuseACustomDocumentClientPermittingNoClient", original: &documentRegisteredClient{DefaultRegisteredClient: registered()}},
+		{name: "ShouldRefuseADocumentClientWhichCanNotListClients", original: &documentClient{DefaultClient: registered().DefaultClient}},
+		{name: "ShouldRefuseADocumentClientListingTheClientWhosePolicyRefuses", original: &documentPolicyClient{rfc8693Client: &rfc8693Client{DefaultClient: registered().DefaultClient}, ids: []string{"exchange-client"}}},
+		{name: "ShouldApplyTheOwnerRulesToADocumentClientListingTheClientWithoutAPolicy", original: &documentListingClient{DefaultClient: registered().DefaultClient, ids: []string{"exchange-client"}}, subject: true},
+		{name: "ShouldApplyTheOwnerRulesToARegisteredClientPermittingAnyClient", original: registered(), subject: true},
+		{name: "ShouldRefuseARegisteredClientPermittingAnotherClient", original: registered("other")},
+	}
+
+	paths := []struct {
+		name  string
+		role  string
+		actor bool
+		form  func(t *testing.T, strategy hoauth2.CoreStrategy, store *storage.MemoryStore, original oauth2.Client) url.Values
+	}{
+		{
+			name: "AccessTokenSubject",
+			role: "a subject token",
+			form: func(t *testing.T, strategy hoauth2.CoreStrategy, store *storage.MemoryStore, original oauth2.Client) url.Values {
+				return url.Values{
+					consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693AccessToken},
+					consts.FormParameterSubjectToken:     {createOwnedAccessToken(t, strategy, store, original, "alice", consts.ScopeOpenID)},
+				}
+			},
+		},
+		{
+			name:  "AccessTokenActor",
+			role:  "an actor token",
+			actor: true,
+			form: func(t *testing.T, strategy hoauth2.CoreStrategy, store *storage.MemoryStore, original oauth2.Client) url.Values {
+				return url.Values{
+					consts.FormParameterActorTokenType:   {consts.TokenTypeRFC8693AccessToken},
+					consts.FormParameterActorToken:       {createOwnedAccessToken(t, strategy, store, original, "bob")},
+					consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693IDToken},
+					consts.FormParameterSubjectToken:     {"opaque-subject-token"},
+				}
+			},
+		},
+	}
+
+	for _, path := range paths {
+		for _, tc := range originals {
+			t.Run(path.name+"/"+tc.name, func(t *testing.T) {
+				cfg, store, strategy := newExchangeFixture(t)
+
+				store.Clients[id] = tc.original
+
+				req := newExchangeRequest(t, newConfidentialClient(), newSpecSession("alice"), path.form(t, strategy, store, tc.original))
+
+				err := newAccessTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(context.Background(), req)
+
+				if (path.actor && tc.actor) || (!path.actor && tc.subject) {
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+					return
+				}
+
+				require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+				assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "The OAuth 2.0 client is not permitted to exchange "+path.role+" issued to client "+id)
+			})
+		}
+	}
 }
 
 func TestSpec_2_1_ActorToken_GrantedScopesDoNotConstrainRequestedScopes(t *testing.T) {
@@ -380,6 +467,19 @@ func createExchangeRefreshToken(t *testing.T, strategy hoauth2.CoreStrategy, sto
 	return token
 }
 
+func createOwnedAccessToken(t *testing.T, strategy hoauth2.CoreStrategy, store *storage.MemoryStore, client oauth2.Client, subject string, scopes ...string) string {
+	t.Helper()
+
+	ctx := context.Background()
+	request := newIssuedRequest(client, subject, scopes, oauth2.AccessToken)
+
+	token, signature, err := strategy.GenerateAccessToken(ctx, request)
+	require.NoError(t, err)
+	require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request.Sanitize(nil)))
+
+	return token
+}
+
 func newIssuedRequest(client oauth2.Client, subject string, scopes []string, key oauth2.TokenType) *oauth2.AccessRequest {
 	request := newUnaddressedRequest(client, subject, scopes, key)
 
@@ -411,3 +511,40 @@ func newUnaddressedRequest(client oauth2.Client, subject string, scopes []string
 		},
 	}
 }
+
+type documentPolicyClient struct {
+	*rfc8693Client
+
+	ids []string
+}
+
+func (c *documentPolicyClient) IsClientIDMetadataDocumentClient() bool { return true }
+
+func (c *documentPolicyClient) GetTokenExchangePermittedClientIDs() []string { return c.ids }
+
+type documentListingClient struct {
+	*oauth2.DefaultClient
+
+	ids []string
+}
+
+func (c *documentListingClient) IsClientIDMetadataDocumentClient() bool { return true }
+
+func (c *documentListingClient) GetTokenExchangePermittedClientIDs() []string { return c.ids }
+
+var (
+	_ TokenExchangePermittedClientsClient = (*oauth2.DefaultRegisteredClient)(nil)
+	_ TokenExchangePermittedClientsClient = (*cimd.Client)(nil)
+)
+
+type documentRegisteredClient struct {
+	*oauth2.DefaultRegisteredClient
+}
+
+func (c *documentRegisteredClient) IsClientIDMetadataDocumentClient() bool { return true }
+
+type documentClient struct {
+	*oauth2.DefaultClient
+}
+
+func (c *documentClient) IsClientIDMetadataDocumentClient() bool { return true }

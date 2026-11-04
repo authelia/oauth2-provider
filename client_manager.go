@@ -29,11 +29,16 @@ type ClientRegistrationManager interface {
 	DeleteClient(ctx context.Context, id string) (err error)
 }
 
+// ClientGetter loads clients by their ID. It is the subset of ClientManager which GetClient needs.
+type ClientGetter interface {
+	// GetClient loads the client by its ID. It returns an error matching ErrNotFound when the client does not exist,
+	// or another error when the lookup failed.
+	GetClient(ctx context.Context, id string) (client Client, err error)
+}
+
 // ClientManager defines the (persistent) manager interface for clients.
 type ClientManager interface {
-	// GetClient loads the client by its ID or returns an error
-	// if the client does not exist or another error occurred.
-	GetClient(ctx context.Context, id string) (client Client, err error)
+	ClientGetter
 
 	// ClientAssertionJWTValid returns an error if the JTI is known for the client or the DB check failed and nil if
 	// the JTI is not known. A JTI is only unique among the JWTs produced by one issuer per RFC 7519 Section 4.1.7, and

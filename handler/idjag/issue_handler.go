@@ -47,7 +47,9 @@ const (
 // them from the ID token claims of the session the refresh token was issued for (Section 4.3.3).
 //
 // It accepts the RFC 9396 'authorization_details' parameter and grants the requested details whose type the
-// relationship permits. For a refresh token 'subject_token' whose 'audience' identifies this server, the
+// relationship permits. When the audience is this server the details are first validated by the local type handlers
+// against the types the client may request. For another server they have that server's meaning, so the relationship
+// alone decides, and the IdP needs no type handler for them (Section 4.3.3). For a refresh token 'subject_token' whose 'audience' identifies this server, the
 // rfc8693.RefreshTokenTypeHandler first replaces the requested details with those the details granted to the refresh
 // token assign, and rejects a request they do not justify.
 //
@@ -191,8 +193,10 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 	}
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-5
-	if err = oauth2.ValidateAuthorizationDetails(ctx, h.Config, request, request.GetRequestedAuthorizationDetails()); err != nil {
-		return err
+	if relationship.Issuer == issuer {
+		if err = oauth2.ValidateAuthorizationDetails(ctx, h.Config, request, request.GetRequestedAuthorizationDetails()); err != nil {
+			return err
+		}
 	}
 
 	grantAuthorizationDetails(request, relationship)
@@ -244,6 +248,13 @@ func (h *IssueHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessReque
 // CanHandleTokenEndpointRequest implements oauth2.TokenEndpointHandler.
 func (h *IssueHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) bool {
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
+}
+
+// ValidatesAuthorizationDetailsTypes implements oauth2.AuthorizationDetailsTypeValidatingHandler. The requested
+// authorization details of an ID-JAG request are validated locally only when the audience is this server, as for
+// another server they have that server's meaning (Section 4.3.3).
+func (h *IssueHandler) ValidatesAuthorizationDetailsTypes(ctx context.Context, request oauth2.AccessRequester) bool {
+	return rfc8693.IsIDJAGRequest(ctx, request, h.Config)
 }
 
 // CanHandleAuthorizationDetails implements oauth2.AuthorizationDetailsTokenEndpointHandler. It accepts the RFC 9396

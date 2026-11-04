@@ -20,6 +20,7 @@ const (
 	issueAudienceTyped = "urn:example:typed"
 	issueAudienceNone  = "urn:example:none"
 	issueOtherType     = "other_type"
+	issueForeignType   = "chat_read"
 
 	issueMemberFormat       = "format"
 	issueMemberNameIDFormat = "nameid_format"

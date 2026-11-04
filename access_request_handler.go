@@ -74,7 +74,7 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 	if clientErr == nil {
 		var details AuthorizationDetails
 
-		if details, err = ParseRequestedAuthorizationDetails(ctx, f.Config, requester.GetClient(), r.PostForm); err != nil {
+		if details, err = parseRequestedAuthorizationDetails(ctx, f.Config, requester.GetClient(), r.PostForm, !f.validatesAuthorizationDetailsTypes(ctx, requester)); err != nil {
 			return requester, err
 		}
 
@@ -131,6 +131,16 @@ func hasClientCredentials(r *http.Request, form url.Values) bool {
 
 	for _, parameter := range []string{consts.FormParameterClientSecret, consts.FormParameterClientAssertion, consts.FormParameterClientAssertionType} {
 		if len(form.Get(parameter)) != 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (f *Fosite) validatesAuthorizationDetailsTypes(ctx context.Context, requester AccessRequester) bool {
+	for _, handler := range f.Config.GetTokenEndpointHandlers(ctx) {
+		if h, ok := handler.(AuthorizationDetailsTypeValidatingHandler); ok && handler.CanHandleTokenEndpointRequest(ctx, requester) && h.ValidatesAuthorizationDetailsTypes(ctx, requester) {
 			return true
 		}
 	}

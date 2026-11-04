@@ -592,15 +592,23 @@ func TestIssueHandlerAuthenticationRequirements(t *testing.T) {
 func TestIssueHandlerAuthorizationDetails(t *testing.T) {
 	payment := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{redeemActionInitiate}}
 	other := oauth2.AuthorizationDetail{Type: issueOtherType, Actions: []string{redeemActionRead}}
+	foreign := oauth2.AuthorizationDetail{Type: issueForeignType, Actions: []string{redeemActionRead}}
 
 	testCases := []struct {
 		name      string
 		audience  string
+		types     []string
 		requested oauth2.AuthorizationDetails
 		expected  oauth2.AuthorizationDetails
 		claim     bool
 		response  bool
+		err       error
 	}{
+		// Section 4.3.3: for another server the details have that server's meaning, so policy evaluates them.
+		{name: "ShouldGrantATypeWithoutALocalHandlerForAnotherServer", audience: redeemAudience, requested: oauth2.AuthorizationDetails{foreign}, expected: oauth2.AuthorizationDetails{foreign}, claim: true, response: true},
+		{name: "ShouldGrantATypeOutsideTheClientTypesForAnotherServer", audience: redeemAudience, types: []string{internal.AuthorizationDetailsTypePaymentInitiation}, requested: oauth2.AuthorizationDetails{foreign}, expected: oauth2.AuthorizationDetails{foreign}, claim: true, response: true},
+		{name: "ShouldRejectATypeWithoutALocalHandlerForThisServer", audience: redeemIssuer, requested: oauth2.AuthorizationDetails{foreign}, err: oauth2.ErrInvalidAuthorizationDetails},
+		{name: "ShouldRejectATypeOutsideTheClientTypesForThisServer", audience: redeemIssuer, types: []string{issueOtherType}, requested: oauth2.AuthorizationDetails{payment}, err: oauth2.ErrInvalidAuthorizationDetails},
 		{name: "ShouldGrantEveryTypeWhenUnrestricted", audience: redeemAudience, requested: oauth2.AuthorizationDetails{payment, other}, expected: oauth2.AuthorizationDetails{payment, other}, claim: true, response: true},
 		// Section 4.3.3: the IdP MAY filter authorization details based on policy.
 		{name: "ShouldDropTypesTheRelationshipDoesNotPermit", audience: issueAudienceTyped, requested: oauth2.AuthorizationDetails{payment, other}, expected: oauth2.AuthorizationDetails{payment}, claim: true, response: true},
@@ -617,9 +625,20 @@ func TestIssueHandlerAuthorizationDetails(t *testing.T) {
 			request.RequestedAudience = oauth2.Arguments{tc.audience}
 			request.SetRequestedAuthorizationDetails(tc.requested)
 
+			if tc.types != nil {
+				request.Client = &internal.AuthorizationDetailsClient{DefaultClient: request.Client.(*oauth2.DefaultClient), AuthorizationDetailsTypes: tc.types}
+			}
+
 			response := oauth2.NewAccessResponse()
 
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
+
+			if tc.err != nil {
+				require.ErrorIs(t, handler.PopulateTokenEndpointResponse(t.Context(), request, response), tc.err)
+
+				return
+			}
+
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), request, response)))
 
 			_, claims := parseIssued(t, response.GetAccessToken(), key)
@@ -725,6 +744,12 @@ func newIssueFixture(t *testing.T, dpop bool) (*idjag.IssueHandler, *oauth2.Conf
 
 	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: issueClient, Audience: issueAudienceTyped}] = typed
 	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: issueClient, Audience: issueAudienceNone}] = none
+
+	self := relationship
+	self.Issuer = redeemIssuer
+
+	store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: issueClient, Audience: redeemIssuer}] = self
+	store.IDJAGAudienceSubjects[storage.IDJAGAudienceSubjectKey{Issuer: redeemIssuer, Subject: issueSubject}] = issueMapped
 
 	return &idjag.IssueHandler{
 		Config:   cfg,

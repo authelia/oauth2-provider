@@ -67,6 +67,7 @@ const (
 	idjagStatus            = "status"
 	idjagDetailsInitiate   = `[{"type":"payment_initiation","actions":["initiate"]}]`
 	idjagDetailsStatus     = `[{"type":"payment_initiation","actions":["status"]}]`
+	idjagDetailsForeign    = `[{"type":"chat_read","actions":["read"]}]`
 	idjagAccount           = "account-1"
 	idjagLargeNumber       = "12345678901234567890"
 )

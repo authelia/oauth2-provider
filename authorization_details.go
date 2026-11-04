@@ -442,6 +442,10 @@ func ValidateAuthorizationDetails(ctx context.Context, config any, request Reque
 // the caller validates the details with ValidateAuthorizationDetails or assigns them with AssignAuthorizationDetails.
 // It returns nil without reading the parameter when no handlers are configured.
 func ParseRequestedAuthorizationDetails(ctx context.Context, config any, client Client, form url.Values) (details AuthorizationDetails, err error) {
+	return parseRequestedAuthorizationDetails(ctx, config, client, form, true)
+}
+
+func parseRequestedAuthorizationDetails(ctx context.Context, config any, client Client, form url.Values, types bool) (details AuthorizationDetails, err error) {
 	if !IsAuthorizationDetailsEnabled(ctx, config) {
 		return nil, nil
 	}
@@ -452,6 +456,10 @@ func ParseRequestedAuthorizationDetails(ctx context.Context, config any, client 
 
 	if err = CheckAuthorizationDetailsMaxObjects(ctx, config, details); err != nil {
 		return nil, err
+	}
+
+	if !types {
+		return details, nil
 	}
 
 	if err = ValidateAuthorizationDetailsTypes(ctx, config, client, details); err != nil {

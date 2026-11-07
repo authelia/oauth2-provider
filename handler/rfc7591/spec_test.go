@@ -229,7 +229,7 @@ func TestSpec_OIDCDCR_2_DefaultTokenEndpointAuthMethod(t *testing.T) {
 
 // §2: 'application_type' defaults to 'web'.
 func TestSpec_OIDCDCR_2_DefaultApplicationTypeIsWeb(t *testing.T) {
-	config := &oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.DefaultAudienceStrategy}
+	config := withTestCapabilities(&oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.DefaultAudienceStrategy})
 	validator := NewLocalValidator(config)
 
 	metadata := &oauth2.ClientRegistrationMetadata{
@@ -245,7 +245,7 @@ func TestSpec_OIDCDCR_2_DefaultApplicationTypeIsWeb(t *testing.T) {
 func TestSpec_OIDCDCR_2_WebClientMustNotTargetLoopback(t *testing.T) {
 	ctx := context.Background()
 
-	config := &oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.DefaultAudienceStrategy}
+	config := withTestCapabilities(&oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.DefaultAudienceStrategy})
 	validator := NewLocalValidator(config)
 
 	loopback := []struct {
@@ -281,7 +281,7 @@ func TestSpec_OIDCDCR_2_WebClientMustNotTargetLoopback(t *testing.T) {
 func TestSpec_RFC7591_2_OmittedGrantTypesDefaultToAuthorizationCode(t *testing.T) {
 	ctx := context.Background()
 
-	config := &oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.DefaultAudienceStrategy}
+	config := withTestCapabilities(&oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.DefaultAudienceStrategy})
 	validator := NewLocalValidator(config)
 
 	err := validator.ValidateClientRegistrationMetadata(ctx, nil, &oauth2.ClientRegistrationMetadata{})

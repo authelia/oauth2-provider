@@ -69,6 +69,34 @@ func (mr *MockTokenEndpointHandlerMockRecorder) CanSkipClientAuth(ctx, request a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CanSkipClientAuth", reflect.TypeOf((*MockTokenEndpointHandler)(nil).CanSkipClientAuth), ctx, request)
 }
 
+// CodeChallengeMethodsSupported mocks base method.
+func (m *MockTokenEndpointHandler) CodeChallengeMethodsSupported(ctx context.Context) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CodeChallengeMethodsSupported", ctx)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// CodeChallengeMethodsSupported indicates an expected call of CodeChallengeMethodsSupported.
+func (mr *MockTokenEndpointHandlerMockRecorder) CodeChallengeMethodsSupported(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CodeChallengeMethodsSupported", reflect.TypeOf((*MockTokenEndpointHandler)(nil).CodeChallengeMethodsSupported), ctx)
+}
+
+// GrantTypesSupported mocks base method.
+func (m *MockTokenEndpointHandler) GrantTypesSupported(ctx context.Context) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GrantTypesSupported", ctx)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// GrantTypesSupported indicates an expected call of GrantTypesSupported.
+func (mr *MockTokenEndpointHandlerMockRecorder) GrantTypesSupported(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantTypesSupported", reflect.TypeOf((*MockTokenEndpointHandler)(nil).GrantTypesSupported), ctx)
+}
+
 // HandleTokenEndpointRequest mocks base method.
 func (m *MockTokenEndpointHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) error {
 	m.ctrl.T.Helper()
@@ -83,6 +111,20 @@ func (mr *MockTokenEndpointHandlerMockRecorder) HandleTokenEndpointRequest(ctx, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleTokenEndpointRequest", reflect.TypeOf((*MockTokenEndpointHandler)(nil).HandleTokenEndpointRequest), ctx, request)
 }
 
+// IDTokenSigningAlgValuesSupported mocks base method.
+func (m *MockTokenEndpointHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IDTokenSigningAlgValuesSupported", ctx)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// IDTokenSigningAlgValuesSupported indicates an expected call of IDTokenSigningAlgValuesSupported.
+func (mr *MockTokenEndpointHandlerMockRecorder) IDTokenSigningAlgValuesSupported(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IDTokenSigningAlgValuesSupported", reflect.TypeOf((*MockTokenEndpointHandler)(nil).IDTokenSigningAlgValuesSupported), ctx)
+}
+
 // PopulateTokenEndpointResponse mocks base method.
 func (m *MockTokenEndpointHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) error {
 	m.ctrl.T.Helper()
@@ -95,4 +137,18 @@ func (m *MockTokenEndpointHandler) PopulateTokenEndpointResponse(ctx context.Con
 func (mr *MockTokenEndpointHandlerMockRecorder) PopulateTokenEndpointResponse(ctx, request, response any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PopulateTokenEndpointResponse", reflect.TypeOf((*MockTokenEndpointHandler)(nil).PopulateTokenEndpointResponse), ctx, request, response)
+}
+
+// RFC8693TokenTypesSupported mocks base method.
+func (m *MockTokenEndpointHandler) RFC8693TokenTypesSupported(ctx context.Context) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RFC8693TokenTypesSupported", ctx)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// RFC8693TokenTypesSupported indicates an expected call of RFC8693TokenTypesSupported.
+func (mr *MockTokenEndpointHandlerMockRecorder) RFC8693TokenTypesSupported(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RFC8693TokenTypesSupported", reflect.TypeOf((*MockTokenEndpointHandler)(nil).RFC8693TokenTypesSupported), ctx)
 }

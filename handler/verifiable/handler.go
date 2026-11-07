@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	draftScope         = "userinfo_credential_draft_00"
 	draftNonceField    = "c_nonce_draft_00"
 	draftNonceExpField = "c_nonce_expires_in_draft_00"
 )
@@ -56,6 +55,11 @@ func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oau
 	return nil
 }
 
+// IsVerifiableCredentialsHandler marks this handler as the OpenID for Verifiable Credentials userinfo handler.
+//
+// See: https://openid.net/specs/openid-connect-userinfo-vc-1_0.html#section-2
+func (c *Handler) IsVerifiableCredentialsHandler() {}
+
 // CanSkipClientAuth always returns false, client authentication is never skipped by this handler.
 func (c *Handler) CanSkipClientAuth(context.Context, oauth2.AccessRequester) (skip bool) {
 	return false
@@ -64,7 +68,35 @@ func (c *Handler) CanSkipClientAuth(context.Context, oauth2.AccessRequester) (sk
 // CanHandleTokenEndpointRequest reports whether the request was granted both the 'openid' and
 // 'userinfo_credential_draft_00' scopes.
 func (c *Handler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) (handle bool) {
-	return request.GetGrantedScopes().Has(consts.ScopeOpenID, draftScope)
+	return request.GetGrantedScopes().Has(consts.ScopeOpenID, consts.ScopeUserinfoCredentialDraft00)
+}
+
+// GrantTypesSupported returns nil because the handler only augments another grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *Handler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *Handler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *Handler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns nil because the handler does not issue RFC 8693 tokens.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *Handler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return nil
 }
 
 var (

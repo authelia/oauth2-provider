@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"context"
 	"net/url"
 	"testing"
 	"time"
@@ -19,6 +20,12 @@ import (
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
 )
+
+func TestResourceOwnerPasswordCredentialsGrantHandlerSupported(t *testing.T) {
+	h := &ResourceOwnerPasswordCredentialsGrantHandler{}
+
+	assert.Equal(t, []string{consts.GrantTypeResourceOwnerPasswordCredentials}, h.GrantTypesSupported(context.Background()))
+}
 
 func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 	testCases := []struct {

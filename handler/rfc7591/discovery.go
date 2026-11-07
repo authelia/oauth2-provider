@@ -7,10 +7,10 @@ package rfc7591
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -97,27 +97,61 @@ func (d *jwksURIDiscovery) resolve(ctx context.Context, config oauth2.HTTPClient
 	}
 }
 
+// discoverJWKSURI returns the 'jwks_uri' of the issuer from the first discovery location, the RFC 8414 form then the
+// OpenID Connect Discovery 1.0 form, whose document names the issuer and a 'jwks_uri'. A location which fails, answers
+// with another status or names another issuer does not stop the next one being tried.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-5
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation
 func discoverJWKSURI(ctx context.Context, config oauth2.HTTPClientProvider, issuer string) (uri string, err error) {
-	location := strings.TrimSuffix(issuer, "/") + consts.WellKnownOpenIDConfiguration
+	var locations [2]string
 
-	var req *retryablehttp.Request
+	if locations[0], err = oauth2.WellKnownURLInsert(issuer, consts.WellKnownOpenIDConfigurationSuffix); err != nil {
+		return "", fmt.Errorf("unable to determine the discovery location of the issuer '%s': %w", issuer, err)
+	}
+
+	if locations[1], err = oauth2.WellKnownURLAppend(issuer, consts.WellKnownOpenIDConfigurationSuffix); err != nil {
+		return "", fmt.Errorf("unable to determine the discovery location of the issuer '%s': %w", issuer, err)
+	}
+
+	count := 2
+	if locations[0] == locations[1] {
+		count = 1
+	}
+
+	errs := make([]error, 0, count)
+
+	for i := 0; i < count; i++ {
+		if uri, err = discoverJWKSURIAt(ctx, config, issuer, locations[i]); err == nil {
+			return uri, nil
+		}
+
+		errs = append(errs, err)
+	}
+
+	return "", errors.Join(errs...)
+}
+
+func discoverJWKSURIAt(ctx context.Context, config oauth2.HTTPClientProvider, issuer, location string) (uri string, err error) {
+	var (
+		req      *retryablehttp.Request
+		response *http.Response
+	)
 
 	if req, err = retryablehttp.NewRequestWithContext(ctx, http.MethodGet, location, nil); err != nil {
-		return "", fmt.Errorf("unable to create the discovery request for the issuer '%s': %w", issuer, err)
+		return "", fmt.Errorf("unable to create the discovery request for the issuer '%s' at '%s': %w", issuer, location, err)
 	}
 
 	req.Header.Set(consts.HeaderAccept, consts.MediaTypeApplicationJSON)
 
-	var response *http.Response
-
 	if response, err = oauth2.HTTPClientWithoutRedirects(config.GetHTTPClient(ctx)).Do(req); err != nil {
-		return "", fmt.Errorf("unable to fetch the discovery metadata of the issuer '%s': %w", issuer, err)
+		return "", fmt.Errorf("unable to fetch the discovery metadata of the issuer '%s' from '%s': %w", issuer, location, err)
 	}
 
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("the discovery metadata of the issuer '%s' returned the status code %d", issuer, response.StatusCode)
+		return "", fmt.Errorf("the discovery metadata of the issuer '%s' at '%s' returned the status code %d", issuer, location, response.StatusCode)
 	}
 
 	var metadata struct {
@@ -126,15 +160,15 @@ func discoverJWKSURI(ctx context.Context, config oauth2.HTTPClientProvider, issu
 	}
 
 	if err = json.NewDecoder(io.LimitReader(response.Body, oauth2.MaxFetchedBodyBytes)).Decode(&metadata); err != nil {
-		return "", fmt.Errorf("unable to decode the discovery metadata of the issuer '%s': %w", issuer, err)
+		return "", fmt.Errorf("unable to decode the discovery metadata of the issuer '%s' at '%s': %w", issuer, location, err)
 	}
 
 	if metadata.Issuer != issuer {
-		return "", fmt.Errorf("the discovery metadata of the issuer '%s' names the issuer '%s'", issuer, metadata.Issuer)
+		return "", fmt.Errorf("the discovery metadata of the issuer '%s' at '%s' names the issuer '%s'", issuer, location, metadata.Issuer)
 	}
 
 	if metadata.JSONWebKeysURI == "" {
-		return "", fmt.Errorf("the discovery metadata of the issuer '%s' has no 'jwks_uri'", issuer)
+		return "", fmt.Errorf("the discovery metadata of the issuer '%s' at '%s' has no 'jwks_uri'", issuer, location)
 	}
 
 	return metadata.JSONWebKeysURI, nil

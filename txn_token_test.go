@@ -59,7 +59,7 @@ func TestTxnTokenIsNotAcceptedAsClientAssertion(t *testing.T) {
 	config := &oauth2.Config{
 		JWKSFetcherStrategy:          oauth2.NewDefaultJWKSFetcherStrategy(),
 		AllowedJWTAssertionAudiences: []string{tokenURL},
-		IDTokenIssuer:                "https://op.example.com",
+		Issuer:                       "https://op.example.com",
 	}
 
 	issuer, err := jwt.NewDefaultIssuer(jose.JSONWebKey{Key: key, KeyID: keyID, Algorithm: "RS256", Use: "sig"})

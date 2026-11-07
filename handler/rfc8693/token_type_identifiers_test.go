@@ -32,9 +32,9 @@ func TestTokenTypeIdentifiersAreReservedFromClientIdentifierURLs(t *testing.T) {
 			resolver := &documentResolver{}
 
 			config := &oauth2.Config{
-				AuthorizationServerIdentificationIssuer: "https://as.example.com",
-				ClientIDMetadataDocumentResolver:        resolver,
-				RFC8693TokenTypes:                       map[string]oauth2.RFC8693TokenType{tc.tokenType.GetName(t.Context()): tc.tokenType},
+				Issuer:                           "https://as.example.com",
+				ClientIDMetadataDocumentResolver: resolver,
+				RFC8693TokenTypes:                map[string]oauth2.RFC8693TokenType{tc.tokenType.GetName(t.Context()): tc.tokenType},
 			}
 
 			client, err := oauth2.GetClient(t.Context(), config, storage.NewMemoryStore(), id)

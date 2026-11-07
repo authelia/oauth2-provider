@@ -71,7 +71,7 @@ func TestSpec_5_RebuiltDocumentClientIsResolvedAgain(t *testing.T) {
 
 			if !tc.disabled {
 				cfg.ClientIDMetadataDocumentResolver = resolver
-				cfg.AuthorizationServerIdentificationIssuer = "https://as.example.com"
+				cfg.Issuer = "https://as.example.com"
 			}
 
 			if tc.registered != nil {
@@ -150,7 +150,6 @@ func TestSpec_5_CustomJWTOfAnotherClientIsGatedByItsPermittedClients(t *testing.
 				signer = external
 
 				config.ClientIDMetadataDocumentResolver = resolver
-				config.AuthorizationServerIdentificationIssuer = "https://as.example.com"
 
 				jwtType := *config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType)
 				validation := *jwtType.Validate

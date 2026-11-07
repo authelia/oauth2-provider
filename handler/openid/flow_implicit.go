@@ -108,6 +108,27 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	return nil
 }
 
+// ResponseTypesSupported returns the response types this handler serves.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *OpenIDConnectImplicitHandler) ResponseTypesSupported(ctx context.Context) (types []string) {
+	return []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowBoth}
+}
+
+// GrantTypesSupported returns the grant types this handler serves.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *OpenIDConnectImplicitHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return []string{consts.GrantTypeImplicit}
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *OpenIDConnectImplicitHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
 var (
 	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectImplicitHandler)(nil)
 )

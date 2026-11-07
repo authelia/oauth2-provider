@@ -78,6 +78,34 @@ func (c *NoneResponseTypeHandler) GetRedirectSecureChecker(ctx context.Context) 
 	return c.Config.GetRedirectSecureChecker(ctx)
 }
 
+// ResponseTypesSupported returns the response types this handler serves.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *NoneResponseTypeHandler) ResponseTypesSupported(ctx context.Context) (types []string) {
+	return []string{consts.ResponseTypeNone}
+}
+
+// GrantTypesSupported returns nil because the 'none' response type serves no grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *NoneResponseTypeHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *NoneResponseTypeHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *NoneResponseTypeHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
 var (
 	_ oauth2.AuthorizeEndpointHandler = (*NoneResponseTypeHandler)(nil)
 )

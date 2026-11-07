@@ -132,7 +132,7 @@ func TestIssueHandlerPopulate(t *testing.T) {
 			header, claims := parseIssued(t, response.GetAccessToken(), key)
 
 			assert.Equal(t, consts.JSONWebTokenTypeIDJAG, header)
-			assert.Equal(t, cfg.AuthorizationServerIdentificationIssuer, claims[consts.ClaimIssuer])
+			assert.Equal(t, cfg.Issuer, claims[consts.ClaimIssuer])
 			assert.Equal(t, issueMapped, claims[consts.ClaimSubject])
 			assert.Equal(t, redeemAudience, claims[consts.ClaimAudience])
 			assert.Equal(t, redeemClient, claims[consts.ClaimClientIdentifier])
@@ -217,7 +217,7 @@ func TestIssueHandlerRejectsSubjectTokenExpiringTooSoon(t *testing.T) {
 func TestIssueHandlerRejectsMissingIssuerIdentifier(t *testing.T) {
 	handler, cfg, _ := newIssueFixture(t, false)
 
-	cfg.AuthorizationServerIdentificationIssuer = ""
+	cfg.Issuer = ""
 
 	request := newIssueRequest(t, newIssueSession(time.Now().Add(time.Hour)), nil)
 	request.RequestedAudience = oauth2.Arguments{redeemAudience}
@@ -736,11 +736,10 @@ func newIssueFixture(t *testing.T, dpop bool) (*idjag.IssueHandler, *oauth2.Conf
 	require.NoError(t, err)
 
 	cfg := &oauth2.Config{
-		AccessTokenIssuer:                       "https://tokens.idp.example.com",
-		AuthorizationServerIdentificationIssuer: redeemIssuer,
-		ScopeStrategy:                           oauth2.ExactScopeStrategy,
-		DPoPEnabled:                             dpop,
-		AuthorizationDetailsTypeHandlers:        []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}, otherTypeHandler{}},
+		Issuer:                           redeemIssuer,
+		ScopeStrategy:                    oauth2.ExactScopeStrategy,
+		DPoPEnabled:                      dpop,
+		AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}, otherTypeHandler{}},
 		RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
 			consts.TokenTypeRFC8693IDToken: &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693IDToken},
 			consts.TokenTypeRFC8693IDJAG:   &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693IDJAG},

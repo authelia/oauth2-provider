@@ -184,7 +184,7 @@ func TestIDJAGRequestRefreshTokenSubject(t *testing.T) {
 			cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693IDJAG] = &DefaultTokenType{Name: consts.TokenTypeRFC8693IDJAG}
 
 			if tc.own {
-				cfg.AuthorizationServerIdentificationIssuer = idjagAudience
+				cfg.Issuer = idjagAudience
 			}
 
 			handler := newRefreshTokenTypeHandler(cfg, store, strategy)
@@ -255,7 +255,7 @@ func TestIDJAGRequestRefreshTokenSubjectAuthorizationDetails(t *testing.T) {
 			cfg.AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
 
 			if tc.own {
-				cfg.AuthorizationServerIdentificationIssuer = idjagAudience
+				cfg.Issuer = idjagAudience
 			}
 
 			handler := newRefreshTokenTypeHandler(cfg, store, strategy)

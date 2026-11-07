@@ -19,6 +19,12 @@ import (
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
+func TestClientCredentialsGrantHandlerSupported(t *testing.T) {
+	h := &ClientCredentialsGrantHandler{}
+
+	assert.Equal(t, []string{consts.GrantTypeClientCredentials}, h.GrantTypesSupported(context.Background()))
+}
+
 func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := mock.NewMockClientCredentialsGrantStorage(ctrl)

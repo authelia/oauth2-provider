@@ -743,7 +743,7 @@ func TestWriteIntrospectionResponseJWT(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := &Config{IntrospectionIssuer: "https://issuer.example.com"}
+			config := &Config{Issuer: "https://issuer.example.com"}
 			if tc.strategy != nil {
 				config.IntrospectionJWTResponseStrategy = tc.strategy
 			}
@@ -793,7 +793,7 @@ func TestWriteIntrospectionResponseJWT(t *testing.T) {
 func TestWriteIntrospectionResponseJWTKeysOffTheCaller(t *testing.T) {
 	newResponse := func(callerAlg, tokenClientAlg string, strategy *stubIntrospectionStrategy) (*Fosite, *IntrospectionResponse) {
 		provider := &Fosite{Config: &Config{
-			IntrospectionIssuer:              "https://issuer.example.com",
+			Issuer:                           "https://issuer.example.com",
 			IntrospectionJWTResponseStrategy: strategy,
 		}}
 
@@ -972,7 +972,7 @@ func TestWriteIntrospectionResponseTokenType(t *testing.T) {
 func TestWriteIntrospectionResponseTokenTypeInJWT(t *testing.T) {
 	strategy := &stubIntrospectionStrategy{token: "a.b.c"}
 	provider := &Fosite{Config: &Config{
-		IntrospectionIssuer:              "https://issuer.example.com",
+		Issuer:                           "https://issuer.example.com",
 		IntrospectionJWTResponseStrategy: strategy,
 		IntrospectionTokenTypeEnabled:    true,
 	}}
@@ -1066,5 +1066,9 @@ func (s *stubIntrospectionStrategy) Decode(_ context.Context, _ string, _ ...jwt
 }
 
 func (s *stubIntrospectionStrategy) Validate(_ context.Context, _ *jwt.Token, _ ...jwt.StrategyOpt) error {
+	return nil
+}
+
+func (s *stubIntrospectionStrategy) SigningAlgValues(_ context.Context) []string {
 	return nil
 }

@@ -35,6 +35,27 @@ func (h *DefaultResponseModeHandler) ResponseModes() ResponseModeTypes {
 	}
 }
 
+// ResponseModesSupported returns the response modes ParseResponseMode accepts for this handler. The JWT Secured
+// Authorization Response Mode values are omitted when no JARM strategy is configured.
+//
+// See: https://openid.net/specs/oauth-v2-jarm.html#section-2.3
+func (h *DefaultResponseModeHandler) ResponseModesSupported(ctx context.Context) (modes ResponseModeTypes) {
+	modes = h.ResponseModes()
+
+	if h.Config != nil && h.Config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx) != nil {
+		return modes
+	}
+
+	return slices.DeleteFunc(modes, func(mode ResponseModeType) bool {
+		switch mode {
+		case ResponseModeJWT, ResponseModeQueryJWT, ResponseModeFragmentJWT, ResponseModeFormPostJWT:
+			return true
+		}
+
+		return false
+	})
+}
+
 // WriteAuthorizeResponse writes authorization responses.
 func (h *DefaultResponseModeHandler) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, response AuthorizeResponder) {
 	header := rw.Header()
@@ -198,7 +219,7 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeErrorFieldResponseJSON(
 // issuer in the response JWT instead.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-7
-func setClientIDMetadataDocumentIssuer(ctx context.Context, config any, request AuthorizeRequester, rm ResponseModeType, parameters url.Values) {
+func setClientIDMetadataDocumentIssuer(ctx context.Context, config ResponseModeHandlerConfigurator, request AuthorizeRequester, rm ResponseModeType, parameters url.Values) {
 	switch rm {
 	case ResponseModeQueryJWT, ResponseModeFragmentJWT, ResponseModeFormPostJWT:
 		return
@@ -212,20 +233,23 @@ func setClientIDMetadataDocumentIssuer(ctx context.Context, config any, request 
 		return
 	}
 
-	provider, ok := config.(AuthorizationServerIssuerIdentificationProvider)
-	if !ok {
+	if !config.GetAuthorizationServerIdentificationEnabled(ctx) {
 		return
 	}
 
-	if issuer := provider.GetAuthorizationServerIdentificationIssuer(ctx); len(issuer) != 0 && jwt.IsClientIDMetadataDocumentClient(request.GetClient()) {
+	if issuer := config.GetIssuer(ctx); len(issuer) != 0 && jwt.IsClientIDMetadataDocumentClient(request.GetClient()) {
 		parameters.Set(consts.FormParameterIssuer, issuer)
 	}
 }
 
-// RFC9207ResponseModeParameterHandler adds the RFC9207
+// RFC9207ResponseModeParameterHandler adds the RFC 9207 'iss' parameter to the authorization response when
+// GetAuthorizationServerIdentificationEnabled is true and GetIssuer is not empty.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9207#section-2
 type RFC9207ResponseModeParameterHandler struct {
 	Config interface {
-		AuthorizationServerIssuerIdentificationProvider
+		IssuerProvider
+		AuthorizationServerIdentificationProvider
 	}
 }
 
@@ -240,10 +264,16 @@ func (h *RFC9207ResponseModeParameterHandler) ResponseModes() ResponseModeTypes 
 	}
 }
 
-// WriteParameters injects the RFC 9207 'iss' parameter into the authorization response when an authorization server
-// identification issuer is configured.
+// WriteParameters injects the RFC 9207 'iss' parameter into the authorization response when
+// GetAuthorizationServerIdentificationEnabled is true and GetIssuer is not empty.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9207#section-2
 func (h *RFC9207ResponseModeParameterHandler) WriteParameters(ctx context.Context, request AuthorizeRequester, parameters url.Values) {
-	if issuer := h.Config.GetAuthorizationServerIdentificationIssuer(ctx); len(issuer) != 0 {
+	if !h.Config.GetAuthorizationServerIdentificationEnabled(ctx) {
+		return
+	}
+
+	if issuer := h.Config.GetIssuer(ctx); len(issuer) != 0 {
 		parameters.Set(consts.FormParameterIssuer, issuer)
 	}
 }
@@ -271,6 +301,15 @@ type ResponseModeHandler interface {
 	// header.Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	// header.Set(consts.HeaderPragma, consts.PragmaNoCache)
 	WriteAuthorizeError(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, err error)
+
+	// ResponseModesSupported returns the response modes the handler currently accepts, which is the set the
+	// 'response_mode' parameter is parsed against and the server metadata advertises. It may be narrower than
+	// ResponseModes when an accepted mode depends on configuration.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+	//
+	// See: https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#ResponseModes
+	ResponseModesSupported(ctx context.Context) (modes ResponseModeTypes)
 }
 
 type ResponseModeParameterHandler interface {
@@ -297,7 +336,8 @@ type ResponseModeHandlerConfigurator interface {
 	ResponseModeParameterHandlerProvider
 	FormPostHTMLTemplateProvider
 	FormPostResponseProvider
-	JWTSecuredAuthorizeResponseModeIssuerProvider
+	IssuerProvider
+	AuthorizationServerIdentificationProvider
 	JWTSecuredAuthorizeResponseModeStrategyProvider
 	JWTSecuredAuthorizeResponseModeLifespanProvider
 	MessageCatalogProvider

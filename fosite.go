@@ -209,13 +209,14 @@ func (a *RFC7592ClientConfigurationEndpointHandlers) Append(h RFC7592ClientConfi
 
 // Configurator is the full configuration surface a Provider requires.
 type Configurator interface {
-	IDTokenIssuerProvider
+	IssuerProvider
+	EndpointURLsProvider
 	IDTokenValidationStrategyProvider
 	BackChannelLogoutTokenStrategyProvider
 	BackChannelLogoutLifespanProvider
 	BackChannelLogoutConcurrencyProvider
 	IDTokenLifespanProvider
-	AuthorizationServerIssuerIdentificationProvider
+	AuthorizationServerIdentificationProvider
 	AllowedPromptsProvider
 	EnforcePKCEProvider
 	EnforcePKCEForPublicClientsProvider
@@ -232,11 +233,9 @@ type Configurator interface {
 	OmitRedirectScopeParamProvider
 	SanitationAllowedProvider
 	JWTScopeFieldProvider
-	JWTSecuredAuthorizeResponseModeIssuerProvider
 	JWTSecuredAuthorizeResponseModeStrategyProvider
 	JWTSecuredAuthorizeResponseModeLifespanProvider
 	JWTProfileAccessTokensProvider
-	AccessTokenIssuerProvider
 	DisableRefreshTokenValidationProvider
 	DisableRefreshTokenRotationProvider
 	RefreshTokenScopesProvider
@@ -280,7 +279,6 @@ type Configurator interface {
 	RFC8628DeviceAuthorizeEndpointHandlersProvider
 	RFC8628UserAuthorizeEndpointHandlersProvider
 	RFC8628DeviceAuthorizeConfigProvider
-	IntrospectionIssuerProvider
 	IntrospectionJWTResponseStrategyProvider
 	JWTStrategyProvider
 	AuthorizeErrorFieldResponseStrategyProvider
@@ -294,6 +292,14 @@ type Configurator interface {
 	IntrospectionTokenTypeEnabledProvider
 	ClientAssertionClientSecretEncryptionDisabledProvider
 	DPoPConfigProvider
+	ClientAssertionAlgorithmsProvider
+	ClientAuthMethodsProvider
+	DiscoveryInformationProvider
+	DiscoveryMetadataHooksProvider
+	DiscoveryMetadataSigningStrategyProvider
+	RequestObjectAlgorithmsProvider
+	GrantAssertionAlgorithmsProvider
+	ResponseEncryptionAlgorithmsProvider
 	DPoPStrictRefreshTokenBindingProvider
 	MTLSConfigProvider
 	MTLSStrictRefreshTokenBindingProvider

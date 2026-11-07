@@ -22,6 +22,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/rfc7523"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -53,8 +54,6 @@ type RedeemHandler struct {
 
 	*hoauth2.HandleHelper
 }
-
-var redeemAlgorithms = []jose.SignatureAlgorithm{jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512}
 
 const (
 	hintIDJAGRedeemed = "The Identity Assertion JWT Authorization Grant was already redeemed."
@@ -91,7 +90,7 @@ func (h *RedeemHandler) HandleTokenEndpointRequest(ctx context.Context, request 
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", grantType))
 	}
 
-	token, issuer, err := parseAssertion(assertion)
+	token, issuer, err := parseAssertion(h.algorithms(ctx), assertion)
 	if err != nil {
 		return err
 	}
@@ -193,7 +192,7 @@ func (h *RedeemHandler) BindAccessRequest(ctx context.Context, request oauth2.Ac
 		return nil
 	}
 
-	jkt, err := confirmationJWKThumbprint(request.GetRequestForm().Get(consts.FormParameterAssertion))
+	jkt, err := confirmationJWKThumbprint(h.algorithms(ctx), request.GetRequestForm().Get(consts.FormParameterAssertion))
 
 	switch {
 	case err != nil:
@@ -283,12 +282,20 @@ func (h *RedeemHandler) unused(ctx context.Context, claims josejwt.Claims) (err 
 	return nil
 }
 
+// algorithms returns the JWS algorithms an ID-JAG may be signed with. 'none' and the HMAC algorithms are never
+// accepted, whether listed or not, as the keys of the issuer are public.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4.1
+func (h *RedeemHandler) algorithms(ctx context.Context) []jose.SignatureAlgorithm {
+	return jwt.ToAsymmetricSignatureAlgorithms(h.Config.GetIDJAGRedeemSigningAlgValues(ctx))
+}
+
 func (h *RedeemHandler) consume(ctx context.Context, assertion string) (err error) {
 	if !h.Config.GetIDJAGSingleUse(ctx) {
 		return nil
 	}
 
-	claims, _, err := unverifiedClaims(assertion)
+	claims, _, err := unverifiedClaims(h.algorithms(ctx), assertion)
 	if err != nil {
 		return err
 	}
@@ -404,7 +411,7 @@ func verifyWithKeys(token *josejwt.JSONWebToken, jwks *jose.JSONWebKeySet, heade
 }
 
 func (h *RedeemHandler) validate(ctx context.Context, client oauth2.Client, claims josejwt.Claims, raw map[string]any) (err error) {
-	expected := h.Config.GetAuthorizationServerIdentificationIssuer(ctx)
+	expected := h.Config.GetIssuer(ctx)
 	if expected == "" {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The authorization server issuer identifier is not configured."))
 	}
@@ -489,8 +496,8 @@ func authorizationDetailsClaim(assertion string) (claim []byte, err error) {
 	return claims.AuthorizationDetails, nil
 }
 
-func confirmationJWKThumbprint(assertion string) (jkt string, err error) {
-	_, raw, err := unverifiedClaims(assertion)
+func confirmationJWKThumbprint(algs []jose.SignatureAlgorithm, assertion string) (jkt string, err error) {
+	_, raw, err := unverifiedClaims(algs, assertion)
 	if err != nil {
 		return "", err
 	}
@@ -501,8 +508,8 @@ func confirmationJWKThumbprint(assertion string) (jkt string, err error) {
 	return jkt, nil
 }
 
-func unverifiedClaims(assertion string) (claims josejwt.Claims, raw map[string]any, err error) {
-	token, err := josejwt.ParseSigned(assertion, redeemAlgorithms)
+func unverifiedClaims(algs []jose.SignatureAlgorithm, assertion string) (claims josejwt.Claims, raw map[string]any, err error) {
+	token, err := josejwt.ParseSigned(assertion, algs)
 	if err != nil {
 		return claims, nil, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse the Identity Assertion JWT Authorization Grant.").WithWrap(err).WithDebugError(err))
 	}
@@ -516,8 +523,8 @@ func unverifiedClaims(assertion string) (claims josejwt.Claims, raw map[string]a
 	return claims, raw, nil
 }
 
-func parseAssertion(assertion string) (token *josejwt.JSONWebToken, issuer string, err error) {
-	token, err = josejwt.ParseSigned(assertion, redeemAlgorithms)
+func parseAssertion(algs []jose.SignatureAlgorithm, assertion string) (token *josejwt.JSONWebToken, issuer string, err error) {
+	token, err = josejwt.ParseSigned(assertion, algs)
 	if err != nil {
 		return nil, "", errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse the Identity Assertion JWT Authorization Grant.").WithWrap(err).WithDebugError(err))
 	}
@@ -857,7 +864,47 @@ func (h *RedeemHandler) constrained(ctx context.Context, client oauth2.Client) b
 	return false
 }
 
+// GrantTypesSupported returns the grant types this handler serves. The DPoP bound JWT authorization grant is only
+// served when DPoP is enabled.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *RedeemHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	types = []string{consts.GrantTypeOAuthJWTBearer}
+
+	if c.Config != nil && c.Config.GetDPoPEnabled(ctx) {
+		types = append(types, consts.GrantTypeOAuthJWTDPoP)
+	}
+
+	return types
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *RedeemHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *RedeemHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns nil because the handler does not issue RFC 8693 tokens.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *RedeemHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
 var (
 	_ oauth2.TokenEndpointHandler        = (*RedeemHandler)(nil)
 	_ oauth2.TokenEndpointBindingHandler = (*RedeemHandler)(nil)
 )
+
+// IsIDJAGRedeemHandler marks this handler as the Identity Assertion JWT Authorization Grant redeem handler.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-7
+func (c *RedeemHandler) IsIDJAGRedeemHandler() {}

@@ -117,8 +117,8 @@ func (c *TxnTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context,
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	tokenType, ok := resolveRequestedTokenType(ctx, request, c.Config).(*TxnTokenType)
-	if !ok || tokenType == nil {
+	tokenType := txnTokenTypeOf(resolveRequestedTokenType(ctx, request, c.Config))
+	if tokenType == nil {
 		return nil
 	}
 
@@ -442,8 +442,8 @@ func (c *TxnTokenTypeHandler) validateIssuable(ctx context.Context, tokenType *T
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The JSON Web Token strategy required to issue a Transaction Token is not configured."))
 	}
 
-	if issuer := c.Config.GetIDTokenIssuer(ctx); tokenType.Issuer != "" && tokenType.Issuer == issuer {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The '%s' token type has the issuer '%s' which is the ID Token issuer.", tokenType.Name, issuer))
+	if issuer := c.Config.GetIssuer(ctx); tokenType.Issuer != "" && tokenType.Issuer == issuer {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The '%s' token type has the issuer '%s' which is the issuer of this server.", tokenType.Name, issuer))
 	}
 
 	return nil
@@ -826,6 +826,42 @@ func (c *TxnTokenTypeHandler) selfSignedKeyfunc(ctx context.Context, client oaut
 
 		return &public, nil
 	}, nil
+}
+
+// GrantTypesSupported returns nil because the handler only augments another grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *TxnTokenTypeHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *TxnTokenTypeHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *TxnTokenTypeHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns the identifiers of the configured issuable Transaction Token types.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *TxnTokenTypeHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return IssuableTokenTypes(ctx, c.Config, func(_ string, tokenType oauth2.RFC8693TokenType) bool {
+		return txnTokenTypeOf(tokenType) != nil
+	})
+}
+
+func txnTokenTypeOf(tokenType oauth2.RFC8693TokenType) *TxnTokenType {
+	txnType, _ := tokenType.(*TxnTokenType)
+
+	return txnType
 }
 
 // Only a generic JWT is a self-signed subject token, as any explicit type names a token with other validation rules, per

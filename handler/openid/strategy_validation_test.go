@@ -23,7 +23,7 @@ func TestDefaultIDTokenValidationStrategy_GenerateAndValidateRoundTrip(t *testin
 	)
 
 	cfg := &oauth2.Config{
-		IDTokenIssuer:       issuer,
+		Issuer:              issuer,
 		IDTokenLifespan:     5 * time.Minute,
 		MinParameterEntropy: 8,
 	}
@@ -65,7 +65,7 @@ func TestDefaultIDTokenValidationStrategy_GenerateAndValidateRoundTrip(t *testin
 
 func TestDefaultIDTokenValidationStrategy_RejectsTamperedToken(t *testing.T) {
 	cfg := &oauth2.Config{
-		IDTokenIssuer:       "https://issuer.example/",
+		Issuer:              "https://issuer.example/",
 		IDTokenLifespan:     5 * time.Minute,
 		MinParameterEntropy: 8,
 	}
@@ -108,7 +108,7 @@ func TestDefaultIDTokenValidationStrategy_RejectsTamperedToken(t *testing.T) {
 
 func TestDefaultIDTokenValidationStrategy_RejectsTokenSignedWithWrongKey(t *testing.T) {
 	cfg := &oauth2.Config{
-		IDTokenIssuer:       "https://issuer.example/",
+		Issuer:              "https://issuer.example/",
 		IDTokenLifespan:     5 * time.Minute,
 		MinParameterEntropy: 8,
 	}
@@ -146,7 +146,7 @@ func TestDefaultIDTokenValidationStrategy_RejectsTokenSignedWithWrongKey(t *test
 }
 
 func TestDefaultIDTokenValidationStrategy_RejectsExpiredByDefault(t *testing.T) {
-	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
+	cfg := &oauth2.Config{Issuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
 	token := newExpiredIDToken(t, cfg, jwtStrategy)
@@ -162,7 +162,7 @@ func TestDefaultIDTokenValidationStrategy_RejectsExpiredByDefault(t *testing.T) 
 }
 
 func TestDefaultIDTokenValidationStrategy_AcceptsExpiredWithOption(t *testing.T) {
-	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
+	cfg := &oauth2.Config{Issuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
 	token := newExpiredIDToken(t, cfg, jwtStrategy)
@@ -178,7 +178,7 @@ func TestDefaultIDTokenValidationStrategy_AcceptsExpiredWithOption(t *testing.T)
 }
 
 func TestDefaultIDTokenValidationStrategy_AcceptsUnverifiedWithOption(t *testing.T) {
-	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
+	cfg := &oauth2.Config{Issuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
 
 	wrongKey := gen.MustRSAKey()
 
@@ -209,7 +209,7 @@ func TestDefaultIDTokenValidationStrategy_AcceptsUnverifiedWithOption(t *testing
 }
 
 func TestDefaultIDTokenValidationStrategy_AcceptsUnverifiedWithoutRequester(t *testing.T) {
-	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
+	cfg := &oauth2.Config{Issuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
 	token := newExpiredIDToken(t, cfg, jwtStrategy)
@@ -223,7 +223,7 @@ func TestDefaultIDTokenValidationStrategy_AcceptsUnverifiedWithoutRequester(t *t
 
 func TestDefaultIDTokenValidationStrategy_ExplicitType(t *testing.T) {
 	cfg := &oauth2.Config{
-		IDTokenIssuer:   "https://issuer.example/",
+		Issuer:          "https://issuer.example/",
 		IDTokenLifespan: 5 * time.Minute,
 	}
 
@@ -250,7 +250,7 @@ func TestDefaultIDTokenValidationStrategy_ExplicitType(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			claims := jwt.MapClaims{
-				jwt.ClaimIssuer:         cfg.IDTokenIssuer,
+				jwt.ClaimIssuer:         cfg.Issuer,
 				jwt.ClaimSubject:        "alice",
 				jwt.ClaimAudience:       []string{"test-client"},
 				jwt.ClaimIssuedAt:       jwt.Now(),
@@ -274,7 +274,7 @@ func TestDefaultIDTokenValidationStrategy_ExplicitType(t *testing.T) {
 }
 
 func TestDefaultIDTokenValidationStrategy_RequiresTimeClaims(t *testing.T) {
-	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute}
+	cfg := &oauth2.Config{Issuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute}
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
 	strategy := &DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
@@ -294,7 +294,7 @@ func TestDefaultIDTokenValidationStrategy_RequiresTimeClaims(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			claims := jwt.MapClaims{
-				jwt.ClaimIssuer:         cfg.IDTokenIssuer,
+				jwt.ClaimIssuer:         cfg.Issuer,
 				jwt.ClaimSubject:        "alice",
 				jwt.ClaimAudience:       []string{"test-client"},
 				jwt.ClaimIssuedAt:       jwt.Now(),
@@ -325,7 +325,7 @@ func newExpiredIDToken(t *testing.T, cfg *oauth2.Config, strategy jwt.Strategy) 
 	t.Helper()
 
 	claims := jwt.MapClaims{
-		jwt.ClaimIssuer:         cfg.IDTokenIssuer,
+		jwt.ClaimIssuer:         cfg.Issuer,
 		jwt.ClaimSubject:        "alice",
 		jwt.ClaimAudience:       []string{"test-client"},
 		jwt.ClaimIssuedAt:       jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)),

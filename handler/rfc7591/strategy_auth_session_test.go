@@ -78,7 +78,7 @@ func TestAuthReadsTheSessionStateOfEverySessionType(t *testing.T) {
 					config := &oauth2.Config{
 						GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 						RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-						RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+						EndpointURLs:                          oauth2.EndpointURLs{Registration: testEndpoint},
 						TokenEntropy:                          32,
 						DPoPEnabled:                           true,
 						MTLSEnabled:                           true,
@@ -176,7 +176,7 @@ func TestAuthReadsThePolicyClaimOfEverySessionType(t *testing.T) {
 				config := &oauth2.Config{
 					GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 					RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-					RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+					EndpointURLs:                          oauth2.EndpointURLs{Registration: testEndpoint},
 					RFC7591ClientRegistrationPolicyClaim:  claim,
 					TokenEntropy:                          32,
 				}

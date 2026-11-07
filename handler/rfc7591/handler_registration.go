@@ -18,15 +18,13 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// Configurator is the configuration seam consumed by ClientRegistrationHandler.
+// Configurator is the configuration seam consumed by ClientRegistrationHandler and ClientConfigurationHandler. It is the
+// full oauth2.Configurator so the default LocalValidator checks the client metadata against the advertised server
+// capabilities.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7591#section-2
 type Configurator interface {
-	oauth2.RFC7591ClientRegistrationConfigProvider
-	oauth2.RFC7591ClientRegistrationPolicyProvider
-	oauth2.TokenEntropyProvider
-	oauth2.ScopeStrategyProvider
-	oauth2.AudienceStrategyProvider
-	oauth2.ResourceStrategyProvider
-	oauth2.JWKSFetcherStrategyProvider
+	oauth2.Configurator
 
 	ClientRegistrationMetadataStrategyConfig
 }

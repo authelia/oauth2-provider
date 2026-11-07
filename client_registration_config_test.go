@@ -33,7 +33,7 @@ func TestConfigRFC7591ClientRegistrationPolicyClaim(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := &Config{AccessTokenIssuer: tc.issuer, RFC7591ClientRegistrationPolicyClaim: tc.explicit}
+			config := &Config{Issuer: tc.issuer, RFC7591ClientRegistrationPolicyClaim: tc.explicit}
 
 			assert.Equal(t, tc.expected, config.GetRFC7591ClientRegistrationPolicyClaim(context.Background()))
 		})
@@ -74,8 +74,8 @@ func TestConfigRFC7591ClientRegistrationProvider(t *testing.T) {
 	ctx := context.Background()
 
 	config := &Config{
-		RFC7591ClientRegistrationEndpointURL: "https://auth.example.com/register",
-		RFC7591ClientSecretLifespan:          time.Hour,
+		EndpointURLs:                EndpointURLs{Registration: "https://auth.example.com/register"},
+		RFC7591ClientSecretLifespan: time.Hour,
 	}
 
 	assert.Equal(t, "https://auth.example.com/register", config.GetRFC7591ClientRegistrationEndpointURL(ctx))

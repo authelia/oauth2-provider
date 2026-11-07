@@ -214,13 +214,14 @@ func newCIMDCeilingEnv(t *testing.T, resolver cimd.Config) *cimdCeilingEnv {
 	var err error
 
 	env.config.ClientIDMetadataDocumentResolver, err = cimd.NewResolver(resolver)
-	env.config.AuthorizationServerIdentificationIssuer = cimdIssuer
+	env.config.Issuer = cimdIssuer
 	require.NoError(t, err)
 
 	env.config.ClientIDMetadataDocumentHTTPClient = client
 	env.config.ClientIDMetadataDocumentJWKSFetcherStrategy = oauth2.NewDefaultJWKSFetcherStrategy(oauth2.JWKSFetcherWithHTTPClient(client))
 
 	provider := compose.Compose(env.config, env.store, strategy,
+		compose.OAuth2AuthorizeExplicitFactory,
 		compose.OAuth2ClientCredentialsGrantFactory,
 		compose.RFC7591ClientRegistrationFactory,
 	)
@@ -237,7 +238,7 @@ func newCIMDCeilingEnv(t *testing.T, resolver cimd.Config) *cimdCeilingEnv {
 	env.tokenURL = server.URL + "/token"
 	env.registrationURL = server.URL + "/register"
 
-	env.config.RFC7591ClientRegistrationEndpointURL = env.registrationURL
+	env.config.EndpointURLs.Registration = env.registrationURL
 	env.config.AllowedJWTAssertionAudiences = []string{env.tokenURL}
 
 	return env

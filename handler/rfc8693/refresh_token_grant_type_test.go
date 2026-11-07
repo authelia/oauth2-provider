@@ -101,7 +101,7 @@ func TestRefreshTokenOfAClientIDMetadataDocumentClientIsRefusedBeforeResolving(t
 	resolver := &failingDocumentResolver{err: errors.New("the resolver is unavailable")}
 
 	cfg.ClientIDMetadataDocumentResolver = resolver
-	cfg.AuthorizationServerIdentificationIssuer = "https://as.example.com"
+	cfg.Issuer = "https://as.example.com"
 
 	owner := &oauth2.DefaultClient{ID: id, GrantTypes: []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken}, Scopes: []string{consts.ScopeOpenID}}
 

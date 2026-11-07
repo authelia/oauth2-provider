@@ -5,6 +5,7 @@
 package openid
 
 import (
+	"context"
 	"net/url"
 	"testing"
 	"time"
@@ -20,6 +21,13 @@ import (
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
 )
+
+func TestOpenIDConnectImplicitHandlerSupported(t *testing.T) {
+	h := &OpenIDConnectImplicitHandler{}
+
+	assert.Equal(t, []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowBoth}, h.ResponseTypesSupported(context.Background()))
+	assert.Equal(t, []string{consts.GrantTypeImplicit}, h.GrantTypesSupported(context.Background()))
+}
 
 func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 	testCases := []struct {

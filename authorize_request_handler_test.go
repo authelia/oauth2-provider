@@ -24,9 +24,37 @@ import (
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
 )
+
+func TestParseResponseModeRejectsJWTWithoutJARM(t *testing.T) {
+	f := &Fosite{Config: &Config{}}
+
+	for _, mode := range []string{"jwt", "query.jwt", "fragment.jwt", "form_post.jwt"} {
+		t.Run(mode, func(t *testing.T) {
+			request := &AuthorizeRequest{}
+			request.Form = url.Values{consts.FormParameterResponseMode: {mode}}
+
+			err := f.ParseResponseMode(context.Background(), nil, request)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, ErrUnsupportedResponseMode)
+		})
+	}
+}
+
+func TestParseResponseModeAcceptsJWTWithJARM(t *testing.T) {
+	config := &Config{Issuer: "https://auth.example.com"}
+	config.JWTSecuredAuthorizeResponseModeStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
+
+	f := &Fosite{Config: config}
+	request := &AuthorizeRequest{}
+	request.Form = url.Values{consts.FormParameterResponseMode: {"query.jwt"}}
+
+	require.NoError(t, f.ParseResponseMode(context.Background(), nil, request))
+	assert.Equal(t, ResponseModeQueryJWT, request.ResponseMode)
+}
 
 // See: https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#Terminology
 func TestNewAuthorizeRequest(t *testing.T) {
@@ -1091,7 +1119,7 @@ func TestNewAuthorizeRequestAuthorizationDetailsFromRequestObject(t *testing.T) 
 	config := &Config{
 		ScopeStrategy:                    ExactScopeStrategy,
 		AudienceStrategy:                 DefaultAudienceStrategy,
-		IDTokenIssuer:                    testRARIssuer,
+		Issuer:                           testRARIssuer,
 		JWKSFetcherStrategy:              NewDefaultJWKSFetcherStrategy(),
 		AuthorizationDetailsTypeHandlers: []AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}},
 	}
@@ -1298,7 +1326,7 @@ func TestNewAuthorizeRequestClaimsFromRequestObject(t *testing.T) {
 	config := &Config{
 		ScopeStrategy:       ExactScopeStrategy,
 		AudienceStrategy:    DefaultAudienceStrategy,
-		IDTokenIssuer:       testRARIssuer,
+		Issuer:              testRARIssuer,
 		JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
 	}
 
@@ -1365,7 +1393,7 @@ func TestNewAuthorizeRequestMalformedClaimsFromRequestObject(t *testing.T) {
 	config := &Config{
 		ScopeStrategy:       ExactScopeStrategy,
 		AudienceStrategy:    DefaultAudienceStrategy,
-		IDTokenIssuer:       testRARIssuer,
+		Issuer:              testRARIssuer,
 		JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
 	}
 

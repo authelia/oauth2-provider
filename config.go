@@ -145,16 +145,92 @@ type JWTProfileAccessTokenDefaultAudienceProvider interface {
 	GetJWTProfileAccessTokenDefaultAudience(ctx context.Context) (audience []string)
 }
 
-// AccessTokenIssuerProvider returns the provider for configuring the JWT issuer.
-type AccessTokenIssuerProvider interface {
-	// GetAccessTokenIssuer returns the access token issuer.
-	GetAccessTokenIssuer(ctx context.Context) (issuer string)
+// IssuerProvider provides the canonical issuer identifier of the authorization server.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+type IssuerProvider interface {
+	// GetIssuer returns the canonical issuer identifier, which is the issuer of every token and response the
+	// authorization server issues.
+	GetIssuer(ctx context.Context) (issuer string)
 }
 
-// IDTokenIssuerProvider returns the provider for configuring the ID token issuer.
-type IDTokenIssuerProvider interface {
-	// GetIDTokenIssuer returns the ID token issuer.
-	GetIDTokenIssuer(ctx context.Context) (issuer string)
+// EndpointURLs are the absolute URLs of the endpoints of an authorization server. An empty value means the endpoint
+// is not exposed.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+type EndpointURLs struct {
+	Authorization              string
+	Token                      string
+	UserInfo                   string
+	JWKS                       string
+	Revocation                 string
+	Introspection              string
+	PushedAuthorizationRequest string
+	DeviceAuthorization        string
+	EndSession                 string
+
+	// Registration is the RFC 7591 client registration endpoint URL.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc7591#section-3
+	Registration string
+
+	// MutualTLSAliases are the endpoint aliases advertised for mutual TLS clients.
+	MutualTLSAliases RFC8705MutualTLSEndpointAliases
+}
+
+// EndpointName identifies an endpoint which has both an EndpointURLs value and an RFC 8705 mutual TLS alias.
+type EndpointName string
+
+const (
+	EndpointToken                      EndpointName = "token"
+	EndpointRevocation                 EndpointName = "revocation"
+	EndpointIntrospection              EndpointName = "introspection"
+	EndpointPushedAuthorizationRequest EndpointName = "pushed_authorization_request"
+	EndpointDeviceAuthorization        EndpointName = "device_authorization"
+	EndpointUserInfo                   EndpointName = "userinfo"
+	EndpointRegistration               EndpointName = "registration"
+	EndpointEndSession                 EndpointName = "end_session"
+)
+
+// URLs returns the URL of the endpoint followed by its RFC 8705 mutual TLS alias, omitting empty values, or nil for
+// an unknown endpoint.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8705#section-5
+func (u EndpointURLs) URLs(name EndpointName) (urls []string) {
+	var url, alias string
+
+	switch name {
+	case EndpointToken:
+		url, alias = u.Token, u.MutualTLSAliases.Token
+	case EndpointRevocation:
+		url, alias = u.Revocation, u.MutualTLSAliases.Revocation
+	case EndpointIntrospection:
+		url, alias = u.Introspection, u.MutualTLSAliases.Introspection
+	case EndpointPushedAuthorizationRequest:
+		url, alias = u.PushedAuthorizationRequest, u.MutualTLSAliases.PushedAuthorizationRequest
+	case EndpointDeviceAuthorization:
+		url, alias = u.DeviceAuthorization, u.MutualTLSAliases.DeviceAuthorization
+	case EndpointUserInfo:
+		url, alias = u.UserInfo, u.MutualTLSAliases.UserInfo
+	case EndpointRegistration:
+		url, alias = u.Registration, u.MutualTLSAliases.Registration
+	case EndpointEndSession:
+		url, alias = u.EndSession, u.MutualTLSAliases.EndSession
+	}
+
+	for _, value := range []string{url, alias} {
+		if value != "" {
+			urls = append(urls, value)
+		}
+	}
+
+	return urls
+}
+
+// EndpointURLsProvider provides the absolute URLs of the endpoints of the authorization server.
+type EndpointURLsProvider interface {
+	// GetEndpointURLs returns the endpoint URLs.
+	GetEndpointURLs(ctx context.Context) (urls EndpointURLs)
 }
 
 // IDTokenValidationStrategyProvider returns the provider for configuring the ID Token validation strategy, which
@@ -186,33 +262,38 @@ type BackChannelLogoutConcurrencyProvider interface {
 	GetBackChannelLogoutConcurrency(ctx context.Context) (n int)
 }
 
-// IntrospectionIssuerProvider returns the provider for configuring the Introspection issuer.
-type IntrospectionIssuerProvider interface {
-	// GetIntrospectionIssuer returns the Introspection token issuer.
-	GetIntrospectionIssuer(ctx context.Context) (issuer string)
-}
-
 // IntrospectionJWTResponseStrategyProvider returns the provider for configuring the Introspection jwt.Strategy.
 type IntrospectionJWTResponseStrategyProvider interface {
 	// GetIntrospectionJWTResponseStrategy returns the Introspection JWT Strategy.
 	GetIntrospectionJWTResponseStrategy(ctx context.Context) jwt.Strategy
 }
 
-// AuthorizationServerIssuerIdentificationProvider provides OAuth 2.0 Authorization Server Issuer Identification related methods.
-type AuthorizationServerIssuerIdentificationProvider interface {
-	GetAuthorizationServerIdentificationIssuer(ctx context.Context) (issuer string)
+// AuthorizationServerIdentificationProvider provides the OAuth 2.0 Authorization Server Issuer Identification switch.
+// The 'iss' authorization response parameter is returned only when the switch is on and GetIssuer is not empty.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9207#section-2
+type AuthorizationServerIdentificationProvider interface {
+	// GetAuthorizationServerIdentificationEnabled returns true when the 'iss' authorization response parameter is
+	// returned.
+	GetAuthorizationServerIdentificationEnabled(ctx context.Context) (enabled bool)
+}
+
+func getAuthorizationServerIdentificationIssuer(ctx context.Context, config any) (issuer string) {
+	if provider, ok := config.(AuthorizationServerIdentificationProvider); !ok || !provider.GetAuthorizationServerIdentificationEnabled(ctx) {
+		return ""
+	}
+
+	if provider, ok := config.(IssuerProvider); ok {
+		return provider.GetIssuer(ctx)
+	}
+
+	return ""
 }
 
 // JWTScopeFieldProvider returns the provider for configuring the JWT scope field.
 type JWTScopeFieldProvider interface {
 	// GetJWTScopeField returns the JWT scope field.
 	GetJWTScopeField(ctx context.Context) jwt.JWTScopeFieldEnum
-}
-
-// JWTSecuredAuthorizeResponseModeIssuerProvider returns the provider for configuring the JARM issuer.
-type JWTSecuredAuthorizeResponseModeIssuerProvider interface {
-	// GetJWTSecuredAuthorizeResponseModeIssuer returns the JARM issuer.
-	GetJWTSecuredAuthorizeResponseModeIssuer(ctx context.Context) string
 }
 
 // JWTSecuredAuthorizeResponseModeStrategyProvider returns the provider for configuring the JARM jwt.Strategy.
@@ -447,8 +528,9 @@ type ClientAssertionClientSecretEncryptionDisabledProvider interface {
 // Token used to authenticate a request to the introspection endpoint is required to validate a request.
 type AllowedIntrospectionAudiencesProvider interface {
 	// GetAllowedIntrospectionAudiences returns the permitted audience list for introspection authentication. The
-	// Access Token must carry at least one of them. An empty list does not disable the check: it means the URL the
-	// request was made to is expected instead. See BearerAuthorization for the full fallback chain.
+	// Access Token must carry at least one of them. An empty list does not disable the check: the configured
+	// introspection endpoint URL is expected instead, then the URL the request was made to. See BearerAuthorization
+	// for the full fallback chain.
 	GetAllowedIntrospectionAudiences(ctx context.Context) (audiences []string)
 }
 
@@ -609,7 +691,7 @@ type RFC7591TrustedIssuer struct {
 // the client metadata an authenticated registrant may register.
 type RFC7591ClientRegistrationPolicyProvider interface {
 	// GetRFC7591ClientRegistrationPolicyClaim returns the name of the claim, on the registration access token, that
-	// carries the registration policy. It defaults to the access token issuer suffixed with
+	// carries the registration policy. It defaults to the issuer suffixed with
 	// ':authelia:oauth2:dynamic-client-registration:policy'.
 	GetRFC7591ClientRegistrationPolicyClaim(ctx context.Context) (claim string)
 
@@ -908,6 +990,109 @@ type DPoPConfigProvider interface {
 	GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy)
 }
 
+// ResponseEncryptionTarget identifies a response that may be encrypted as a JWE.
+type ResponseEncryptionTarget string
+
+const (
+	// ResponseEncryptionTargetIDToken is the ID Token.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#IDTokenEncryption
+	ResponseEncryptionTargetIDToken ResponseEncryptionTarget = "id_token"
+
+	// ResponseEncryptionTargetUserInfo is the UserInfo response.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
+	ResponseEncryptionTargetUserInfo ResponseEncryptionTarget = "userinfo"
+
+	// ResponseEncryptionTargetAuthorization is the JWT-secured authorization response.
+	//
+	// See: https://openid.net/specs/oauth-v2-jarm.html#section-2.3
+	ResponseEncryptionTargetAuthorization ResponseEncryptionTarget = "authorization"
+
+	// ResponseEncryptionTargetIntrospection is the JWT introspection response.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9701#section-5
+	ResponseEncryptionTargetIntrospection ResponseEncryptionTarget = "introspection"
+
+	// ResponseEncryptionTargetAccessToken is a JWT access token.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9068#section-2.1
+	ResponseEncryptionTargetAccessToken ResponseEncryptionTarget = "access_token"
+)
+
+// ClientAssertionAlgorithmsProvider is the configuration provider for the algorithms accepted on client assertions.
+type ClientAssertionAlgorithmsProvider interface {
+	// GetClientAssertionSigningAlgValues returns the JWS algorithms accepted for a client assertion.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8414#section-2
+	GetClientAssertionSigningAlgValues(ctx context.Context) (algs []string)
+
+	// GetClientAssertionEncryptionAlgValues returns the JWE 'alg' values accepted for an encrypted client assertion.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication
+	GetClientAssertionEncryptionAlgValues(ctx context.Context) (algs []string)
+
+	// GetClientAssertionEncryptionEncValues returns the JWE 'enc' values accepted for an encrypted client assertion.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication
+	GetClientAssertionEncryptionEncValues(ctx context.Context) (encs []string)
+}
+
+// RequestObjectAlgorithmsProvider is the configuration provider for the algorithms accepted on request objects.
+type RequestObjectAlgorithmsProvider interface {
+	// GetRequestObjectSigningAlgValues returns the JWS algorithms accepted for a request object.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9101#section-10.2
+	GetRequestObjectSigningAlgValues(ctx context.Context) (algs []string)
+
+	// GetRequestObjectEncryptionAlgValues returns the JWE 'alg' values accepted for an encrypted request object.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9101#section-10.2
+	GetRequestObjectEncryptionAlgValues(ctx context.Context) (algs []string)
+
+	// GetRequestObjectEncryptionEncValues returns the JWE 'enc' values accepted for an encrypted request object.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9101#section-10.2
+	GetRequestObjectEncryptionEncValues(ctx context.Context) (encs []string)
+}
+
+// GrantAssertionAlgorithmsProvider is the configuration provider for the signing algorithms accepted on assertions
+// presented as grants or as trust anchors.
+type GrantAssertionAlgorithmsProvider interface {
+	// GetRFC7523AssertionSigningAlgValues returns the JWS algorithms accepted for a JWT bearer grant assertion.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc7523#section-3
+	GetRFC7523AssertionSigningAlgValues(ctx context.Context) (algs []string)
+
+	// GetIDJAGRedeemSigningAlgValues returns the JWS algorithms accepted for an Identity Assertion JWT Authorization
+	// Grant presented for redemption. 'none' and the HMAC algorithms are never accepted, whether listed or not, as the
+	// keys of the issuer are public.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06
+	GetIDJAGRedeemSigningAlgValues(ctx context.Context) (algs []string)
+
+	// GetRFC7591TrustedIssuerSigningAlgValues returns the JWS algorithms accepted for a software statement and an
+	// initial access token from a trusted issuer. 'none' and the HMAC algorithms are never accepted, whether listed or
+	// not, as the keys of a trusted issuer are public.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc7591#section-2.3
+	GetRFC7591TrustedIssuerSigningAlgValues(ctx context.Context) (algs []string)
+}
+
+// ResponseEncryptionAlgorithmsProvider is the configuration provider for the algorithms a response may be encrypted
+// with.
+type ResponseEncryptionAlgorithmsProvider interface {
+	// GetResponseEncryptionAlgValues returns the JWE 'alg' values supported for the given response.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	GetResponseEncryptionAlgValues(ctx context.Context, target ResponseEncryptionTarget) (algs []string)
+
+	// GetResponseEncryptionEncValues returns the JWE 'enc' values supported for the given response.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	GetResponseEncryptionEncValues(ctx context.Context, target ResponseEncryptionTarget) (encs []string)
+}
+
 // MTLSStrictRefreshTokenBindingProvider returns the provider for configuring the RFC 8705 refresh token binding of
 // confidential clients.
 type MTLSStrictRefreshTokenBindingProvider interface {
@@ -962,4 +1147,124 @@ type IDTokenConfirmationConfigProvider interface {
 type OIDCKeyBindingConfigProvider interface {
 	// GetOIDCKeyBindingEnabled returns true if OpenID Connect Key Binding 1.0 handling is enabled.
 	GetOIDCKeyBindingEnabled(ctx context.Context) (enabled bool)
+}
+
+// DiscoveryInformationProvider is the configuration provider for the informational authorization server and OpenID
+// Provider metadata. Nil and empty values are omitted from the metadata.
+type DiscoveryInformationProvider interface {
+	// GetScopesSupported returns the configured 'scopes_supported' values, which are extended with the derived scopes.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+	GetScopesSupported(ctx context.Context) (scopes []string)
+
+	// GetClaimsSupported returns the configured 'claims_supported' values, which are extended with the protocol claims
+	// when OpenID Connect is registered.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	GetClaimsSupported(ctx context.Context) (claims []string)
+
+	// GetACRValuesSupported returns the 'acr_values_supported' values.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	GetACRValuesSupported(ctx context.Context) (values []string)
+
+	// GetDisplayValuesSupported returns the 'display_values_supported' values.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	GetDisplayValuesSupported(ctx context.Context) (values []string)
+
+	// GetClaimTypesSupported returns the 'claim_types_supported' values.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	GetClaimTypesSupported(ctx context.Context) (types []string)
+
+	// GetSubjectTypesSupported returns the 'subject_types_supported' values, which defaults to 'public'.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	GetSubjectTypesSupported(ctx context.Context) (types []string)
+
+	// GetUILocalesSupported returns the 'ui_locales_supported' values.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+	GetUILocalesSupported(ctx context.Context) (locales []string)
+
+	// GetClaimsLocalesSupported returns the 'claims_locales_supported' values.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	GetClaimsLocalesSupported(ctx context.Context) (locales []string)
+
+	// GetServiceDocumentation returns the 'service_documentation' URL.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+	GetServiceDocumentation(ctx context.Context) (value string)
+
+	// GetOPPolicyURI returns the 'op_policy_uri' URL.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+	GetOPPolicyURI(ctx context.Context) (value string)
+
+	// GetOPTOSURI returns the 'op_tos_uri' URL.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+	GetOPTOSURI(ctx context.Context) (value string)
+}
+
+// ClientAuthMethodsProvider is the configuration provider for the client authentication methods accepted at the token,
+// revocation and introspection endpoints. A nil list is not configured.
+type ClientAuthMethodsProvider interface {
+	// GetTokenEndpointAuthMethods returns the client authentication methods accepted at the token endpoint, narrowing
+	// the methods supported by the ClientAuthenticationStrategy.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8414#section-2
+	GetTokenEndpointAuthMethods(ctx context.Context) (methods []string)
+
+	// GetRevocationEndpointAuthMethods returns the client authentication methods accepted at the revocation endpoint.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8414#section-2
+	GetRevocationEndpointAuthMethods(ctx context.Context) (methods []string)
+
+	// GetIntrospectionEndpointAuthMethods returns the client authentication methods accepted at the introspection
+	// endpoint.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8414#section-2
+	GetIntrospectionEndpointAuthMethods(ctx context.Context) (methods []string)
+
+	// GetRevocationEndpointAuthSigningAlgValues returns the JWS algorithms accepted for a client assertion at the
+	// revocation endpoint, replacing the client assertion algorithms when set.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8414#section-2
+	GetRevocationEndpointAuthSigningAlgValues(ctx context.Context) (algs []string)
+
+	// GetIntrospectionEndpointAuthSigningAlgValues returns the JWS algorithms accepted for a client assertion at the
+	// introspection endpoint, replacing the client assertion algorithms when set.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8414#section-2
+	GetIntrospectionEndpointAuthSigningAlgValues(ctx context.Context) (algs []string)
+}
+
+// DiscoveryMetadataHook is called last when the OAuth 2.0 Authorization Server Metadata or the OpenID Provider Metadata
+// is built, and may adjust the document before it is signed.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+type DiscoveryMetadataHook interface {
+	// HandleDiscoveryMetadata adjusts the metadata. When the OAuth 2.0 Authorization Server Metadata is built the hook
+	// receives a temporary wrapper of which only the embedded OAuth2AuthorizationServerMetadata is kept.
+	HandleDiscoveryMetadata(ctx context.Context, metadata *OpenIDConnectProviderMetadata) (err error)
+}
+
+// DiscoveryMetadataHooksProvider is the configuration provider for the discovery metadata hooks.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+type DiscoveryMetadataHooksProvider interface {
+	// GetDiscoveryMetadataHooks returns the hooks which run, in order, after the metadata is built.
+	GetDiscoveryMetadataHooks(ctx context.Context) (hooks []DiscoveryMetadataHook)
+}
+
+// DiscoveryMetadataSigningStrategyProvider is the configuration provider for signed metadata.
+type DiscoveryMetadataSigningStrategyProvider interface {
+	// GetDiscoveryMetadataSigningStrategy returns the strategy which signs the metadata as the 'signed_metadata'
+	// member. When nil the metadata is not signed.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2.1
+	GetDiscoveryMetadataSigningStrategy(ctx context.Context) (strategy jwt.Strategy)
 }

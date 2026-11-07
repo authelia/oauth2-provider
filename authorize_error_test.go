@@ -397,9 +397,9 @@ func TestWriteAuthorizeError(t *testing.T) {
 			err:   ErrInvalidRequest.WithDebug("with-debug"),
 			setup: func(t *testing.T, provider *Fosite, rw *mock.MockResponseWriter, req *mock.MockAuthorizeRequester, header http.Header) {
 				config := &Config{
-					SendDebugMessagesToClients:              provider.Config.GetSendDebugMessagesToClients(context.Background()),
-					UseLegacyErrorFormat:                    provider.Config.GetUseLegacyErrorFormat(context.Background()),
-					AuthorizationServerIdentificationIssuer: "https://example.com",
+					SendDebugMessagesToClients: provider.Config.GetSendDebugMessagesToClients(context.Background()),
+					UseLegacyErrorFormat:       provider.Config.GetUseLegacyErrorFormat(context.Background()),
+					Issuer:                     "https://example.com",
 				}
 
 				config.ResponseModeParameterHandlers = []ResponseModeParameterHandler{

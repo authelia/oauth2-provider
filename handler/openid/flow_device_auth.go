@@ -126,6 +126,27 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) CanHandleTokenEndpointRequest(_ co
 	return request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode))
 }
 
+// GrantTypesSupported returns nil because the handler only augments another grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *OpenIDConnectDeviceAuthorizeHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *OpenIDConnectDeviceAuthorizeHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns nil because the handler does not issue RFC 8693 tokens.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *OpenIDConnectDeviceAuthorizeHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
 var (
 	_ oauth2.RFC8628UserAuthorizeEndpointHandler = (*OpenIDConnectDeviceAuthorizeHandler)(nil)
 	_ oauth2.TokenEndpointHandler                = (*OpenIDConnectDeviceAuthorizeHandler)(nil)

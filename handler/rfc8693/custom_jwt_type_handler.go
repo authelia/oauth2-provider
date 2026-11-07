@@ -127,10 +127,6 @@ func (c *CustomJWTTypeHandler) PopulateTokenEndpointResponse(ctx context.Context
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
-	if IsIDJAGRequest(ctx, request, c.Config) {
-		return nil
-	}
-
 	form := request.GetRequestForm()
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 
@@ -141,7 +137,7 @@ func (c *CustomJWTTypeHandler) PopulateTokenEndpointResponse(ctx context.Context
 	tokenTypes := c.Config.GetRFC8693TokenTypes(ctx)
 	tokenType := tokenTypes[requestedTokenType]
 
-	if tokenType == nil || tokenType.GetType(ctx) != consts.TokenTypeRFC8693JWT {
+	if !c.issues(ctx, requestedTokenType, tokenType) {
 		return nil
 	}
 
@@ -334,9 +330,9 @@ func (c *CustomJWTTypeHandler) validateIssuerIsNotIDTokenIssuer(ctx context.Cont
 	// 3.12 requires mutually exclusive validation rules for JWTs from one issuer.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
-	if provider, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok {
-		if issuer := provider.GetIDTokenIssuer(ctx); issuer != "" && iss == issuer {
-			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token is the ID Token issuer, so the token must be exchanged as '%s'.", consts.TokenTypeRFC8693IDToken))
+	if provider, ok := c.Config.(oauth2.IssuerProvider); ok {
+		if issuer := provider.GetIssuer(ctx); issuer != "" && iss == issuer {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token is the issuer of this server, so the token must be exchanged as '%s'.", consts.TokenTypeRFC8693IDToken))
 		}
 	}
 
@@ -563,19 +559,19 @@ func (c *CustomJWTTypeHandler) validateIDTokenIssuerConfigured(ctx context.Conte
 		return nil
 	}
 
-	if provider, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok && provider.GetIDTokenIssuer(ctx) != "" {
+	if provider, ok := c.Config.(oauth2.IssuerProvider); ok && provider.GetIssuer(ctx) != "" {
 		return nil
 	}
 
 	return errorsx.WithStack(oauth2.ErrServerError.
-		WithDebugf("The JSON Web Token type '%s' issues JWT authorization grants but the ID Token token type is registered without an ID Token issuer, so a grant would be accepted as an ID Token.", jwtType.GetName(ctx)))
+		WithDebugf("The JSON Web Token type '%s' issues JWT authorization grants but the ID Token token type is registered without the issuer of this server, so a grant would be accepted as an ID Token.", jwtType.GetName(ctx)))
 }
 
 func (c *CustomJWTTypeHandler) validateIssuedIssuer(ctx context.Context, jwtType *JWTType, iss string) error {
-	if provider, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok {
-		if issuer := provider.GetIDTokenIssuer(ctx); issuer != "" && iss == issuer {
+	if provider, ok := c.Config.(oauth2.IssuerProvider); ok {
+		if issuer := provider.GetIssuer(ctx); issuer != "" && iss == issuer {
 			return errorsx.WithStack(oauth2.ErrServerError.
-				WithDebugf("The JSON Web Token type '%s' has the issuer '%s' which is the ID Token issuer, so the issued token would be accepted as an ID Token.", jwtType.GetName(ctx), iss))
+				WithDebugf("The JSON Web Token type '%s' has the issuer '%s' which is the issuer of this server, so the issued token would be accepted as an ID Token.", jwtType.GetName(ctx), iss))
 		}
 	}
 
@@ -596,6 +592,55 @@ func (c *CustomJWTTypeHandler) expiry(ctx context.Context, client oauth2.Client,
 	}
 
 	return oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeTokenExchange, oauth2.AccessToken, fallback)
+}
+
+// GrantTypesSupported returns nil because the handler only augments another grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *CustomJWTTypeHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *CustomJWTTypeHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *CustomJWTTypeHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns the identifiers of the configured issuable JWT token types, excluding the
+// Identity Assertion JWT Authorization Grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *CustomJWTTypeHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return IssuableTokenTypes(ctx, c.Config, func(identifier string, tokenType oauth2.RFC8693TokenType) bool {
+		return c.issues(ctx, identifier, tokenType)
+	})
+}
+
+// IdentityChainingRequestedTokenTypesSupported returns the identifiers of the configured issuable JWT token types which
+// issue a JWT authorization grant.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-3
+func (c *CustomJWTTypeHandler) IdentityChainingRequestedTokenTypesSupported(ctx context.Context) (types []string) {
+	return IssuableTokenTypes(ctx, c.Config, func(identifier string, tokenType oauth2.RFC8693TokenType) bool {
+		jwtType, ok := tokenType.(*JWTType)
+
+		return ok && jwtType != nil && jwtType.Issue != nil && jwtType.Issue.AuthorizationGrant && c.issues(ctx, identifier, tokenType)
+	})
+}
+
+var _ oauth2.IdentityChainingHandler = (*CustomJWTTypeHandler)(nil)
+
+func (c *CustomJWTTypeHandler) issues(ctx context.Context, identifier string, tokenType oauth2.RFC8693TokenType) bool {
+	return !IsIDJAGRequestedTokenType(identifier) && tokenType != nil && tokenType.GetType(ctx) == consts.TokenTypeRFC8693JWT
 }
 
 func stripIDTokenConfirmationHeader(headers *jwt.Headers) (stripped *jwt.Headers) {
@@ -690,3 +735,5 @@ func validateCustomJWTScope(ctx context.Context, request oauth2.AccessRequester,
 
 	return validateSubjectTokenScope(request, scopeClaim(claims))
 }
+
+var _ oauth2.TokenEndpointHandler = (*CustomJWTTypeHandler)(nil)

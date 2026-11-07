@@ -40,7 +40,7 @@ func TestIDJAGRequestRefreshTokenSubjectAudienceAlias(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, store, strategy := newExchangeFixture(t)
 			cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693IDJAG] = &DefaultTokenType{Name: consts.TokenTypeRFC8693IDJAG}
-			cfg.AuthorizationServerIdentificationIssuer = idjagAudience
+			cfg.Issuer = idjagAudience
 
 			if tc.issuer != "" {
 				store.IDJAGRelationships[storage.IDJAGRelationshipKey{ClientID: tc.owner, Audience: alias}] = oauth2.IDJAGRelationship{Issuer: tc.issuer, ClientID: "rs-client"}
@@ -75,7 +75,7 @@ func TestIDJAGRequestRefreshTokenSubjectAudienceAlias(t *testing.T) {
 func TestIDJAGRequestRefreshTokenSubjectAudienceAliasStorageError(t *testing.T) {
 	cfg, store, strategy := newExchangeFixture(t)
 	cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693IDJAG] = &DefaultTokenType{Name: consts.TokenTypeRFC8693IDJAG}
-	cfg.AuthorizationServerIdentificationIssuer = idjagAudience
+	cfg.Issuer = idjagAudience
 
 	handler := newRefreshTokenTypeHandler(cfg, store, strategy)
 	handler.Storage = &failingRelationshipStore{MemoryStore: store}

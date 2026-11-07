@@ -57,7 +57,9 @@ const (
 	// parameter listing the token types a client can request when performing identity and authorization chaining.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-3
-	AuthorizationServerMetadataIdentityChainingRequestedTokenTypesSupported string = "identity_chaining_requested_token_types_supported"
+	//
+	// Deprecated: use the DraftIdentityChainingMetadata.IdentityChainingRequestedTokenTypesSupported field.
+	AuthorizationServerMetadataIdentityChainingRequestedTokenTypesSupported string = consts.DiscoveryIdentityChainingRequestedTokenTypesSupported
 )
 
 // Provider is an interface that enables you to write OAuth2 handlers with only a few lines of code.
@@ -292,6 +294,28 @@ type Provider interface {
 	// The following specs must be considered in any implementation of this method:
 	// * https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 	DisableRefreshTokenRotation(ctx context.Context, client Client) (disable bool)
+
+	// NewOAuth2AuthorizationServerMetadata builds the OAuth 2.0 Authorization Server Metadata document from the
+	// registered handlers and the configuration, omitting every extension whose feature is disabled.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://datatracker.ietf.org/doc/html/rfc8414#section-2 (everything MUST be implemented)
+	NewOAuth2AuthorizationServerMetadata(ctx context.Context) (metadata *OAuth2AuthorizationServerMetadata, err error)
+
+	// NewOpenIDConnectProviderMetadata builds the OpenID Provider Metadata document from the OAuth 2.0 Authorization
+	// Server Metadata, the registered handlers and the configuration, omitting every extension whose feature is
+	// disabled. It returns ErrDiscoveryOpenIDConnectNotRegistered when no OpenID Connect handler is registered.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata (everything MUST be implemented)
+	NewOpenIDConnectProviderMetadata(ctx context.Context) (metadata *OpenIDConnectProviderMetadata, err error)
+
+	// WriteDiscoveryResponse writes a discovery metadata document as a 200 JSON response, or a 500 without a body when
+	// it cannot be marshalled. Caching headers are left to the caller.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://datatracker.ietf.org/doc/html/rfc8414#section-3.2
+	WriteDiscoveryResponse(ctx context.Context, rw http.ResponseWriter, metadata any)
 }
 
 // IntrospectionResponder is the response object that will be returned when token introspection was successful,

@@ -323,11 +323,11 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		assertion = request.Form.Get(consts.FormParameterRequest)
 	}
 
-	issuer := f.Config.GetIDTokenIssuer(ctx)
+	issuer := f.Config.GetIssuer(ctx)
 
 	strategy := f.Config.GetJWTStrategy(ctx)
 
-	token, err := strategy.Decode(ctx, assertion, jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...), jwt.WithJARClient(client))
+	token, err := strategy.Decode(ctx, assertion, jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(f.Config.GetRequestObjectSigningAlgValues(ctx))...), jwt.WithKeyAlgorithm(jwt.ToKeyAlgorithms(f.Config.GetRequestObjectEncryptionAlgValues(ctx))...), jwt.WithContentEncryption(jwt.ToContentEncryptions(f.Config.GetRequestObjectEncryptionEncValues(ctx))...), jwt.WithJARClient(client))
 	if err != nil {
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
@@ -715,7 +715,7 @@ func (f *Fosite) ParseResponseMode(ctx context.Context, _ *http.Request, request
 	for _, handler := range f.Config.GetResponseModeHandlers(ctx) {
 		mode := ResponseModeType(m)
 
-		if handler.ResponseModes().Has(mode) {
+		if handler.ResponseModesSupported(ctx).Has(mode) {
 			request.ResponseMode = mode
 
 			return nil

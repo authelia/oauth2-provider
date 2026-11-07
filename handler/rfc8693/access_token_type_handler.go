@@ -133,7 +133,7 @@ func (c *AccessTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Conte
 		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
-	if requestedTokenType != consts.TokenTypeRFC8693AccessToken {
+	if !c.issues(requestedTokenType) {
 		return nil
 	}
 
@@ -324,3 +324,39 @@ func (c *AccessTokenTypeHandler) GetExpiresIn(r oauth2.Requester, key oauth2.Tok
 
 	return time.Duration(r.GetSession().GetExpiresAt(key).UnixNano() - now.UnixNano())
 }
+
+// GrantTypesSupported returns nil because the handler only augments another grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *AccessTokenTypeHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *AccessTokenTypeHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *AccessTokenTypeHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns the configured access token type identifier when it is issuable.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *AccessTokenTypeHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return IssuableTokenTypes(ctx, c.Config, func(identifier string, _ oauth2.RFC8693TokenType) bool {
+		return c.issues(identifier)
+	})
+}
+
+func (c *AccessTokenTypeHandler) issues(identifier string) bool {
+	return identifier == consts.TokenTypeRFC8693AccessToken
+}
+
+var _ oauth2.TokenEndpointHandler = (*AccessTokenTypeHandler)(nil)

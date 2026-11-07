@@ -18,6 +18,48 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+func TestValidateDPoPProofAcceptsConfiguredTokenURL(t *testing.T) {
+	s, _ := newTestStrategy()
+	key := newTestProofKey(t)
+
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "alt-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://op/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+	})
+
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "http://internal:8080/token", raw, false, "", "https://op/token")
+	require.NoError(t, err)
+}
+
+func TestValidateDPoPProofRejectsUnconfiguredURL(t *testing.T) {
+	s, _ := newTestStrategy()
+	key := newTestProofKey(t)
+
+	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+		jwt.ClaimJWTID: "alt-2", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://op/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+	})
+
+	_, err := s.ValidateDPoPProof(context.Background(), http.MethodPost, "http://internal:8080/token", raw, false, "")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, "does not match the request URI")
+}
+
+func TestHandlerBindAccessRequestAcceptsConfiguredTokenURL(t *testing.T) {
+	h, _, cfg := newTestHandler(false)
+	cfg.urls = oauth2.EndpointURLs{Token: "https://op/token", MutualTLSAliases: oauth2.RFC8705MutualTLSEndpointAliases{Token: "https://mtls.op/token"}}
+
+	for _, htu := range []string{"https://op/token", "https://mtls.op/token"} {
+		raw := signProof(t, newTestProofKey(t), jwt.JSONWebTokenTypeDPoP, map[string]any{
+			jwt.ClaimJWTID: "bind-" + htu, jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: htu, jwt.ClaimIssuedAt: time.Now().Unix(),
+		})
+
+		ar := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+		ar.Client = &oauth2.DefaultClient{}
+
+		require.NoError(t, h.BindAccessRequest(ctxWithDPoP(http.MethodPost, "http://internal:8080/token", raw), ar), htu)
+	}
+}
+
 func TestStrategyValidateProofAcceptsMatchingMethodURL(t *testing.T) {
 	s, _ := newTestStrategy()
 	key := newTestProofKey(t)

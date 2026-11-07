@@ -175,7 +175,7 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 		return err
 	}
 
-	issuer := h.Config.GetAuthorizationServerIdentificationIssuer(ctx)
+	issuer := h.Config.GetIssuer(ctx)
 	if issuer == "" {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The authorization server issuer identifier is not configured."))
 	}
@@ -511,7 +511,62 @@ func (h *IssueHandler) relationship(ctx context.Context, request oauth2.AccessRe
 	return relationship, nil
 }
 
+// GrantTypesSupported returns nil because the handler only augments another grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (h *IssueHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (h *IssueHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (h *IssueHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns the configured Identity Assertion JWT Authorization Grant token type identifier
+// when it is issuable.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3
+func (h *IssueHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return rfc8693.IssuableTokenTypes(ctx, h.Config, func(identifier string, _ oauth2.RFC8693TokenType) bool {
+		return rfc8693.IsIDJAGRequestedTokenType(identifier)
+	})
+}
+
 var (
 	_ oauth2.TokenEndpointHandler                     = (*IssueHandler)(nil)
 	_ oauth2.AuthorizationDetailsTokenEndpointHandler = (*IssueHandler)(nil)
+)
+
+// SigningAlgValuesSupported returns the JWS algorithms the handler can sign an ID-JAG with.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-7
+func (h *IssueHandler) SigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	if h.Strategy == nil {
+		return nil
+	}
+
+	return h.Strategy.SigningAlgValues(ctx)
+}
+
+// IdentityChainingRequestedTokenTypesSupported returns the configured Identity Assertion JWT Authorization Grant token
+// type identifier when it is issuable, as the grant profiles Identity and Authorization Chaining Across Domains.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-3
+func (h *IssueHandler) IdentityChainingRequestedTokenTypesSupported(ctx context.Context) (types []string) {
+	return h.RFC8693TokenTypesSupported(ctx)
+}
+
+var (
+	_ oauth2.IDJAGIssuingHandler     = (*IssueHandler)(nil)
+	_ oauth2.IdentityChainingHandler = (*IssueHandler)(nil)
 )

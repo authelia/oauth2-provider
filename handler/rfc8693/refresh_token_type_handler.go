@@ -136,7 +136,7 @@ func (c *RefreshTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Cont
 		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
-	if requestedTokenType != consts.TokenTypeRFC8693RefreshToken {
+	if !c.issues(requestedTokenType) {
 		return nil
 	}
 
@@ -335,12 +335,12 @@ func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, reques
 // ownAudience returns the audience to compare with the refresh token when the requested 'audience' identifies this
 // server, by its issuer identifier or an alias the relationship resolves to it (Section 4.3), and nil otherwise.
 func (c *RefreshTokenTypeHandler) ownAudience(ctx context.Context, request oauth2.AccessRequester) (audiences []string, err error) {
-	config, ok := c.Config.(oauth2.AuthorizationServerIssuerIdentificationProvider)
+	config, ok := c.Config.(oauth2.IssuerProvider)
 	if !ok {
 		return nil, nil
 	}
 
-	issuer := config.GetAuthorizationServerIdentificationIssuer(ctx)
+	issuer := config.GetIssuer(ctx)
 	requested := request.GetRequestedAudience()
 
 	switch {
@@ -487,3 +487,39 @@ func (c *RefreshTokenTypeHandler) GetExpiresIn(r oauth2.Requester, key oauth2.To
 
 	return time.Duration(r.GetSession().GetExpiresAt(key).UnixNano() - now.UnixNano())
 }
+
+// GrantTypesSupported returns nil because the handler only augments another grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *RefreshTokenTypeHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *RefreshTokenTypeHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *RefreshTokenTypeHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns the configured refresh token type identifier when it is issuable.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *RefreshTokenTypeHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return IssuableTokenTypes(ctx, c.Config, func(identifier string, _ oauth2.RFC8693TokenType) bool {
+		return c.issues(identifier)
+	})
+}
+
+func (c *RefreshTokenTypeHandler) issues(identifier string) bool {
+	return identifier == consts.TokenTypeRFC8693RefreshToken
+}
+
+var _ oauth2.TokenEndpointHandler = (*RefreshTokenTypeHandler)(nil)

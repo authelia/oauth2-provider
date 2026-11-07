@@ -17,11 +17,13 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// LocalValidatorConfig is the configuration oauth2.ClientRegistrationValidator LocalValidator depends on.
+// LocalValidatorConfig is the configuration oauth2.ClientRegistrationValidator LocalValidator depends on. It is the full
+// oauth2.Configurator so the client metadata is checked against the same derived capabilities the discovery metadata
+// advertises.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7591#section-2
 type LocalValidatorConfig interface {
-	oauth2.ScopeStrategyProvider
-	oauth2.AudienceStrategyProvider
-	oauth2.RFC7591ClientRegistrationGrantTypesProvider
+	oauth2.Configurator
 }
 
 // LocalValidator is an oauth2.ClientRegistrationValidator that performs purely local checks against submitted
@@ -88,10 +90,6 @@ func (v *LocalValidator) ValidateClientRegistrationMetadata(ctx context.Context,
 		return err
 	}
 
-	if err = validateGrantTypesPermitted(ctx, v.config, metadata); err != nil {
-		return err
-	}
-
 	if err = validateAuthorizationGrantProfiles(metadata); err != nil {
 		return err
 	}
@@ -106,6 +104,23 @@ func (v *LocalValidator) ValidateClientRegistrationMetadata(ctx context.Context,
 
 	if err = validateTLSClientAuth(metadata); err != nil {
 		return err
+	}
+
+	return validateCapabilities(ctx, v.config, metadata)
+}
+
+func validateCapabilities(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	for _, validate := range []func(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) error{
+		validateGrantTypesSupported,
+		validateResponseTypesSupported,
+		validateResponseModesSupported,
+		validateAuthMethodsSupported,
+		validateSubjectTypeSupported,
+		validateAlgorithmsSupported,
+	} {
+		if err = validate(ctx, config, metadata); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -238,27 +253,6 @@ func validateRedirectURI(rfc *oauth2.RFC6749Error, name, raw, applicationType st
 
 	if oauth2.IsLocalhost(parsed) {
 		return errorsx.WithStack(rfc.WithHintf("The '%s' value '%s' must not target the loopback interface for the 'web' '%s'.", name, raw, consts.ClientMetadataApplicationType))
-	}
-
-	return nil
-}
-
-// validateGrantTypesPermitted checks the registered 'grant_types' against the grant types the deployment permits a
-// client to register for. An empty policy permits any grant, which is the default; see
-// GetRFC7591ClientRegistrationGrantTypes. An absent 'grant_types' is not checked.
-//
-// See: https://datatracker.ietf.org/doc/html/rfc7591#section-2
-func validateGrantTypesPermitted(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
-	permitted := config.GetRFC7591ClientRegistrationGrantTypes(ctx)
-
-	if len(permitted) == 0 {
-		return nil
-	}
-
-	for _, grantType := range metadata.GrantTypes {
-		if !slices.Contains(permitted, grantType) {
-			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is not permitted for registration.", consts.ClientMetadataGrantTypes, grantType))
-		}
 	}
 
 	return nil
@@ -563,6 +557,7 @@ func validateAlgorithms(metadata *oauth2.ClientRegistrationMetadata) (err error)
 		{consts.ClientMetadataRevocationEndpointAuthAlg, metadata.RevocationEndpointAuthSigningAlg},
 		{consts.ClientMetadataAuthorizationSignedResponseAlg, metadata.AuthorizationSignedResponseAlg},
 		{consts.ClientMetadataAccessTokenSignedResponseAlg, metadata.AccessTokenSignedResponseAlg},
+		{consts.ClientMetadataIntrospectionSignedResponseAlg, metadata.IntrospectionSignedResponseAlg},
 	} {
 		if algorithm.value == consts.JSONWebTokenAlgNone {
 			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value must not be '%s'.", algorithm.name, consts.JSONWebTokenAlgNone))
@@ -709,6 +704,232 @@ func validateAuthorizationGrantProfiles(metadata *oauth2.ClientRegistrationMetad
 	}
 
 	return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' authorization grant profile requires the '%s' and '%s' grant types to be present in '%s'.", consts.GrantProfileIDJAG, consts.GrantTypeOAuthTokenExchange, consts.GrantTypeOAuthJWTBearer, consts.ClientMetadataGrantTypes))
+}
+
+// validateGrantTypesSupported checks the effective 'grant_types' against the grant types this authorization server
+// supports and permits for registration. An omitted value is checked as 'authorization_code', the RFC 7591 Section 2
+// default.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7591#section-2
+func validateGrantTypesSupported(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	supported := oauth2.SupportedGrantTypes(ctx, config)
+	permitted := config.GetRFC7591ClientRegistrationGrantTypes(ctx)
+
+	grantTypes, defaulted := metadata.GrantTypes, len(metadata.GrantTypes) == 0
+	if defaulted {
+		grantTypes = []string{consts.GrantTypeAuthorizationCode}
+	}
+
+	for _, grantType := range grantTypes {
+		if !slices.Contains(supported, grantType) {
+			return errUnsupportedEffectiveValue(consts.ClientMetadataGrantTypes, grantType, defaulted)
+		}
+
+		if len(permitted) != 0 && !slices.Contains(permitted, grantType) {
+			if defaulted {
+				return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s', which applies by default when '%s' is omitted, is not permitted for registration.", consts.ClientMetadataGrantTypes, grantType, consts.ClientMetadataGrantTypes))
+			}
+
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is not permitted for registration.", consts.ClientMetadataGrantTypes, grantType))
+		}
+	}
+
+	return nil
+}
+
+// validateResponseTypesSupported checks the effective 'response_types' against the response types this authorization
+// server supports. An omitted value is checked as 'code', the RFC 7591 Section 2 default, whenever the effective
+// 'grant_types' include 'authorization_code', as the registered client then uses that default at the authorization
+// endpoint. A client registering only grant types that do not use the authorization endpoint has no use for a
+// response type, so the default is not checked for it.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7591#section-2
+func validateResponseTypesSupported(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	responseTypes, defaulted := metadata.ResponseTypes, false
+
+	if len(responseTypes) == 0 {
+		if len(metadata.GrantTypes) != 0 && !slices.Contains(metadata.GrantTypes, consts.GrantTypeAuthorizationCode) {
+			return nil
+		}
+
+		responseTypes, defaulted = []string{consts.ResponseTypeAuthorizationCodeFlow}, true
+	}
+
+	supported := map[string]struct{}{}
+
+	for _, responseType := range oauth2.SupportedResponseTypes(ctx, config) {
+		supported[normalizeResponseType(responseType)] = struct{}{}
+	}
+
+	for _, responseType := range responseTypes {
+		if _, ok := supported[normalizeResponseType(responseType)]; !ok {
+			return errUnsupportedEffectiveValue(consts.ClientMetadataResponseTypes, responseType, defaulted)
+		}
+	}
+
+	return nil
+}
+
+func normalizeResponseType(responseType string) string {
+	fields := strings.Fields(responseType)
+
+	slices.Sort(fields)
+
+	return strings.Join(fields, " ")
+}
+
+func validateResponseModesSupported(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	if len(metadata.ResponseModes) == 0 {
+		return nil
+	}
+
+	supported := oauth2.SupportedResponseModes(ctx, config)
+
+	for _, mode := range metadata.ResponseModes {
+		if !slices.Contains(supported, mode) {
+			return errUnsupportedValue(consts.ClientMetadataResponseModes, mode)
+		}
+	}
+
+	return nil
+}
+
+// validateAuthMethodsSupported checks the effective authentication method of each endpoint against the methods that
+// endpoint accepts, as the endpoint itself resolves both. An omitted 'token_endpoint_auth_method' is checked as
+// 'client_secret_basic', the RFC 7591 Section 2 default, and an omitted revocation or introspection method as the
+// effective token endpoint method, which the endpoint authenticates the client with. The revocation and introspection
+// endpoints accept their configured methods, or every method of the client authentication strategy when none are
+// configured; the token endpoint's configured methods do not restrict them. The access token types an introspection
+// list may hold are not client authentication methods, so a list holding only those offers no client authentication
+// and an omitted introspection method is not checked against it.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7591#section-2
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func validateAuthMethodsSupported(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	token, tokenDefaulted := metadata.TokenEndpointAuthMethod, metadata.TokenEndpointAuthMethod == ""
+	if tokenDefaulted {
+		token = consts.ClientAuthMethodClientSecretBasic
+	}
+
+	if err = validateEffectiveValueSupported(consts.ClientMetadataTokenEndpointAuthMethod, token, tokenDefaulted, oauth2.SupportedTokenEndpointAuthMethods(ctx, config)); err != nil {
+		return err
+	}
+
+	for _, endpoint := range []struct {
+		name     string
+		value    string
+		endpoint oauth2.ClientAuthEndpoint
+	}{
+		{consts.ClientMetadataRevocationEndpointAuthMethod, metadata.RevocationEndpointAuthMethod, oauth2.ClientAuthEndpointRevocation},
+		{consts.ClientMetadataIntrospectionEndpointAuthMethod, metadata.IntrospectionEndpointAuthMethod, oauth2.ClientAuthEndpointIntrospection},
+	} {
+		method, defaulted := endpoint.value, endpoint.value == ""
+		if defaulted {
+			method = token
+		}
+
+		supported := slices.DeleteFunc(slices.Clone(oauth2.SupportedEndpointAuthMethods(ctx, config, endpoint.endpoint)), oauth2.IsAccessTokenTypeAuthMethod)
+
+		if defaulted && len(supported) == 0 {
+			continue
+		}
+
+		if err = validateEffectiveValueSupported(endpoint.name, method, defaulted, supported); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateSubjectTypeSupported(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	return validateValueSupported(consts.ClientMetadataSubjectType, metadata.SubjectType, config.GetSubjectTypesSupported(ctx))
+}
+
+func validateAlgorithmsSupported(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	for _, algorithm := range []struct {
+		name      string
+		value     string
+		supported func() []string
+	}{
+		{consts.ClientMetadataTokenEndpointAuthAlg, metadata.TokenEndpointAuthSigningAlg, func() []string {
+			return oauth2.SupportedEndpointAuthSigningAlgValues(ctx, config, oauth2.ClientAuthEndpointToken)
+		}},
+		{consts.ClientMetadataRevocationEndpointAuthAlg, metadata.RevocationEndpointAuthSigningAlg, func() []string {
+			return oauth2.SupportedEndpointAuthSigningAlgValues(ctx, config, oauth2.ClientAuthEndpointRevocation)
+		}},
+		{consts.ClientMetadataIntrospectionEndpointAuthAlg, metadata.IntrospectionEndpointAuthSigningAlg, func() []string {
+			return oauth2.SupportedEndpointAuthSigningAlgValues(ctx, config, oauth2.ClientAuthEndpointIntrospection)
+		}},
+		{consts.ClientMetadataRequestObjectSigningAlg, metadata.RequestObjectSigningAlg, func() []string { return oauth2.SupportedRequestObjectSigningAlgValues(ctx, config) }},
+		{consts.ClientMetadataRequestObjectEncryptionAlg, metadata.RequestObjectEncryptionAlg, func() []string { return config.GetRequestObjectEncryptionAlgValues(ctx) }},
+		{consts.ClientMetadataRequestObjectEncryptionEnc, metadata.RequestObjectEncryptionEnc, func() []string { return config.GetRequestObjectEncryptionEncValues(ctx) }},
+		{consts.ClientMetadataIDTokenSignedResponseAlg, metadata.IDTokenSignedResponseAlg, func() []string { return oauth2.SupportedIDTokenSignedResponseAlgValues(ctx, config) }},
+		{consts.ClientMetadataIDTokenEncryptedResponseAlg, metadata.IDTokenEncryptedResponseAlg, responseEncryptionAlgValues(ctx, config, oauth2.ResponseEncryptionTargetIDToken)},
+		{consts.ClientMetadataIDTokenEncryptedResponseEnc, metadata.IDTokenEncryptedResponseEnc, responseEncryptionEncValues(ctx, config, oauth2.ResponseEncryptionTargetIDToken)},
+		{consts.ClientMetadataUserinfoSignedResponseAlg, metadata.UserinfoSignedResponseAlg, func() []string { return oauth2.SupportedUserinfoSignedResponseAlgValues(ctx, config) }},
+		{consts.ClientMetadataUserinfoEncryptedResponseAlg, metadata.UserinfoEncryptedResponseAlg, responseEncryptionAlgValues(ctx, config, oauth2.ResponseEncryptionTargetUserInfo)},
+		{consts.ClientMetadataUserinfoEncryptedResponseEnc, metadata.UserinfoEncryptedResponseEnc, responseEncryptionEncValues(ctx, config, oauth2.ResponseEncryptionTargetUserInfo)},
+		{consts.ClientMetadataAuthorizationSignedResponseAlg, metadata.AuthorizationSignedResponseAlg, func() []string { return oauth2.SupportedAuthorizationSignedResponseAlgValues(ctx, config) }},
+		{consts.ClientMetadataAuthorizationEncryptedResponseAlg, metadata.AuthorizationEncryptedResponseAlg, responseEncryptionAlgValues(ctx, config, oauth2.ResponseEncryptionTargetAuthorization)},
+		{consts.ClientMetadataAuthorizationEncryptedResponseEnc, metadata.AuthorizationEncryptedResponseEnc, responseEncryptionEncValues(ctx, config, oauth2.ResponseEncryptionTargetAuthorization)},
+		{consts.ClientMetadataIntrospectionSignedResponseAlg, metadata.IntrospectionSignedResponseAlg, func() []string { return oauth2.SupportedIntrospectionSignedResponseAlgValues(ctx, config) }},
+		{consts.ClientMetadataIntrospectionEncryptedResponseAlg, metadata.IntrospectionEncryptedResponseAlg, responseEncryptionAlgValues(ctx, config, oauth2.ResponseEncryptionTargetIntrospection)},
+		{consts.ClientMetadataIntrospectionEncryptedResponseEnc, metadata.IntrospectionEncryptedResponseEnc, responseEncryptionEncValues(ctx, config, oauth2.ResponseEncryptionTargetIntrospection)},
+		{consts.ClientMetadataAccessTokenSignedResponseAlg, metadata.AccessTokenSignedResponseAlg, func() []string { return oauth2.SupportedAccessTokenSignedResponseAlgValues(ctx, config) }},
+		{consts.ClientMetadataAccessTokenEncryptedResponseAlg, metadata.AccessTokenEncryptedResponseAlg, responseEncryptionAlgValues(ctx, config, oauth2.ResponseEncryptionTargetAccessToken)},
+		{consts.ClientMetadataAccessTokenEncryptedResponseEnc, metadata.AccessTokenEncryptedResponseEnc, responseEncryptionEncValues(ctx, config, oauth2.ResponseEncryptionTargetAccessToken)},
+	} {
+		if algorithm.value == "" {
+			continue
+		}
+
+		if err = validateValueSupported(algorithm.name, algorithm.value, algorithm.supported()); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func responseEncryptionAlgValues(ctx context.Context, config LocalValidatorConfig, target oauth2.ResponseEncryptionTarget) func() []string {
+	return func() []string {
+		return append(slices.Clone(config.GetResponseEncryptionAlgValues(ctx, target)), consts.JSONWebTokenAlgNone)
+	}
+}
+
+func responseEncryptionEncValues(ctx context.Context, config LocalValidatorConfig, target oauth2.ResponseEncryptionTarget) func() []string {
+	return func() []string { return config.GetResponseEncryptionEncValues(ctx, target) }
+}
+
+func validateValueSupported(name, value string, supported []string) (err error) {
+	if value == "" || slices.Contains(supported, value) {
+		return nil
+	}
+
+	return errUnsupportedValue(name, value)
+}
+
+// validateEffectiveValueSupported is validateValueSupported for a value which may be a default applied in place of an
+// omitted one, so the error can say so.
+func validateEffectiveValueSupported(name, value string, defaulted bool, supported []string) (err error) {
+	if slices.Contains(supported, value) {
+		return nil
+	}
+
+	return errUnsupportedEffectiveValue(name, value, defaulted)
+}
+
+func errUnsupportedEffectiveValue(name, value string, defaulted bool) (err error) {
+	if defaulted {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s', which applies by default when '%s' is omitted, is not supported by this authorization server.", name, value, name))
+	}
+
+	return errUnsupportedValue(name, value)
+}
+
+func errUnsupportedValue(name, value string) (err error) {
+	return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is not supported by this authorization server.", name, value))
 }
 
 var (

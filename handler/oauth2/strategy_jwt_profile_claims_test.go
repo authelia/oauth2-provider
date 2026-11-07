@@ -58,7 +58,7 @@ func TestJWTProfileAccessTokenRequiredClaims(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &oauth2.Config{
 				EnforceJWTProfileAccessTokens:        true,
-				AccessTokenIssuer:                    "https://as.example.com",
+				Issuer:                               "https://as.example.com",
 				GlobalSecret:                         []byte("foofoofoofoofoofoofoofoofoofoofoo"),
 				JWTProfileAccessTokenDefaultAudience: tc.defaults,
 			}

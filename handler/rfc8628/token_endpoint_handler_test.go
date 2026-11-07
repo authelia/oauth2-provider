@@ -20,6 +20,7 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/handler/rfc8628"
 	. "authelia.com/provider/oauth2/handler/rfc8628"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
@@ -27,6 +28,12 @@ import (
 	"authelia.com/provider/oauth2/token/hmac"
 	"authelia.com/provider/oauth2/token/jwt"
 )
+
+func TestDeviceAuthorizeTokenEndpointHandlerGrantTypesSupported(t *testing.T) {
+	h := &rfc8628.DeviceAuthorizeTokenEndpointHandler{}
+
+	assert.Equal(t, []string{consts.GrantTypeOAuthDeviceCode}, h.GrantTypesSupported(context.Background()))
+}
 
 func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseHMAC(t *testing.T) {
 	strategy := &o2hmacshaStrategy

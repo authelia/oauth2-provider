@@ -25,6 +25,7 @@ const (
 	ClientMetadataRedirectURIs                 = "redirect_uris"
 	ClientMetadataGrantTypes                   = "grant_types"
 	ClientMetadataResponseTypes                = "response_types"
+	ClientMetadataResponseModes                = "response_modes"
 	ClientMetadataScope                        = valueScope
 	ClientMetadataJSONWebKeys                  = "jwks"
 	ClientMetadataJSONWebKeysURI               = "jwks_uri"

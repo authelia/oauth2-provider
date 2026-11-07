@@ -139,6 +139,34 @@ func (c *ClientCredentialsGrantHandler) CanHandleTokenEndpointRequest(_ context.
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeClientCredentials)
 }
 
+// GrantTypesSupported returns the grant types this handler serves.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *ClientCredentialsGrantHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return []string{consts.GrantTypeClientCredentials}
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *ClientCredentialsGrantHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *ClientCredentialsGrantHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns nil because the handler does not issue RFC 8693 tokens.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *ClientCredentialsGrantHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
 var (
 	_ oauth2.TokenEndpointHandler                     = (*ClientCredentialsGrantHandler)(nil)
 	_ oauth2.AuthorizationDetailsTokenEndpointHandler = (*ClientCredentialsGrantHandler)(nil)

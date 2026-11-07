@@ -30,17 +30,17 @@ func TestIDTokenSubjectTokenIssuer(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "ShouldRejectAnyIssuerWhenTheIDTokenIssuerIsNotConfigured",
+			name:     "ShouldRejectAnyIssuerWhenTheIssuerIsNotConfigured",
 			issuer:   "https://id.example.com",
 			unset:    true,
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'iss' from token is not a trusted issuer. The ID Token issuer is not configured, so no issuer is trusted.",
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'iss' from token is not a trusted issuer. The issuer of this server is not configured, so no issuer is trusted.",
 		},
 		{
-			name:   "ShouldAcceptTheIDTokenIssuer",
+			name:   "ShouldAcceptTheIssuer",
 			issuer: "https://id.example.com",
 		},
 		{
-			name:     "ShouldRejectTheAccessTokenIssuer",
+			name:     "ShouldRejectAnotherIssuer",
 			issuer:   "https://at.example.com",
 			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'iss' from token must match the 'https://id.example.com'.",
 		},
@@ -51,7 +51,7 @@ func TestIDTokenSubjectTokenIssuer(t *testing.T) {
 			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'iss' from token must match the 'https://id.example.com'.",
 		},
 		{
-			name:    "ShouldAcceptTheIDTokenIssuerTheClientDoesNotPermit",
+			name:    "ShouldAcceptTheIssuerTheClientDoesNotPermit",
 			issuer:  "https://id.example.com",
 			allowed: []string{"https://jwt.example.com"},
 		},
@@ -60,11 +60,10 @@ func TestIDTokenSubjectTokenIssuer(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := newSpecConfig(t)
-			config.IDTokenIssuer = "https://id.example.com"
-			config.AccessTokenIssuer = "https://at.example.com"
+			config.Issuer = "https://id.example.com"
 
 			if tc.unset {
-				config.IDTokenIssuer = ""
+				config.Issuer = ""
 			}
 
 			store := storage.NewExampleStore()
@@ -92,7 +91,7 @@ func TestIDTokenSubjectTokenIssuer(t *testing.T) {
 
 func TestIDTokenSubjectTokenSignedWithClientSecretIsRefused(t *testing.T) {
 	config := newSpecConfig(t)
-	config.IDTokenIssuer = "https://id.example.com"
+	config.Issuer = "https://id.example.com"
 
 	store := storage.NewExampleStore()
 	client := &oauth2.DefaultRegisteredClient{
@@ -104,7 +103,7 @@ func TestIDTokenSubjectTokenSignedWithClientSecretIsRefused(t *testing.T) {
 	strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
 	token, _, err := strategy.Encode(t.Context(), jwt.MapClaims{
-		consts.ClaimIssuer:         config.IDTokenIssuer,
+		consts.ClaimIssuer:         config.Issuer,
 		consts.ClaimSubject:        "victim",
 		consts.ClaimAudience:       []string{client.GetID()},
 		consts.ClaimExpirationTime: time.Now().Add(10 * time.Minute).Unix(),
@@ -124,9 +123,9 @@ func TestCustomJWTIsNotAcceptedAsIDTokenSubjectToken(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "ShouldRefuseToIssueWithTheIDTokenIssuer",
+			name:     "ShouldRefuseToIssueWithTheIssuer",
 			issuer:   "https://as.example.com",
-			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The JSON Web Token type 'urn:spec:jwt' has the issuer 'https://as.example.com' which is the ID Token issuer, so the issued token would be accepted as an ID Token.",
+			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The JSON Web Token type 'urn:spec:jwt' has the issuer 'https://as.example.com' which is the issuer of this server, so the issued token would be accepted as an ID Token.",
 		},
 		{
 			name:   "ShouldIssueWithADistinctIssuer",
@@ -137,7 +136,7 @@ func TestCustomJWTIsNotAcceptedAsIDTokenSubjectToken(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := newSpecConfig(t)
-			config.IDTokenIssuer = "https://as.example.com"
+			config.Issuer = "https://as.example.com"
 			config.RFC8693TokenTypes["urn:spec:jwt"].(*JWTType).Issue.Issuer = tc.issuer
 
 			store := storage.NewExampleStore()

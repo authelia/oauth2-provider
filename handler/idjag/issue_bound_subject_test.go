@@ -104,12 +104,11 @@ func TestIssueHandlerWithABoundIDTokenSubject(t *testing.T) {
 			store.IDJAGAudienceSubjects[storage.IDJAGAudienceSubjectKey{Issuer: redeemAudience, Subject: issueSubject}] = issueMapped
 
 			config := &oauth2.Config{
-				GlobalSecret:                            []byte("super-duper-secret-that-is-at-least-32-bytes"),
-				RFC7591ClientRegistrationGlobalSecret:   []byte("a-completely-different-secret-at-least-32b"),
-				AuthorizationServerIdentificationIssuer: redeemIssuer,
-				IDTokenIssuer:                           boundIssuer,
-				DPoPEnabled:                             tc.dpop,
-				MTLSEnabled:                             tc.mtls,
+				GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+				Issuer:                                boundIssuer,
+				DPoPEnabled:                           tc.dpop,
+				MTLSEnabled:                           tc.mtls,
 				RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
 					consts.TokenTypeRFC8693IDJAG:   &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693IDJAG},
 					consts.TokenTypeRFC8693IDToken: &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693IDToken},

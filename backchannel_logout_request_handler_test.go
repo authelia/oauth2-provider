@@ -428,7 +428,7 @@ func TestRetryableHTTPClientFieldCount(t *testing.T) {
 func newBCLProvider(t *testing.T) (*oauth2.Fosite, *oauth2.Config) {
 	t.Helper()
 
-	config := &oauth2.Config{IDTokenIssuer: bclTestIssuer, MinParameterEntropy: 8}
+	config := &oauth2.Config{Issuer: bclTestIssuer, MinParameterEntropy: 8}
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(bclTestKey)}
 

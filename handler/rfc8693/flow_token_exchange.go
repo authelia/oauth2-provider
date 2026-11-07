@@ -150,17 +150,13 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
-	switch tokenType := configTypesSupported[requestedTokenType].(type) {
-	case nil, *SelfSignedTokenType, *UnsignedJSONTokenType:
+	requestedType := configTypesSupported[requestedTokenType]
+	if !IsIssuable(requestedType) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
-	case *JWTType:
-		if tokenType == nil || tokenType.Issue == nil {
-			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s'.", requestedTokenType, consts.FormParameterRequestedTokenType))
-		}
+	}
 
-		if tokenType.Issue.Issuer == "" {
-			return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The JSON Web Token type '%s' has no issuer.", requestedTokenType))
-		}
+	if tokenType, ok := requestedType.(*JWTType); ok && tokenType.Issue.Issuer == "" {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The JSON Web Token type '%s' has no issuer.", requestedTokenType))
 	}
 
 	if len(supportedRequestTypes) > 0 && !supportedRequestTypes.Has(requestedTokenType) {
@@ -546,7 +542,16 @@ func IsIDJAGRequest(ctx context.Context, request oauth2.Requester, config oauth2
 		requested = config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
-	return requested == consts.TokenTypeRFC8693IDJAG
+	return IsIDJAGRequestedTokenType(requested)
+}
+
+// IsIDJAGRequestedTokenType returns true when the RFC 8693 token type identifier, such as a 'requested_token_type'
+// value, is the Identity Assertion JWT Authorization Grant. Unlike oauth2.IsIDJAGTokenType it does not check a JOSE
+// 'typ' header.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3
+func IsIDJAGRequestedTokenType(identifier string) bool {
+	return identifier == consts.TokenTypeRFC8693IDJAG
 }
 
 func authorizationGrantType(ctx context.Context, request oauth2.Requester, config oauth2.RFC8693ConfigProvider) *JWTType {
@@ -1018,6 +1023,34 @@ func (c *TokenExchangeGrantHandler) CanHandleTokenEndpointRequest(ctx context.Co
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
+// GrantTypesSupported returns the grant types this handler serves.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *TokenExchangeGrantHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return []string{consts.GrantTypeOAuthTokenExchange}
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *TokenExchangeGrantHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *TokenExchangeGrantHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns nil because the token types are reported by the handlers which issue them.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *TokenExchangeGrantHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
 type tokenBinding struct {
 	jkt string
 	x5t string
@@ -1340,3 +1373,44 @@ func recordSubjectTokenDeadline(request oauth2.Requester) {
 		session.SetExpiryDeadline(deadline)
 	}
 }
+
+// IssuableTokenTypes returns the sorted identifiers of the configured token types which pass IsIssuable and which
+// issues reports the handler issues, or nil when config is nil. A handler which issues a token type reports it with
+// this function so the advertised types match those it issues.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func IssuableTokenTypes(ctx context.Context, config oauth2.RFC8693ConfigProvider, issues func(identifier string, tokenType oauth2.RFC8693TokenType) bool) (types []string) {
+	if config == nil {
+		return nil
+	}
+
+	for identifier, t := range config.GetRFC8693TokenTypes(ctx) {
+		if IsIssuable(t) && issues(identifier, t) {
+			types = append(types, identifier)
+		}
+	}
+
+	slices.Sort(types)
+
+	return types
+}
+
+// IsIssuable reports whether a token type can be requested as the 'requested_token_type'. A nil type, a nil
+// *DefaultTokenType, a *SelfSignedTokenType, a *UnsignedJSONTokenType and a *JWTType without an issue configuration
+// cannot.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
+func IsIssuable(t oauth2.RFC8693TokenType) bool {
+	switch tokenType := t.(type) {
+	case nil, *SelfSignedTokenType, *UnsignedJSONTokenType:
+		return false
+	case *DefaultTokenType:
+		return tokenType != nil
+	case *JWTType:
+		return tokenType != nil && tokenType.Issue != nil
+	}
+
+	return true
+}
+
+var _ oauth2.TokenEndpointHandler = (*TokenExchangeGrantHandler)(nil)

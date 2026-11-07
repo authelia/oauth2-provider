@@ -142,8 +142,9 @@ func GetDPoPProof(ctx context.Context) (proof *DPoPProof) {
 type DPoPStrategy interface {
 	// ValidateDPoPProof parses and validates the compact proof JWT against the request method and url. When
 	// requireNonce is true, a valid 'nonce' claim is mandatory. It returns the validated proof or an error that wraps
-	// ErrInvalidDPoPProof or ErrUseDPoPNonce.
-	ValidateDPoPProof(ctx context.Context, method, url, proof string, requireNonce bool) (parsed *DPoPProof, err error)
+	// ErrInvalidDPoPProof or ErrUseDPoPNonce. The proof's 'htu' claim may match the url or any non-empty alternate,
+	// being the configured URLs of the endpoint.
+	ValidateDPoPProof(ctx context.Context, method, url, proof string, requireNonce bool, alternates ...string) (parsed *DPoPProof, err error)
 
 	// NewDPoPNonce issues, persists, and returns a fresh server nonce.
 	NewDPoPNonce(ctx context.Context) (nonce string, err error)
@@ -158,8 +159,10 @@ type DPoPStrategy interface {
 type DPoPResourceStrategy interface {
 	// ValidateResourceAccess performs the RFC 9449 7.1/7.2 resource-server checks for a DPoP-bound access token. It
 	// verifies the token was presented under the DPoP scheme, that the proof covers this request and this token via
-	// the 'ath' claim, and that the proof key is the key the token is bound to.
-	ValidateResourceAccess(ctx context.Context, r *http.Request, accessToken, boundJKT string, requireNonce bool) (parsed *DPoPProof, err error)
+	// the 'ath' claim, and that the proof key is the key the token is bound to. The proof 'htu' may equal the request
+	// URL or one of the alternates, such as the configured endpoint URL and its mutual TLS alias; empty alternates are
+	// ignored.
+	ValidateResourceAccess(ctx context.Context, r *http.Request, accessToken, boundJKT string, requireNonce bool, alternates ...string) (parsed *DPoPProof, err error)
 }
 
 // DPoPBoundSession is implemented by sessions that can be bound to a DPoP proof-of-possession key.

@@ -134,16 +134,12 @@ func (f *Fosite) validateRPInitiatedLogoutIDTokenHint(ctx context.Context, reque
 		return errorsx.WithStack(ErrServerError.WithDebug("Failed to validate the 'id_token_hint' because the ID Token validation strategy is not configured."))
 	}
 
-	issuer := ""
-
-	if config, ok := f.Config.(IDTokenIssuerProvider); ok {
-		issuer = config.GetIDTokenIssuer(ctx)
-	}
+	issuer := f.Config.GetIssuer(ctx)
 
 	// An empty issuer would silently skip the 'iss' check below, accepting a hint issued by anyone. Refuse to validate
 	// at all rather than validate weakly.
 	if issuer == "" {
-		return errorsx.WithStack(ErrServerError.WithDebug("Failed to validate the 'id_token_hint' because the ID Token issuer is not configured."))
+		return errorsx.WithStack(ErrServerError.WithDebug("Failed to validate the 'id_token_hint' because the issuer is not configured."))
 	}
 
 	var claims jwt.MapClaims

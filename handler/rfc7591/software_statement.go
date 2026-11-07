@@ -25,6 +25,7 @@ import (
 type softwareStatementConfig interface {
 	oauth2.RFC7591ClientRegistrationPolicyProvider
 	oauth2.JWKSFetcherStrategyProvider
+	oauth2.GrantAssertionAlgorithmsProvider
 }
 
 var softwareStatementExcludedClaims = []string{
@@ -71,7 +72,7 @@ func applySoftwareStatement(ctx context.Context, config softwareStatementConfig,
 
 	var token *jwt.Token
 
-	if token, err = strategy.Decode(ctx, statement, jwt.WithSigAlgorithm(trustedIssuerSignatureAlgorithms...), jwt.WithKeyFunc(jwksKeyFunc(config, approved.JSONWebKeysURI))); err != nil {
+	if token, err = strategy.Decode(ctx, statement, jwt.WithSigAlgorithm(trustedIssuerSigningAlgs(ctx, config)...), jwt.WithKeyFunc(jwksKeyFunc(config, approved.JSONWebKeysURI))); err != nil {
 		if isKeySourceFailure(err) {
 			return errorsx.WithStack(oauth2.ErrServerError.WithHint("The keys of the software statement issuer could not be retrieved.").WithWrap(err).WithDebugError(err))
 		}
@@ -106,7 +107,7 @@ func applyStoredSoftwareStatement(metadata *oauth2.ClientRegistrationMetadata) (
 
 	var parsed *josejwt.JSONWebToken
 
-	if parsed, err = josejwt.ParseSigned(metadata.SoftwareStatement, trustedIssuerSignatureAlgorithms); err != nil {
+	if parsed, err = josejwt.ParseSigned(metadata.SoftwareStatement, jwt.SignatureAlgorithms); err != nil {
 		return errInvalidSoftwareStatement(err)
 	}
 
@@ -176,7 +177,7 @@ func retainPresentSoftwareStatementMembers(metadata *oauth2.ClientRegistrationMe
 func approvedSoftwareStatementIssuer(ctx context.Context, config softwareStatementConfig, statement string) (approved *oauth2.RFC7591TrustedIssuer, err error) {
 	var parsed *josejwt.JSONWebToken
 
-	if parsed, err = josejwt.ParseSigned(statement, trustedIssuerSignatureAlgorithms); err != nil {
+	if parsed, err = josejwt.ParseSigned(statement, jwt.SignatureAlgorithms); err != nil {
 		return nil, errInvalidSoftwareStatement(err)
 	}
 

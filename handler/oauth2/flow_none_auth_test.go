@@ -16,6 +16,12 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
+func TestNoneResponseTypeHandlerSupported(t *testing.T) {
+	h := &NoneResponseTypeHandler{}
+
+	assert.Equal(t, []string{consts.ResponseTypeNone}, h.ResponseTypesSupported(context.Background()))
+}
+
 func TestNone_HandleAuthorizeEndpointRequest(t *testing.T) {
 	testCases := []struct {
 		name      string

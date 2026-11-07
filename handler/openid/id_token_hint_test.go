@@ -124,7 +124,7 @@ func TestIDTokenHintSignedWithClientSecretRejectsAKeyIdentifier(t *testing.T) {
 }
 
 func TestGenerateIDTokenAcceptsAHintSignedWithClientSecret(t *testing.T) {
-	cfg := &oauth2.Config{IDTokenIssuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
+	cfg := &oauth2.Config{Issuer: "https://issuer.example/", IDTokenLifespan: 5 * time.Minute, MinParameterEntropy: 8}
 	strategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 	client := newHintClient(hintClientSecret, "HS256", "")
 

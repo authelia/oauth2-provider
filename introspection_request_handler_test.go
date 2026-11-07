@@ -27,6 +27,13 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+func TestAllowedIntrospectionAudiencesReturnsTheConfiguredList(t *testing.T) {
+	ctx := context.Background()
+
+	assert.Nil(t, (&Config{EndpointURLs: EndpointURLs{Introspection: "https://op/introspect"}}).GetAllowedIntrospectionAudiences(ctx))
+	assert.Equal(t, []string{"https://rs"}, (&Config{AllowedIntrospectionAudiences: []string{"https://rs"}, EndpointURLs: EndpointURLs{Introspection: "https://op/introspect"}}).GetAllowedIntrospectionAudiences(ctx))
+}
+
 func TestIntrospectionResponseTokenUse(t *testing.T) {
 	const requestURL = introspectionCredentialURL
 
@@ -335,14 +342,15 @@ func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
 	const requestURL = "https://as.example.com/introspect"
 
 	testCases := []struct {
-		name     string
-		allowed  []string
-		audience []string
-		resource []string
-		scope    []string
-		err      string
-		errField string
-		code     int
+		name      string
+		allowed   []string
+		endpoints EndpointURLs
+		audience  []string
+		resource  []string
+		scope     []string
+		err       string
+		errField  string
+		code      int
 	}{
 		{
 			name:     "ShouldFailWithoutConfiguredAudiencesGivenNoTokenAudience",
@@ -408,6 +416,33 @@ func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
 			code:     http.StatusUnauthorized,
 		},
 		{
+			name:      "ShouldPassWithTheEndpointURL",
+			endpoints: EndpointURLs{Introspection: "https://auth.example.com/introspect", MutualTLSAliases: RFC8705MutualTLSEndpointAliases{Introspection: "https://mtls.auth.example.com/introspect"}},
+			audience:  []string{"https://auth.example.com/introspect"},
+		},
+		{
+			name:      "ShouldPassWithTheMutualTLSAlias",
+			endpoints: EndpointURLs{Introspection: "https://auth.example.com/introspect", MutualTLSAliases: RFC8705MutualTLSEndpointAliases{Introspection: "https://mtls.auth.example.com/introspect"}},
+			audience:  []string{"https://mtls.auth.example.com/introspect"},
+		},
+		{
+			name:      "ShouldFailWithTheRequestURLWhenAnEndpointIsConfigured",
+			endpoints: EndpointURLs{Introspection: "https://auth.example.com/introspect"},
+			audience:  []string{requestURL},
+			err:       "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://auth.example.com/introspect' but the audience had the values 'https://as.example.com/introspect'.",
+			errField:  "invalid_token",
+			code:      http.StatusUnauthorized,
+		},
+		{
+			name:      "ShouldFailWithTheEndpointURLWhenAnAudienceIsConfigured",
+			allowed:   []string{"https://introspection.example.com"},
+			endpoints: EndpointURLs{Introspection: "https://auth.example.com/introspect"},
+			audience:  []string{"https://auth.example.com/introspect"},
+			err:       "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://introspection.example.com' but the audience had the values 'https://auth.example.com/introspect'.",
+			errField:  "invalid_token",
+			code:      http.StatusUnauthorized,
+		},
+		{
 			name:     "ShouldFailWithoutTokenAudience",
 			allowed:  []string{"https://introspection.example.com"},
 			audience: nil,
@@ -454,7 +489,7 @@ func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
 			validator := mock.NewMockTokenIntrospector(ctrl)
 			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
 
-			config := &Config{AllowedIntrospectionAudiences: tc.allowed, RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
+			config := &Config{AllowedIntrospectionAudiences: tc.allowed, EndpointURLs: tc.endpoints, RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
 
 			f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
 

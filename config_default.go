@@ -55,11 +55,14 @@ type Config struct {
 	// Sets how long a device user/device code pair is valid for
 	RFC8628CodeLifespan time.Duration
 
-	// IDTokenIssuer sets the default issuer of the ID Token.
-	IDTokenIssuer string
+	// Issuer is the canonical issuer identifier of the authorization server. It is the issuer of every token and
+	// response the authorization server issues.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+	Issuer string
 
-	// AccessTokenIssuer is the issuer to be used when generating access tokens.
-	AccessTokenIssuer string
+	// EndpointURLs are the absolute URLs of the endpoints of the authorization server.
+	EndpointURLs EndpointURLs
 
 	// JWTProfileAccessTokenDefaultAudience is the default resource indicators used as the 'aud' claim of a JWT profile
 	// access token whose request granted no audience or resource. Without one such a token cannot be issued, as RFC 9068
@@ -68,11 +71,12 @@ type Config struct {
 	// See: https://www.rfc-editor.org/rfc/rfc9068#section-3
 	JWTProfileAccessTokenDefaultAudience []string
 
-	// 	AuthorizationServerIdentificationIssuer string sets the issuer identifier for authorization responses (RFC9207).
-	AuthorizationServerIdentificationIssuer string
-
-	// IntrospectionIssuer is the issuer to be used when generating signed introspection responses.
-	IntrospectionIssuer string
+	// DisableAuthorizationServerIdentification disables the 'iss' authorization response parameter, which is otherwise
+	// returned whenever Issuer is set. It also omits the 'authorization_response_iss_parameter_supported' discovery
+	// member and disables Client ID Metadata Document resolution, which requires the 'iss' parameter.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc9207#section-2
+	DisableAuthorizationServerIdentification bool
 
 	// IntrospectionJWTResponseStrategy is the signer for Introspection Responses. Has no default.
 	IntrospectionJWTResponseStrategy jwt.Strategy
@@ -182,8 +186,8 @@ type Config struct {
 
 	// AllowedIntrospectionAudiences is a list of audiences permitted for an Access Token used to authenticate a request
 	// to the introspection endpoint. Such an Access Token MUST have at least one of these values within its granted
-	// audience or granted RFC 8707 resource indicators. Defaults to empty, which does not disable the check: it means
-	// the URL the request was made to is expected instead.
+	// audience or granted RFC 8707 resource indicators. Defaults to empty, which does not disable the check: the
+	// EndpointURLs.Introspection value is expected instead, then the URL the request was made to.
 	AllowedIntrospectionAudiences []string
 
 	// AllowedIntrospectionScopes is a list of scopes permitted for an Access Token used to authenticate a request to
@@ -293,10 +297,6 @@ type Config struct {
 
 	// JWTScopeClaimKey defines the claim key to be used to set the scope in. Valid fields are "scope" or "scp" or both.
 	JWTScopeClaimKey jwt.JWTScopeFieldEnum
-
-	// JWTSecuredAuthorizeResponseModeIssuer sets the issuer for the JWT Secured Authorization Response Mode. Defaults to
-	// IDTokenIssuer. JARM Section 2.1 requires every response, including an error response, to carry the issuer.
-	JWTSecuredAuthorizeResponseModeIssuer string
 
 	// JWTSecuredAuthorizeResponseModeLifespan sets the default lifetime for the tokens issued in the
 	// JWT Secured Authorization Response Mode. Defaults to 10 minutes.
@@ -468,6 +468,104 @@ type Config struct {
 	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 	JWTClockSkew time.Duration
 
+	// ClientAssertionSigningAlgValues is the JWS algorithms accepted for a client assertion. Defaults to every
+	// supported signature algorithm except 'none'.
+	ClientAssertionSigningAlgValues []string
+
+	// ScopesSupported lists the scopes advertised in addition to the derived scopes.
+	ScopesSupported []string
+
+	// ClaimsSupported lists the claims advertised in addition to the protocol claims.
+	ClaimsSupported []string
+
+	// ACRValuesSupported lists the Authentication Context Class References advertised.
+	ACRValuesSupported []string
+
+	// DisplayValuesSupported lists the 'display' values advertised.
+	DisplayValuesSupported []string
+
+	// ClaimTypesSupported lists the claim types advertised.
+	ClaimTypesSupported []string
+
+	// SubjectTypesSupported lists the subject types advertised. Defaults to []string{"public"}.
+	SubjectTypesSupported []string
+
+	// UILocalesSupported lists the user interface locales advertised.
+	UILocalesSupported []string
+
+	// ClaimsLocalesSupported lists the claims locales advertised.
+	ClaimsLocalesSupported []string
+
+	// DiscoveryMetadataHooks run, in order, after the discovery metadata is built.
+	DiscoveryMetadataHooks []DiscoveryMetadataHook
+
+	// DiscoveryMetadataSigningStrategy signs the discovery metadata as 'signed_metadata' when set.
+	DiscoveryMetadataSigningStrategy jwt.Strategy
+
+	// ServiceDocumentation is the service documentation URL advertised.
+	ServiceDocumentation string
+
+	// OPPolicyURI is the policy URL advertised.
+	OPPolicyURI string
+
+	// OPTOSURI is the terms of service URL advertised.
+	OPTOSURI string
+
+	// TokenEndpointAuthMethods narrows the client authentication methods accepted at the token endpoint. Nil is not configured.
+	TokenEndpointAuthMethods []string
+
+	// RevocationEndpointAuthMethods is the client authentication methods accepted at the revocation endpoint. Nil is not configured.
+	RevocationEndpointAuthMethods []string
+
+	// IntrospectionEndpointAuthMethods is the client authentication methods accepted at the introspection endpoint. Nil is not configured.
+	IntrospectionEndpointAuthMethods []string
+
+	// RevocationEndpointAuthSigningAlgValues replaces ClientAssertionSigningAlgValues for assertions at the revocation endpoint. Nil is not configured.
+	RevocationEndpointAuthSigningAlgValues []string
+
+	// IntrospectionEndpointAuthSigningAlgValues replaces ClientAssertionSigningAlgValues for assertions at the introspection endpoint. Nil is not configured.
+	IntrospectionEndpointAuthSigningAlgValues []string
+
+	// ClientAssertionEncryptionAlgValues is the JWE 'alg' values accepted for an encrypted client assertion. Defaults
+	// to every supported key management algorithm.
+	ClientAssertionEncryptionAlgValues []string
+
+	// ClientAssertionEncryptionEncValues is the JWE 'enc' values accepted for an encrypted client assertion. Defaults
+	// to every supported content encryption algorithm.
+	ClientAssertionEncryptionEncValues []string
+
+	// RequestObjectSigningAlgValues is the JWS algorithms accepted for a request object. Defaults to every supported
+	// signature algorithm including 'none'.
+	RequestObjectSigningAlgValues []string
+
+	// RequestObjectEncryptionAlgValues is the JWE 'alg' values accepted for an encrypted request object. Defaults to
+	// every supported key management algorithm.
+	RequestObjectEncryptionAlgValues []string
+
+	// RequestObjectEncryptionEncValues is the JWE 'enc' values accepted for an encrypted request object. Defaults to
+	// every supported content encryption algorithm.
+	RequestObjectEncryptionEncValues []string
+
+	// RFC7523AssertionSigningAlgValues is the JWS algorithms accepted for a JWT bearer grant assertion.
+	RFC7523AssertionSigningAlgValues []string
+
+	// IDJAGRedeemSigningAlgValues is the JWS algorithms accepted for an ID-JAG presented for redemption. 'none' and the
+	// HMAC algorithms are never accepted, whether listed or not, as the keys of the issuer are public.
+	IDJAGRedeemSigningAlgValues []string
+
+	// RFC7591TrustedIssuerSigningAlgValues is the JWS algorithms accepted for a trusted issuer's software statement
+	// or initial access token. 'none' and the HMAC algorithms are never accepted, whether listed or not, as the keys of
+	// a trusted issuer are public.
+	RFC7591TrustedIssuerSigningAlgValues []string
+
+	// ResponseEncryptionAlgValues is the JWE 'alg' values supported per response. A missing or empty entry means every
+	// supported key management algorithm.
+	ResponseEncryptionAlgValues map[ResponseEncryptionTarget][]string
+
+	// ResponseEncryptionEncValues is the JWE 'enc' values supported per response. A missing or empty entry means every
+	// supported content encryption algorithm.
+	ResponseEncryptionEncValues map[ResponseEncryptionTarget][]string
+
 	// DPoPEnabled enables RFC 9449 DPoP handling.
 	DPoPEnabled bool
 
@@ -551,9 +649,6 @@ type Config struct {
 	// remain valid for verification but are not used for signing.
 	RFC7591ClientRegistrationRotatedGlobalSecrets [][]byte
 
-	// RFC7591ClientRegistrationEndpointURL is the absolute URL of the client registration endpoint.
-	RFC7591ClientRegistrationEndpointURL string
-
 	// RFC7591ClientSecretLifespan is the lifespan used to derive 'client_secret_expires_at'. Zero means the secret
 	// does not expire.
 	RFC7591ClientSecretLifespan time.Duration
@@ -589,7 +684,7 @@ type Config struct {
 	RFC7591ClientRegistrationGrantTypes []string
 
 	// RFC7591ClientRegistrationPolicyClaim is the name of the claim carrying the registration policy. When empty it
-	// defaults to the access token issuer suffixed with ':authelia:oauth2:dynamic-client-registration:policy'.
+	// defaults to the issuer suffixed with ':authelia:oauth2:dynamic-client-registration:policy'.
 	RFC7591ClientRegistrationPolicyClaim string
 
 	// RFC7591ClientRegistrationStatelessAccessTokens accepts a JWT client creation token issued by this server without
@@ -861,9 +956,14 @@ func (c *Config) GetEnforceRevokeFlowRevokeRefreshTokensExplicitClient(ctx conte
 	return c.EnforceRevokeFlowRevokeRefreshTokensExplicitClient
 }
 
-// GetIDTokenIssuer returns the issuer of the ID Token.
-func (c *Config) GetIDTokenIssuer(ctx context.Context) string {
-	return c.IDTokenIssuer
+// GetIssuer returns the canonical issuer identifier of the authorization server. Has no default.
+func (c *Config) GetIssuer(ctx context.Context) (issuer string) {
+	return c.Issuer
+}
+
+// GetEndpointURLs returns the absolute URLs of the endpoints of the authorization server. Has no default.
+func (c *Config) GetEndpointURLs(ctx context.Context) (urls EndpointURLs) {
+	return c.EndpointURLs
 }
 
 // GetIDTokenValidationStrategy returns the strategy which validates ID Tokens presented to the authorization server by
@@ -897,14 +997,12 @@ func (c *Config) GetBackChannelLogoutConcurrency(ctx context.Context) (n int) {
 	return c.BackChannelLogoutConcurrency
 }
 
-// GetAuthorizationServerIdentificationIssuer returns the issuer identifier for authorization responses per RFC 9207.
-func (c *Config) GetAuthorizationServerIdentificationIssuer(ctx context.Context) (issuer string) {
-	return c.AuthorizationServerIdentificationIssuer
-}
-
-// GetIntrospectionIssuer returns the issuer used when generating signed introspection responses.
-func (c *Config) GetIntrospectionIssuer(ctx context.Context) string {
-	return c.IntrospectionIssuer
+// GetAuthorizationServerIdentificationEnabled returns true unless DisableAuthorizationServerIdentification is set. The
+// 'iss' authorization response parameter is returned only when this is true and GetIssuer is not empty.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9207#section-2
+func (c *Config) GetAuthorizationServerIdentificationEnabled(ctx context.Context) (enabled bool) {
+	return !c.DisableAuthorizationServerIdentification
 }
 
 // GetIntrospectionJWTResponseStrategy returns the signer for introspection responses. Has no default.
@@ -958,30 +1056,9 @@ func (c *Config) GetOmitRedirectScopeParam(ctx context.Context) bool {
 	return c.OmitRedirectScopeParam
 }
 
-// GetAccessTokenIssuer returns the issuer for JWT profile access tokens, falling back to the ID Token issuer.
-//
-// See: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
-func (c *Config) GetAccessTokenIssuer(ctx context.Context) string {
-	if c.AccessTokenIssuer == "" {
-		return c.IDTokenIssuer
-	}
-
-	return c.AccessTokenIssuer
-}
-
 // GetJWTScopeField returns the claim key the scope is set in for a JWT.
 func (c *Config) GetJWTScopeField(ctx context.Context) jwt.JWTScopeFieldEnum {
 	return c.JWTScopeClaimKey
-}
-
-// GetJWTSecuredAuthorizeResponseModeIssuer returns JWTSecuredAuthorizeResponseModeIssuer if set. Defaults to
-// IDTokenIssuer.
-func (c *Config) GetJWTSecuredAuthorizeResponseModeIssuer(ctx context.Context) string {
-	if c.JWTSecuredAuthorizeResponseModeIssuer != "" {
-		return c.JWTSecuredAuthorizeResponseModeIssuer
-	}
-
-	return c.IDTokenIssuer
 }
 
 // GetJWTSecuredAuthorizeResponseModeStrategy returns the signer for the JWT Secured Authorization Response Mode. Has no
@@ -1013,7 +1090,8 @@ func (c *Config) GetEnforceJWTProfileAccessTokens(ctx context.Context) (enable b
 	return c.EnforceJWTProfileAccessTokens
 }
 
-// GetAllowedPrompts returns the OpenID Connect prompt values the server supports.
+// GetAllowedPrompts returns the configured OpenID Connect prompt values. SupportedPromptValues applies the default when
+// none are configured.
 func (c *Config) GetAllowedPrompts(_ context.Context) []string {
 	return c.AllowedPromptValues
 }
@@ -1525,6 +1603,88 @@ func (c *Config) GetDPoPAllowedJWSAlgorithms(ctx context.Context) (algs []string
 	return c.DPoPAllowedJWSAlgorithms
 }
 
+// GetClientAssertionSigningAlgValues returns the JWS algorithms accepted for a client assertion.
+func (c *Config) GetClientAssertionSigningAlgValues(ctx context.Context) (algs []string) {
+	return algorithmsOrDefault(c.ClientAssertionSigningAlgValues, jwt.SignatureAlgorithms)
+}
+
+// GetClientAssertionEncryptionAlgValues returns the JWE 'alg' values accepted for an encrypted client assertion.
+func (c *Config) GetClientAssertionEncryptionAlgValues(ctx context.Context) (algs []string) {
+	return algorithmsOrDefault(c.ClientAssertionEncryptionAlgValues, jwt.EncryptionKeyAlgorithms)
+}
+
+// GetClientAssertionEncryptionEncValues returns the JWE 'enc' values accepted for an encrypted client assertion.
+func (c *Config) GetClientAssertionEncryptionEncValues(ctx context.Context) (encs []string) {
+	return algorithmsOrDefault(c.ClientAssertionEncryptionEncValues, jwt.ContentEncryptionAlgorithms)
+}
+
+// GetRequestObjectSigningAlgValues returns the JWS algorithms accepted for a request object, which include 'none'.
+func (c *Config) GetRequestObjectSigningAlgValues(ctx context.Context) (algs []string) {
+	return algorithmsOrDefault(c.RequestObjectSigningAlgValues, jwt.SignatureAlgorithmsNone)
+}
+
+// GetRequestObjectEncryptionAlgValues returns the JWE 'alg' values accepted for an encrypted request object.
+func (c *Config) GetRequestObjectEncryptionAlgValues(ctx context.Context) (algs []string) {
+	return algorithmsOrDefault(c.RequestObjectEncryptionAlgValues, jwt.EncryptionKeyAlgorithms)
+}
+
+// GetRequestObjectEncryptionEncValues returns the JWE 'enc' values accepted for an encrypted request object.
+func (c *Config) GetRequestObjectEncryptionEncValues(ctx context.Context) (encs []string) {
+	return algorithmsOrDefault(c.RequestObjectEncryptionEncValues, jwt.ContentEncryptionAlgorithms)
+}
+
+// GetRFC7523AssertionSigningAlgValues returns the JWS algorithms accepted for a JWT bearer grant assertion.
+func (c *Config) GetRFC7523AssertionSigningAlgValues(ctx context.Context) (algs []string) {
+	return algorithmsOrDefault(c.RFC7523AssertionSigningAlgValues, defaultRFC7523AssertionSigningAlgValues)
+}
+
+// GetIDJAGRedeemSigningAlgValues returns the JWS algorithms accepted for an ID-JAG presented for redemption.
+func (c *Config) GetIDJAGRedeemSigningAlgValues(ctx context.Context) (algs []string) {
+	return algorithmsOrDefault(c.IDJAGRedeemSigningAlgValues, defaultIDJAGRedeemSigningAlgValues)
+}
+
+// GetRFC7591TrustedIssuerSigningAlgValues returns the JWS algorithms accepted for a trusted issuer's software
+// statement or initial access token.
+func (c *Config) GetRFC7591TrustedIssuerSigningAlgValues(ctx context.Context) (algs []string) {
+	return algorithmsOrDefault(c.RFC7591TrustedIssuerSigningAlgValues, defaultRFC7591TrustedIssuerSigningAlgValues)
+}
+
+// GetResponseEncryptionAlgValues returns the JWE 'alg' values supported for the given response.
+func (c *Config) GetResponseEncryptionAlgValues(ctx context.Context, target ResponseEncryptionTarget) (algs []string) {
+	return algorithmsOrDefault(c.ResponseEncryptionAlgValues[target], jwt.EncryptionKeyAlgorithms)
+}
+
+// GetResponseEncryptionEncValues returns the JWE 'enc' values supported for the given response.
+func (c *Config) GetResponseEncryptionEncValues(ctx context.Context, target ResponseEncryptionTarget) (encs []string) {
+	return algorithmsOrDefault(c.ResponseEncryptionEncValues[target], jwt.ContentEncryptionAlgorithms)
+}
+
+func algorithmsOrDefault[T ~string](configured []string, defaults []T) []string {
+	if len(configured) != 0 {
+		return configured
+	}
+
+	return algorithmStrings(defaults)
+}
+
+func algorithmStrings[T ~string](values []T) []string {
+	out := make([]string, len(values))
+
+	for i, v := range values {
+		out[i] = string(v)
+	}
+
+	return out
+}
+
+var (
+	defaultRFC7523AssertionSigningAlgValues = []string{"HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512", "EdDSA", "Ed25519"}
+
+	defaultIDJAGRedeemSigningAlgValues = []string{"RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512", "EdDSA", "Ed25519"}
+
+	defaultRFC7591TrustedIssuerSigningAlgValues = []string{"RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512", "EdDSA", "Ed25519"}
+)
+
 // GetDPoPClockSkew returns the tolerance allowed when judging the 'iat' claim of a DPoP proof. Defaults to 10 seconds.
 func (c *Config) GetDPoPClockSkew(ctx context.Context) (skew time.Duration) {
 	if c.DPoPClockSkew <= 0 {
@@ -1603,9 +1763,10 @@ func (c *Config) GetRFC7591ClientRegistrationRotatedGlobalSecrets(ctx context.Co
 	return c.RFC7591ClientRegistrationRotatedGlobalSecrets, nil
 }
 
-// GetRFC7591ClientRegistrationEndpointURL returns the absolute URL of the client registration endpoint.
+// GetRFC7591ClientRegistrationEndpointURL returns the absolute URL of the client registration endpoint, which is
+// EndpointURLs.Registration.
 func (c *Config) GetRFC7591ClientRegistrationEndpointURL(ctx context.Context) (endpoint string) {
-	return c.RFC7591ClientRegistrationEndpointURL
+	return c.EndpointURLs.Registration
 }
 
 // GetRFC7591ClientSecretLifespan returns the lifespan used to derive 'client_secret_expires_at'. Zero means the secret
@@ -1651,14 +1812,14 @@ func (c *Config) GetRFC7591ClientRegistrationGrantTypes(ctx context.Context) (gr
 }
 
 // GetRFC7591ClientRegistrationPolicyClaim returns the name of the claim carrying the registration policy. Defaults to
-// the access token issuer suffixed with ':authelia:oauth2:dynamic-client-registration:policy', or
+// the issuer suffixed with ':authelia:oauth2:dynamic-client-registration:policy', or
 // 'authelia:oauth2:dynamic-client-registration:policy' when there is no issuer.
 func (c *Config) GetRFC7591ClientRegistrationPolicyClaim(ctx context.Context) (claim string) {
 	if c.RFC7591ClientRegistrationPolicyClaim != "" {
 		return c.RFC7591ClientRegistrationPolicyClaim
 	}
 
-	if issuer := strings.TrimSuffix(c.GetAccessTokenIssuer(ctx), "/"); issuer != "" {
+	if issuer := strings.TrimSuffix(c.GetIssuer(ctx), "/"); issuer != "" {
 		return issuer + ":authelia:oauth2:dynamic-client-registration:policy"
 	}
 
@@ -1732,9 +1893,9 @@ var (
 	_ RefreshTokenScopesProvider                            = (*Config)(nil)
 	_ DisableRefreshTokenValidationProvider                 = (*Config)(nil)
 	_ DisableRefreshTokenRotationProvider                   = (*Config)(nil)
-	_ AccessTokenIssuerProvider                             = (*Config)(nil)
+	_ DiscoveryMetadataHooksProvider                        = (*Config)(nil)
+	_ DiscoveryMetadataSigningStrategyProvider              = (*Config)(nil)
 	_ JWTScopeFieldProvider                                 = (*Config)(nil)
-	_ JWTSecuredAuthorizeResponseModeIssuerProvider         = (*Config)(nil)
 	_ JWTSecuredAuthorizeResponseModeStrategyProvider       = (*Config)(nil)
 	_ JWTSecuredAuthorizeResponseModeLifespanProvider       = (*Config)(nil)
 	_ JWTProfileAccessTokensProvider                        = (*Config)(nil)
@@ -1752,12 +1913,11 @@ var (
 	_ GetJWTMaxDurationProvider                             = (*Config)(nil)
 	_ JWTClockSkewProvider                                  = (*Config)(nil)
 	_ IDTokenLifespanProvider                               = (*Config)(nil)
-	_ IDTokenIssuerProvider                                 = (*Config)(nil)
 	_ IDTokenValidationStrategyProvider                     = (*Config)(nil)
 	_ BackChannelLogoutTokenStrategyProvider                = (*Config)(nil)
 	_ BackChannelLogoutLifespanProvider                     = (*Config)(nil)
 	_ BackChannelLogoutConcurrencyProvider                  = (*Config)(nil)
-	_ AuthorizationServerIssuerIdentificationProvider       = (*Config)(nil)
+	_ AuthorizationServerIdentificationProvider             = (*Config)(nil)
 	_ JWKSFetcherStrategyProvider                           = (*Config)(nil)
 	_ ClientAuthenticationStrategyProvider                  = (*Config)(nil)
 	_ SendDebugMessagesToClientsProvider                    = (*Config)(nil)
@@ -1789,7 +1949,6 @@ var (
 	_ RFC8628DeviceAuthorizeConfigProvider                  = (*Config)(nil)
 	_ RFC8628DeviceAuthorizeEndpointHandlersProvider        = (*Config)(nil)
 	_ RFC8628UserAuthorizeEndpointHandlersProvider          = (*Config)(nil)
-	_ IntrospectionIssuerProvider                           = (*Config)(nil)
 	_ IntrospectionJWTResponseStrategyProvider              = (*Config)(nil)
 	_ AuthorizeErrorFieldResponseStrategyProvider           = (*Config)(nil)
 	_ TokenEndpointClientAuthStrategyProvider               = (*Config)(nil)
@@ -1798,6 +1957,12 @@ var (
 	_ IntrospectionTokenTypeEnabledProvider                 = (*Config)(nil)
 	_ RevocationEndpointClientAuthStrategyProvider          = (*Config)(nil)
 	_ DPoPConfigProvider                                    = (*Config)(nil)
+	_ ClientAssertionAlgorithmsProvider                     = (*Config)(nil)
+	_ DiscoveryInformationProvider                          = (*Config)(nil)
+	_ ClientAuthMethodsProvider                             = (*Config)(nil)
+	_ RequestObjectAlgorithmsProvider                       = (*Config)(nil)
+	_ GrantAssertionAlgorithmsProvider                      = (*Config)(nil)
+	_ ResponseEncryptionAlgorithmsProvider                  = (*Config)(nil)
 	_ DPoPStrictRefreshTokenBindingProvider                 = (*Config)(nil)
 	_ OIDCKeyBindingConfigProvider                          = (*Config)(nil)
 	_ MTLSConfigProvider                                    = (*Config)(nil)
@@ -1807,3 +1972,103 @@ var (
 	_ RFC7591ClientRegistrationEndpointHandlersProvider     = (*Config)(nil)
 	_ RFC7592ClientConfigurationEndpointHandlersProvider    = (*Config)(nil)
 )
+
+// GetTokenEndpointAuthMethods returns the client authentication methods accepted at the token endpoint, or nil when
+// not configured.
+func (c *Config) GetTokenEndpointAuthMethods(ctx context.Context) (methods []string) {
+	return c.TokenEndpointAuthMethods
+}
+
+// GetRevocationEndpointAuthMethods returns the client authentication methods accepted at the revocation endpoint, or
+// nil when not configured.
+func (c *Config) GetRevocationEndpointAuthMethods(ctx context.Context) (methods []string) {
+	return c.RevocationEndpointAuthMethods
+}
+
+// GetIntrospectionEndpointAuthMethods returns the client authentication methods accepted at the introspection
+// endpoint, or nil when not configured.
+func (c *Config) GetIntrospectionEndpointAuthMethods(ctx context.Context) (methods []string) {
+	return c.IntrospectionEndpointAuthMethods
+}
+
+// GetRevocationEndpointAuthSigningAlgValues returns the JWS algorithms accepted for a client assertion at the
+// revocation endpoint, or nil when not configured.
+func (c *Config) GetRevocationEndpointAuthSigningAlgValues(ctx context.Context) (algs []string) {
+	return c.RevocationEndpointAuthSigningAlgValues
+}
+
+// GetIntrospectionEndpointAuthSigningAlgValues returns the JWS algorithms accepted for a client assertion at the
+// introspection endpoint, or nil when not configured.
+func (c *Config) GetIntrospectionEndpointAuthSigningAlgValues(ctx context.Context) (algs []string) {
+	return c.IntrospectionEndpointAuthSigningAlgValues
+}
+
+// GetScopesSupported returns the configured 'scopes_supported' values.
+func (c *Config) GetScopesSupported(_ context.Context) (scopes []string) {
+	return c.ScopesSupported
+}
+
+// GetClaimsSupported returns the configured 'claims_supported' values.
+func (c *Config) GetClaimsSupported(_ context.Context) (claims []string) {
+	return c.ClaimsSupported
+}
+
+// GetACRValuesSupported returns the configured 'acr_values_supported' values.
+func (c *Config) GetACRValuesSupported(_ context.Context) (values []string) {
+	return c.ACRValuesSupported
+}
+
+// GetDisplayValuesSupported returns the configured 'display_values_supported' values.
+func (c *Config) GetDisplayValuesSupported(_ context.Context) (values []string) {
+	return c.DisplayValuesSupported
+}
+
+// GetClaimTypesSupported returns the configured 'claim_types_supported' values.
+func (c *Config) GetClaimTypesSupported(_ context.Context) (types []string) {
+	return c.ClaimTypesSupported
+}
+
+// GetSubjectTypesSupported returns the configured 'subject_types_supported' values, defaulting to 'public'.
+func (c *Config) GetSubjectTypesSupported(_ context.Context) (types []string) {
+	if len(c.SubjectTypesSupported) == 0 {
+		return []string{consts.SubjectTypePublic}
+	}
+
+	return c.SubjectTypesSupported
+}
+
+// GetUILocalesSupported returns the configured 'ui_locales_supported' values.
+func (c *Config) GetUILocalesSupported(_ context.Context) (locales []string) {
+	return c.UILocalesSupported
+}
+
+// GetClaimsLocalesSupported returns the configured 'claims_locales_supported' values.
+func (c *Config) GetClaimsLocalesSupported(_ context.Context) (locales []string) {
+	return c.ClaimsLocalesSupported
+}
+
+// GetDiscoveryMetadataHooks returns the configured discovery metadata hooks.
+func (c *Config) GetDiscoveryMetadataHooks(_ context.Context) (hooks []DiscoveryMetadataHook) {
+	return c.DiscoveryMetadataHooks
+}
+
+// GetDiscoveryMetadataSigningStrategy returns the configured strategy which signs the discovery metadata, nil by
+// default.
+func (c *Config) GetDiscoveryMetadataSigningStrategy(_ context.Context) (strategy jwt.Strategy) {
+	return c.DiscoveryMetadataSigningStrategy
+}
+
+// GetServiceDocumentation returns the configured 'service_documentation' URL.
+func (c *Config) GetServiceDocumentation(_ context.Context) (value string) {
+	return c.ServiceDocumentation
+}
+
+// GetOPPolicyURI returns the configured 'op_policy_uri' URL.
+func (c *Config) GetOPPolicyURI(_ context.Context) (value string) {
+	return c.OPPolicyURI
+}
+
+// GetOPTOSURI returns the configured 'op_tos_uri' URL.
+func (c *Config) GetOPTOSURI(_ context.Context) (value string) {
+	return c.OPTOSURI
+}

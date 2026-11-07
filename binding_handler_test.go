@@ -239,6 +239,14 @@ func (g *grantHandler) CanHandleTokenEndpointRequest(context.Context, oauth2.Acc
 	return true
 }
 
+func (g *grantHandler) GrantTypesSupported(context.Context) []string { return nil }
+
+func (g *grantHandler) CodeChallengeMethodsSupported(context.Context) []string { return nil }
+
+func (g *grantHandler) IDTokenSigningAlgValuesSupported(context.Context) []string { return nil }
+
+func (g *grantHandler) RFC8693TokenTypesSupported(context.Context) []string { return nil }
+
 type countingTokenBinder struct {
 	calls int
 	err   error
@@ -265,6 +273,18 @@ func (h *recordingAuthorizeHandler) HandleAuthorizeEndpointRequest(_ context.Con
 
 	request.SetResponseTypeHandled("code")
 
+	return nil
+}
+
+func (h *recordingAuthorizeHandler) ResponseTypesSupported(context.Context) []string { return nil }
+
+func (h *recordingAuthorizeHandler) GrantTypesSupported(context.Context) []string { return nil }
+
+func (h *recordingAuthorizeHandler) CodeChallengeMethodsSupported(context.Context) []string {
+	return nil
+}
+
+func (h *recordingAuthorizeHandler) IDTokenSigningAlgValuesSupported(context.Context) []string {
 	return nil
 }
 

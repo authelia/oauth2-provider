@@ -9,9 +9,11 @@ import (
 	"crypto"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,6 +26,11 @@ import (
 
 // ClientAuthenticationStrategy describes a client authentication strategy implementation.
 type ClientAuthenticationStrategy interface {
+	// AuthMethodsSupported returns the client authentication methods the strategy can authenticate.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8414#section-2
+	AuthMethodsSupported(ctx context.Context) (methods []string)
+
 	AuthenticateClient(ctx context.Context, r *http.Request, form url.Values, strategy EndpointClientAuthStrategy) (client Client, method string, err error)
 }
 
@@ -58,7 +65,20 @@ func (f *Fosite) AuthenticateClientWithAuthHandler(ctx context.Context, r *http.
 		return client, method, withClientAuthenticationChallenge(r, err, f.Config.GetClientAuthenticationRealm(ctx))
 	}
 
+	if err = f.checkEndpointAuthMethod(ctx, client, method, strategyECA); err != nil {
+		return nil, "", withClientAuthenticationChallenge(r, err, f.Config.GetClientAuthenticationRealm(ctx))
+	}
+
 	return client, method, nil
+}
+
+func (f *Fosite) checkEndpointAuthMethod(ctx context.Context, client Client, method string, strategy EndpointClientAuthStrategy) (err error) {
+	methods := configuredEndpointAuthMethods(ctx, f.Config, ClientAuthEndpoint(strategy.Name()))
+	if len(methods) == 0 || slices.Contains(methods, method) {
+		return nil
+	}
+
+	return errorsx.WithStack(ErrInvalidClient.WithHint(fmt.Sprintf("The %s endpoint does not permit the client authentication method '%s'.", strategy.Name(), method)).WithDebugf("The client with id '%s' authenticated using '%s' but the %s endpoint is configured to accept only '%s'.", client.GetID(), method, strategy.Name(), strings.Join(methods, "', '")))
 }
 
 func withClientAuthenticationChallenge(r *http.Request, err error, realm string) error {

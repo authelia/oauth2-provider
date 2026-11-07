@@ -215,7 +215,7 @@ type DefaultStrategy struct {
 	jwt.Strategy
 
 	Config interface {
-		oauth2.IDTokenIssuerProvider
+		oauth2.IssuerProvider
 		oauth2.IDTokenLifespanProvider
 		oauth2.MinParameterEntropyProvider
 		oauth2.IDTokenConfirmationConfigProvider
@@ -228,6 +228,17 @@ func isRefreshTokenGrant(request oauth2.Requester) bool {
 	}
 
 	return false
+}
+
+// SigningAlgValues returns the JWS algorithms the underlying jwt.Strategy can sign with, or nil when it is not set.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (h DefaultStrategy) SigningAlgValues(ctx context.Context) (algs []string) {
+	if h.Strategy == nil {
+		return nil
+	}
+
+	return h.Strategy.SigningAlgValues(ctx)
 }
 
 // GenerateIDToken returns a JWT string.
@@ -346,7 +357,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 	}
 
 	if claims.Issuer == "" {
-		claims.Issuer = h.Config.GetIDTokenIssuer(ctx)
+		claims.Issuer = h.Config.GetIssuer(ctx)
 	}
 
 	// OPTIONAL. String value used to associate a Client session with an ID Token, and to mitigate replay attacks. The
@@ -388,7 +399,7 @@ func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, cli
 	// REQUIRED. The 'iss' claim. LogoutTokenClaims.ToMap deletes 'iss' when empty and the JWT strategy injects
 	// no claims of its own, so the issuer must be set here as it is for ID Tokens.
 	if len(claims.Issuer) == 0 {
-		claims.Issuer = h.Config.GetIDTokenIssuer(ctx)
+		claims.Issuer = h.Config.GetIssuer(ctx)
 	}
 
 	if claims.ExpirationTime == nil || claims.ExpirationTime.IsZero() {

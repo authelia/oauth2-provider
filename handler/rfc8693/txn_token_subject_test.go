@@ -487,7 +487,7 @@ func TestTxnTokenJTINotConsumedWhenIssuanceFails(t *testing.T) {
 			return func() { f.txn.Strategy = strategy }
 		}},
 		{"ShouldKeepItWhenTheIssuerIsMisconfigured", func(f *txnIssueFixture) func() {
-			f.txnType.Issuer = f.cfg.IDTokenIssuer
+			f.txnType.Issuer = f.cfg.Issuer
 
 			return func() { f.txnType.Issuer = "" }
 		}},

@@ -33,6 +33,8 @@ type DefaultClientAuthenticationStrategy struct {
 		ClientAssertionClientSecretEncryptionDisabledProvider
 		JWTClockSkewProvider
 		MTLSConfigProvider
+		ClientAssertionAlgorithmsProvider
+		ClientAuthMethodsProvider
 	}
 }
 
@@ -201,11 +203,11 @@ func newClientAssertionWithConfig(ctx context.Context, config any, strategyJWT j
 		return &ClientAssertion{Assertion: assertion, Type: assertionType}, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("Unknown client_assertion_type '%s'.", assertionType))
 	}
 
-	if alg, ok := getClientSecretEncryptedJWTAlg(assertion); ok {
+	if alg, ok := getClientSecretEncryptedJWTAlg(ctx, config, assertion); ok {
 		return &ClientAssertion{Assertion: assertion, Type: assertionType}, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion was encrypted with the 'alg' header value '%s' which derives the key from the client secret, but the client cannot be identified until the client assertion is decrypted.", alg))
 	}
 
-	if token, err = strategyJWT.Decode(ctx, assertion, jwt.WithAllowUnverified(), jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...)); err != nil {
+	if token, err = strategyJWT.Decode(ctx, assertion, append(clientAssertionJWEOptions(ctx, config), jwt.WithAllowUnverified(), jwt.WithSigAlgorithm(jwt.SignatureAlgorithmsNone...))...); err != nil {
 		return &ClientAssertion{Assertion: assertion, Type: assertionType}, resolveJWTErrorToRFCError(err)
 	}
 
@@ -213,7 +215,7 @@ func newClientAssertionWithConfig(ctx context.Context, config any, strategyJWT j
 }
 
 func (s *DefaultClientAuthenticationStrategy) newClientAssertion(ctx context.Context, id, assertion, assertionType string, strategy EndpointClientAuthStrategy) (a *ClientAssertion, err error) {
-	alg, ok := getClientSecretEncryptedJWTAlg(assertion)
+	alg, ok := getClientSecretEncryptedJWTAlg(ctx, s.Config, assertion)
 
 	if !ok || assertionType != consts.ClientAssertionTypeJWTBearer {
 		return newClientAssertionWithConfig(ctx, s.Config, s.Config.GetJWTStrategy(ctx), s.Store, assertion, assertionType, strategy)
@@ -243,7 +245,7 @@ func (s *DefaultClientAuthenticationStrategy) newClientAssertion(ctx context.Con
 		return a, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
 	}
 
-	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion, jwt.WithClient(&EndpointClientAuthJWTClient{client: c, strategy: strategy}), jwt.WithSigAlgorithm(jwt.SignatureAlgorithms...)); err != nil {
+	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion, append(clientAssertionJWEOptions(ctx, s.Config), jwt.WithClient(&EndpointClientAuthJWTClient{client: c, strategy: strategy}), jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(s.clientAssertionSigningAlgValues(ctx, strategy))...))...); err != nil {
 		return a, resolveJWTErrorToRFCError(err)
 	}
 
@@ -283,12 +285,26 @@ func newClientAssertionFromToken(ctx context.Context, config any, store ClientMa
 	}, nil
 }
 
-func getClientSecretEncryptedJWTAlg(assertion string) (alg string, ok bool) {
+func clientAssertionJWEOptions(ctx context.Context, config any) (opts []jwt.StrategyOpt) {
+	if provider, ok := config.(ClientAssertionAlgorithmsProvider); ok {
+		opts = append(opts, jwt.WithKeyAlgorithm(jwt.ToKeyAlgorithms(provider.GetClientAssertionEncryptionAlgValues(ctx))...), jwt.WithContentEncryption(jwt.ToContentEncryptions(provider.GetClientAssertionEncryptionEncValues(ctx))...))
+	}
+
+	return opts
+}
+
+func getClientSecretEncryptedJWTAlg(ctx context.Context, config any, assertion string) (alg string, ok bool) {
 	if !jwt.IsEncryptedJWT(assertion) {
 		return "", false
 	}
 
-	jwe, err := jose.ParseEncryptedCompact(assertion, jwt.EncryptionKeyAlgorithms, jwt.ContentEncryptionAlgorithms)
+	keyAlgs, encs := jwt.EncryptionKeyAlgorithms, jwt.ContentEncryptionAlgorithms
+
+	if provider, has := config.(ClientAssertionAlgorithmsProvider); has {
+		keyAlgs, encs = jwt.ToKeyAlgorithms(provider.GetClientAssertionEncryptionAlgValues(ctx)), jwt.ToContentEncryptions(provider.GetClientAssertionEncryptionEncValues(ctx))
+	}
+
+	jwe, err := jose.ParseEncryptedCompact(assertion, keyAlgs, encs)
 	if err != nil {
 		return "", false
 	}
@@ -431,8 +447,8 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	if enforceIssuerAudience {
 		var issuer string
 
-		if provider, ok := s.Config.(IDTokenIssuerProvider); ok {
-			issuer = provider.GetIDTokenIssuer(ctx)
+		if provider, ok := s.Config.(IssuerProvider); ok {
+			issuer = provider.GetIssuer(ctx)
 		}
 
 		if issuer == "" {
@@ -447,15 +463,14 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	}
 
 	// An unsigned client assertion is never acceptable, irrespective of the client's registered
-	// '<endpoint>_endpoint_auth_signing_alg' value. Decode below excludes 'none' as well; this check runs first only
-	// to return a diagnosable error.
+	// '<endpoint>_endpoint_auth_signing_alg' value and of any configured signing algorithm list which contains 'none'.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc7523#section-3
 	if assertion.Algorithm == consts.JSONWebTokenAlgNone {
 		return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' was signed with the 'alg' header value 'none' but client assertions must be signed or have a MAC applied.", client.GetID()))
 	}
 
-	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion.Assertion, jwt.WithClient(&EndpointClientAuthJWTClient{client: client, strategy: strategy}), jwt.WithSigAlgorithm(jwt.SignatureAlgorithms...)); err != nil {
+	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion.Assertion, append(clientAssertionJWEOptions(ctx, s.Config), jwt.WithClient(&EndpointClientAuthJWTClient{client: client, strategy: strategy}), jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(s.clientAssertionSigningAlgValues(ctx, strategy))...))...); err != nil {
 		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, strategy, audience, err))
 	}
 
@@ -671,4 +686,28 @@ func errClientLookup(err error, fallback *RFC6749Error) error {
 	}
 
 	return errorsx.WithStack(fallback)
+}
+
+// AuthMethodsSupported returns the client authentication methods the strategy can authenticate, including the mutual
+// TLS methods when RFC 8705 handling is enabled.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8414#section-2
+func (s *DefaultClientAuthenticationStrategy) AuthMethodsSupported(ctx context.Context) (methods []string) {
+	methods = []string{
+		consts.ClientAuthMethodClientSecretBasic,
+		consts.ClientAuthMethodClientSecretPost,
+		consts.ClientAuthMethodClientSecretJWT,
+		consts.ClientAuthMethodPrivateKeyJWT,
+		consts.ClientAuthMethodNone,
+	}
+
+	if s.Config.GetMTLSEnabled(ctx) {
+		methods = append(methods, consts.ClientAuthMethodTLSClientAuth, consts.ClientAuthMethodSelfSignedTLSClientAuth)
+	}
+
+	return methods
+}
+
+func (s *DefaultClientAuthenticationStrategy) clientAssertionSigningAlgValues(ctx context.Context, strategy EndpointClientAuthStrategy) []string {
+	return SupportedEndpointAuthSigningAlgValues(ctx, s.Config, ClientAuthEndpoint(strategy.Name()))
 }

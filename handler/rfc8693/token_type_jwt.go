@@ -37,7 +37,7 @@ type JWTType struct {
 type JWTIssueConfig struct {
 	// Issuer is the 'iss' claim of an issued JWT. It is required, and must be an identifier of this authorization
 	// server, as RFC 7519 Section 4.1.1 has it identify the principal that issued the JWT. A JWT is not issued when it
-	// equals the ID Token issuer, as it would then be accepted as an ID Token, and it must not be the issuer of any JWT
+	// equals the issuer of this server, as it would then be accepted as an ID Token, and it must not be the issuer of any JWT
 	// this authorization server accepts with a key it does not hold.
 	Issuer string `json:"iss"`
 

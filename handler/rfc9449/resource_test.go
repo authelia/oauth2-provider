@@ -135,6 +135,54 @@ func TestValidateResourceAccessHappyPath(t *testing.T) {
 	assert.Equal(t, thumbprint(t, key), parsed.Thumbprint)
 }
 
+func TestValidateResourceAccessAlternates(t *testing.T) {
+	const (
+		internalURL = "http://internal.local/introspect"
+		alias       = "https://mtls.auth.example.com/introspect"
+	)
+
+	token := "access-token-value"
+
+	testCases := []struct {
+		name       string
+		htu        string
+		alternates []string
+		err        string
+	}{
+		{name: "ShouldAcceptTheConfiguredEndpointURL", htu: resourceURL, alternates: []string{resourceURL, alias}},
+		{name: "ShouldAcceptTheMutualTLSAlias", htu: alias, alternates: []string{"", alias}},
+		{name: "ShouldAcceptTheRequestURL", htu: internalURL, alternates: []string{resourceURL}},
+		{
+			name:       "ShouldRejectAURLWhichIsNeitherTheRequestURLNorAnAlternate",
+			htu:        "https://elsewhere.example.com/introspect",
+			alternates: []string{resourceURL, alias},
+			err:        "The DPoP proof 'htu' claim 'https://elsewhere.example.com/introspect' does not match the request URI 'http://internal.local/introspect'.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _ := newTestStrategy()
+			key := newTestProofKey(t)
+
+			proof := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+				jwt.ClaimJWTID: "ra-alt", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: tc.htu, jwt.ClaimIssuedAt: time.Now().Unix(), "ath": athClaim(token),
+			})
+
+			_, err := s.ValidateResourceAccess(context.Background(), newResourceRequest(http.MethodPost, internalURL, token, proof), token, thumbprint(t, key), false, tc.alternates...)
+
+			if tc.err == "" {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+			assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
+		})
+	}
+}
+
 func TestValidateResourceAccessRejects(t *testing.T) {
 	token := "access-token-value"
 

@@ -314,11 +314,13 @@ func newPolicyRegistrationHandler(t *testing.T, factory func() Storage) (handler
 	config := &oauth2.Config{
 		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+		EndpointURLs:                          oauth2.EndpointURLs{Registration: testEndpoint},
 		RFC7591ClientRegistrationStrategy:     NewDefaultClientRegistrationStrategy(),
 		ScopeStrategy:                         oauth2.ExactScopeStrategy,
 		TokenEntropy:                          32,
 	}
+
+	withTestCapabilities(config)
 
 	store = factory()
 

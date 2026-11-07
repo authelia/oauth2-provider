@@ -175,8 +175,8 @@ func TestAuthorizeRequestFetchesTheRequestURIOfADocumentClientOverTheGuardedClie
 			}
 
 			config := &Config{
-				HTTPClient:    shared,
-				IDTokenIssuer: issuer,
+				HTTPClient: shared,
+				Issuer:     issuer,
 			}
 
 			config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{})}

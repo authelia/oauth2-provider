@@ -287,6 +287,47 @@ func (c *Handler) validateNoPKCE(ctx context.Context, parameter string, client o
 	return nil
 }
 
+// ResponseTypesSupported returns nil because the handler only augments another flow.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *Handler) ResponseTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// GrantTypesSupported returns nil because the handler only augments another grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *Handler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// CodeChallengeMethodsSupported returns 'S256' and, when enabled, 'plain'.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.2
+func (c *Handler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	methods = []string{consts.PKCEChallengeMethodSHA256}
+
+	if c.Config.GetEnablePKCEPlainChallengeMethod(ctx) {
+		methods = append(methods, consts.PKCEChallengeMethodPlain)
+	}
+
+	return methods
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *Handler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns nil because the handler does not issue RFC 8693 tokens.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *Handler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
 var (
 	_ oauth2.AuthorizeEndpointHandler = (*Handler)(nil)
 	_ oauth2.TokenEndpointHandler     = (*Handler)(nil)

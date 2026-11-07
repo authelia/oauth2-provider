@@ -76,8 +76,8 @@ func TestComposeIssuesATransactionToken(t *testing.T) {
 			key := gen.MustRSAKey()
 
 			config := &oauth2.Config{
-				GlobalSecret:  []byte("some-cool-secret-that-is-32bytes"),
-				IDTokenIssuer: "https://op.example",
+				GlobalSecret: []byte("some-cool-secret-that-is-32bytes"),
+				Issuer:       "https://op.example",
 				RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
 					consts.TokenTypeRFC8693AccessToken: &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693AccessToken},
 					consts.TokenTypeRFC8693TxnToken: &rfc8693.TxnTokenType{

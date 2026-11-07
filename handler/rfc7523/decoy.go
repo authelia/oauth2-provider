@@ -6,6 +6,7 @@ package rfc7523
 
 import (
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rsa"
 	"math/big"
@@ -37,6 +38,8 @@ func decoyKey(alg jose.SignatureAlgorithm) any {
 		return decoyECDSAKey(elliptic.P521())
 	case jose.HS256, jose.HS384, jose.HS512:
 		return decoyHMACKey
+	case jose.EdDSA, jose.Ed25519:
+		return decoyEd25519Key()
 	default:
 		return nil
 	}
@@ -52,6 +55,10 @@ var decoyRSAKey = sync.OnceValue(func() *rsa.PublicKey {
 	n, _ := new(big.Int).SetString(decoyRSAModulus, 16)
 
 	return &rsa.PublicKey{N: n, E: 65537}
+})
+
+var decoyEd25519Key = sync.OnceValue(func() ed25519.PublicKey {
+	return ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize)).Public().(ed25519.PublicKey)
 })
 
 var decoyHMACKey = make([]byte, 64)

@@ -100,7 +100,7 @@ func TestCustomJWTSubjectTokenIDTokenIssuer(t *testing.T) {
 		{
 			name:     "ShouldRejectTheIDTokenIssuer",
 			issuer:   "https://as.example.com",
-			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'iss' from token is the ID Token issuer, so the token must be exchanged as 'urn:ietf:params:oauth:token-type:id_token'.",
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'iss' from token is the issuer of this server, so the token must be exchanged as 'urn:ietf:params:oauth:token-type:id_token'.",
 		},
 		{
 			name:   "ShouldAcceptADistinctIssuer",
@@ -111,7 +111,7 @@ func TestCustomJWTSubjectTokenIDTokenIssuer(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := newSpecConfig(t)
-			config.IDTokenIssuer = tc.issuer
+			config.Issuer = tc.issuer
 
 			err := runCustomJWTSubjectToken(t, config, "https://as.example.com", consts.JSONWebTokenTypeJWT)
 

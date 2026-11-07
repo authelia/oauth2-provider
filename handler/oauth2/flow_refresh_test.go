@@ -26,6 +26,12 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+func TestRefreshTokenGrantHandlerSupported(t *testing.T) {
+	h := &RefreshTokenGrantHandler{}
+
+	assert.Equal(t, []string{consts.GrantTypeRefreshToken}, h.GrantTypesSupported(context.Background()))
+}
+
 func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 	strategy := &hmacshaStrategy
 	session := &oauth2.DefaultSession{Subject: "othersub"}

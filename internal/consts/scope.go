@@ -10,6 +10,8 @@ const (
 	ScopeOfflineAccess = "offline_access"
 	ScopeEmail         = "email"
 	ScopeBoundKey      = "bound_key"
+
+	ScopeUserinfoCredentialDraft00 = "userinfo_credential_draft_00"
 )
 
 // The following scopes are special scopes for particular purposes.

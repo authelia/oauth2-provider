@@ -97,7 +97,7 @@ func TestRequestObjectResourceAndAudienceClaims(t *testing.T) {
 
 			r := httptest.NewRequest(http.MethodGet, "https://auth.example.com/authorize?"+form.Encode(), nil)
 
-			provider := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, IDTokenIssuer: "https://auth.example.com"}}
+			provider := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, Issuer: "https://auth.example.com"}}
 
 			requester, err := provider.NewAuthorizeRequest(t.Context(), r)
 

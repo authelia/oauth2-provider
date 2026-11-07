@@ -1385,7 +1385,7 @@ func chainRefreshForm(refreshToken string) url.Values {
 
 type proofOnlyChainDPoPStrategy struct{}
 
-func (proofOnlyChainDPoPStrategy) ValidateDPoPProof(_ context.Context, _, _, _ string, _ bool) (parsed *oauth2.DPoPProof, err error) {
+func (proofOnlyChainDPoPStrategy) ValidateDPoPProof(_ context.Context, _, _, _ string, _ bool, _ ...string) (parsed *oauth2.DPoPProof, err error) {
 	return &oauth2.DPoPProof{}, nil
 }
 

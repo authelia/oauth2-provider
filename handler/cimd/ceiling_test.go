@@ -5,7 +5,6 @@
 package cimd
 
 import (
-	"context"
 	"slices"
 	"testing"
 
@@ -92,8 +91,8 @@ func TestApplyCeilingScope(t *testing.T) {
 			expected: "openid",
 		},
 		{
-			name:     "ShouldRemoveTheRegistrationScopeWhenTheConfigDoesNotProvideRegistrationScopes",
-			config:   Config{ValidatorConfig: scopeOnlyConfig{}, Scopes: []string{"openid", consts.ScopeClientRegistration}},
+			name:     "ShouldRemoveTheRegistrationScopeWhenTheConfigHasNoRegistrationScopes",
+			config:   Config{ValidatorConfig: &oauth2.Config{}, Scopes: []string{"openid", consts.ScopeClientRegistration}},
 			scope:    "openid " + consts.ScopeClientRegistration,
 			expected: "openid",
 		},
@@ -302,8 +301,6 @@ func TestApplyCeilingClearsPrivilegesAndKeepsRestrictions(t *testing.T) {
 	assert.Equal(t, []string{"urn:ietf:params:oauth:token-type:access_token"}, metadata.TokenExchangeSubjectTokenTypes)
 }
 
-type scopeOnlyConfig struct{}
-
 func TestApplyCeilingAuthorizationGrantProfiles(t *testing.T) {
 	const (
 		profile       = consts.GrantProfileIDJAG
@@ -474,18 +471,6 @@ func TestApplyCeilingRejectsNoUsableResponseType(t *testing.T) {
 			assert.Equal(t, tc.expected, metadata.ResponseTypes)
 		})
 	}
-}
-
-func (scopeOnlyConfig) GetScopeStrategy(_ context.Context) oauth2.ScopeStrategy {
-	return nil
-}
-
-func (scopeOnlyConfig) GetAudienceStrategy(_ context.Context) oauth2.AudienceStrategy {
-	return nil
-}
-
-func (scopeOnlyConfig) GetRFC7591ClientRegistrationGrantTypes(_ context.Context) []string {
-	return nil
 }
 
 func withDefaults(config Config) Config {

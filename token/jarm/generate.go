@@ -23,7 +23,7 @@ func EncodeParameters(token, _ string, tErr error) (parameters url.Values, err e
 	return url.Values{consts.FormParameterResponse: []string{token}}, nil
 }
 
-// Generate generates the token and signature for a JARM response. The issuer is always the configured JARM issuer, and
+// Generate generates the token and signature for a JARM response. The issuer is always the configured issuer, and
 // the session argument is not used. Per JARM Section 2.1 the numeric 'expires_in' parameter is encoded as a JSON number
 // and all other parameters as JSON strings.
 func Generate(ctx context.Context, config Configurator, client Client, _ any, parameters url.Values) (token, signature string, err error) {
@@ -38,9 +38,9 @@ func Generate(ctx context.Context, config Configurator, client Client, _ any, pa
 	}
 
 	// JARM Section 2.1: every response, including an error response issued before a session exists, carries 'iss'.
-	issuer := config.GetJWTSecuredAuthorizeResponseModeIssuer(ctx)
+	issuer := config.GetIssuer(ctx)
 	if len(issuer) == 0 {
-		return "", "", errors.New("the JARM response modes require the JWTSecuredAuthorizeResponseModeIssuerProvider to return an issuer but it didn't")
+		return "", "", errors.New("the JARM response modes require the configuration to return an issuer but it didn't")
 	}
 
 	claims := jwt.NewJARMClaims(issuer, jwt.ClaimStrings{client.GetID()}, config.GetJWTSecuredAuthorizeResponseModeLifespan(ctx))

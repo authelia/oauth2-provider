@@ -27,7 +27,7 @@ func TestDefaultStrategyImplementsBackChannelLogoutTokenStrategy(t *testing.T) {
 }
 
 func TestGenerateBackChannelLogoutTokenSetsRequiredClaims(t *testing.T) {
-	config := &oauth2.Config{IDTokenIssuer: "https://op.example/", MinParameterEntropy: 8}
+	config := &oauth2.Config{Issuer: "https://op.example/", MinParameterEntropy: 8}
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
 
@@ -60,7 +60,7 @@ func TestGenerateBackChannelLogoutTokenSetsRequiredClaims(t *testing.T) {
 }
 
 func TestGenerateBackChannelLogoutTokenDefaultsToFiveMinuteLifespan(t *testing.T) {
-	config := &oauth2.Config{IDTokenIssuer: "https://op.example/", MinParameterEntropy: 8}
+	config := &oauth2.Config{Issuer: "https://op.example/", MinParameterEntropy: 8}
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
 
@@ -93,7 +93,7 @@ func TestGenerateBackChannelLogoutTokenDefaultsToFiveMinuteLifespan(t *testing.T
 }
 
 func TestGenerateBackChannelLogoutTokenRejectsNegativeLifespan(t *testing.T) {
-	config := &oauth2.Config{IDTokenIssuer: "https://op.example/", MinParameterEntropy: 8}
+	config := &oauth2.Config{Issuer: "https://op.example/", MinParameterEntropy: 8}
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
 

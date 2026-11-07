@@ -30,23 +30,33 @@ func TestValidateBearerAuthorizationAudienceFallbackChain(t *testing.T) {
 	}{
 		{
 			name:    "ShouldUseConfiguredListWhenPresent",
-			auth:    BearerAuthorization{Audiences: []string{"urn:example:aud"}, Endpoint: "https://as.example.com/register"},
+			auth:    BearerAuthorization{Audiences: []string{"urn:example:aud"}, Endpoints: []string{"https://as.example.com/register"}},
 			granted: []string{"urn:example:aud"},
 		},
 		{
 			name:     "ShouldIgnoreEndpointWhenListConfigured",
-			auth:     BearerAuthorization{Audiences: []string{"urn:example:aud"}, Endpoint: "https://as.example.com/register"},
+			auth:     BearerAuthorization{Audiences: []string{"urn:example:aud"}, Endpoints: []string{"https://as.example.com/register"}},
 			granted:  []string{"https://as.example.com/register"},
 			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'urn:example:aud' but the audience had the values 'https://as.example.com/register'.",
 		},
 		{
 			name:    "ShouldFallBackToEndpointWhenListEmpty",
-			auth:    BearerAuthorization{Endpoint: "https://as.example.com/register"},
+			auth:    BearerAuthorization{Endpoints: []string{"https://as.example.com/register"}},
 			granted: []string{"https://as.example.com/register"},
 		},
 		{
+			name:    "ShouldMatchAnyEndpointIgnoringEmptyValues",
+			auth:    BearerAuthorization{Endpoints: []string{"", "https://mtls.as.example.com/register"}},
+			granted: []string{"https://mtls.as.example.com/register"},
+		},
+		{
+			name:    "ShouldFallBackToRequestURLWhenEveryEndpointIsEmpty",
+			auth:    BearerAuthorization{Endpoints: []string{"", ""}},
+			granted: []string{"https://as.example.com/introspect"},
+		},
+		{
 			name:     "ShouldNotUseRequestURLWhenEndpointConfigured",
-			auth:     BearerAuthorization{Endpoint: "https://as.example.com/register"},
+			auth:     BearerAuthorization{Endpoints: []string{"https://as.example.com/register"}},
 			granted:  []string{"https://as.example.com/introspect"},
 			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://as.example.com/register' but the audience had the values 'https://as.example.com/introspect'.",
 		},
@@ -390,11 +400,29 @@ func (c *bearerEnforceWithoutEnableConfig) GetMTLSEnabled(ctx context.Context) b
 
 func (c *bearerEnforceWithoutEnableConfig) GetMTLSEnforce(ctx context.Context) bool { return true }
 
-type bearerResourceStrategy struct {
-	DPoPStrategy
+func TestValidateBearerAuthorizationPassesEndpointsToTheDPoPCheck(t *testing.T) {
+	strategy := &bearerResourceStrategy{}
+	config := &Config{DPoPEnabled: true, DPoPStrategy: strategy}
+
+	requester := NewRequest()
+	requester.Session = &DefaultSession{JWKThumbprint: "some-jkt"}
+	requester.GrantAudience("https://auth.example.com/introspect")
+
+	endpoints := []string{"https://auth.example.com/introspect", "https://mtls.auth.example.com/introspect"}
+
+	require.NoError(t, ValidateBearerAuthorization(context.Background(), config, newBearerRequest(), requester, "token", BearerAuthorization{Endpoints: endpoints}))
+	assert.Equal(t, endpoints, strategy.alternates)
 }
 
-func (s *bearerResourceStrategy) ValidateResourceAccess(ctx context.Context, r *http.Request, accessToken, boundJKT string, requireNonce bool) (*DPoPProof, error) {
+type bearerResourceStrategy struct {
+	DPoPStrategy
+
+	alternates []string
+}
+
+func (s *bearerResourceStrategy) ValidateResourceAccess(ctx context.Context, r *http.Request, accessToken, boundJKT string, requireNonce bool, alternates ...string) (*DPoPProof, error) {
+	s.alternates = alternates
+
 	return &DPoPProof{Thumbprint: boundJKT}, nil
 }
 

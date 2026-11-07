@@ -405,7 +405,7 @@ func TestTxnTokenIssuer(t *testing.T) {
 
 			t.Run("ShouldRefuseTheIDTokenIssuer", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
-				f.txnType.Issuer = f.cfg.IDTokenIssuer
+				f.txnType.Issuer = f.cfg.Issuer
 
 				_, err := f.exchange(t, txnExchange{subjectToken: f.mint(t, txnMint{scopes: []string{"trade.stocks"}}), scopes: []string{"trade.stocks"}})
 
@@ -791,7 +791,7 @@ func TestTxnTokenIsNotAcceptedElsewhere(t *testing.T) {
 				{
 					name: "ShouldRefuseAsAnIDTokenSubject",
 					present: func(t *testing.T, f *txnIssueFixture, token string) error {
-						f.cfg.IDTokenIssuer = txnJWTIssuer
+						f.cfg.Issuer = txnJWTIssuer
 
 						_, err := f.exchange(t, txnExchange{subjectType: consts.TokenTypeRFC8693IDToken, subjectToken: token, requested: consts.TokenTypeRFC8693AccessToken, noScope: true})
 
@@ -934,7 +934,7 @@ func newTxnIssueFixture(t *testing.T, store txnIssueStore) *txnIssueFixture {
 
 	txnType := &TxnTokenType{Name: consts.TokenTypeRFC8693TxnToken, TrustDomain: txnTrustDomain}
 
-	cfg.IDTokenIssuer = "https://op.example"
+	cfg.Issuer = "https://op.example"
 	cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693TxnToken] = txnType
 	cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693SelfSigned] = &SelfSignedTokenType{Name: consts.TokenTypeRFC8693SelfSigned, Identifier: txnIdentifier}
 	cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693UnsignedJSON] = &UnsignedJSONTokenType{Name: consts.TokenTypeRFC8693UnsignedJSON}
@@ -1031,7 +1031,7 @@ func (f *txnIssueFixture) idToken(t *testing.T, extra map[string]any) string {
 	now := time.Now()
 
 	claims := jwt.MapClaims{
-		consts.ClaimIssuer:         f.cfg.IDTokenIssuer,
+		consts.ClaimIssuer:         f.cfg.Issuer,
 		consts.ClaimSubject:        "alice",
 		consts.ClaimAudience:       []string{txnClientID},
 		consts.ClaimIssuedAt:       now.Unix(),

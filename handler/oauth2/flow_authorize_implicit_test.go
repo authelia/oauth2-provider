@@ -21,6 +21,13 @@ import (
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
+func TestAuthorizeImplicitGrantTypeHandlerSupported(t *testing.T) {
+	h := &AuthorizeImplicitGrantTypeHandler{}
+
+	assert.Equal(t, []string{consts.ResponseTypeImplicitFlowToken}, h.ResponseTypesSupported(context.Background()))
+	assert.Equal(t, []string{consts.GrantTypeImplicit}, h.GrantTypesSupported(context.Background()))
+}
+
 func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

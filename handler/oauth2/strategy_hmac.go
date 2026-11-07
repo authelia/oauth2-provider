@@ -417,7 +417,7 @@ const (
 type CoreStrategyConfigurator interface {
 	HMACCoreStrategyConfigurator
 
-	oauth2.AccessTokenIssuerProvider
+	oauth2.IssuerProvider
 	oauth2.JWTScopeFieldProvider
 	oauth2.JWTProfileAccessTokensProvider
 	oauth2.ConfirmationConfigProvider

@@ -41,6 +41,34 @@ func (m *MockAuthorizeEndpointHandler) EXPECT() *MockAuthorizeEndpointHandlerMoc
 	return m.recorder
 }
 
+// CodeChallengeMethodsSupported mocks base method.
+func (m *MockAuthorizeEndpointHandler) CodeChallengeMethodsSupported(ctx context.Context) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CodeChallengeMethodsSupported", ctx)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// CodeChallengeMethodsSupported indicates an expected call of CodeChallengeMethodsSupported.
+func (mr *MockAuthorizeEndpointHandlerMockRecorder) CodeChallengeMethodsSupported(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CodeChallengeMethodsSupported", reflect.TypeOf((*MockAuthorizeEndpointHandler)(nil).CodeChallengeMethodsSupported), ctx)
+}
+
+// GrantTypesSupported mocks base method.
+func (m *MockAuthorizeEndpointHandler) GrantTypesSupported(ctx context.Context) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GrantTypesSupported", ctx)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// GrantTypesSupported indicates an expected call of GrantTypesSupported.
+func (mr *MockAuthorizeEndpointHandlerMockRecorder) GrantTypesSupported(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantTypesSupported", reflect.TypeOf((*MockAuthorizeEndpointHandler)(nil).GrantTypesSupported), ctx)
+}
+
 // HandleAuthorizeEndpointRequest mocks base method.
 func (m *MockAuthorizeEndpointHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) error {
 	m.ctrl.T.Helper()
@@ -53,4 +81,32 @@ func (m *MockAuthorizeEndpointHandler) HandleAuthorizeEndpointRequest(ctx contex
 func (mr *MockAuthorizeEndpointHandlerMockRecorder) HandleAuthorizeEndpointRequest(ctx, request, response any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleAuthorizeEndpointRequest", reflect.TypeOf((*MockAuthorizeEndpointHandler)(nil).HandleAuthorizeEndpointRequest), ctx, request, response)
+}
+
+// IDTokenSigningAlgValuesSupported mocks base method.
+func (m *MockAuthorizeEndpointHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IDTokenSigningAlgValuesSupported", ctx)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// IDTokenSigningAlgValuesSupported indicates an expected call of IDTokenSigningAlgValuesSupported.
+func (mr *MockAuthorizeEndpointHandlerMockRecorder) IDTokenSigningAlgValuesSupported(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IDTokenSigningAlgValuesSupported", reflect.TypeOf((*MockAuthorizeEndpointHandler)(nil).IDTokenSigningAlgValuesSupported), ctx)
+}
+
+// ResponseTypesSupported mocks base method.
+func (m *MockAuthorizeEndpointHandler) ResponseTypesSupported(ctx context.Context) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResponseTypesSupported", ctx)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// ResponseTypesSupported indicates an expected call of ResponseTypesSupported.
+func (mr *MockAuthorizeEndpointHandlerMockRecorder) ResponseTypesSupported(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResponseTypesSupported", reflect.TypeOf((*MockAuthorizeEndpointHandler)(nil).ResponseTypesSupported), ctx)
 }

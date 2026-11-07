@@ -47,7 +47,7 @@ func AccessTokenFromRequest(r *http.Request) (token string, dpop bool) {
 //     a token that is not bound at all - return oauth2.ErrInvalidToken instead.
 //
 // The method is intended only for tokens already known to be DPoP-bound; an empty boundJKT is treated as caller misuse.
-func (s *DefaultStrategy) ValidateResourceAccess(ctx context.Context, r *http.Request, accessToken, boundJKT string, requireNonce bool) (parsed *oauth2.DPoPProof, err error) {
+func (s *DefaultStrategy) ValidateResourceAccess(ctx context.Context, r *http.Request, accessToken, boundJKT string, requireNonce bool, alternates ...string) (parsed *oauth2.DPoPProof, err error) {
 	// Not one of the RFC 9449 Section 4.3 criteria, so this reports ErrInvalidToken: an unbound token is caller
 	// misuse and there is no proof to have been deemed invalid.
 	if boundJKT == "" {
@@ -75,7 +75,7 @@ func (s *DefaultStrategy) ValidateResourceAccess(ctx context.Context, r *http.Re
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The request to the protected resource requires a DPoP proof but none was provided."))
 	}
 
-	if parsed, err = s.ValidateDPoPProof(ctx, r.Method, requestURL(r), header, requireNonce); err != nil {
+	if parsed, err = s.ValidateDPoPProof(ctx, r.Method, requestURL(r), header, requireNonce, alternates...); err != nil {
 		return nil, err
 	}
 

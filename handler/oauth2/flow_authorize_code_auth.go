@@ -118,6 +118,41 @@ func (c *AuthorizeExplicitGrantHandler) GetSanitationWhiteList(ctx context.Conte
 	return []string{consts.FormParameterScope, consts.FormParameterRedirectURI}
 }
 
+// ResponseTypesSupported returns the response types this handler serves.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *AuthorizeExplicitGrantHandler) ResponseTypesSupported(ctx context.Context) (types []string) {
+	return []string{consts.ResponseTypeAuthorizationCodeFlow}
+}
+
+// GrantTypesSupported returns the grant types this handler serves.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *AuthorizeExplicitGrantHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return []string{consts.GrantTypeAuthorizationCode}
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *AuthorizeExplicitGrantHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *AuthorizeExplicitGrantHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns nil because the handler does not issue RFC 8693 tokens.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *AuthorizeExplicitGrantHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
 var (
 	_ oauth2.AuthorizeEndpointHandler                 = (*AuthorizeExplicitGrantHandler)(nil)
 	_ oauth2.TokenEndpointHandler                     = (*AuthorizeExplicitGrantHandler)(nil)

@@ -31,6 +31,11 @@ type Strategy interface {
 	// Validate allows performing the signature validation step after using the Decode function without a client while
 	// also using WithAllowUnverified.
 	Validate(ctx context.Context, token *Token, opts ...StrategyOpt) (err error)
+
+	// SigningAlgValues returns the sorted unique signing algorithms the strategy can produce.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	SigningAlgValues(ctx context.Context) (algs []string)
 }
 
 type StrategyConfig interface {
@@ -73,6 +78,17 @@ type JWKSFetcherStrategy interface {
 type DefaultStrategy struct {
 	Config StrategyConfig
 	Issuer Issuer
+}
+
+// SigningAlgValues returns the signing algorithms of the Issuer, or nil when there is no Issuer.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (j *DefaultStrategy) SigningAlgValues(ctx context.Context) (algs []string) {
+	if j.Issuer == nil {
+		return nil
+	}
+
+	return j.Issuer.GetIssuerSigningAlgValues(ctx)
 }
 
 // Encode handles encoding JWT's.

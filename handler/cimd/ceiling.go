@@ -147,10 +147,8 @@ func (r *Resolver) selectAuthMethod(metadata *oauth2.ClientRegistrationMetadata)
 func (r *Resolver) isRegistrationScope(ctx context.Context, scope string) (is bool) {
 	registration := []string{consts.ScopeClientRegistration}
 
-	if provider, ok := r.config.ValidatorConfig.(interface {
-		GetRFC7591ClientRegistrationScopes(ctx context.Context) (scopes []string)
-	}); ok {
-		registration = append(registration, provider.GetRFC7591ClientRegistrationScopes(ctx)...)
+	if r.config.ValidatorConfig != nil {
+		registration = append(registration, r.config.ValidatorConfig.GetRFC7591ClientRegistrationScopes(ctx)...)
 	}
 
 	if slices.Contains(registration, scope) {

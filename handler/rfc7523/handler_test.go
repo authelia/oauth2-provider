@@ -6,6 +6,7 @@ package rfc7523
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"fmt"
@@ -28,6 +29,59 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
 )
+
+func TestHandlerGrantTypesSupported(t *testing.T) {
+	h := &Handler{}
+
+	assert.Equal(t, []string{consts.GrantTypeOAuthJWTBearer}, h.GrantTypesSupported(context.Background()))
+}
+
+func TestRFC7523RejectsUnadvertisedAlg(t *testing.T) {
+	f := newJWTBearerFixture(t)
+
+	f.handler.Config.(*oauth2.Config).RFC7523AssertionSigningAlgValues = []string{"ES256"}
+
+	f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(f.createStandardClaim(), "unadvertised"))
+
+	err := f.handler.HandleTokenEndpointRequest(f.ctx, f.requester)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "Unable to parse JSON Web Token")
+}
+
+func TestRFC7523AcceptsEdDSA(t *testing.T) {
+	const keyID = "eddsa"
+
+	for _, alg := range []jose.SignatureAlgorithm{jose.EdDSA, jose.Ed25519} {
+		t.Run(string(alg), func(t *testing.T) {
+			f := newJWTBearerFixture(t)
+
+			public, private, err := ed25519.GenerateKey(rand.Reader)
+			require.NoError(t, err)
+
+			cl := f.createStandardClaim()
+
+			signer, err := jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: jose.JSONWebKey{Key: private, KeyID: keyID, Algorithm: string(alg)}}, (&jose.SignerOptions{}).WithType("JWT"))
+			require.NoError(t, err)
+
+			assertion, err := jwt.Signed(signer).Claims(cl).Serialize()
+			require.NoError(t, err)
+
+			pubKey := jose.JSONWebKey{Key: public, KeyID: keyID, Algorithm: string(alg), Use: consts.JSONWebTokenUseSignature}
+
+			f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+			f.requester.Form.Add(consts.FormParameterAssertion, assertion)
+
+			f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
+			f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
+			f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
+
+			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.handler.HandleTokenEndpointRequest(f.ctx, f.requester)))
+		})
+	}
+}
 
 func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 	const (

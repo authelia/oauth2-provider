@@ -39,6 +39,68 @@ import (
 	"authelia.com/provider/oauth2/storage"
 )
 
+func TestRedeemHandlerGrantTypesSupported(t *testing.T) {
+	testCases := []struct {
+		name     string
+		config   idjag.RedeemConfig
+		expected []string
+	}{
+		{
+			name:     "ShouldReportOnlyJWTBearerWithoutConfig",
+			expected: []string{consts.GrantTypeOAuthJWTBearer},
+		},
+		{
+			name:     "ShouldReportOnlyJWTBearerWhenDPoPIsDisabled",
+			config:   &oauth2.Config{DPoPEnabled: false},
+			expected: []string{consts.GrantTypeOAuthJWTBearer},
+		},
+		{
+			name:     "ShouldReportJWTDPoPWhenDPoPIsEnabled",
+			config:   &oauth2.Config{DPoPEnabled: true},
+			expected: []string{consts.GrantTypeOAuthJWTBearer, consts.GrantTypeOAuthJWTDPoP},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := &idjag.RedeemHandler{Config: tc.config}
+
+			assert.Equal(t, tc.expected, h.GrantTypesSupported(context.Background()))
+		})
+	}
+}
+
+func TestIDJAGRedeemRejectsUnadvertisedAlg(t *testing.T) {
+	fixture := newRedeemFixture(t, false)
+
+	fixture.config.IDJAGRedeemSigningAlgValues = []string{"ES256"}
+
+	request := newRedeemRequest(fixture.store.Clients[redeemClient], fixture.sign(t, fixture.claims(), "", "", ""), nil)
+
+	err := fixture.handler.HandleTokenEndpointRequest(t.Context(), request)
+
+	require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "Unable to parse the Identity Assertion JWT Authorization Grant")
+}
+
+func TestIDJAGRedeemRejectsSymmetricAlgEvenWhenListed(t *testing.T) {
+	fixture := newRedeemFixture(t, false)
+
+	fixture.config.IDJAGRedeemSigningAlgValues = []string{string(jose.HS256), string(jose.RS256)}
+
+	trusted := fixture.store.IDJAGTrustedIssuers[redeemIssuer]
+	trusted.JSONWebKeys = &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: fixture.private.N.Bytes(), KeyID: redeemKeyID, Algorithm: string(jose.HS256), Use: consts.JSONWebTokenUseSignature}}}
+	trusted.SigningAlgs = []string{string(jose.HS256)}
+	fixture.store.IDJAGTrustedIssuers[redeemIssuer] = trusted
+
+	request := newRedeemRequest(fixture.store.Clients[redeemClient], fixture.sign(t, fixture.claims(), "", jose.HS256, ""), nil)
+
+	err := fixture.handler.HandleTokenEndpointRequest(t.Context(), request)
+
+	require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "Unable to parse the Identity Assertion JWT Authorization Grant")
+}
+
 func TestRedeemHandlerValidation(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -1057,12 +1119,12 @@ func newRedeemFixture(t *testing.T, dpop bool) *redeemFixture {
 	public := jose.JSONWebKey{Key: &private.PublicKey, KeyID: redeemKeyID, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}
 
 	config := &oauth2.Config{
-		AuthorizationServerIdentificationIssuer: redeemAudience,
-		AccessTokenLifespan:                     time.Hour,
-		GrantTypeJWTBearerMaxDuration:           time.Hour,
-		ScopeStrategy:                           oauth2.ExactScopeStrategy,
-		DPoPEnabled:                             dpop,
-		GlobalSecret:                            []byte("some-secret-thats-random-some-secret-thats-random-"),
+		Issuer:                        redeemAudience,
+		AccessTokenLifespan:           time.Hour,
+		GrantTypeJWTBearerMaxDuration: time.Hour,
+		ScopeStrategy:                 oauth2.ExactScopeStrategy,
+		DPoPEnabled:                   dpop,
+		GlobalSecret:                  []byte("some-secret-thats-random-some-secret-thats-random-"),
 	}
 
 	store := storage.NewMemoryStore()

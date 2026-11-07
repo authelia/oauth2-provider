@@ -30,6 +30,7 @@ type Handler struct {
 	Config interface {
 		oauth2.DPoPConfigProvider
 		oauth2.DPoPStrictRefreshTokenBindingProvider
+		oauth2.EndpointURLsProvider
 	}
 	Strategy oauth2.DPoPStrategy
 }
@@ -88,7 +89,9 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 		return errorsx.WithStack(oauth2.ErrServerError.WithHint("The session does not support DPoP binding."))
 	}
 
-	proof, err := h.Strategy.ValidateDPoPProof(ctx, r.Method, requestURL(r), header, h.Config.GetDPoPNonceRequired(ctx))
+	urls := h.Config.GetEndpointURLs(ctx)
+
+	proof, err := h.Strategy.ValidateDPoPProof(ctx, r.Method, requestURL(r), header, h.Config.GetDPoPNonceRequired(ctx), urls.URLs(oauth2.EndpointToken)...)
 	if err != nil {
 		return err
 	}
@@ -161,3 +164,8 @@ func (h *Handler) required(ctx context.Context, request oauth2.AccessRequester) 
 var (
 	_ oauth2.TokenEndpointBindingHandler = (*Handler)(nil)
 )
+
+// IsRFC9449DPoPHandler marks this handler as the RFC 9449 token endpoint DPoP handler.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9449#section-5.1
+func (h *Handler) IsRFC9449DPoPHandler() {}

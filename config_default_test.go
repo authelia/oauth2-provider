@@ -25,6 +25,57 @@ func TestConfig_GetIDTokenValidationStrategy(t *testing.T) {
 	assert.Same(t, strategy, c.GetIDTokenValidationStrategy(t.Context()))
 }
 
+func TestEndpointURLsURLs(t *testing.T) {
+	urls := EndpointURLs{
+		Token:                      "https://as/token",
+		Revocation:                 "https://as/revoke",
+		Introspection:              "https://as/introspect",
+		PushedAuthorizationRequest: "https://as/par",
+		DeviceAuthorization:        "https://as/device",
+		UserInfo:                   "https://as/userinfo",
+		Registration:               "https://as/register",
+		EndSession:                 "https://as/logout",
+		MutualTLSAliases: RFC8705MutualTLSEndpointAliases{
+			Token:                      "https://mtls/token",
+			Revocation:                 "https://mtls/revoke",
+			Introspection:              "https://mtls/introspect",
+			PushedAuthorizationRequest: "https://mtls/par",
+			DeviceAuthorization:        "https://mtls/device",
+			UserInfo:                   "https://mtls/userinfo",
+			Registration:               "https://mtls/register",
+			EndSession:                 "https://mtls/logout",
+		},
+	}
+
+	testCases := []struct {
+		name     string
+		urls     EndpointURLs
+		endpoint EndpointName
+		expected []string
+	}{
+		{"ShouldReturnTheToken", urls, EndpointToken, []string{"https://as/token", "https://mtls/token"}},
+		{"ShouldReturnTheRevocation", urls, EndpointRevocation, []string{"https://as/revoke", "https://mtls/revoke"}},
+		{"ShouldReturnTheIntrospection", urls, EndpointIntrospection, []string{"https://as/introspect", "https://mtls/introspect"}},
+		{"ShouldReturnThePushedAuthorizationRequest", urls, EndpointPushedAuthorizationRequest, []string{"https://as/par", "https://mtls/par"}},
+		{"ShouldReturnTheDeviceAuthorization", urls, EndpointDeviceAuthorization, []string{"https://as/device", "https://mtls/device"}},
+		{"ShouldReturnTheUserInfo", urls, EndpointUserInfo, []string{"https://as/userinfo", "https://mtls/userinfo"}},
+		{"ShouldReturnTheRegistration", urls, EndpointRegistration, []string{"https://as/register", "https://mtls/register"}},
+		{"ShouldReturnTheEndSession", urls, EndpointEndSession, []string{"https://as/logout", "https://mtls/logout"}},
+		{"ShouldOmitAnEmptyAlias", EndpointURLs{Token: "https://as/token"}, EndpointToken, []string{"https://as/token"}},
+		{"ShouldOmitAnEmptyURL", EndpointURLs{MutualTLSAliases: RFC8705MutualTLSEndpointAliases{Token: "https://mtls/token"}}, EndpointToken, []string{"https://mtls/token"}},
+		{"ShouldReturnNilWhenBothAreEmpty", EndpointURLs{}, EndpointToken, nil},
+		{"ShouldReturnNilForAnUnknownEndpoint", urls, EndpointName("authorization"), nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.urls.URLs(tc.endpoint))
+		})
+	}
+
+	assert.Equal(t, "https://as/register", (&Config{EndpointURLs: urls}).GetRFC7591ClientRegistrationEndpointURL(context.Background()))
+}
+
 func TestConfigBackChannelLogoutDefaults(t *testing.T) {
 	config := &Config{}
 
@@ -216,71 +267,6 @@ func TestConfig_LazyDefaultsAreConcurrencySafe(t *testing.T) {
 			}
 
 			wg.Wait()
-		})
-	}
-}
-
-func TestConfig_GetJWTSecuredAuthorizeResponseModeIssuer(t *testing.T) {
-	const (
-		jarmIssuer = "https://jarm.example.com"
-		idIssuer   = "https://id.example.com"
-	)
-
-	testCases := []struct {
-		name     string
-		config   *Config
-		expected string
-	}{
-		{
-			name:     "ShouldReturnTheJARMIssuerWhenSet",
-			config:   &Config{JWTSecuredAuthorizeResponseModeIssuer: jarmIssuer, IDTokenIssuer: idIssuer},
-			expected: jarmIssuer,
-		},
-		{
-			name:     "ShouldFallBackToTheIDTokenIssuerWhenUnset",
-			config:   &Config{IDTokenIssuer: idIssuer},
-			expected: idIssuer,
-		},
-		{
-			name:     "ShouldReturnEmptyWithoutEitherIssuer",
-			config:   &Config{},
-			expected: "",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, tc.config.GetJWTSecuredAuthorizeResponseModeIssuer(t.Context()))
-		})
-	}
-}
-
-func TestConfig_GetAccessTokenIssuer(t *testing.T) {
-	testCases := []struct {
-		name     string
-		config   *Config
-		expected string
-	}{
-		{
-			name:     "ShouldReturnItsOwnValueWhenSet",
-			config:   &Config{AccessTokenIssuer: "https://at.example.com", IDTokenIssuer: "https://id.example.com"},
-			expected: "https://at.example.com",
-		},
-		{
-			name:     "ShouldFallBackToTheIDTokenIssuer",
-			config:   &Config{IDTokenIssuer: "https://id.example.com"},
-			expected: "https://id.example.com",
-		},
-		{
-			name:     "ShouldReturnEmptyWhenNeitherIsSet",
-			config:   &Config{},
-			expected: "",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, tc.config.GetAccessTokenIssuer(t.Context()))
 		})
 	}
 }

@@ -177,7 +177,7 @@ func TestAuthorizeRequestParametersFromJARRequireSignedRequestObject(t *testing.
 
 			config := &Config{
 				JWKSFetcherStrategy:        NewDefaultJWKSFetcherStrategy(),
-				IDTokenIssuer:              "https://auth.example.com",
+				Issuer:                     "https://auth.example.com",
 				RequireSignedRequestObject: tc.serverRequires,
 				RequireSignedRequestObjectSkipPushedAuthorizationRequests: tc.skipPAR,
 			}

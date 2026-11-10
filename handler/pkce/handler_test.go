@@ -28,6 +28,17 @@ import (
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
+func TestHandlerCodeChallengeMethodsSupported(t *testing.T) {
+	config := &oauth2.Config{}
+	h := &Handler{Config: config}
+
+	assert.Equal(t, []string{consts.PKCEChallengeMethodSHA256}, h.CodeChallengeMethodsSupported(context.Background()))
+
+	config.EnablePKCEPlainChallengeMethod = true
+
+	assert.Equal(t, []string{consts.PKCEChallengeMethodSHA256, consts.PKCEChallengeMethodPlain}, h.CodeChallengeMethodsSupported(context.Background()))
+}
+
 func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 	testCases := []struct {
 		name      string

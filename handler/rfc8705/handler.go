@@ -146,3 +146,8 @@ func (h *Handler) required(ctx context.Context, request oauth2.AccessRequester) 
 var (
 	_ oauth2.TokenEndpointBindingHandler = (*Handler)(nil)
 )
+
+// IsRFC8705MutualTLSHandler marks this handler as the RFC 8705 certificate-bound access token handler.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8705#section-3.3
+func (h *Handler) IsRFC8705MutualTLSHandler() {}

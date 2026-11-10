@@ -15,6 +15,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/handler/rfc8693"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
@@ -23,6 +24,23 @@ import (
 )
 
 // RFC 8693 §2.1: 'subject_token' and 'subject_token_type' must both be present.
+func TestIsIssuable(t *testing.T) {
+	assert.False(t, rfc8693.IsIssuable(nil))
+	assert.False(t, rfc8693.IsIssuable(&rfc8693.SelfSignedTokenType{}))
+	assert.False(t, rfc8693.IsIssuable(&rfc8693.UnsignedJSONTokenType{}))
+	assert.False(t, rfc8693.IsIssuable(&rfc8693.JWTType{}))
+	assert.False(t, rfc8693.IsIssuable((*rfc8693.JWTType)(nil)))
+	assert.True(t, rfc8693.IsIssuable(&rfc8693.JWTType{Issue: &rfc8693.JWTIssueConfig{}}))
+	assert.False(t, rfc8693.IsIssuable((*rfc8693.DefaultTokenType)(nil)))
+	assert.True(t, rfc8693.IsIssuable(&rfc8693.DefaultTokenType{}))
+}
+
+func TestTokenExchangeGrantHandlerGrantTypesSupported(t *testing.T) {
+	h := &rfc8693.TokenExchangeGrantHandler{}
+
+	assert.Equal(t, []string{consts.GrantTypeOAuthTokenExchange}, h.GrantTypesSupported(context.Background()))
+}
+
 func TestHandleTokenEndpointRequest_RequiredParameters(t *testing.T) {
 	handler := newTokenExchangeHandler()
 	client := newConfidentialClient()

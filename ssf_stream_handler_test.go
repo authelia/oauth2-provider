@@ -28,6 +28,7 @@ import (
 )
 
 const (
+	ssfHandlerIssuer   = "https://ssf.example.com"
 	ssfHandlerAudience = "https://ssf.example.com/ssf"
 	ssfHandlerURL      = "https://ssf.example.com/ssf/stream"
 	ssfHandlerSecret   = "Bearer rx-secret-value"
@@ -66,6 +67,7 @@ type ssfHandlerHarness struct {
 	provider *Fosite
 	store    *ssfCountingStore
 	config   *SSFConfig
+	root     *Config
 }
 
 func newSSFHandlerHarness(t *testing.T, mutate func(c *SSFConfig)) *ssfHandlerHarness {
@@ -89,7 +91,6 @@ func newSSFHandlerHarness(t *testing.T, mutate func(c *SSFConfig)) *ssfHandlerHa
 		}).Return(AccessToken, nil).AnyTimes()
 
 	config := &SSFConfig{
-		Issuer:   "https://ssf.example.com",
 		Audience: ssfHandlerAudience,
 		Policy: ssfHandlerPolicy{policy: &SSFClientPolicy{
 			Audience:        []string{"https://rx.example.com"},
@@ -110,10 +111,13 @@ func newSSFHandlerHarness(t *testing.T, mutate func(c *SSFConfig)) *ssfHandlerHa
 
 	store := &ssfCountingStore{MemoryStore: storage.NewMemoryStore()}
 
+	root := &Config{Issuer: ssfHandlerIssuer, SSF: config, TokenIntrospectionHandlers: TokenIntrospectionHandlers{introspector}}
+
 	return &ssfHandlerHarness{
-		provider: &Fosite{Store: store, Config: &Config{SSF: config, TokenIntrospectionHandlers: TokenIntrospectionHandlers{introspector}}},
+		provider: &Fosite{Store: store, Config: root},
 		store:    store,
 		config:   config,
+		root:     root,
 	}
 }
 
@@ -164,7 +168,7 @@ func TestSSFStreamHandlerCreate(t *testing.T) {
 
 		id, _ := got["stream_id"].(string)
 		assert.NotEmpty(t, id)
-		assert.Equal(t, "https://ssf.example.com", got["iss"])
+		assert.Equal(t, ssfHandlerIssuer, got["iss"])
 		assert.Equal(t, []any{"https://rx.example.com"}, got["aud"])
 		assert.Equal(t, []any{ssfEventSessionRev}, got["events_delivered"])
 		assert.Equal(t, []any{ssfEventSessionRev, ssfEventCredChange}, got["events_supported"])
@@ -189,7 +193,7 @@ func TestSSFStreamHandlerCreate(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rw.Body.Bytes(), &got))
 
 		assert.NotEqual(t, "chosen", got["stream_id"])
-		assert.Equal(t, "https://ssf.example.com", got["iss"])
+		assert.Equal(t, ssfHandlerIssuer, got["iss"])
 		assert.Equal(t, []any{"https://rx.example.com"}, got["aud"])
 		assert.Equal(t, []any{ssfEventCredChange}, got["events_delivered"])
 	})
@@ -251,7 +255,8 @@ func TestSSFStreamHandlerCreate(t *testing.T) {
 }
 
 func TestSSFStreamHandlerCreateRequiresIssuer(t *testing.T) {
-	h := newSSFHandlerHarness(t, func(c *SSFConfig) { c.Issuer = "" })
+	h := newSSFHandlerHarness(t, nil)
+	h.root.Issuer = ""
 
 	rw := h.do(t, "a", http.MethodPost, ssfHandlerURL, "application/json", `{}`)
 	assert.Equal(t, http.StatusInternalServerError, rw.Code)
@@ -262,7 +267,8 @@ func TestSSFStreamHandlerCreateRequiresIssuer(t *testing.T) {
 func TestSSFStreamHandlerCreateRejectsInvalidIssuer(t *testing.T) {
 	for _, issuer := range []string{"http://ssf.example.com", "https://ssf.example.com?x=1", "https://ssf.example.com#x"} {
 		t.Run(issuer, func(t *testing.T) {
-			h := newSSFHandlerHarness(t, func(c *SSFConfig) { c.Issuer = issuer })
+			h := newSSFHandlerHarness(t, nil)
+			h.root.Issuer = issuer
 
 			rw := h.do(t, "a", http.MethodPost, ssfHandlerURL, "application/json", `{}`)
 			assert.Equal(t, http.StatusInternalServerError, rw.Code)
@@ -320,14 +326,14 @@ func TestSSFStreamInvalidStoredIssuer(t *testing.T) {
 
 		rw := h.do(t, "a", http.MethodPatch, ssfHandlerURL, "application/json", `{"stream_id":"`+id+`","iss":"https://ssf.example.com","description":"new"}`)
 		require.Equal(t, http.StatusOK, rw.Code)
-		assert.Equal(t, "https://ssf.example.com", h.stored(t, "a", id).Issuer)
+		assert.Equal(t, ssfHandlerIssuer, h.stored(t, "a", id).Issuer)
 	})
 
 	t.Run("ShouldKeepValidStoredIssuer", func(t *testing.T) {
 		h := newSSFHandlerHarness(t, nil)
 		id := h.createStream(t, "a", `{}`)
 
-		h.config.Issuer = "https://new.example.com"
+		h.root.Issuer = "https://new.example.com"
 
 		rw := h.do(t, "a", http.MethodGet, ssfHandlerURL+"?stream_id="+id, "", "")
 		require.Equal(t, http.StatusOK, rw.Code)

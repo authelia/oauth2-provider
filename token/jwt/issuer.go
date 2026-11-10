@@ -10,6 +10,7 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
+	"slices"
 
 	"authelia.com/provider/jose"
 )
@@ -148,7 +149,49 @@ func (i *DefaultIssuer) GetIssuerStrictJWK(ctx context.Context, kid, alg, use st
 	return searchJWKS(i.jwks, kid, alg, use, true, false)
 }
 
+// GetIssuerSigningAlgValues returns the sorted unique algorithms of the keys with a use of sig, excluding none.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (i *DefaultIssuer) GetIssuerSigningAlgValues(ctx context.Context) (algs []string) {
+	return i.keyAlgValues(JSONWebTokenUseSignature)
+}
+
+// GetIssuerDecryptionAlgValues returns the sorted unique algorithms of the keys with a use of enc.
+func (i *DefaultIssuer) GetIssuerDecryptionAlgValues(ctx context.Context) (algs []string) {
+	return i.keyAlgValues(JSONWebTokenUseEncryption)
+}
+
+func (i *DefaultIssuer) keyAlgValues(use string) (algs []string) {
+	if i == nil || i.jwks == nil {
+		return nil
+	}
+
+	for _, key := range i.jwks.Keys {
+		if key.Use != use {
+			continue
+		}
+
+		if key.Algorithm == "" || key.Algorithm == JSONWebTokenAlgNone {
+			continue
+		}
+
+		algs = append(algs, key.Algorithm)
+	}
+
+	slices.Sort(algs)
+
+	return slices.Compact(algs)
+}
+
 type Issuer interface {
 	GetIssuerJWK(ctx context.Context, kid, alg, use string) (jwk *jose.JSONWebKey, err error)
 	GetIssuerStrictJWK(ctx context.Context, kid, alg, use string) (jwk *jose.JSONWebKey, err error)
+
+	// GetIssuerSigningAlgValues returns the sorted unique signing algorithms of the issuer keys.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	GetIssuerSigningAlgValues(ctx context.Context) (algs []string)
+
+	// GetIssuerDecryptionAlgValues returns the sorted unique key management algorithms of the issuer decryption keys.
+	GetIssuerDecryptionAlgValues(ctx context.Context) (algs []string)
 }

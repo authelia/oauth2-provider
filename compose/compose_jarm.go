@@ -13,7 +13,7 @@ import (
 
 // ErrJWTSecuredAuthorizeResponseModeIssuer is returned by ValidateJWTSecuredAuthorizeResponseMode when the JWT Secured
 // Authorization Response Mode is enabled without an issuer.
-var ErrJWTSecuredAuthorizeResponseModeIssuer = errors.New("oauth2: the JWT Secured Authorization Response Mode requires an issuer: set JWTSecuredAuthorizeResponseModeIssuer or IDTokenIssuer")
+var ErrJWTSecuredAuthorizeResponseModeIssuer = errors.New("oauth2: the JWT Secured Authorization Response Mode requires an issuer: set Issuer")
 
 // ValidateJWTSecuredAuthorizeResponseMode returns ErrJWTSecuredAuthorizeResponseModeIssuer when the JWT Secured
 // Authorization Response Mode is enabled, by setting JWTSecuredAuthorizeResponseModeStrategy, but no issuer resolves.
@@ -23,7 +23,7 @@ var ErrJWTSecuredAuthorizeResponseModeIssuer = errors.New("oauth2: the JWT Secur
 func ValidateJWTSecuredAuthorizeResponseMode(config *oauth2.Config) (err error) {
 	ctx := context.Background()
 
-	if config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx) == nil || config.GetJWTSecuredAuthorizeResponseModeIssuer(ctx) != "" {
+	if config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx) == nil || config.GetIssuer(ctx) != "" {
 		return nil
 	}
 

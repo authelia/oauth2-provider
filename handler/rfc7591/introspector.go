@@ -110,3 +110,9 @@ var (
 	_ oauth2.TokenIntrospector  = (*ClientRegistrationTokenIntrospector)(nil)
 	_ oauth2.ExtraClaimsSession = (*policyOmittedSession)(nil)
 )
+
+// IsRegistrationTokenIntrospector marks this introspector as one which only resolves client registration tokens, so
+// it does not by itself provide a token introspection endpoint.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (v *ClientRegistrationTokenIntrospector) IsRegistrationTokenIntrospector() {}

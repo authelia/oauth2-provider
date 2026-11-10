@@ -412,7 +412,7 @@ func TestAuthorizationGrantSigning(t *testing.T) {
 
 	t.Run("ShouldRejectTheIDTokenIssuer", func(t *testing.T) {
 		f := newGrantFixture(t, nil)
-		f.cfg.IDTokenIssuer = grantIssuer
+		f.cfg.Issuer = grantIssuer
 
 		_, err := f.exchange(t, grantExchange{audience: []string{grantTarget}})
 
@@ -501,7 +501,7 @@ func TestAuthorizationGrantIsNotAcceptedBack(t *testing.T) {
 
 	t.Run("ShouldNotIssueWhileAnIDTokenCouldBeAcceptedWithAnyIssuer", func(t *testing.T) {
 		f := newGrantFixture(t, nil)
-		f.cfg.IDTokenIssuer = ""
+		f.cfg.Issuer = ""
 
 		_, err := f.exchange(t, grantExchange{audience: []string{grantTarget}})
 
@@ -510,7 +510,7 @@ func TestAuthorizationGrantIsNotAcceptedBack(t *testing.T) {
 
 	t.Run("ShouldIssueWithoutAnIDTokenIssuerWhenIDTokensAreNotExchanged", func(t *testing.T) {
 		f := newGrantFixture(t, nil)
-		f.cfg.IDTokenIssuer = ""
+		f.cfg.Issuer = ""
 
 		delete(f.cfg.RFC8693TokenTypes, consts.TokenTypeRFC8693IDToken)
 
@@ -757,7 +757,7 @@ func newGrantFixtureWithStore(t *testing.T, store grantStore, configure func(jwt
 	}
 
 	cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693JWT] = jwtType
-	cfg.IDTokenIssuer = "https://op.a.example"
+	cfg.Issuer = "https://op.a.example"
 
 	client := &oauth2.DefaultClient{
 		ID:           "chaining-client",

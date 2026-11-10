@@ -436,7 +436,7 @@ func newBindingFixtures(t *testing.T) (auth *DefaultEndpointAuthStrategy, config
 	config = &oauth2.Config{
 		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+		EndpointURLs:                          oauth2.EndpointURLs{Registration: testEndpoint},
 		TokenEntropy:                          32,
 		DPoPEnabled:                           true,
 		MTLSEnabled:                           true,
@@ -538,7 +538,7 @@ func bindingRequest(scheme, token, proof string, peer *x509.Certificate) *http.R
 
 type proofOnlyDPoPStrategy struct{}
 
-func (proofOnlyDPoPStrategy) ValidateDPoPProof(_ context.Context, _, _, _ string, _ bool) (parsed *oauth2.DPoPProof, err error) {
+func (proofOnlyDPoPStrategy) ValidateDPoPProof(_ context.Context, _, _, _ string, _ bool, _ ...string) (parsed *oauth2.DPoPProof, err error) {
 	return &oauth2.DPoPProof{}, nil
 }
 

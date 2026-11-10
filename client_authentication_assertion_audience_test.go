@@ -56,7 +56,7 @@ func TestClientAssertionAudienceIssuerEnforcement(t *testing.T) {
 			config := &Config{
 				JWKSFetcherStrategy:                  NewDefaultJWKSFetcherStrategy(),
 				AllowedJWTAssertionAudiences:         []string{issuer, tokenURL, otherIssuer},
-				IDTokenIssuer:                        issuer,
+				Issuer:                               issuer,
 				EnforceClientAssertionIssuerAudience: tc.enforce,
 			}
 

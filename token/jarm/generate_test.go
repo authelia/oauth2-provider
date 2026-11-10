@@ -70,7 +70,7 @@ func TestEncodeParameters(t *testing.T) {
 }
 
 func TestGenerate(t *testing.T) {
-	const errNoIssuer = "the JARM response modes require the JWTSecuredAuthorizeResponseModeIssuerProvider to return an issuer but it didn't"
+	const errNoIssuer = "the JARM response modes require the configuration to return an issuer but it didn't"
 
 	testCases := []struct {
 		name       string
@@ -285,7 +285,7 @@ type stubConfigurator struct {
 	lifespan time.Duration
 }
 
-func (c *stubConfigurator) GetJWTSecuredAuthorizeResponseModeIssuer(_ context.Context) string {
+func (c *stubConfigurator) GetIssuer(_ context.Context) string {
 	return c.issuer
 }
 
@@ -344,6 +344,14 @@ func (s *stubStrategy) Decode(_ context.Context, _ string, _ ...jwt.StrategyOpt)
 }
 
 func (s *stubStrategy) Validate(_ context.Context, _ *jwt.Token, _ ...jwt.StrategyOpt) error {
+	return nil
+}
+
+func (s *stubStrategy) SigningAlgValues(_ context.Context) []string {
+	return nil
+}
+
+func (s *stubStrategy) DecryptionAlgValues(_ context.Context) []string {
 	return nil
 }
 

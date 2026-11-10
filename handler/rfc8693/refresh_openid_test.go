@@ -68,7 +68,7 @@ func TestRefreshTokenFromAnExchangeRefreshesTheIDToken(t *testing.T) {
 				config := &oauth2.Config{
 					GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 					RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-					IDTokenIssuer:                         "https://as.example.com",
+					Issuer:                                "https://as.example.com",
 					AccessTokenLifespan:                   time.Hour,
 					RefreshTokenLifespan:                  time.Hour,
 					TokenEntropy:                          32,

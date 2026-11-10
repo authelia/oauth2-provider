@@ -202,6 +202,34 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	return nil
 }
 
+// ResponseTypesSupported returns the response types this handler serves.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *OpenIDConnectHybridHandler) ResponseTypesSupported(ctx context.Context) (types []string) {
+	return []string{consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth}
+}
+
+// GrantTypesSupported returns the grant types this handler serves.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *OpenIDConnectHybridHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return []string{consts.GrantTypeImplicit}
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *OpenIDConnectHybridHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns the JWS algorithms this handler can sign an ID Token with.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *OpenIDConnectHybridHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return c.IDTokenHandleHelper.IDTokenSigningAlgValuesSupported(ctx)
+}
+
 var (
 	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectHybridHandler)(nil)
 )

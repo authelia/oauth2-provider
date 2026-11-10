@@ -49,7 +49,7 @@ func TestRequestObjectPasswordBasedEncryption(t *testing.T) {
 				RequestObjectEncryptionAlg: tc.encAlg,
 			}
 
-			config := &oauth2.Config{IDTokenIssuer: "https://auth.example.com", JWEPBES2CountMaximum: tc.maximum}
+			config := &oauth2.Config{Issuer: "https://auth.example.com", JWEPBES2CountMaximum: tc.maximum}
 			config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{})}
 
 			provider := &oauth2.Fosite{Store: store, Config: config}

@@ -45,6 +45,7 @@ func TestClientRegistrationCreationTokenFromTheTokenEndpoint(t *testing.T) {
 	strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
 	provider := compose.Compose(config, memory, strategy,
+		compose.OAuth2AuthorizeExplicitFactory,
 		compose.OAuth2ClientCredentialsGrantFactory,
 		compose.RFC7591ClientRegistrationFactory,
 	)
@@ -60,7 +61,7 @@ func TestClientRegistrationCreationTokenFromTheTokenEndpoint(t *testing.T) {
 
 	registrationURL := ts.URL + "/register"
 
-	config.RFC7591ClientRegistrationEndpointURL = registrationURL
+	config.EndpointURLs.Registration = registrationURL
 
 	newClient := func(id string, scopes, audience []string) *oauth2.DefaultClient {
 		return &oauth2.DefaultClient{
@@ -140,7 +141,7 @@ func TestClientRegistration(t *testing.T) {
 
 	strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 
-	provider := compose.Compose(config, memory, strategy, compose.RFC7591ClientRegistrationFactory, compose.RFC7592ClientConfigurationFactory)
+	provider := compose.Compose(config, memory, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.RFC7591ClientRegistrationFactory, compose.RFC7592ClientConfigurationFactory)
 
 	config.RFC7591ClientRegistrationEndpointAuthStrategy = rfc7591.NewDefaultEndpointAuthStrategy(config, memory, strategy, strategy)
 
@@ -151,7 +152,7 @@ func TestClientRegistration(t *testing.T) {
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
-	config.RFC7591ClientRegistrationEndpointURL = ts.URL + "/register"
+	config.EndpointURLs.Registration = ts.URL + "/register"
 
 	creator := &oauth2.DefaultClient{ID: "initial-access-client"}
 
@@ -163,7 +164,7 @@ func TestClientRegistration(t *testing.T) {
 	creation.GrantScope(consts.ScopeClientRegistration)
 	creation.GrantScope(consts.ScopeOpenID)
 	creation.GrantScope("profile")
-	creation.GrantAudience(config.RFC7591ClientRegistrationEndpointURL)
+	creation.GrantAudience(config.EndpointURLs.Registration)
 
 	creationToken, creationSignature, err := strategy.GenerateAccessToken(ctx, creation)
 	require.NoError(t, err)

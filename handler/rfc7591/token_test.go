@@ -92,9 +92,9 @@ func TestNewClientManagementTokenNeverExpiresUnderJWTProfile(t *testing.T) {
 	config := &oauth2.Config{
 		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  "https://auth.example.com/register",
+		EndpointURLs:                          oauth2.EndpointURLs{Registration: "https://auth.example.com/register"},
 		EnforceJWTProfileAccessTokens:         true,
-		AccessTokenIssuer:                     "https://auth.example.com",
+		Issuer:                                "https://auth.example.com",
 		AccessTokenLifespan:                   time.Nanosecond,
 	}
 
@@ -133,9 +133,9 @@ func TestNewClientManagementTokenUnderJWTProfile(t *testing.T) {
 	config := &oauth2.Config{
 		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  "https://auth.example.com/register",
+		EndpointURLs:                          oauth2.EndpointURLs{Registration: "https://auth.example.com/register"},
 		EnforceJWTProfileAccessTokens:         true,
-		AccessTokenIssuer:                     "https://auth.example.com",
+		Issuer:                                "https://auth.example.com",
 	}
 
 	store := storage.NewMemoryStore()
@@ -217,7 +217,7 @@ func newTokenFixtures(t *testing.T) (*oauth2.Config, *storage.MemoryStore, *hoau
 	config := &oauth2.Config{
 		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  "https://auth.example.com/register",
+		EndpointURLs:                          oauth2.EndpointURLs{Registration: "https://auth.example.com/register"},
 	}
 
 	return config, storage.NewMemoryStore(), hoauth2.NewHMACCoreStrategy(config, "authelia_%s_"), &oauth2.DefaultClient{ID: "creator"}

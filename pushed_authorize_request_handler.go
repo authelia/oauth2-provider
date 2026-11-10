@@ -143,7 +143,9 @@ func (f *Fosite) handlePushedAuthorizeRequestDPoP(ctx context.Context, r *http.R
 
 	var parsed *DPoPProof
 
-	if parsed, err = strategy.ValidateDPoPProof(ctx, r.Method, RequestURL(r), proof, f.Config.GetDPoPNonceRequired(ctx)); err != nil {
+	urls := f.Config.GetEndpointURLs(ctx)
+
+	if parsed, err = strategy.ValidateDPoPProof(ctx, r.Method, RequestURL(r), proof, f.Config.GetDPoPNonceRequired(ctx), urls.URLs(EndpointPushedAuthorizationRequest)...); err != nil {
 		return err
 	}
 

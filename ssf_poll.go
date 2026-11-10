@@ -112,7 +112,7 @@ func (f *Fosite) NewSSFPollRequest(ctx context.Context, r *http.Request, session
 		return nil, err
 	}
 
-	request = &SSFPollRequest{Stream: f.getSSFConfig(ctx).currentSSFStream(stream)}
+	request = &SSFPollRequest{Stream: f.currentSSFStream(ctx, f.getSSFConfig(ctx), stream)}
 
 	if len(data) == 0 && (r.Header.Get(consts.HeaderContentType) == "" || hasJSONContentType(r)) {
 		return request, nil

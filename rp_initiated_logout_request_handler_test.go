@@ -230,7 +230,7 @@ func TestNewRPInitiatedLogoutRequest_RejectsHintSignedWithWrongKey(t *testing.T)
 	client := &oauth2.DefaultClient{ID: "test-client"}
 	f, _, _ := newLogoutProviderWithJWT(t, client)
 
-	wrongConfig := &oauth2.Config{IDTokenIssuer: logoutTestIssuer, MinParameterEntropy: 8}
+	wrongConfig := &oauth2.Config{Issuer: logoutTestIssuer, MinParameterEntropy: 8}
 	wrongStrategy := &jwt.DefaultStrategy{Config: wrongConfig, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
 
 	hint := mintIDToken(t, wrongStrategy, baseHintClaims("test-client"))
@@ -406,7 +406,7 @@ func TestNewRPInitiatedLogoutRequest_RejectsHintWhenIssuerUnconfigured(t *testin
 
 	hint := mintIDToken(t, jwtStrategy, baseHintClaims("test-client"))
 
-	config.IDTokenIssuer = ""
+	config.Issuer = ""
 
 	_, err := f.NewRPInitiatedLogoutRequest(t.Context(), newLogoutGet(url.Values{
 		"id_token_hint": []string{hint},
@@ -426,7 +426,7 @@ func newLogoutClient(id string, uris ...string) *oauth2.DefaultRPInitiatedLogout
 func newLogoutProviderWithJWT(t *testing.T, clients ...oauth2.Client) (*oauth2.Fosite, jwt.Strategy, *oauth2.Config) {
 	t.Helper()
 
-	config := &oauth2.Config{IDTokenIssuer: logoutTestIssuer, MinParameterEntropy: 8}
+	config := &oauth2.Config{Issuer: logoutTestIssuer, MinParameterEntropy: 8}
 	jwtStrategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(logoutTestKey)}
 	config.IDTokenValidationStrategy = &openid.DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
 
@@ -468,7 +468,7 @@ func newLogoutProvider(t *testing.T, clients ...oauth2.Client) *oauth2.Fosite {
 		store.Clients[client.GetID()] = client
 	}
 
-	return &oauth2.Fosite{Store: store, Config: &oauth2.Config{IDTokenIssuer: "https://issuer.example/"}}
+	return &oauth2.Fosite{Store: store, Config: &oauth2.Config{Issuer: "https://issuer.example/"}}
 }
 
 func newLogoutGet(query url.Values) *http.Request {

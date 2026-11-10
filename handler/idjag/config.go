@@ -14,7 +14,7 @@ import (
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3
 type IssueConfig interface {
 	oauth2.RFC8693ConfigProvider
-	oauth2.AuthorizationServerIssuerIdentificationProvider
+	oauth2.IssuerProvider
 	oauth2.JWTClockSkewProvider
 	oauth2.IDJAGConfigProvider
 	oauth2.ConfirmationConfigProvider
@@ -24,7 +24,7 @@ type IssueConfig interface {
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4
 type RedeemConfig interface {
 	oauth2.AccessTokenLifespanProvider
-	oauth2.AuthorizationServerIssuerIdentificationProvider
+	oauth2.IssuerProvider
 	oauth2.JWTClockSkewProvider
 	oauth2.GetJWTMaxDurationProvider
 	oauth2.JWKSFetcherStrategyProvider
@@ -32,6 +32,7 @@ type RedeemConfig interface {
 	oauth2.ResourceStrategyProvider
 	oauth2.IDJAGConfigProvider
 	oauth2.MTLSConfigProvider
+	oauth2.GrantAssertionAlgorithmsProvider
 	GetDPoPEnabled(ctx context.Context) (enabled bool)
 	GetDPoPEnforce(ctx context.Context) (enforce bool)
 }

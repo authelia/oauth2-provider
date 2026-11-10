@@ -25,12 +25,17 @@ type BearerAuthorizationConfig interface {
 // ValidateBearerAuthorization.
 type BearerAuthorization struct {
 	// Audiences are the permitted audiences. The credential must carry at least one. When empty the check falls back
-	// to Endpoint, and then to RequestURL.
+	// to Endpoints, and then to RequestURL.
 	Audiences []string
 
-	// Endpoint is the configured absolute endpoint URL, used as the permitted audience when Audiences is empty. It is
-	// preferred over RequestURL, which is reconstructed from the client-controlled Host header and X-Forwarded-Proto.
-	Endpoint string
+	// Endpoints are the configured absolute URLs of the endpoint, such as its URL and its RFC 8705 mutual TLS alias,
+	// used as the permitted audiences when Audiences is empty, and accepted as the 'htu' of a DPoP proof alongside
+	// RequestURL. Empty values are ignored. For the audience they are preferred over RequestURL, which is reconstructed
+	// from the client-controlled Host header and X-Forwarded-Proto.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8705#section-5
+	// See: https://datatracker.ietf.org/doc/html/rfc9449#section-4.3
+	Endpoints []string
 
 	// Scopes are the required scopes. The credential must carry at least one. Empty means no scope check.
 	Scopes []string
@@ -46,7 +51,7 @@ type BearerAuthorization struct {
 //
 // See: https://www.rfc-editor.org/rfc/rfc6750#section-3.1
 func ValidateBearerAuthorization(ctx context.Context, config BearerAuthorizationConfig, r *http.Request, requester Requester, token string, auth BearerAuthorization) (err error) {
-	if err = validateBearerProofOfPossession(ctx, config, r, requester, token); err != nil {
+	if err = validateBearerProofOfPossession(ctx, config, r, requester, token, auth.Endpoints); err != nil {
 		return err
 	}
 
@@ -70,7 +75,7 @@ func ValidateBearerAuthorization(ctx context.Context, config BearerAuthorization
 // Errors from the underlying strategies are returned unwrapped, as the response writers depend on their codes.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9449 and https://www.rfc-editor.org/rfc/rfc8705
-func validateBearerProofOfPossession(ctx context.Context, config BearerAuthorizationConfig, r *http.Request, requester Requester, token string) (err error) {
+func validateBearerProofOfPossession(ctx context.Context, config BearerAuthorizationConfig, r *http.Request, requester Requester, token string, endpoints []string) (err error) {
 	// A nil session, and one whose type cannot record a binding, both leave the thumbprint empty below rather than
 	// returning early, which would bypass enforcement.
 	session := requester.GetSession()
@@ -94,7 +99,7 @@ func validateBearerProofOfPossession(ctx context.Context, config BearerAuthoriza
 					WithDebug("The credential used to authenticate the request is bound to a DPoP key but the configured DPoP strategy cannot validate resource access."))
 			}
 
-			if _, err = strategy.ValidateResourceAccess(ctx, r, token, jkt, config.GetDPoPNonceRequired(ctx)); err != nil {
+			if _, err = strategy.ValidateResourceAccess(ctx, r, token, jkt, config.GetDPoPNonceRequired(ctx), endpoints...); err != nil {
 				return err
 			}
 		case config.GetDPoPEnforce(ctx):
@@ -179,12 +184,15 @@ func validateBearerScope(requester Requester, scopes []string) (err error) {
 func validateBearerAudience(r *http.Request, requester Requester, auth BearerAuthorization) (err error) {
 	permitted := auth.Audiences
 
-	switch {
-	case len(permitted) != 0:
-		break
-	case auth.Endpoint != "":
-		permitted = []string{auth.Endpoint}
-	default:
+	if len(permitted) == 0 {
+		for _, endpoint := range auth.Endpoints {
+			if endpoint != "" {
+				permitted = append(permitted, endpoint)
+			}
+		}
+	}
+
+	if len(permitted) == 0 {
 		permitted = []string{RequestURL(r)}
 	}
 

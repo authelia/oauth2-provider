@@ -14,6 +14,30 @@ type AuthorizeEndpointHandler interface {
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.1
 	HandleAuthorizeEndpointRequest(ctx context.Context, request AuthorizeRequester, response AuthorizeResponder) (err error)
+
+	// ResponseTypesSupported returns the 'response_type' values this handler serves. It returns nil when the handler
+	// only augments another flow.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+	ResponseTypesSupported(ctx context.Context) (types []string)
+
+	// GrantTypesSupported returns the 'grant_type' values this handler serves. It returns nil when the handler only
+	// augments another flow.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+	GrantTypesSupported(ctx context.Context) (types []string)
+
+	// CodeChallengeMethodsSupported returns the 'code_challenge_method' values this handler accepts. It returns nil
+	// when the handler does not enforce PKCE.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+	CodeChallengeMethodsSupported(ctx context.Context) (methods []string)
+
+	// IDTokenSigningAlgValuesSupported returns the JWS algorithms this handler can sign an ID Token with. It returns
+	// nil when the handler does not issue ID Tokens.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string)
 }
 
 type TokenEndpointHandler interface {
@@ -33,6 +57,30 @@ type TokenEndpointHandler interface {
 	// CanHandleTokenEndpointRequest indicates, if TokenEndpointHandler can handle this request or not. If true,
 	// HandleTokenEndpointRequest can be called.
 	CanHandleTokenEndpointRequest(ctx context.Context, request AccessRequester) (handle bool)
+
+	// GrantTypesSupported returns the 'grant_type' values this handler serves. It returns nil when the handler only
+	// augments another grant.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+	GrantTypesSupported(ctx context.Context) (types []string)
+
+	// CodeChallengeMethodsSupported returns the 'code_challenge_method' values this handler accepts. It returns nil
+	// when the handler does not enforce PKCE.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+	CodeChallengeMethodsSupported(ctx context.Context) (methods []string)
+
+	// IDTokenSigningAlgValuesSupported returns the JWS algorithms this handler can sign an ID Token with. It returns
+	// nil when the handler does not issue ID Tokens.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string)
+
+	// RFC8693TokenTypesSupported returns the configured token type identifiers this handler issues. It returns nil when
+	// the handler does not issue RFC 8693 tokens, including the token exchange grant handler itself.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+	RFC8693TokenTypesSupported(ctx context.Context) (types []string)
 }
 
 // AuthorizationDetailsTokenEndpointHandler is implemented by a TokenEndpointHandler which processes the RFC 9396

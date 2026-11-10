@@ -303,6 +303,33 @@ func TestApplySoftwareStatement(t *testing.T) {
 			reason: testUnexpectedHS256Reason,
 		},
 		{
+			name:      "ShouldRejectAnUnadvertisedAlgorithm",
+			statement: func(t *testing.T) string { return fixture.sign(t, nil) },
+			configure: func(config *oauth2.Config) {
+				config.RFC7591TrustedIssuerSigningAlgValues = []string{"ES256"}
+			},
+			err:    oauth2.ErrInvalidSoftwareStatement,
+			reason: "unexpected signature algorithm 'RS256'",
+		},
+		{
+			name: "ShouldRejectASymmetricAlgorithmEvenWhenConfigured",
+			statement: func(t *testing.T) string {
+				return hmacJWTWithKeyID(t, softwareStatementClaims(nil), testStatementKeyID+"-hs")
+			},
+			configure: func(config *oauth2.Config) {
+				config.RFC7591TrustedIssuerSigningAlgValues = []string{"HS256", "RS256"}
+			},
+			err:    oauth2.ErrInvalidSoftwareStatement,
+			reason: testUnexpectedHS256Reason,
+		},
+		{
+			name:      "ShouldAcceptAnAsymmetricAlgorithmConfiguredAlongsideASymmetricOne",
+			statement: func(t *testing.T) string { return fixture.sign(t, nil) },
+			configure: func(config *oauth2.Config) {
+				config.RFC7591TrustedIssuerSigningAlgValues = []string{"HS256", "RS256"}
+			},
+		},
+		{
 			name: "ShouldAcceptAStatementWithoutAKeyIDWhenOneKeyMatches",
 			statement: func(t *testing.T) string {
 				return signSoftwareStatement(t, fixture.key, "", softwareStatementClaims(nil))

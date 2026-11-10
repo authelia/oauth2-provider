@@ -831,7 +831,7 @@ func TestNewPushedAuthorizeRequestWithRequestObject(t *testing.T) {
 	config := &Config{
 		ScopeStrategy:                ExactScopeStrategy,
 		AudienceStrategy:             DefaultAudienceStrategy,
-		IDTokenIssuer:                "https://auth.example.com",
+		Issuer:                       "https://auth.example.com",
 		JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
 		ClientAuthenticationStrategy: &staticClientAuthenticationStrategy{client: client},
 	}
@@ -984,4 +984,8 @@ type staticClientAuthenticationStrategy struct {
 
 func (s *staticClientAuthenticationStrategy) AuthenticateClient(_ context.Context, _ *http.Request, _ url.Values, _ EndpointClientAuthStrategy) (Client, string, error) {
 	return s.client, consts.ClientAuthMethodPrivateKeyJWT, s.err
+}
+
+func (s *staticClientAuthenticationStrategy) AuthMethodsSupported(_ context.Context) []string {
+	return nil
 }

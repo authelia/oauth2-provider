@@ -74,7 +74,7 @@ func TestIntrospectionJWTResponseNegotiation(t *testing.T) {
 			}
 
 			config := &Config{
-				IntrospectionIssuer:        "https://as.example.com",
+				Issuer:                     "https://as.example.com",
 				TokenIntrospectionHandlers: TokenIntrospectionHandlers{&fixedIntrospector{token: introspected}},
 			}
 

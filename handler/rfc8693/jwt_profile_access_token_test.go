@@ -39,7 +39,7 @@ func TestJWTProfileAccessTokenExchange(t *testing.T) {
 					config, hmacStrategy := newBindingExchangeConfig()
 					config.JWTProfileAccessTokenDefaultAudience = []string{"https://api.example.com"}
 					config.EnforceJWTProfileAccessTokens = true
-					config.AccessTokenIssuer = "https://issuer.example.com"
+					config.Issuer = "https://issuer.example.com"
 
 					strategy := &hoauth2.JWTProfileCoreStrategy{
 						Strategy:         &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)},

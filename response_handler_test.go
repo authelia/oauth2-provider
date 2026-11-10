@@ -23,6 +23,19 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+func TestSupportedResponseModesWithoutJARM(t *testing.T) {
+	config := &Config{}
+
+	assert.Equal(t, []string{"form_post", "fragment", "query"}, SupportedResponseModes(context.Background(), config))
+}
+
+func TestSupportedResponseModesWithJARM(t *testing.T) {
+	config := &Config{Issuer: "https://auth.example.com"}
+	config.JWTSecuredAuthorizeResponseModeStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
+
+	assert.Equal(t, []string{"form_post", "form_post.jwt", "fragment", "fragment.jwt", "jwt", "query", "query.jwt"}, SupportedResponseModes(context.Background(), config))
+}
+
 func TestDefaultResponseModeHandlerJWTRedirectURIQuery(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -149,7 +162,7 @@ func TestDefaultResponseModeHandlerJWTRedirectURIQueryResponseParameter(t *testi
 }
 
 func TestDefaultResponseModeHandlerJWTErrorWithoutSession(t *testing.T) {
-	config := &Config{JWTSecuredAuthorizeResponseModeIssuer: "https://jarm.example.com"}
+	config := &Config{Issuer: "https://jarm.example.com"}
 	config.JWTSecuredAuthorizeResponseModeStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
 
 	handler := &DefaultResponseModeHandler{Config: config}
@@ -224,8 +237,42 @@ func TestDefaultResponseModeHandlerShouldNotMutateRedirectURI(t *testing.T) {
 	}
 }
 
+func TestRFC9207ResponseModeParameterHandlerWriteParameters(t *testing.T) {
+	testCases := []struct {
+		name     string
+		config   *Config
+		expected []string
+	}{
+		{
+			name:     "ShouldSetTheIssuerWhenEnabled",
+			config:   &Config{Issuer: "https://auth.example.com"},
+			expected: []string{"https://auth.example.com"},
+		},
+		{
+			name:   "ShouldNotSetTheIssuerWhenDisabled",
+			config: &Config{Issuer: "https://auth.example.com", DisableAuthorizationServerIdentification: true},
+		},
+		{
+			name:   "ShouldNotSetAnEmptyIssuer",
+			config: &Config{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := &RFC9207ResponseModeParameterHandler{Config: tc.config}
+
+			parameters := url.Values{}
+
+			handler.WriteParameters(t.Context(), NewAuthorizeRequest(), parameters)
+
+			assert.Equal(t, tc.expected, parameters[consts.FormParameterIssuer])
+		})
+	}
+}
+
 func testNewJARMResponseModeHandler() *DefaultResponseModeHandler {
-	config := &Config{IDTokenIssuer: "https://auth.example.com"}
+	config := &Config{Issuer: "https://auth.example.com"}
 	config.JWTSecuredAuthorizeResponseModeStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
 
 	return &DefaultResponseModeHandler{Config: config}

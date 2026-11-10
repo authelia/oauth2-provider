@@ -12,7 +12,7 @@ import (
 )
 
 type Configurator interface {
-	GetJWTSecuredAuthorizeResponseModeIssuer(ctx context.Context) string
+	GetIssuer(ctx context.Context) (issuer string)
 	GetJWTSecuredAuthorizeResponseModeStrategy(ctx context.Context) jwt.Strategy
 	GetJWTSecuredAuthorizeResponseModeLifespan(ctx context.Context) time.Duration
 }

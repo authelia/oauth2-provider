@@ -433,7 +433,7 @@ func newCIMDEnv(t *testing.T, store cimdStore, enabled, fetcher bool, options ..
 		require.NoError(t, err)
 
 		config.ClientIDMetadataDocumentResolver = resolver
-		config.AuthorizationServerIdentificationIssuer = cimdIssuer
+		config.Issuer = cimdIssuer
 		config.ClientIDMetadataDocumentHTTPClient = client
 
 		if fetcher {

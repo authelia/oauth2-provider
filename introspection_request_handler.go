@@ -7,8 +7,10 @@ package oauth2
 import (
 	"context"
 	"errors"
+	"fmt"
 	"mime"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -132,6 +134,18 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 	}
 
 	if clientToken != "" {
+		if types := f.Config.GetIntrospectionEndpointAuthMethods(ctx); len(types) != 0 {
+			tokenType := consts.AuthSchemeBearer
+			if scheme, _, _ := strings.Cut(r.Header.Get(consts.HeaderAuthorization), " "); strings.EqualFold(scheme, DPoPAccessToken) {
+				tokenType = DPoPAccessToken
+			}
+
+			// See: https://www.rfc-editor.org/rfc/rfc8414#section-2
+			if !slices.Contains(types, tokenType) {
+				return nil, errorsx.WithStack(ErrInvalidClient.WithHint(fmt.Sprintf("The introspection endpoint does not permit authentication using the access token type '%s'.", tokenType)))
+			}
+		}
+
 		if token == clientToken {
 			return nil, errorsx.WithStack(ErrInvalidToken.WithHint("Bearer and introspection token are identical."))
 		}
@@ -153,10 +167,13 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 			return nil, errorsx.WithStack(ErrInvalidToken.WithHint("HTTP Authorization header missing, malformed, or credentials used are invalid.").WithDebugf("The HTTP Authorization header did not provide a token of type 'access_token', got type '%s'.", use))
 		}
 
-		// Endpoint is left empty: GetIntrospectionIssuer is the 'iss' claim of JWT introspection responses, not this
-		// endpoint's URL, so the audience falls back from the configured list to RequestURL.
+		urls := f.Config.GetEndpointURLs(ctx)
+
+		// The audience falls back from the configured list to the introspection endpoint URL and its mutual TLS alias,
+		// then to RequestURL. GetIssuer is the 'iss' claim of JWT introspection responses, not this endpoint's URL.
 		if err = ValidateBearerAuthorization(ctx, f.Config, r, ar, clientToken, BearerAuthorization{
 			Audiences: f.Config.GetAllowedIntrospectionAudiences(ctx),
+			Endpoints: urls.URLs(EndpointIntrospection),
 			Scopes:    f.Config.GetAllowedIntrospectionScopes(ctx),
 		}); err != nil {
 			return nil, err

@@ -37,21 +37,21 @@ func TestGetClient(t *testing.T) {
 		{
 			name:     "ShouldReturnRegisteredClient",
 			store:    stubClientGetter{clients: map[string]Client{"registered": registered}},
-			config:   &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: resolved}},
+			config:   &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: resolved}},
 			id:       "registered",
 			expected: registered,
 		},
 		{
 			name:     "ShouldPreferRegisteredClientForURL",
 			store:    stubClientGetter{clients: map[string]Client{url: registeredURL}},
-			config:   &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: resolved}},
+			config:   &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: resolved}},
 			id:       url,
 			expected: registeredURL,
 		},
 		{
 			name:     "ShouldResolveUnknownURL",
 			store:    stubClientGetter{},
-			config:   &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: resolved}},
+			config:   &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: resolved}},
 			id:       url,
 			expected: resolved,
 			resolves: 1,
@@ -80,28 +80,28 @@ func TestGetClient(t *testing.T) {
 		{
 			name:   "ShouldNotResolveOpaqueIdentifier",
 			store:  stubClientGetter{},
-			config: &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: resolved}},
+			config: &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: resolved}},
 			id:     "unknown",
 			err:    ErrNotFound,
 		},
 		{
 			name:   "ShouldNotResolveInvalidURL",
 			store:  stubClientGetter{},
-			config: &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: resolved}},
+			config: &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: resolved}},
 			id:     "https://client.example.com/a/../b",
 			err:    ErrNotFound,
 		},
 		{
 			name:   "ShouldNotResolveOnStoreFailure",
 			store:  stubClientGetter{err: failure},
-			config: &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: resolved}},
+			config: &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: resolved}},
 			id:     url,
 			err:    failure,
 		},
 		{
 			name:     "ShouldReturnResolverError",
 			store:    stubClientGetter{},
-			config:   &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{err: ErrInvalidClient}},
+			config:   &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{err: ErrInvalidClient}},
 			id:       url,
 			err:      ErrInvalidClient,
 			resolves: 1,
@@ -109,7 +109,7 @@ func TestGetClient(t *testing.T) {
 		{
 			name:     "ShouldRefuseNilResolverResult",
 			store:    stubClientGetter{},
-			config:   &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}},
+			config:   &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}},
 			id:       url,
 			err:      ErrServerError,
 			resolves: 1,
@@ -117,7 +117,7 @@ func TestGetClient(t *testing.T) {
 		{
 			name:     "ShouldRefuseResolverResultWithAnotherIdentifier",
 			store:    stubClientGetter{},
-			config:   &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: &stubDocumentClient{Client: &DefaultClient{ID: url + "x"}, document: true}}},
+			config:   &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: &stubDocumentClient{Client: &DefaultClient{ID: url + "x"}, document: true}}},
 			id:       url,
 			err:      ErrServerError,
 			resolves: 1,
@@ -125,7 +125,7 @@ func TestGetClient(t *testing.T) {
 		{
 			name:     "ShouldRefuseResolverResultWithTheIdentifierOfARegisteredClient",
 			store:    stubClientGetter{clients: map[string]Client{"registered": registered}},
-			config:   &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: &stubDocumentClient{Client: registered, document: true}}},
+			config:   &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: &stubDocumentClient{Client: registered, document: true}}},
 			id:       url,
 			err:      ErrServerError,
 			resolves: 1,
@@ -133,7 +133,7 @@ func TestGetClient(t *testing.T) {
 		{
 			name:     "ShouldRefuseUnmarkedResolverResult",
 			store:    stubClientGetter{},
-			config:   &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: &DefaultClient{ID: url}}},
+			config:   &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: &DefaultClient{ID: url}}},
 			id:       url,
 			err:      ErrServerError,
 			resolves: 1,
@@ -141,7 +141,7 @@ func TestGetClient(t *testing.T) {
 		{
 			name:     "ShouldRefuseResolverResultReportingItIsNotADocumentClient",
 			store:    stubClientGetter{},
-			config:   &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: &stubDocumentClient{Client: &DefaultClient{ID: url}}}},
+			config:   &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{client: &stubDocumentClient{Client: &DefaultClient{ID: url}}}},
 			id:       url,
 			err:      ErrServerError,
 			resolves: 1,
@@ -203,8 +203,8 @@ func TestGetClientAllowedDomainSuffixes(t *testing.T) {
 			resolver := &stubResolver{client: &stubDocumentClient{Client: &DefaultClient{ID: tc.id}, document: true}}
 
 			config := &Config{
-				AuthorizationServerIdentificationIssuer:       testIssuer,
-				ClientIDMetadataDocumentResolver:              resolver,
+				Issuer:                           testIssuer,
+				ClientIDMetadataDocumentResolver: resolver,
 				ClientIDMetadataDocumentAllowedDomainSuffixes: tc.suffixes,
 			}
 
@@ -246,12 +246,24 @@ func TestGetClientRequiresAnIssuer(t *testing.T) {
 
 	resolver := &stubResolver{client: &stubDocumentClient{Client: &DefaultClient{ID: id}, document: true}}
 
-	client, err := GetClient(t.Context(), &Config{ClientIDMetadataDocumentResolver: resolver}, stubClientGetter{}, id)
+	testCases := []struct {
+		name   string
+		config *Config
+	}{
+		{"ShouldRefuseWithoutAnIssuer", &Config{ClientIDMetadataDocumentResolver: resolver}},
+		{"ShouldRefuseWhenAuthorizationServerIdentificationIsDisabled", &Config{Issuer: testIssuer, DisableAuthorizationServerIdentification: true, ClientIDMetadataDocumentResolver: resolver}},
+	}
 
-	require.ErrorIs(t, err, ErrServerError)
-	assert.Nil(t, client)
-	assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), "no RFC 9207 authorization server issuer identifier is configured")
-	assert.Equal(t, 0, resolver.calls)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, err := GetClient(t.Context(), tc.config, stubClientGetter{}, id)
+
+			require.ErrorIs(t, err, ErrServerError)
+			assert.Nil(t, client)
+			assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), "RFC 9207 authorization server issuer identification is disabled or no issuer is configured")
+			assert.Equal(t, 0, resolver.calls)
+		})
+	}
 }
 
 func TestSetClientIDMetadataDocumentIssuer(t *testing.T) {
@@ -266,14 +278,15 @@ func TestSetClientIDMetadataDocumentIssuer(t *testing.T) {
 		existing string
 		expected string
 	}{
-		{"ShouldSetTheIssuerForADocumentClient", &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}}, document, ResponseModeQuery, "", testIssuer},
-		{"ShouldSetTheIssuerForTheDefaultMode", &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}}, document, ResponseModeDefault, "", testIssuer},
-		{"ShouldSetTheIssuerForFormPost", &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}}, document, ResponseModeFormPost, "", testIssuer},
-		{"ShouldKeepAnIssuerAlreadySet", &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}}, document, ResponseModeFragment, "https://other.example.com", "https://other.example.com"},
-		{"ShouldNotSetTheIssuerForAJWTMode", &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}}, document, ResponseModeQueryJWT, "", ""},
-		{"ShouldNotSetTheIssuerForARegisteredClient", &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}}, registered, ResponseModeQuery, "", ""},
-		{"ShouldNotSetTheIssuerWhenDisabled", &Config{AuthorizationServerIdentificationIssuer: testIssuer}, document, ResponseModeQuery, "", ""},
+		{"ShouldSetTheIssuerForADocumentClient", &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}}, document, ResponseModeQuery, "", testIssuer},
+		{"ShouldSetTheIssuerForTheDefaultMode", &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}}, document, ResponseModeDefault, "", testIssuer},
+		{"ShouldSetTheIssuerForFormPost", &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}}, document, ResponseModeFormPost, "", testIssuer},
+		{"ShouldKeepAnIssuerAlreadySet", &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}}, document, ResponseModeFragment, "https://other.example.com", "https://other.example.com"},
+		{"ShouldNotSetTheIssuerForAJWTMode", &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}}, document, ResponseModeQueryJWT, "", ""},
+		{"ShouldNotSetTheIssuerForARegisteredClient", &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{}}, registered, ResponseModeQuery, "", ""},
+		{"ShouldNotSetTheIssuerWhenDisabled", &Config{Issuer: testIssuer}, document, ResponseModeQuery, "", ""},
 		{"ShouldNotSetAnEmptyIssuer", &Config{ClientIDMetadataDocumentResolver: &stubResolver{}}, document, ResponseModeQuery, "", ""},
+		{"ShouldNotSetTheIssuerWhenAuthorizationServerIdentificationIsDisabled", &Config{Issuer: testIssuer, DisableAuthorizationServerIdentification: true, ClientIDMetadataDocumentResolver: &stubResolver{}}, document, ResponseModeQuery, "", ""},
 	}
 
 	for _, tc := range testCases {
@@ -301,13 +314,14 @@ func TestGetClientReservedIdentifiers(t *testing.T) {
 		name   string
 		config *Config
 	}{
-		{"ShouldRejectTheIDTokenIssuer", &Config{IDTokenIssuer: id}},
-		{"ShouldRejectTheAccessTokenIssuer", &Config{AccessTokenIssuer: id}},
-		{"ShouldRejectTheIntrospectionIssuer", &Config{IntrospectionIssuer: id}},
-		{"ShouldRejectTheAuthorizationServerIdentificationIssuer", &Config{AuthorizationServerIdentificationIssuer: id}},
-		{"ShouldRejectTheJARMIssuer", &Config{JWTSecuredAuthorizeResponseModeIssuer: id}},
+		{"ShouldRejectTheIssuer", &Config{Issuer: id}},
 		{"ShouldRejectAnAllowedJWTAssertionAudience", &Config{AllowedJWTAssertionAudiences: []string{"https://auth.example.com/token", id}}},
 		{"ShouldRejectAnAllowedIntrospectionAudience", &Config{AllowedIntrospectionAudiences: []string{id}}},
+		{"ShouldRejectTheIntrospectionEndpointURL", &Config{EndpointURLs: EndpointURLs{Introspection: id}}},
+		{"ShouldRejectTheIntrospectionEndpointMutualTLSAlias", &Config{EndpointURLs: EndpointURLs{MutualTLSAliases: RFC8705MutualTLSEndpointAliases{Introspection: id}}}},
+		{"ShouldRejectTheRegistrationEndpointURL", &Config{EndpointURLs: EndpointURLs{Registration: id}}},
+		{"ShouldRejectTheRegistrationEndpointMutualTLSAlias", &Config{EndpointURLs: EndpointURLs{MutualTLSAliases: RFC8705MutualTLSEndpointAliases{Registration: id}}}},
+		{"ShouldRejectARegistrationEndpointAudience", &Config{RFC7591ClientRegistrationEndpointAudiences: []string{id}}},
 		{"ShouldRejectAReservedIdentifier", &Config{ClientIDMetadataDocumentReservedIdentifiers: []string{"https://rs.example.com/api", id}}},
 		{"ShouldRejectATokenTypeIdentifier", &Config{RFC8693TokenTypes: map[string]RFC8693TokenType{"urn:example:jwt": &stubIdentifiersTokenType{identifiers: []string{"", "https://idp.example.com", id}}}}},
 	}
@@ -318,8 +332,8 @@ func TestGetClientReservedIdentifiers(t *testing.T) {
 
 			tc.config.ClientIDMetadataDocumentResolver = resolver
 
-			if tc.config.AuthorizationServerIdentificationIssuer == "" {
-				tc.config.AuthorizationServerIdentificationIssuer = testIssuer
+			if tc.config.Issuer == "" {
+				tc.config.Issuer = testIssuer
 			}
 
 			client, err := GetClient(t.Context(), tc.config, stubClientGetter{}, id)
@@ -334,7 +348,7 @@ func TestGetClientReservedIdentifiers(t *testing.T) {
 	t.Run("ShouldIgnoreATokenTypeWithoutIdentifiers", func(t *testing.T) {
 		resolver := &stubResolver{client: &stubDocumentClient{Client: &DefaultClient{ID: id}, document: true}}
 
-		client, err := GetClient(t.Context(), &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: resolver, RFC8693TokenTypes: map[string]RFC8693TokenType{"urn:example:other": stubTokenType{}}}, stubClientGetter{}, id)
+		client, err := GetClient(t.Context(), &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: resolver, RFC8693TokenTypes: map[string]RFC8693TokenType{"urn:example:other": stubTokenType{}}}, stubClientGetter{}, id)
 
 		require.NoError(t, err)
 		assert.Equal(t, id, client.GetID())
@@ -343,7 +357,7 @@ func TestGetClientReservedIdentifiers(t *testing.T) {
 	t.Run("ShouldUseSimpleStringComparison", func(t *testing.T) {
 		resolver := &stubResolver{client: &stubDocumentClient{Client: &DefaultClient{ID: id + "/"}, document: true}}
 
-		client, err := GetClient(t.Context(), &Config{AuthorizationServerIdentificationIssuer: testIssuer, IDTokenIssuer: id, ClientIDMetadataDocumentResolver: resolver}, stubClientGetter{}, id+"/")
+		client, err := GetClient(t.Context(), &Config{Issuer: id, ClientIDMetadataDocumentResolver: resolver}, stubClientGetter{}, id+"/")
 
 		require.NoError(t, err)
 		assert.Equal(t, id+"/", client.GetID())
@@ -353,7 +367,7 @@ func TestGetClientReservedIdentifiers(t *testing.T) {
 		registered := &DefaultClient{ID: id}
 		resolver := &stubResolver{}
 
-		client, err := GetClient(t.Context(), &Config{AuthorizationServerIdentificationIssuer: testIssuer, IDTokenIssuer: id, ClientIDMetadataDocumentResolver: resolver}, stubClientGetter{clients: map[string]Client{id: registered}}, id)
+		client, err := GetClient(t.Context(), &Config{Issuer: id, ClientIDMetadataDocumentResolver: resolver}, stubClientGetter{clients: map[string]Client{id: registered}}, id)
 
 		require.NoError(t, err)
 		assert.Equal(t, registered, client)
@@ -376,7 +390,7 @@ func TestAuthenticateClientReportsATransientDocumentFailure(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			strategy := &DefaultClientAuthenticationStrategy{Store: newMTLSClientStore(), Config: &Config{AuthorizationServerIdentificationIssuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{err: tc.err}}}
+			strategy := &DefaultClientAuthenticationStrategy{Store: newMTLSClientStore(), Config: &Config{Issuer: testIssuer, ClientIDMetadataDocumentResolver: &stubResolver{err: tc.err}}}
 
 			form := url.Values{consts.FormParameterClientID: {id}}
 

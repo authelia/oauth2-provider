@@ -46,7 +46,7 @@ func (s *DefaultSecurityEventTokenStrategy) GenerateSecurityEventToken(ctx conte
 // and audience of the stream, and the 'jti' it used. An empty jti generates one. A retry of the same event should reuse
 // the same 'jti', which is also the key of a poll response and of an acknowledgement.
 //
-// A stream whose issuer is not an https URL with no query or fragment uses SSFConfig.Issuer, and gives ErrServerError
+// A stream whose issuer is not an https URL with no query or fragment uses the issuer, GetIssuer, and gives ErrServerError
 // when that is not valid either (SSF Section 8.1.1).
 //
 // A SET requires 'iss', 'iat', 'jti', 'aud' and 'events'. A token whose protected header 'typ' is not 'secevent+jwt',
@@ -66,7 +66,7 @@ func (f *Fosite) GenerateSecurityEventToken(ctx context.Context, stream *SSFStre
 		return "", "", errorsx.WithStack(ErrServerError.WithDebug("Failed to generate the Security Event Token because the stream is missing or its audience is empty."))
 	}
 
-	stream = config.currentSSFStream(stream)
+	stream = f.currentSSFStream(ctx, config, stream)
 
 	if !isValidSSFIssuer(stream.Issuer) {
 		return "", "", errorsx.WithStack(ErrServerError.WithDebug("Failed to generate the Security Event Token because the stream has no valid issuer."))

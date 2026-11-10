@@ -152,6 +152,96 @@ func TestAuthenticateClientRegistrationJWTDiscovery(t *testing.T) {
 	}
 }
 
+func TestTrustedIssuerDiscoveryFallsBackToAppendForm(t *testing.T) {
+	var paths []string
+
+	var server *httptest.Server
+
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+
+		if r.URL.Path != "/tenant/.well-known/openid-configuration" {
+			w.WriteHeader(http.StatusNotFound)
+
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{"issuer": server.URL + "/tenant", "jwks_uri": server.URL + "/jwks"})
+	}))
+
+	t.Cleanup(server.Close)
+
+	uri, err := discoverJWKSURI(context.Background(), &oauth2.Config{}, server.URL+"/tenant")
+	require.NoError(t, err)
+
+	assert.Equal(t, server.URL+"/jwks", uri)
+	assert.Equal(t, []string{"/.well-known/openid-configuration/tenant", "/tenant/.well-known/openid-configuration"}, paths)
+}
+
+func TestTrustedIssuerDiscoveryFallsBackPastAnUnusableInsertedDocument(t *testing.T) {
+	testCases := []struct {
+		name     string
+		inserted func(w http.ResponseWriter, root string)
+	}{
+		{
+			name: "ShouldFallBackWhenTheInsertedDocumentNamesAnotherIssuer",
+			inserted: func(w http.ResponseWriter, root string) {
+				_ = json.NewEncoder(w).Encode(map[string]any{"issuer": root, "jwks_uri": root + "/root-jwks"})
+			},
+		},
+		{
+			name: "ShouldFallBackWhenTheInsertedDocumentDoesNotDecode",
+			inserted: func(w http.ResponseWriter, _ string) {
+				_, _ = w.Write([]byte("<html></html>"))
+			},
+		},
+		{
+			name: "ShouldFallBackWhenTheInsertedDocumentHasNoJWKSURI",
+			inserted: func(w http.ResponseWriter, root string) {
+				_ = json.NewEncoder(w).Encode(map[string]any{"issuer": root + "/tenant"})
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var server *httptest.Server
+
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/.well-known/openid-configuration/tenant":
+					tc.inserted(w, server.URL)
+				case "/tenant/.well-known/openid-configuration":
+					_ = json.NewEncoder(w).Encode(map[string]any{"issuer": server.URL + "/tenant", "jwks_uri": server.URL + "/jwks"})
+				default:
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+
+			t.Cleanup(server.Close)
+
+			uri, err := discoverJWKSURI(context.Background(), &oauth2.Config{}, server.URL+"/tenant")
+			require.NoError(t, err)
+
+			assert.Equal(t, server.URL+"/jwks", uri)
+		})
+	}
+}
+
+func TestTrustedIssuerDiscoveryReportsBothLocations(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	t.Cleanup(server.Close)
+
+	_, err := discoverJWKSURI(context.Background(), &oauth2.Config{}, server.URL+"/tenant")
+	require.Error(t, err)
+
+	assert.Contains(t, err.Error(), "'"+server.URL+"/.well-known/openid-configuration/tenant' returned the status code 404")
+	assert.Contains(t, err.Error(), "'"+server.URL+"/tenant/.well-known/openid-configuration' returned the status code 404")
+}
+
 func TestAuthenticateClientRegistrationJWTReportsAnUnreachableKeySetAsAServerError(t *testing.T) {
 	auth, config, _, _ := newJWTAuthFixtures(t)
 

@@ -266,7 +266,7 @@ func (f *Fosite) readSSFStreams(ctx context.Context, config *SSFConfig, storage 
 			return nil, ssfStreamStorageError(ErrNotFound)
 		}
 
-		return &SSFStreamResponse{StatusCode: http.StatusOK, Body: config.currentSSFStream(stream)}, nil
+		return &SSFStreamResponse{StatusCode: http.StatusOK, Body: f.currentSSFStream(ctx, config, stream)}, nil
 	}
 
 	var streams []*SSFStream
@@ -280,7 +280,7 @@ func (f *Fosite) readSSFStreams(ctx context.Context, config *SSFConfig, storage 
 
 	for _, stream := range streams {
 		if stream != nil && stream.ClientID == clientID {
-			owned = append(owned, config.currentSSFStream(stream))
+			owned = append(owned, f.currentSSFStream(ctx, config, stream))
 		}
 	}
 
@@ -297,11 +297,13 @@ func (f *Fosite) createSSFStream(ctx context.Context, config *SSFConfig, storage
 
 	// Every SET of the stream uses this as 'iss' (SSF Section 4.1.6), an https URL with no query or fragment (SSF Section
 	// 8.1.1).
-	if config.Issuer == "" {
+	issuer := f.Config.GetIssuer(ctx)
+
+	if issuer == "" {
 		return nil, errorsx.WithStack(ErrServerError.WithDebug("The Shared Signals Framework transmitter is not configured with an issuer."))
 	}
 
-	if _, err = SSFConfigurationURL(config.Issuer); err != nil {
+	if _, err = SSFConfigurationURL(issuer); err != nil {
 		return nil, errorsx.WithStack(ErrServerError.WithDebugf("The Shared Signals Framework transmitter issuer is invalid: %s.", err.Error()))
 	}
 
@@ -336,7 +338,7 @@ func (f *Fosite) createSSFStream(ctx context.Context, config *SSFConfig, storage
 	stream := &SSFStream{
 		StreamID:                streamID,
 		ClientID:                client.GetID(),
-		Issuer:                  config.Issuer,
+		Issuer:                  issuer,
 		Audience:                audience,
 		EventsSupported:         slices.Clone(policy.EventsSupported),
 		EventsRequested:         slices.Clone(body.EventsRequested),
@@ -395,7 +397,7 @@ func (f *Fosite) updateSSFStream(ctx context.Context, config *SSFConfig, storage
 		return nil, ssfStreamStorageError(ErrNotFound)
 	}
 
-	stored = config.currentSSFStream(stored)
+	stored = f.currentSSFStream(ctx, config, stored)
 
 	var policy *SSFClientPolicy
 

@@ -59,7 +59,7 @@ func TestGenerateSecurityEventToken(t *testing.T) {
 		err     string
 	}{
 		{name: "ShouldFailNilConfig", config: nil, stream: good, subject: subject, event: event, err: "server_error"},
-		{name: "ShouldFailNilStrategy", config: &oauth2.SSFConfig{Issuer: "https://tx.example.com"}, stream: good, subject: subject, event: event, err: "server_error"},
+		{name: "ShouldFailNilStrategy", config: &oauth2.SSFConfig{}, stream: good, subject: subject, event: event, err: "server_error"},
 		{name: "ShouldFailNilStream", config: &oauth2.SSFConfig{TokenStrategy: &ssfTestStrategy{}}, subject: subject, event: event, err: "server_error"},
 		{name: "ShouldFailEmptyAudience", config: &oauth2.SSFConfig{TokenStrategy: &ssfTestStrategy{}}, stream: &oauth2.SSFStream{Issuer: "https://tx.example.com"}, subject: subject, event: event, err: "server_error"},
 		{name: "ShouldFailEmptyIssuer", config: &oauth2.SSFConfig{TokenStrategy: &ssfTestStrategy{}}, stream: &oauth2.SSFStream{Audience: []string{"rx"}}, subject: subject, event: event, err: "server_error"},
@@ -215,12 +215,12 @@ func TestDefaultSecurityEventTokenStrategy(t *testing.T) {
 func TestConfigGetSSFConfig(t *testing.T) {
 	assert.Nil(t, (&oauth2.Config{}).GetSSFConfig(t.Context()))
 
-	c := (&oauth2.Config{SSF: &oauth2.SSFConfig{Issuer: "https://tx.example.com"}}).GetSSFConfig(t.Context())
+	c := (&oauth2.Config{SSF: &oauth2.SSFConfig{}}).GetSSFConfig(t.Context())
 	require.NotNil(t, c)
-	assert.Equal(t, "https://tx.example.com", c.Audience)
+	assert.Empty(t, c.Audience)
 	assert.Equal(t, int64(1<<16), c.MaxRequestBytes)
 
-	c = (&oauth2.Config{SSF: &oauth2.SSFConfig{Issuer: "i", Audience: "a", MaxRequestBytes: 10}}).GetSSFConfig(t.Context())
+	c = (&oauth2.Config{SSF: &oauth2.SSFConfig{Audience: "a", MaxRequestBytes: 10}}).GetSSFConfig(t.Context())
 	assert.Equal(t, "a", c.Audience)
 	assert.Equal(t, int64(10), c.MaxRequestBytes)
 }
@@ -246,7 +246,7 @@ func TestGenerateSecurityEventTokenStoredIssuer(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			strategy := &ssfTestStrategy{token: ssfTestToken(jwt.JSONWebTokenTypeSecurityEventToken)}
-			f := &oauth2.Fosite{Config: &oauth2.Config{SSF: &oauth2.SSFConfig{Issuer: tc.config, TokenStrategy: strategy}}}
+			f := &oauth2.Fosite{Config: &oauth2.Config{Issuer: tc.config, SSF: &oauth2.SSFConfig{TokenStrategy: strategy}}}
 			stream := &oauth2.SSFStream{Issuer: tc.stored, Audience: []string{"rx"}}
 
 			_, _, err := f.GenerateSecurityEventToken(t.Context(), stream, subject, event, "", "")

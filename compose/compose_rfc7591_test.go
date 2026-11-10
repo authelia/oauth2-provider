@@ -23,7 +23,7 @@ func TestRFC7591Factories(t *testing.T) {
 	config := &oauth2.Config{
 		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  "https://auth.example.com/register",
+		EndpointURLs:                          oauth2.EndpointURLs{Registration: "https://auth.example.com/register"},
 		RFC7591ClientRegistrationStrategy:     rfc7591.NewDefaultClientRegistrationStrategy(),
 		TokenEntropy:                          32,
 	}
@@ -50,7 +50,7 @@ func TestComposeAllEnabledIncludesRFC7591(t *testing.T) {
 	config := &oauth2.Config{
 		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  "https://auth.example.com/register",
+		EndpointURLs:                          oauth2.EndpointURLs{Registration: "https://auth.example.com/register"},
 		RFC7591ClientRegistrationStrategy:     rfc7591.NewDefaultClientRegistrationStrategy(),
 		TokenEntropy:                          32,
 	}

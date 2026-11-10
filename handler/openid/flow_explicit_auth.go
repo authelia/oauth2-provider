@@ -55,6 +55,34 @@ func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	return nil
 }
 
+// ResponseTypesSupported returns nil because the handler only augments another flow.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *OpenIDConnectExplicitHandler) ResponseTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// GrantTypesSupported returns nil because the handler only augments another grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *OpenIDConnectExplicitHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *OpenIDConnectExplicitHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns nil because the handler does not issue RFC 8693 tokens.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *OpenIDConnectExplicitHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
 var oidcParameters = []string{
 	consts.FormParameterGrantType,
 	consts.FormParameterMaximumAge,
@@ -68,3 +96,8 @@ var (
 	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectExplicitHandler)(nil)
 	_ oauth2.TokenEndpointHandler     = (*OpenIDConnectExplicitHandler)(nil)
 )
+
+// IsOpenIDConnectHandler marks this handler as an OpenID Connect authorization flow handler.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *OpenIDConnectExplicitHandler) IsOpenIDConnectHandler() {}

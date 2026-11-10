@@ -5,6 +5,7 @@
 package openid
 
 import (
+	"context"
 	"net/url"
 	"testing"
 	"time"
@@ -20,6 +21,13 @@ import (
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
 )
+
+func TestOpenIDConnectHybridHandlerSupported(t *testing.T) {
+	h := &OpenIDConnectHybridHandler{}
+
+	assert.Equal(t, []string{consts.ResponseTypeHybridFlowIDToken, consts.ResponseTypeHybridFlowToken, consts.ResponseTypeHybridFlowBoth}, h.ResponseTypesSupported(context.Background()))
+	assert.Equal(t, []string{consts.GrantTypeImplicit}, h.GrantTypesSupported(context.Background()))
+}
 
 func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 	testCases := []struct {

@@ -140,3 +140,8 @@ func (h *Handler) PopulateBoundTokenEndpointResponse(ctx context.Context, reques
 var (
 	_ oauth2.TokenEndpointBindingHandler = (*Handler)(nil)
 )
+
+// IsOpenIDConnectKeyBindingHandler marks this handler as an OpenID Connect Key Binding handler.
+//
+// See: https://openid.net/specs/openid-connect-key-binding-1_0.html#section-4
+func (h *Handler) IsOpenIDConnectKeyBindingHandler() {}

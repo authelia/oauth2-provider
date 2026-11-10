@@ -430,6 +430,51 @@ func TestValidatePrompt(t *testing.T) {
 	}
 }
 
+func TestValidatePromptDefaultsWithoutConfiguredPrompts(t *testing.T) {
+	v := NewOpenIDConnectRequestValidator(nil, validateClaimsPromptsOnlyConfig{})
+
+	testCases := []struct {
+		name   string
+		prompt string
+		err    string
+	}{
+		{name: "ShouldAcceptLogin", prompt: consts.PromptTypeLogin},
+		{name: "ShouldAcceptConsent", prompt: consts.PromptTypeConsent},
+		{name: "ShouldAcceptSelectAccount", prompt: consts.PromptTypeSelectAccount},
+		{
+			name:   "ShouldRejectCreate",
+			prompt: "create",
+			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The requested prompt value 'create' either contains unknown, unsupported, or prohibited prompt values. The permitted prompt values are 'login', 'none', 'consent', 'select_account'.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now()
+
+			_, err := v.ValidatePrompt(t.Context(), &oauth2.AuthorizeRequest{
+				Request: oauth2.Request{
+					Client: &oauth2.DefaultClient{ID: "foo"},
+					Form:   url.Values{consts.FormParameterPrompt: {tc.prompt}},
+					Session: &DefaultSession{
+						Subject:     "foo",
+						Claims:      &jwt.IDTokenClaims{Subject: "foo", AuthTime: jwt.NewNumericDate(now)},
+						RequestedAt: now,
+					},
+				},
+			})
+
+			if tc.err == "" {
+				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+		})
+	}
+}
+
 func TestValidatePromptPublicClientIdentityChecker(t *testing.T) {
 	testCases := []struct {
 		name        string

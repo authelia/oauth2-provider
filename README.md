@@ -111,8 +111,18 @@ finalized, so support for one may change in any release.
 | [RFC 7800: Proof-of-Possession Key Semantics for JWTs](https://datatracker.ietf.org/doc/html/rfc7800)    |   ✅   |       | The `cnf` claim                                                                  |
 | [RFC 8037: CFRG Elliptic Curve Signatures in JOSE](https://datatracker.ietf.org/doc/html/rfc8037)        |   🟡   |       | Ed25519; no Ed448                                                                |
 | [RFC 8725: JSON Web Token Best Current Practices](https://datatracker.ietf.org/doc/html/rfc8725)         |   🟡   |       | Explicit typing and mutually exclusive validation rules; not assessed as a whole |
-| [RFC 9493: Subject Identifiers for Security Event Tokens](https://datatracker.ietf.org/doc/html/rfc9493) |   🟡   |       | The `sub_id` claim of ID-JAG                                                     |
+| [RFC 9493: Subject Identifiers for Security Event Tokens](https://datatracker.ietf.org/doc/html/rfc9493) |   🟡   |       | The `sub_id` claim of ID-JAG and the subject of a Security Event Token           |
 | [RFC 9864: Fully-Specified Algorithms for JOSE and COSE](https://datatracker.ietf.org/doc/html/rfc9864)  |   🟡   |       | The `Ed25519` identifier; no `Ed448`                                             |
+
+### Shared Signals
+
+| Specification                                                                                           | Status | Draft | Notes                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------- | :----: | ----- | ------------------------------------------------------------------------------------------------------------------------ |
+| [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html) |   🟡   |       | Security Event Token signing, transmitter metadata, stream management, push and poll; subject management not implemented |
+| [OpenID Continuous Access Evaluation Profile 1.0](https://openid.net/specs/openid-caep-1_0.html)        |   🟡   |       | Event and subject identifier types only                                                                                  |
+| [RFC 8417: Security Event Token (SET)](https://datatracker.ietf.org/doc/html/rfc8417)                   |   🟡   |       | Claims and signing; delivery is RFC 8935 push or RFC 8936 poll                                                           |
+| [RFC 8935: Push-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8935)     |   🟡   |       | Single push attempt with a typed outcome; queueing and retries are left to the application                               |
+| [RFC 8936: Poll-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8936)     |   🟡   |       | Request parsing and response writing only; the SET queue is the application's                                            |
 
 ### Not Yet Supported: Drafts
 
@@ -136,7 +146,7 @@ Drafts adopted by the IETF OAuth Working Group or the OpenID Foundation which ar
 | [OpenID Connect Advanced Syntax for Claims (ASC) 1.0](https://openid.net/specs/openid-connect-advanced-syntax-for-claims-1_0.html)   |   ❌   | `draft-02`            |                                                                             |
 | [OpenID Connect Native SSO for Mobile Apps 1.0](https://openid.net/specs/openid-connect-native-sso-1_0.html)                         |   ❌   | `draft-07`            |                                                                             |
 | [Self-Issued OpenID Provider v2](https://openid.net/specs/openid-connect-self-issued-v2-1_0.html)                                    |   ❌   | `draft-13`            |                                                                             |
-| [CAEP Interoperability Profile 1.0](https://openid.net/specs/openid-caep-interoperability-profile-1_0-ID1.html)                      |   ❌   | `draft-00`            |                                                                             |
+| [CAEP Interoperability Profile 1.0](https://openid.net/specs/openid-caep-interoperability-profile-1_0.html)                          |   ❌   | `draft-01`            |                                                                             |
 | [Grant Management for OAuth 2.0](https://openid.net/specs/oauth-v2-grant-management-ID1.html)                                        |   ❌   | Implementer's Draft 1 |                                                                             |
 
 ### Not Yet Supported: Published
@@ -149,12 +159,7 @@ Drafts adopted by the IETF OAuth Working Group or the OpenID Foundation which ar
 | [RFC 9901: Selective Disclosure for JWTs (SD-JWT)](https://datatracker.ietf.org/doc/html/rfc9901)                                                              |   ❌   |       |                                                                             |
 | [RFC 10017: OAuth 2.0 for Browser-Based Applications](https://datatracker.ietf.org/doc/html/rfc10017)                                                          |   ❌   |       |                                                                             |
 | [RFC 10027: Best Current Practice for Security of Cross-Device Flows](https://datatracker.ietf.org/doc/html/rfc10027)                                          |   ❌   |       |                                                                             |
-| [RFC 8417: Security Event Token (SET)](https://datatracker.ietf.org/doc/html/rfc8417)                                                                          |   ❌   |       | In progress in [#901](https://github.com/authelia/oauth2-provider/pull/901) |
-| [RFC 8935: Push-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8935)                                                            |   ❌   |       | In progress in [#901](https://github.com/authelia/oauth2-provider/pull/901) |
-| [RFC 8936: Poll-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8936)                                                            |   ❌   |       | In progress in [#901](https://github.com/authelia/oauth2-provider/pull/901) |
-| [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html)                                                        |   ❌   |       | In progress in [#901](https://github.com/authelia/oauth2-provider/pull/901) |
-| [OpenID Continuous Access Evaluation Profile 1.0](https://openid.net/specs/openid-caep-1_0.html)                                                               |   ❌   |       |                                                                             |
-| [OpenID RISC Profile 1.0](https://openid.net/specs/openid-risc-1_0.html)                                                                                       |   ❌   |       |                                                                             |
+| [OpenID RISC Profile 1.0](https://openid.net/specs/openid-risc-1_0.html)                                                                                       |   ❌   |       | Events can be sent as raw Security Events                                   |
 | [OpenID Connect Client-Initiated Backchannel Authentication (CIBA)](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html) |   ❌   |       | In progress in [#532](https://github.com/authelia/oauth2-provider/pull/532) |
 | [OpenID Connect Front-Channel Logout 1.0](https://openid.net/specs/openid-connect-frontchannel-1_0.html)                                                       |   ❌   |       |                                                                             |
 | [OpenID Connect Session Management 1.0](https://openid.net/specs/openid-connect-session-1_0.html)                                                              |   ❌   |       |                                                                             |

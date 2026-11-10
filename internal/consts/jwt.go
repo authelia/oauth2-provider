@@ -72,6 +72,11 @@ const (
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-9.1
 	JSONWebTokenTypeTxnToken = "txntoken+jwt" //nolint:gosec // This is a credential type, not a credential.
+
+	// JSONWebTokenTypeSecurityEventToken represents the JWT type value for a Security Event Token.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8417.html#section-2.3
+	JSONWebTokenTypeSecurityEventToken = "secevent+jwt"
 )
 
 const (

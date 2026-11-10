@@ -29,9 +29,16 @@ import (
 // See: https://openid.net/specs/openid-caep-interoperability-profile-1_0.html#section-2.7.2
 // See: https://openid.net/specs/openid-caep-interoperability-profile-1_0.html#section-2.7.3
 func (f *Fosite) authorizeSSFRequest(ctx context.Context, r *http.Request, session Session, write bool) (requester AccessRequester, storage SSFStreamStorage, err error) {
-	var config *SSFConfig
+	var (
+		config   *SSFConfig
+		audience string
+	)
 
-	if config = f.getSSFConfig(ctx); config == nil || config.Audience == "" {
+	if config = f.getSSFConfig(ctx); config == nil {
+		return nil, nil, errorsx.WithStack(ErrServerError.WithDebug("The Shared Signals Framework transmitter is not configured."))
+	}
+
+	if audience = f.ssfAudience(ctx, config); audience == "" {
 		return nil, nil, errorsx.WithStack(ErrServerError.WithDebug("The Shared Signals Framework transmitter is not configured with an audience."))
 	}
 
@@ -65,7 +72,7 @@ func (f *Fosite) authorizeSSFRequest(ctx context.Context, r *http.Request, sessi
 	}
 
 	if err = ValidateBearerAuthorization(ctx, f.Config, r, ar, token, BearerAuthorization{
-		Audiences: []string{config.Audience},
+		Audiences: []string{audience},
 		Scopes:    scopes,
 	}); err != nil {
 		return nil, nil, err

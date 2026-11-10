@@ -140,7 +140,7 @@ func (c *IDTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, 
 		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
 	}
 
-	if requestedTokenType != consts.TokenTypeRFC8693IDToken {
+	if !c.issues(requestedTokenType) {
 		return nil
 	}
 
@@ -169,15 +169,11 @@ func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.Access
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the id_token").WithWrap(err).WithDebugError(err))
 	}
 
-	expectedIssuer := ""
-
 	// OpenID Connect Core 1.0 Section 3.1.3.7 requires the 'iss' claim to exactly match the Issuer Identifier of the
 	// OpenID Provider, which is the issuer every ID Token from this server is generated with.
 	//
 	// See: https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
-	if config, ok := c.Config.(oauth2.IDTokenIssuerProvider); ok {
-		expectedIssuer = config.GetIDTokenIssuer(ctx)
-	}
+	expectedIssuer := c.Config.GetIssuer(ctx)
 
 	iss, _ := claims[consts.ClaimIssuer].(string)
 
@@ -185,7 +181,7 @@ func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.Access
 
 	if _, ok = ValidateIssuer(iss, expectedIssuer, nil); !ok {
 		if expectedIssuer == "" {
-			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not a trusted issuer.").WithDebug("The ID Token issuer is not configured, so no issuer is trusted."))
+			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iss' from token is not a trusted issuer.").WithDebug("The issuer of this server is not configured, so no issuer is trusted."))
 		}
 
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim 'iss' from token must match the '%s'.", expectedIssuer))
@@ -296,3 +292,39 @@ func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessReq
 
 	return nil
 }
+
+// GrantTypesSupported returns nil because the handler only augments another grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *IDTokenTypeHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *IDTokenTypeHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *IDTokenTypeHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns the configured ID Token type identifier when it is issuable.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *IDTokenTypeHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return IssuableTokenTypes(ctx, c.Config, func(identifier string, _ oauth2.RFC8693TokenType) bool {
+		return c.issues(identifier)
+	})
+}
+
+func (c *IDTokenTypeHandler) issues(identifier string) bool {
+	return identifier == consts.TokenTypeRFC8693IDToken
+}
+
+var _ oauth2.TokenEndpointHandler = (*IDTokenTypeHandler)(nil)

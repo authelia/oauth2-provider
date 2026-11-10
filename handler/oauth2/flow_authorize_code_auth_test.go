@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"context"
 	"net/url"
 	"strings"
 	"testing"
@@ -17,6 +18,13 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 )
+
+func TestAuthorizeExplicitGrantHandlerSupported(t *testing.T) {
+	h := &AuthorizeExplicitGrantHandler{}
+
+	assert.Equal(t, []string{consts.ResponseTypeAuthorizationCodeFlow}, h.ResponseTypesSupported(context.Background()))
+	assert.Equal(t, []string{consts.GrantTypeAuthorizationCode}, h.GrantTypesSupported(context.Background()))
+}
 
 func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 	testCases := []struct {

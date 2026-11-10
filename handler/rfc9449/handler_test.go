@@ -594,7 +594,10 @@ type testHandlerConfig struct {
 	enabled, enforce, nonceRequired bool
 	strictRefreshTokenBinding       bool
 	strategy                        oauth2.DPoPStrategy
+	urls                            oauth2.EndpointURLs
 }
+
+func (c *testHandlerConfig) GetEndpointURLs(context.Context) oauth2.EndpointURLs { return c.urls }
 
 func (c *testHandlerConfig) GetDPoPStrictRefreshTokenBinding(context.Context) bool {
 	return c.strictRefreshTokenBinding

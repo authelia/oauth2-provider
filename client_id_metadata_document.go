@@ -24,7 +24,9 @@ import (
 // which resolves Client ID Metadata Documents publishes with the value true.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-8
-const ClientIDMetadataDocumentSupportedMetadataName = "client_id_metadata_document_supported"
+//
+// Deprecated: use the DraftClientIDMetadataDocumentMetadata.ClientIDMetadataDocumentSupported field.
+const ClientIDMetadataDocumentSupportedMetadataName = consts.DiscoveryClientIDMetadataDocumentSupported
 
 // IsClientIdentifierURL reports whether id is a valid Client Identifier URL.
 //
@@ -218,8 +220,8 @@ func GetClient(ctx context.Context, config any, store ClientGetter, id string) (
 	}
 
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-7
-	if issuer, ok := config.(AuthorizationServerIssuerIdentificationProvider); !ok || len(issuer.GetAuthorizationServerIdentificationIssuer(ctx)) == 0 {
-		return nil, errorsx.WithStack(ErrServerError.WithDebugf("The Client ID Metadata Document for the client identifier '%s' was not resolved as no RFC 9207 authorization server issuer identifier is configured.", id))
+	if len(getAuthorizationServerIdentificationIssuer(ctx, config)) == 0 {
+		return nil, errorsx.WithStack(ErrServerError.WithDebugf("The Client ID Metadata Document for the client identifier '%s' was not resolved as RFC 9207 authorization server issuer identification is disabled or no issuer is configured.", id))
 	}
 
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-10.8
@@ -257,30 +259,14 @@ type ClientIDMetadataDocumentReservedIdentifiersProvider interface {
 	GetClientIDMetadataDocumentReservedIdentifiers(ctx context.Context) (identifiers []string)
 }
 
-// reservedClientIdentifierURLs returns the identifiers a Client Identifier URL may not equal: the issuer identifiers
-// and accepted assertion audiences of this authorization server, the identifiers its token exchange token types
-// configure, and the identifiers of the parties it trusts.
+// reservedClientIdentifierURLs returns the identifiers a Client Identifier URL may not equal: the issuer identifier,
+// accepted assertion audiences and accepted bearer audiences of this authorization server, the identifiers its token
+// exchange token types configure, and the identifiers of the parties it trusts.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-10.1
 func reservedClientIdentifierURLs(ctx context.Context, config any) (identifiers []string) {
-	if p, ok := config.(AccessTokenIssuerProvider); ok {
-		identifiers = append(identifiers, p.GetAccessTokenIssuer(ctx))
-	}
-
-	if p, ok := config.(IDTokenIssuerProvider); ok {
-		identifiers = append(identifiers, p.GetIDTokenIssuer(ctx))
-	}
-
-	if p, ok := config.(IntrospectionIssuerProvider); ok {
-		identifiers = append(identifiers, p.GetIntrospectionIssuer(ctx))
-	}
-
-	if p, ok := config.(AuthorizationServerIssuerIdentificationProvider); ok {
-		identifiers = append(identifiers, p.GetAuthorizationServerIdentificationIssuer(ctx))
-	}
-
-	if p, ok := config.(JWTSecuredAuthorizeResponseModeIssuerProvider); ok {
-		identifiers = append(identifiers, p.GetJWTSecuredAuthorizeResponseModeIssuer(ctx))
+	if p, ok := config.(IssuerProvider); ok {
+		identifiers = append(identifiers, p.GetIssuer(ctx))
 	}
 
 	if p, ok := config.(AllowedJWTAssertionAudiencesProvider); ok {
@@ -289,6 +275,19 @@ func reservedClientIdentifierURLs(ctx context.Context, config any) (identifiers 
 
 	if p, ok := config.(AllowedIntrospectionAudiencesProvider); ok {
 		identifiers = append(identifiers, p.GetAllowedIntrospectionAudiences(ctx)...)
+	}
+
+	if p, ok := config.(EndpointURLsProvider); ok {
+		urls := p.GetEndpointURLs(ctx)
+
+		identifiers = append(identifiers, urls.URLs(EndpointIntrospection)...)
+		identifiers = append(identifiers, urls.URLs(EndpointRegistration)...)
+	}
+
+	if p, ok := config.(interface {
+		GetRFC7591ClientRegistrationEndpointAudiences(ctx context.Context) (audiences []string)
+	}); ok {
+		identifiers = append(identifiers, p.GetRFC7591ClientRegistrationEndpointAudiences(ctx)...)
 	}
 
 	if p, ok := config.(interface {

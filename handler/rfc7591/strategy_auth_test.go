@@ -30,7 +30,7 @@ func TestAuthenticateClientRegistrationSurfacesPolicy(t *testing.T) {
 			config := &oauth2.Config{
 				GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-				RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+				EndpointURLs:                          oauth2.EndpointURLs{Registration: testEndpoint},
 			}
 
 			claim := config.GetRFC7591ClientRegistrationPolicyClaim(ctx)
@@ -94,7 +94,7 @@ func TestAuthenticateClientRegistrationOmitsCounterKeyWithoutRequestID(t *testin
 			config := &oauth2.Config{
 				GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-				RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+				EndpointURLs:                          oauth2.EndpointURLs{Registration: testEndpoint},
 			}
 
 			tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
@@ -133,7 +133,7 @@ func TestAuthenticateClientConfigurationSurfacesPolicy(t *testing.T) {
 			config := &oauth2.Config{
 				GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-				RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+				EndpointURLs:                          oauth2.EndpointURLs{Registration: testEndpoint},
 			}
 
 			tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
@@ -412,6 +412,7 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 	testCases := []struct {
 		name       string
 		configured string
+		alias      string
 		granted    string
 		url        string
 		expected   string
@@ -427,6 +428,20 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 			granted:  "https://elsewhere.example.com/register",
 			url:      testEndpoint,
 			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://auth.example.com/register' but the audience had the values 'https://elsewhere.example.com/register'.",
+		},
+		{
+			name:    "ShouldAcceptTheMutualTLSAlias",
+			alias:   "https://mtls.auth.example.com/register",
+			granted: "https://mtls.auth.example.com/register",
+			url:     testEndpoint,
+		},
+		{
+			name:       "ShouldRejectTheMutualTLSAliasWhenAnAudienceIsConfigured",
+			alias:      "https://mtls.auth.example.com/register",
+			configured: "https://auth.example.com/api/register",
+			granted:    "https://mtls.auth.example.com/register",
+			url:        testEndpoint,
+			expected:   "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request does not have an audience which is permitted at this endpoint. The credential was expected to have an audience matching one of the values 'https://auth.example.com/api/register' but the audience had the values 'https://mtls.auth.example.com/register'.",
 		},
 		{
 			name:       "ShouldAcceptTheConfiguredAudience",
@@ -457,8 +472,8 @@ func TestDefaultEndpointAuthStrategyRegistrationAudience(t *testing.T) {
 			config := &oauth2.Config{
 				GlobalSecret:                               []byte("super-duper-secret-that-is-at-least-32-bytes"),
 				RFC7591ClientRegistrationGlobalSecret:      []byte("a-completely-different-secret-at-least-32b"),
-				RFC7591ClientRegistrationEndpointURL:       testEndpoint,
 				RFC7591ClientRegistrationEndpointAudiences: audiences,
+				EndpointURLs:                               oauth2.EndpointURLs{Registration: testEndpoint, MutualTLSAliases: oauth2.RFC8705MutualTLSEndpointAliases{Registration: tc.alias}},
 				TokenEntropy:                               32,
 			}
 
@@ -490,7 +505,7 @@ func TestAuthHydratesTheAccessTokenSession(t *testing.T) {
 	config := &oauth2.Config{
 		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+		EndpointURLs:                          oauth2.EndpointURLs{Registration: testEndpoint},
 		TokenEntropy:                          32,
 	}
 
@@ -749,7 +764,7 @@ func newTestAuthStrategy(t *testing.T) (*DefaultEndpointAuthStrategy, *oauth2.Co
 	config := &oauth2.Config{
 		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  testEndpoint,
+		EndpointURLs:                          oauth2.EndpointURLs{Registration: testEndpoint},
 	}
 
 	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
@@ -795,7 +810,7 @@ func newAuthFixtures(t *testing.T) (*DefaultEndpointAuthStrategy, *oauth2.Config
 	config := &oauth2.Config{
 		GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
-		RFC7591ClientRegistrationEndpointURL:  "https://auth.example.com/register",
+		EndpointURLs:                          oauth2.EndpointURLs{Registration: "https://auth.example.com/register"},
 	}
 
 	store := storage.NewMemoryStore()

@@ -89,7 +89,7 @@ func (f *Fosite) HandleSSFVerificationRequest(ctx context.Context, r *http.Reque
 		return err
 	}
 
-	stream = config.currentSSFStream(stream)
+	stream = f.currentSSFStream(ctx, config, stream)
 
 	now := time.Now().UTC()
 

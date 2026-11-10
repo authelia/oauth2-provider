@@ -23,10 +23,13 @@ import (
 func TestLocalValidator(t *testing.T) {
 	const errPrivateOrSymmetricKey = "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks' parameter must not contain private or symmetric key values."
 
-	config := &oauth2.Config{
-		ScopeStrategy:    oauth2.ExactScopeStrategy,
-		AudienceStrategy: oauth2.DefaultAudienceStrategy,
-	}
+	config := withTestCapabilities(&oauth2.Config{
+		ScopeStrategy:         oauth2.ExactScopeStrategy,
+		AudienceStrategy:      oauth2.DefaultAudienceStrategy,
+		SubjectTypesSupported: []string{consts.SubjectTypePublic, consts.SubjectTypePairwise},
+		MTLSEnabled:           true,
+		JWTStrategy:           signingAlgValuesStrategy{algs: []string{"RS256", "https://example.com/alg#custom"}},
+	})
 
 	validator := NewLocalValidator(config)
 
@@ -237,11 +240,12 @@ func TestLocalValidator(t *testing.T) {
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'access_token_signed_response_alg' value must not be 'none'.",
 		},
 		{
-			name: "ShouldAcceptNoneIntrospectionSignedResponseAlg",
+			name: "ShouldRejectNoneIntrospectionSignedResponseAlg",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				RedirectURIs:                   []string{"https://example.com/cb"},
 				IntrospectionSignedResponseAlg: consts.JSONWebTokenAlgNone,
 			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'introspection_signed_response_alg' value must not be 'none'.",
 		},
 		{
 			name: "ShouldAcceptNoneAuthorizationEncryptedResponseAlg",
@@ -562,10 +566,10 @@ func TestLocalValidator(t *testing.T) {
 }
 
 func TestLocalValidatorURIs(t *testing.T) {
-	validator := NewLocalValidator(&oauth2.Config{
+	validator := NewLocalValidator(withTestCapabilities(&oauth2.Config{
 		ScopeStrategy:    oauth2.ExactScopeStrategy,
 		AudienceStrategy: oauth2.DefaultAudienceStrategy,
-	})
+	}))
 
 	base := func() *oauth2.ClientRegistrationMetadata {
 		return &oauth2.ClientRegistrationMetadata{
@@ -833,11 +837,11 @@ func TestLocalValidatorGrantTypePolicy(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			validator := NewLocalValidator(&oauth2.Config{
+			validator := NewLocalValidator(withTestCapabilities(&oauth2.Config{
 				ScopeStrategy:                       oauth2.ExactScopeStrategy,
 				AudienceStrategy:                    oauth2.DefaultAudienceStrategy,
 				RFC7591ClientRegistrationGrantTypes: tc.permitted,
-			})
+			}))
 
 			err := validator.ValidateClientRegistrationMetadata(t.Context(), nil, tc.metadata)
 

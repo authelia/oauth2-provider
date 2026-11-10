@@ -26,6 +26,24 @@ type IDTokenHandleHelper struct {
 	IDTokenStrategy OpenIDConnectTokenStrategy
 }
 
+// IDTokenSigningAlgValuesSupported returns the JWS algorithms the ID Token strategy can sign with, or nil when the
+// strategy does not report them.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (i *IDTokenHandleHelper) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	if i == nil || i.IDTokenStrategy == nil {
+		return nil
+	}
+
+	if s, ok := i.IDTokenStrategy.(interface {
+		SigningAlgValues(ctx context.Context) (algs []string)
+	}); ok {
+		return s.SigningAlgValues(ctx)
+	}
+
+	return nil
+}
+
 // GetAccessTokenHash returns the 'at_hash' claim value for the access token in the response. See ComputeHash.
 func (i *IDTokenHandleHelper) GetAccessTokenHash(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (sum string) {
 	var err error

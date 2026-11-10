@@ -105,7 +105,8 @@ func TestAuthorizeSSFRequest(t *testing.T) {
 			}
 
 			if !tc.noConfig {
-				config.SSF = &SSFConfig{Issuer: tc.issuer, Audience: tc.audience}
+				config.Issuer = tc.issuer
+				config.SSF = &SSFConfig{Audience: tc.audience}
 			}
 
 			var s Storage = store
@@ -179,7 +180,7 @@ func TestAuthorizeSSFRequestShouldNotRevealIntrospectionFailure(t *testing.T) {
 
 	provider := &Fosite{
 		Store:  storage.NewMemoryStore(),
-		Config: &Config{SSF: &SSFConfig{Issuer: "https://ssf.example.com"}, TokenIntrospectionHandlers: TokenIntrospectionHandlers{introspector}},
+		Config: &Config{Issuer: ssfHandlerIssuer, SSF: &SSFConfig{}, TokenIntrospectionHandlers: TokenIntrospectionHandlers{introspector}},
 	}
 
 	r := httptest.NewRequest(http.MethodGet, "https://ssf.example.com/ssf/stream", nil)
@@ -205,7 +206,7 @@ func TestAuthorizeSSFRequestShouldReportStorageFailure(t *testing.T) {
 
 	provider := &Fosite{
 		Store:  storage.NewMemoryStore(),
-		Config: &Config{SSF: &SSFConfig{Issuer: "https://ssf.example.com"}, TokenIntrospectionHandlers: TokenIntrospectionHandlers{introspector}},
+		Config: &Config{Issuer: ssfHandlerIssuer, SSF: &SSFConfig{}, TokenIntrospectionHandlers: TokenIntrospectionHandlers{introspector}},
 	}
 
 	r := httptest.NewRequest(http.MethodGet, "https://ssf.example.com/ssf/stream", nil)
@@ -226,11 +227,10 @@ func TestAuthorizeSSFRequestShouldReportStorageFailure(t *testing.T) {
 func TestGetSSFConfigRetainsHooks(t *testing.T) {
 	policy := &testSSFPolicy{}
 
-	config := (&Config{SSF: &SSFConfig{Issuer: "https://ssf.example.com", Policy: policy, MinVerificationInterval: 5}}).GetSSFConfig(context.Background())
+	config := (&Config{SSF: &SSFConfig{Policy: policy, MinVerificationInterval: 5}}).GetSSFConfig(context.Background())
 
 	require.NotNil(t, config)
 	assert.Same(t, policy, config.Policy)
-	assert.Equal(t, "https://ssf.example.com", config.Audience)
 	assert.EqualValues(t, 5, config.MinVerificationInterval)
 }
 
@@ -295,7 +295,8 @@ func TestAuthorizeSSFRequestDPoP(t *testing.T) {
 			config := &Config{
 				DPoPEnabled:              true,
 				DPoPAllowedJWSAlgorithms: []string{"ES256"},
-				SSF:                      &SSFConfig{Issuer: "https://ssf.example.com", Audience: audience},
+				Issuer:                   ssfHandlerIssuer,
+				SSF:                      &SSFConfig{Audience: audience},
 			}
 
 			config.DPoPStrategy = rfc9449.NewDefaultStrategy(config, store)
@@ -456,12 +457,12 @@ func (c *ssfRawConfig) GetSSFConfig(ctx context.Context) (config *SSFConfig) {
 }
 
 func TestSSFConfigWithDefaults(t *testing.T) {
-	config := SSFConfig{Issuer: "https://ssf.example.com"}.WithDefaults()
+	config := SSFConfig{}.WithDefaults()
 
-	assert.Equal(t, "https://ssf.example.com", config.Audience)
+	assert.Empty(t, config.Audience)
 	assert.EqualValues(t, 1<<16, config.MaxRequestBytes)
 
-	config = SSFConfig{Issuer: "https://ssf.example.com", Audience: "https://aud.example.com", MaxRequestBytes: 10}.WithDefaults()
+	config = SSFConfig{Audience: "https://aud.example.com", MaxRequestBytes: 10}.WithDefaults()
 
 	assert.Equal(t, "https://aud.example.com", config.Audience)
 	assert.EqualValues(t, 10, config.MaxRequestBytes)
@@ -476,8 +477,9 @@ func TestSSFRawConfigProvider(t *testing.T) {
 
 	base := h.provider.Config.(*Config)
 
-	// The token audience of the harness is ssfHandlerAudience, reached here only through the Issuer default.
-	raw := &SSFConfig{Issuer: ssfHandlerAudience, Policy: base.SSF.Policy, PollEndpointURL: base.SSF.PollEndpointURL}
+	// The token audience of the harness is ssfHandlerAudience, reached here only through the issuer default.
+	base.Issuer = ssfHandlerAudience
+	raw := &SSFConfig{Policy: base.SSF.Policy, PollEndpointURL: base.SSF.PollEndpointURL}
 
 	h.provider.Config = &ssfRawConfig{Config: base, raw: raw}
 

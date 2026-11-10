@@ -38,6 +38,17 @@ const (
 	//
 	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationRequest
 	WellKnownOpenIDConfiguration = "/.well-known/openid-configuration"
+
+	// WellKnownOAuthAuthorizationServerSuffix is the RFC 8414 well-known URI suffix of the authorization server
+	// metadata.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8414#section-3
+	WellKnownOAuthAuthorizationServerSuffix = "oauth-authorization-server"
+
+	// WellKnownOpenIDConfigurationSuffix is the well-known URI suffix of the OpenID Provider Configuration.
+	//
+	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationRequest
+	WellKnownOpenIDConfigurationSuffix = "openid-configuration"
 )
 
 const (

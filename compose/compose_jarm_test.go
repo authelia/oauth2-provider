@@ -24,8 +24,7 @@ func TestValidateJWTSecuredAuthorizeResponseMode(t *testing.T) {
 		err    bool
 	}{
 		{name: "ShouldPassWithoutAJARMStrategy", config: &oauth2.Config{}},
-		{name: "ShouldPassWithTheJARMIssuer", config: &oauth2.Config{JWTSecuredAuthorizeResponseModeStrategy: &jwt.DefaultStrategy{}, JWTSecuredAuthorizeResponseModeIssuer: "https://jarm.example.com"}},
-		{name: "ShouldPassWithTheIDTokenIssuer", config: &oauth2.Config{JWTSecuredAuthorizeResponseModeStrategy: &jwt.DefaultStrategy{}, IDTokenIssuer: issuer}},
+		{name: "ShouldPassWithTheIssuer", config: &oauth2.Config{JWTSecuredAuthorizeResponseModeStrategy: &jwt.DefaultStrategy{}, Issuer: issuer}},
 		{name: "ShouldFailWithoutAnIssuer", config: &oauth2.Config{JWTSecuredAuthorizeResponseModeStrategy: &jwt.DefaultStrategy{}}, err: true},
 	}
 

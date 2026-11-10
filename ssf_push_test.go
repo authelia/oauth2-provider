@@ -492,7 +492,7 @@ func TestSSFDeliveryShouldRedactAuthorizationHeader(t *testing.T) {
 }
 
 func newSSFPushProvider(server *httptest.Server) *oauth2.Fosite {
-	config := &oauth2.Config{SSF: &oauth2.SSFConfig{Issuer: "https://ssf.example.com", EndpointValidator: ssfHandlerValidator{}}}
+	config := &oauth2.Config{Issuer: ssfHandlerIssuer, SSF: &oauth2.SSFConfig{EndpointValidator: ssfHandlerValidator{}}}
 
 	client := retryablehttp.NewClient()
 	client.Logger = nil

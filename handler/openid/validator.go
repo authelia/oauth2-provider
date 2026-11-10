@@ -18,13 +18,6 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-var defaultPrompts = []string{
-	consts.PromptTypeLogin,
-	consts.PromptTypeNone,
-	consts.PromptTypeConsent,
-	consts.PromptTypeSelectAccount,
-}
-
 type openIDConnectRequestValidatorConfigProvider interface {
 	oauth2.AllowedPromptsProvider
 }
@@ -122,10 +115,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 	// Specification Note: prompt is case-sensitive.
 	requiredPrompt := oauth2.RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterPrompt), " "))
 
-	availablePrompts := v.Config.GetAllowedPrompts(ctx)
-	if len(availablePrompts) == 0 {
-		availablePrompts = defaultPrompts
-	}
+	availablePrompts := oauth2.SupportedPromptValues(ctx, v.Config)
 
 	if !isWhitelisted(requiredPrompt, availablePrompts) {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The requested prompt value '%s' either contains unknown, unsupported, or prohibited prompt values.", strings.Join(requiredPrompt, " ")).WithDebugf("The permitted prompt values are '%s'.", strings.Join(availablePrompts, "', '")))

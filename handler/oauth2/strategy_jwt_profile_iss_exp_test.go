@@ -45,7 +45,7 @@ func TestJWTProfileAccessTokenRequiresIssuerAndExpiry(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &oauth2.Config{
 				EnforceJWTProfileAccessTokens: true,
-				AccessTokenIssuer:             tc.config,
+				Issuer:                        tc.config,
 				GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
 			}
 

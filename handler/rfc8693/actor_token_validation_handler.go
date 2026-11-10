@@ -127,6 +127,34 @@ func (c *ActorTokenValidationHandler) CanHandleTokenEndpointRequest(ctx context.
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
+// GrantTypesSupported returns nil because the handler only augments another grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *ActorTokenValidationHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *ActorTokenValidationHandler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *ActorTokenValidationHandler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns nil because the handler only augments the token exchange grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *ActorTokenValidationHandler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return nil
+}
+
 func authorizedActor(subject map[string]any) (mayAct map[string]any, present bool, err error) {
 	var value any
 
@@ -174,3 +202,5 @@ func isUnusedAuthorizedActorClaim(claim string) bool {
 		return false
 	}
 }
+
+var _ oauth2.TokenEndpointHandler = (*ActorTokenValidationHandler)(nil)

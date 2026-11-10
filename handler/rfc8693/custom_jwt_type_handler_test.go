@@ -5,6 +5,7 @@
 package rfc8693_test
 
 import (
+	"context"
 	"net/url"
 	"testing"
 	"time"
@@ -294,3 +295,42 @@ func TestCustomJWTTypeHandlerExpiry(t *testing.T) {
 		})
 	}
 }
+
+func TestCustomJWTTypeHandler_OnlyIssuesJWTType(t *testing.T) {
+	const (
+		identifierJWTType = "urn:example:jwt"
+		identifierForeign = "urn:example:foreign-jwt"
+	)
+
+	config := &oauth2.Config{
+		RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
+			identifierJWTType: &JWTType{Name: identifierJWTType, Issue: &JWTIssueConfig{Issuer: "https://issuer.example.com"}},
+			identifierForeign: foreignJWTTokenType{name: identifierForeign},
+		},
+	}
+
+	handler := &CustomJWTTypeHandler{Config: config}
+
+	t.Run("ShouldAdvertiseOnlyTheJWTType", func(t *testing.T) {
+		assert.Equal(t, []string{identifierJWTType}, handler.RFC8693TokenTypesSupported(t.Context()))
+	})
+
+	t.Run("ShouldNotIssueATypeWhichIsNotAJWTType", func(t *testing.T) {
+		request := oauth2.NewAccessRequest(&DefaultSession{DefaultSession: &openid.DefaultSession{}})
+		request.GrantTypes = oauth2.Arguments{consts.GrantTypeOAuthTokenExchange}
+		request.Form = url.Values{consts.FormParameterRequestedTokenType: {identifierForeign}}
+
+		response := oauth2.NewAccessResponse()
+
+		require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), request, response))
+		assert.Empty(t, response.GetAccessToken())
+	})
+}
+
+type foreignJWTTokenType struct {
+	name string
+}
+
+func (f foreignJWTTokenType) GetName(_ context.Context) string { return f.name }
+
+func (f foreignJWTTokenType) GetType(_ context.Context) string { return consts.TokenTypeRFC8693JWT }

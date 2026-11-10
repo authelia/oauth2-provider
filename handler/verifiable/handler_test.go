@@ -28,7 +28,7 @@ func TestHandler(t *testing.T) {
 		defer ctrl.Finish()
 
 		req := mock.NewMockAccessRequester(ctrl)
-		req.EXPECT().GetGrantedScopes().Return(oauth2.Arguments{consts.ScopeOpenID, draftScope}).AnyTimes()
+		req.EXPECT().GetGrantedScopes().Return(oauth2.Arguments{consts.ScopeOpenID, consts.ScopeUserinfoCredentialDraft00}).AnyTimes()
 
 		resp := mock.NewMockAccessResponder(ctrl)
 		resp.EXPECT().GetAccessToken().Return("fake access token")

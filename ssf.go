@@ -39,12 +39,7 @@ type SecurityEventTokenStrategy interface {
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html
 type SSFConfig struct {
-	// Issuer is the transmitter issuer, used as the 'iss' of every SET. It must be an https URL with no query or fragment.
-	// Required to create a stream; an empty or invalid value gives ErrServerError. It replaces an invalid issuer stored on
-	// an existing stream, which an update then persists.
-	Issuer string
-
-	// Audience is the transmitter audience. Empty means Issuer.
+	// Audience is the transmitter audience. Empty means the issuer, GetIssuer.
 	Audience string
 
 	// TokenStrategy signs the SETs.
@@ -77,14 +72,9 @@ type SSFConfig struct {
 	MinVerificationInterval time.Duration
 }
 
-// WithDefaults returns a copy with an empty Audience defaulted to Issuer and an unset MaxRequestBytes defaulted to
-// 64 KiB.
+// WithDefaults returns a copy with an unset MaxRequestBytes defaulted to 64 KiB.
 func (c SSFConfig) WithDefaults() (config SSFConfig) {
 	config = c
-
-	if config.Audience == "" {
-		config.Audience = config.Issuer
-	}
 
 	if config.MaxRequestBytes <= 0 {
 		config.MaxRequestBytes = defaultSSFMaxRequestBytes
@@ -107,15 +97,23 @@ func isValidSSFIssuer(issuer string) (valid bool) {
 	return err == nil
 }
 
-func (c *SSFConfig) currentSSFStream(stream *SSFStream) (current *SSFStream) {
+func (f *Fosite) currentSSFStream(ctx context.Context, config *SSFConfig, stream *SSFStream) (current *SSFStream) {
 	current = stream.Clone()
-	current.MinVerificationInterval = c.minVerificationIntervalSeconds()
+	current.MinVerificationInterval = config.minVerificationIntervalSeconds()
 
-	if !isValidSSFIssuer(current.Issuer) && isValidSSFIssuer(c.Issuer) {
-		current.Issuer = c.Issuer
+	if issuer := f.Config.GetIssuer(ctx); !isValidSSFIssuer(current.Issuer) && isValidSSFIssuer(issuer) {
+		current.Issuer = issuer
 	}
 
 	return current
+}
+
+func (f *Fosite) ssfAudience(ctx context.Context, config *SSFConfig) (audience string) {
+	if config.Audience != "" {
+		return config.Audience
+	}
+
+	return f.Config.GetIssuer(ctx)
 }
 
 // getSSFConfig returns the configured SSFConfig with defaults applied, or nil.

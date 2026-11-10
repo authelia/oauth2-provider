@@ -38,7 +38,7 @@ type TxnTokenType struct {
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-10
 	TrustDomain string `json:"trust_domain"`
 
-	// Issuer is the 'iss' claim of an issued token when not empty. It must not equal the ID Token issuer.
+	// Issuer is the 'iss' claim of an issued token when not empty. It must not equal the issuer of this server.
 	Issuer string `json:"iss"`
 
 	// Expiry is the lifetime of an issued token. A value that is not positive uses 5 minutes. It has no upper limit, and a

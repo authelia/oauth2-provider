@@ -18,6 +18,7 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	oauth2jwt "authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -43,6 +44,7 @@ type Handler struct {
 		oauth2.AudienceStrategyProvider
 		oauth2.ResourceStrategyProvider
 		oauth2.ScopeStrategyProvider
+		oauth2.GrantAssertionAlgorithmsProvider
 	}
 
 	*hoauth2.HandleHelper
@@ -69,7 +71,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The assertion request parameter must be set when using grant_type of '%s'.", consts.GrantTypeOAuthJWTBearer))
 	}
 
-	token, err := jwt.ParseSigned(assertion, assertionAlgorithms)
+	token, err := jwt.ParseSigned(assertion, oauth2jwt.ToSignatureAlgorithms(c.Config.GetRFC7523AssertionSigningAlgValues(ctx)))
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse JSON Web Token passed in 'assertion' request parameter.").WithWrap(err).WithDebugError(err))
 	}
@@ -182,7 +184,7 @@ func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oau
 }
 
 func (c *Handler) consume(ctx context.Context, assertion string) (err error) {
-	token, err := jwt.ParseSigned(assertion, assertionAlgorithms)
+	token, err := jwt.ParseSigned(assertion, oauth2jwt.ToSignatureAlgorithms(c.Config.GetRFC7523AssertionSigningAlgValues(ctx)))
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse JSON Web Token passed in 'assertion' request parameter.").WithWrap(err).WithDebugError(err))
 	}
@@ -466,6 +468,34 @@ func (c *Handler) validateRequestedAudience(ctx context.Context, request oauth2.
 	}
 
 	return oauth2.GetResourceStrategy(ctx, c.Config, nil)(audience, request.GetRequestedResource())
+}
+
+// GrantTypesSupported returns the grant types this handler serves.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *Handler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return []string{consts.GrantTypeOAuthJWTBearer}
+}
+
+// CodeChallengeMethodsSupported returns nil because the handler does not enforce PKCE.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7636#section-4.3
+func (c *Handler) CodeChallengeMethodsSupported(ctx context.Context) (methods []string) {
+	return nil
+}
+
+// IDTokenSigningAlgValuesSupported returns nil because the handler does not issue ID Tokens.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *Handler) IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string) {
+	return nil
+}
+
+// RFC8693TokenTypesSupported returns nil because the handler does not issue RFC 8693 tokens.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-3
+func (c *Handler) RFC8693TokenTypesSupported(ctx context.Context) (types []string) {
+	return nil
 }
 
 var (

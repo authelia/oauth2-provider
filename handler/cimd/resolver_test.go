@@ -872,7 +872,7 @@ func TestResolverRejectsADocumentLeftWithNoPermittedResponseType(t *testing.T) {
 
 func TestResolverAcceptsNativeLoopbackRedirectURIsWithTheSameOriginValidator(t *testing.T) {
 	env := newResolverEnv(t, func(config *Config) {
-		config.Validators = []oauth2.ClientRegistrationValidator{rfc7591.NewLocalValidator(&oauth2.Config{}), RedirectURISameOriginValidator{}}
+		config.Validators = []oauth2.ClientRegistrationValidator{rfc7591.NewLocalValidator(newTestValidatorConfig()), RedirectURISameOriginValidator{}}
 	})
 
 	client, err := env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), env.server.URL+"/native")
@@ -1094,7 +1094,7 @@ func TestResolverBoundsConcurrentFetchesPerDomain(t *testing.T) {
 }
 
 func TestNewResolverBoundsTheFetchesPerDomain(t *testing.T) {
-	base := Config{Storage: storage.NewMemoryStore(), HTTPClient: oauth2.NewSpecialUseAddressGuardedHTTPClient(), ValidatorConfig: &oauth2.Config{}}
+	base := Config{Storage: storage.NewMemoryStore(), HTTPClient: oauth2.NewSpecialUseAddressGuardedHTTPClient(), ValidatorConfig: newTestValidatorConfig()}
 
 	resolver, err := NewResolver(base)
 	require.NoError(t, err)
@@ -1609,7 +1609,7 @@ func newResolverEnv(t *testing.T, configure func(config *Config)) *resolverEnv {
 	config := Config{
 		Storage:         env.store,
 		HTTPClient:      loopbackClient(env.server),
-		ValidatorConfig: &oauth2.Config{},
+		ValidatorConfig: newTestValidatorConfig(),
 	}
 
 	if configure != nil {

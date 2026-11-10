@@ -165,6 +165,13 @@ func (c *DeviceCodeTokenHandler) DeviceCodeSignature(ctx context.Context, code s
 	return c.Strategy.RFC8628DeviceCodeSignature(ctx, code)
 }
 
+// GrantTypesSupported returns the grant types this handler serves.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
+func (c *DeviceAuthorizeTokenEndpointHandler) GrantTypesSupported(ctx context.Context) (types []string) {
+	return []string{consts.GrantTypeOAuthDeviceCode}
+}
+
 var (
 	_ hoauth2.CodeTokenEndpointHandler = (*DeviceCodeTokenHandler)(nil)
 	_ oauth2.TokenEndpointHandler      = (*DeviceAuthorizeTokenEndpointHandler)(nil)

@@ -28,6 +28,59 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+func TestTrustedIssuerRejectsUnadvertisedAlg(t *testing.T) {
+	ctx := context.Background()
+
+	auth, config, _, _ := newJWTAuthFixtures(t)
+
+	trusted := newJWTAuthKeyedSigner(t, config, gen.MustRSAKey(), "trusted-1")
+
+	jwks := newJWKSServer(t, &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{publicJWK(t, trusted)}})
+
+	config.RFC7591ClientRegistrationTrustedIssuers = []oauth2.RFC7591TrustedIssuer{{Issuer: testJWTTrustedIssuer, JSONWebKeysURI: jwks.URL}}
+	config.RFC7591TrustedIssuerSigningAlgValues = []string{"ES256"}
+
+	token := signJWTAuthToken(t, trusted, jwt.JSONWebTokenTypeAccessToken, jwt.MapClaims{jwt.ClaimIssuer: testJWTTrustedIssuer})
+
+	_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest(oauth2.BearerAccessToken, token, "", nil), "")
+
+	require.ErrorIs(t, err, oauth2.ErrInvalidToken)
+	assert.NotErrorIs(t, err, oauth2.ErrServerError)
+}
+
+func TestTrustedIssuerNeverAcceptsSymmetricAlg(t *testing.T) {
+	ctx := context.Background()
+
+	auth, config, store, _ := newJWTAuthFixtures(t)
+
+	trusted := newJWTAuthKeyedSigner(t, config, gen.MustRSAKey(), "trusted-1")
+
+	hmacKey := &jose.JSONWebKey{Key: []byte("a-shared-secret-of-at-least-32-bytes"), KeyID: "shared", Algorithm: string(jose.HS256), Use: jwt.JSONWebTokenUseSignature}
+
+	jwks := newJWKSServer(t, &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{publicJWK(t, trusted), *hmacKey}})
+
+	config.RFC7591ClientRegistrationTrustedIssuers = []oauth2.RFC7591TrustedIssuer{{Issuer: testJWTTrustedIssuer, JSONWebKeysURI: jwks.URL}}
+	config.RFC7591TrustedIssuerSigningAlgValues = []string{"HS256", "RS256"}
+
+	symmetric, _, err := jwt.EncodeCompactSigned(ctx, signJWTAuthClaims(jwt.MapClaims{jwt.ClaimIssuer: testJWTTrustedIssuer}), &jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: jwt.JSONWebTokenTypeAccessToken}}, hmacKey)
+	require.NoError(t, err)
+
+	persistJWTAuthToken(t, store, symmetric)
+
+	_, err = auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest(oauth2.BearerAccessToken, symmetric, "", nil), "")
+
+	require.ErrorIs(t, err, oauth2.ErrInvalidToken)
+	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), testUnexpectedHS256Reason)
+
+	asymmetric := signJWTAuthToken(t, trusted, jwt.JSONWebTokenTypeAccessToken, jwt.MapClaims{jwt.ClaimIssuer: testJWTTrustedIssuer})
+
+	persistJWTAuthToken(t, store, asymmetric)
+
+	_, err = auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest(oauth2.BearerAccessToken, asymmetric, "", nil), "")
+
+	require.NoError(t, err)
+}
+
 func TestAuthenticateClientRegistrationJWT(t *testing.T) {
 	ctx := context.Background()
 
@@ -560,7 +613,7 @@ func TestAuthenticateClientRegistrationJWTRequiresAnIssuer(t *testing.T) {
 
 	persistJWTAuthToken(t, store, token)
 
-	config.AccessTokenIssuer = ""
+	config.Issuer = ""
 
 	_, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest(oauth2.BearerAccessToken, token, "", nil), "")
 
@@ -584,7 +637,7 @@ func newJWTAuthFixtures(t *testing.T) (auth *DefaultEndpointAuthStrategy, config
 
 	_, config, store, _ = newAuthFixtures(t)
 
-	config.AccessTokenIssuer = testJWTIssuer
+	config.Issuer = testJWTIssuer
 	config.DPoPEnabled = true
 	config.DPoPStrategy = rfc9449.NewDefaultStrategy(config, store)
 

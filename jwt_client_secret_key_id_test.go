@@ -74,7 +74,7 @@ func TestRequestObjectClientSecretAlgorithmWithKeyID(t *testing.T) {
 				RequestObjectSigningAlg: string(alg),
 			}
 
-			config := &oauth2.Config{IDTokenIssuer: "https://auth.example.com"}
+			config := &oauth2.Config{Issuer: "https://auth.example.com"}
 			config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{})}
 
 			provider := &oauth2.Fosite{Store: store, Config: config}

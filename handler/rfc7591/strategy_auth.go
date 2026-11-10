@@ -32,11 +32,12 @@ import (
 type EndpointAuthStrategyConfig interface {
 	oauth2.RFC7591ClientRegistrationConfigProvider
 	oauth2.RFC7591ClientRegistrationPolicyProvider
-	oauth2.AccessTokenIssuerProvider
+	oauth2.IssuerProvider
 	oauth2.JWKSFetcherStrategyProvider
 	oauth2.HTTPClientProvider
 	oauth2.DPoPConfigProvider
 	oauth2.MTLSConfigProvider
+	oauth2.GrantAssertionAlgorithmsProvider
 }
 
 // DefaultEndpointAuthStrategy is the oauth2.ClientRegistrationEndpointAuthStrategy used to authenticate requests to
@@ -170,7 +171,7 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context
 
 	if err = oauth2.ValidateBearerAuthorization(ctx, s.Config, r, requester, tokenString, oauth2.BearerAuthorization{
 		Audiences: s.Config.GetRFC7591ClientRegistrationEndpointAudiences(ctx),
-		Endpoint:  s.Config.GetRFC7591ClientRegistrationEndpointURL(ctx),
+		Endpoints: s.registrationEndpoints(ctx),
 		Scopes:    s.Config.GetRFC7591ClientRegistrationScopes(ctx),
 	}); err != nil {
 		return nil, err
@@ -187,14 +188,14 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context
 
 // authenticateClientRegistrationJWT authenticates a client registration request (RFC 7591) presenting a JWT access
 // token, validated per RFC 9068 Section 4: the 'typ' header is 'at+jwt', the signature
-// verifies with the keys of strategy, 'iss' equals GetAccessTokenIssuer exactly, 'exp' is present and in the future,
+// verifies with the keys of strategy, 'iss' equals GetIssuer exactly, 'exp' is present and in the future,
 // and 'jti' is present. The proof-of-possession binding, scope and audience are then checked by
 // oauth2.ValidateBearerAuthorization against the requester rebuilt from the claims, as for an opaque token.
 //
 // A token whose unverified 'iss' equals an entry of GetRFC7591ClientRegistrationTrustedIssuers exactly is instead
 // verified with the keys published at that entry's JSONWebKeysURI, or at the 'jwks_uri' of the issuer's OpenID
 // Connect Discovery 1.0 metadata when it has none, and must then carry that 'iss' exactly. The
-// unverified 'iss' only selects the keys: a token claiming GetAccessTokenIssuer is verified with this server's keys
+// unverified 'iss' only selects the keys: a token claiming GetIssuer is verified with this server's keys
 // alone, and any other 'iss' is rejected. The key is the one named by the 'kid' header, the set being refreshed when it
 // holds no such key at most once a minute per location; a token without a 'kid' is verified only when exactly one key
 // of the set matches its 'alg'.
@@ -256,7 +257,7 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistrationJWT(ctx cont
 		resolved bool
 	)
 
-	if issuer == s.Config.GetAccessTokenIssuer(ctx) && (!s.Config.GetRFC7591ClientRegistrationStatelessAccessTokens(ctx) || policyClaimLimitsRegistrations(claim)) {
+	if issuer == s.Config.GetIssuer(ctx) && (!s.Config.GetRFC7591ClientRegistrationStatelessAccessTokens(ctx) || policyClaimLimitsRegistrations(claim)) {
 		if key, err = s.storedCounterKey(ctx, tokenString); err != nil {
 			return nil, errInvalidAccessToken(err)
 		}
@@ -268,7 +269,7 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistrationJWT(ctx cont
 
 	if err = oauth2.ValidateBearerAuthorization(ctx, s.Config, r, requester, tokenString, oauth2.BearerAuthorization{
 		Audiences: s.Config.GetRFC7591ClientRegistrationEndpointAudiences(ctx),
-		Endpoint:  s.Config.GetRFC7591ClientRegistrationEndpointURL(ctx),
+		Endpoints: s.registrationEndpoints(ctx),
 		Scopes:    s.Config.GetRFC7591ClientRegistrationScopes(ctx),
 	}); err != nil {
 		return nil, err
@@ -284,7 +285,7 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistrationJWT(ctx cont
 		key = "jwt:" + string(identity)
 	}
 
-	patterns := issuer == s.Config.GetAccessTokenIssuer(ctx) || slices.Contains(s.Config.GetRFC7591ClientRegistrationPatternIssuers(ctx), issuer)
+	patterns := issuer == s.Config.GetIssuer(ctx) || slices.Contains(s.Config.GetRFC7591ClientRegistrationPatternIssuers(ctx), issuer)
 
 	return &policyRequester{Requester: requester, claim: claim, ok: hasClaim, key: key, patterns: patterns}, nil
 }
@@ -339,7 +340,7 @@ func (s *DefaultEndpointAuthStrategy) clientRegistrationJWTIssuer(ctx context.Co
 		return "", nil, errors.New("the token does not have an 'iss' claim")
 	}
 
-	if self := s.Config.GetAccessTokenIssuer(ctx); self != "" && claims.Issuer == self {
+	if self := s.Config.GetIssuer(ctx); self != "" && claims.Issuer == self {
 		return self, nil, nil
 	}
 
@@ -355,12 +356,16 @@ func (s *DefaultEndpointAuthStrategy) clientRegistrationJWTIssuer(ctx context.Co
 		}
 
 		return trusted.Issuer, []jwt.StrategyOpt{
-			jwt.WithSigAlgorithm(trustedIssuerSignatureAlgorithms...),
+			jwt.WithSigAlgorithm(trustedIssuerSigningAlgs(ctx, s.Config)...),
 			jwt.WithKeyFunc(jwksKeyFunc(s.Config, location)),
 		}, nil
 	}
 
 	return "", nil, fmt.Errorf("the issuer '%s' is neither this server nor a trusted issuer", claims.Issuer)
+}
+
+func trustedIssuerSigningAlgs(ctx context.Context, config oauth2.GrantAssertionAlgorithmsProvider) []jose.SignatureAlgorithm {
+	return jwt.ToAsymmetricSignatureAlgorithms(config.GetRFC7591TrustedIssuerSigningAlgValues(ctx))
 }
 
 func jwksKeyFunc(config oauth2.JWKSFetcherStrategyProvider, location string) jwt.KeyFuncJWS {
@@ -527,10 +532,6 @@ func endpointToken(r *http.Request, dpop bool) (token string, err error) {
 }
 
 var (
-	trustedIssuerSignatureAlgorithms = []jose.SignatureAlgorithm{jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512, jose.EdDSA, jose.Ed25519}
-)
-
-var (
 	_ oauth2.ClientRegistrationEndpointAuthStrategy = (*DefaultEndpointAuthStrategy)(nil)
 )
 
@@ -573,4 +574,14 @@ func (s *accessTokenSession) UnmarshalJSON(data []byte) (err error) {
 	}
 
 	return nil
+}
+
+func (s *DefaultEndpointAuthStrategy) registrationEndpoints(ctx context.Context) (endpoints []string) {
+	endpoints = []string{s.Config.GetRFC7591ClientRegistrationEndpointURL(ctx)}
+
+	if provider, ok := s.Config.(oauth2.EndpointURLsProvider); ok {
+		endpoints = append(endpoints, provider.GetEndpointURLs(ctx).MutualTLSAliases.Registration)
+	}
+
+	return endpoints
 }

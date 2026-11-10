@@ -254,6 +254,10 @@ func (m *DecoratedFormPostResponse) ResponseModes() oauth2.ResponseModeTypes {
 	return oauth2.ResponseModeTypes{"decorated_form_post"}
 }
 
+func (m *DecoratedFormPostResponse) ResponseModesSupported(_ context.Context) oauth2.ResponseModeTypes {
+	return m.ResponseModes()
+}
+
 func (m *DecoratedFormPostResponse) WriteAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, requester oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) {
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeTextHTML)
 	response.AddParameter("custom_param", "foo")

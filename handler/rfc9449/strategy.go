@@ -40,7 +40,7 @@ func NewDefaultStrategy(config StrategyConfig, store Storage) *DefaultStrategy {
 // the 'nonce' claim must be valid when a nonce is required, and the proof must not have been used before.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9449#section-4.3
-func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, requestURL, proof string, requireNonce bool) (parsed *oauth2.DPoPProof, err error) {
+func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, requestURL, proof string, requireNonce bool, alternates ...string) (parsed *oauth2.DPoPProof, err error) {
 	if parsed, err = ParseProof(proof, s.allowedAlgorithms(ctx)); err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The request URI could not be normalized.").WithWrap(err))
 	}
 
-	if expected != actual {
+	if expected != actual && !matchesAlternate(expected, alternates) {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHintf("The DPoP proof 'htu' claim '%s' does not match the request URI '%s'.", expected, actual))
 	}
 
@@ -113,6 +113,20 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 	}
 
 	return parsed, nil
+}
+
+func matchesAlternate(expected string, alternates []string) bool {
+	for _, alternate := range alternates {
+		if alternate == "" {
+			continue
+		}
+
+		if normalized, err := normalizeHTU(alternate); err == nil && normalized == expected {
+			return true
+		}
+	}
+
+	return false
 }
 
 // NewDPoPNonce generates a random DPoP nonce and stores it with the configured nonce lifespan.

@@ -9,6 +9,7 @@ import (
 	"authelia.com/provider/jose/jwt"
 
 	"authelia.com/provider/oauth2"
+	oauth2jwt "authelia.com/provider/oauth2/token/jwt"
 )
 
 // IsIDJAGAssertion returns true when the JOSE 'typ' header of assertion identifies an Identity Assertion JWT
@@ -16,7 +17,7 @@ import (
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4.1
 func IsIDJAGAssertion(assertion string) bool {
-	token, err := jwt.ParseSigned(assertion, assertionAlgorithms)
+	token, err := jwt.ParseSigned(assertion, oauth2jwt.SignatureAlgorithms)
 	if err != nil {
 		return false
 	}

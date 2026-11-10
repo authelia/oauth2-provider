@@ -183,26 +183,20 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 // endpoint, accepting the RFC 9449 DPoP scheme in addition to the schemes AccessTokenFromRequest understands. The proof
 // is checked by ValidateBearerAuthorization.
 func introspectionCredentialFromRequest(r *http.Request) (token string, err error) {
-	// RFC 9449 Section 7.2 Figure 19: using more than one method to include an access token is a malformed request,
-	// reported with HTTP 400 and 'invalid_request'. Without this check Header.Get would silently take the first.
-	// The detection is independent of any token, so distinguishing it discloses nothing.
-	if len(r.Header.Values(consts.HeaderAuthorization)) > 1 {
-		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
+	var scheme, value string
+
+	if scheme, value, err = AuthorizationCredentialFromRequest(r); err != nil {
+		return "", err
 	}
-
-	scheme, value, found := strings.Cut(r.Header.Get(consts.HeaderAuthorization), " ")
-
-	// RFC 9110 Section 11.4: one or more spaces separate the scheme from the token.
-	value = strings.TrimLeft(value, " ")
 
 	// RFC 6750 Section 2 and Section 3.1: a token in both the header and the 'access_token' parameter is
 	// 'invalid_request'. A 'Basic' header is client authentication rather than a token transport, so it may accompany
 	// the parameter. The parameter is read off r.Form, which carries the URI query alongside the form body.
-	if found && len(value) != 0 && (strings.EqualFold(scheme, BearerAccessToken) || strings.EqualFold(scheme, DPoPAccessToken)) && r.Form.Get(consts.FormParameterAccessToken) != "" {
+	if len(value) != 0 && (strings.EqualFold(scheme, BearerAccessToken) || strings.EqualFold(scheme, DPoPAccessToken)) && r.Form.Get(consts.FormParameterAccessToken) != "" {
 		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
 	}
 
-	if found && strings.EqualFold(scheme, DPoPAccessToken) {
+	if strings.EqualFold(scheme, DPoPAccessToken) {
 		return value, nil
 	}
 

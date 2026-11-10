@@ -294,6 +294,7 @@ type Configurator interface {
 	IntrospectionTokenTypeEnabledProvider
 	ClientAssertionClientSecretEncryptionDisabledProvider
 	DPoPConfigProvider
+	SSFConfigProvider
 	DPoPStrictRefreshTokenBindingProvider
 	MTLSConfigProvider
 	MTLSStrictRefreshTokenBindingProvider

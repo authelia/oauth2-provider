@@ -500,16 +500,22 @@ type FormPostResponseProvider interface {
 	GetFormPostResponseWriter(ctx context.Context) FormPostResponseWriter
 }
 
-// AllowedJWTAssertionAudiencesProvider is a provider used in contexts where the permitted audiences for a JWT assertion
-// is required to validate a request.
+// AllowedJWTAssertionAudiencesProvider provides the audience rules for RFC 7523 JWT authorization grants and JWT client
+// authentication assertions.
 type AllowedJWTAssertionAudiencesProvider interface {
-	// GetAllowedJWTAssertionAudiences returns the permitted audience list for JWT Assertions.
+	// GetAllowedJWTAssertionAudiences returns the audiences accepted for an RFC 7523 JWT authorization grant in
+	// addition to the issuer identifier and the token endpoint URL. They are accepted for a JWT client authentication
+	// assertion only when GetDisableClientAssertionIssuerAudience returns true.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
 	GetAllowedJWTAssertionAudiences(ctx context.Context) (audiences []string)
 
-	// GetEnforceClientAssertionIssuerAudience returns whether a JWT client authentication assertion must carry the
-	// issuer identifier as the sole value of its 'aud' claim, per draft-ietf-oauth-rfc7523bis Section 4. The
-	// authorization grant is unaffected: the draft preserves the looser rule for it.
-	GetEnforceClientAssertionIssuerAudience(ctx context.Context) (enforce bool)
+	// GetDisableClientAssertionIssuerAudience returns true when a JWT client authentication assertion is not required
+	// to carry the issuer identifier as the sole value of its 'aud' claim. The authorization grant is unaffected.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
+	// See: https://www.rfc-editor.org/rfc/rfc10070#section-5
+	GetDisableClientAssertionIssuerAudience(ctx context.Context) (disable bool)
 }
 
 // ClientAssertionClientSecretEncryptionDisabledProvider returns the provider for turning off client assertions that

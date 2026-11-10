@@ -280,6 +280,7 @@ func reservedClientIdentifierURLs(ctx context.Context, config any) (identifiers 
 	if p, ok := config.(EndpointURLsProvider); ok {
 		urls := p.GetEndpointURLs(ctx)
 
+		identifiers = append(identifiers, urls.URLs(EndpointToken)...)
 		identifiers = append(identifiers, urls.URLs(EndpointIntrospection)...)
 		identifiers = append(identifiers, urls.URLs(EndpointRegistration)...)
 	}

@@ -208,9 +208,9 @@ func TestEndpointClientAuthStrategyFallsBackToTheTokenEndpoint(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &Config{
-				JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
-				AllowedJWTAssertionAudiences: []string{audience},
-				MTLSEnabled:                  true,
+				JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
+				Issuer:              audience,
+				MTLSEnabled:         true,
 			}
 
 			config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}

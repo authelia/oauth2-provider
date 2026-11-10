@@ -127,7 +127,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTClientCredentialsFlow(t *testing.T
 				consts.FormParameterGrantType:           {consts.GrantTypeClientCredentials},
 				consts.FormParameterScope:               {"oauth2"},
 				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-				consts.FormParameterClientAssertion:     {env.assertion(t, id, env.provider.URL+tokenRelativePath)},
+				consts.FormParameterClientAssertion:     {env.assertion(t, id, cimdIssuer)},
 			})
 
 			require.NotEmpty(t, token["access_token"])
@@ -148,7 +148,6 @@ func TestClientIDMetadataDocumentPrivateKeyJWTAuthorizationCodeFlow(t *testing.T
 
 			id := env.documents.URL + "/confidential.json"
 			callback := env.provider.URL + "/callback"
-			tokenURL := env.provider.URL + tokenRelativePath
 
 			env.setDocument("/confidential.json", map[string]any{ //nolint:gosec
 				"client_id":                       id,
@@ -191,7 +190,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTAuthorizationCodeFlow(t *testing.T
 				consts.FormParameterRedirectURI:         {callback},
 				consts.FormParameterCodeVerifier:        {verifier},
 				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-				consts.FormParameterClientAssertion:     {env.assertion(t, id, tokenURL)},
+				consts.FormParameterClientAssertion:     {env.assertion(t, id, cimdIssuer)},
 			})
 
 			require.NotEmpty(t, token["refresh_token"])
@@ -200,7 +199,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTAuthorizationCodeFlow(t *testing.T
 				consts.FormParameterGrantType:           {consts.GrantTypeRefreshToken},
 				consts.FormParameterRefreshToken:        {token["refresh_token"].(string)},
 				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-				consts.FormParameterClientAssertion:     {env.assertion(t, id, tokenURL)},
+				consts.FormParameterClientAssertion:     {env.assertion(t, id, cimdIssuer)},
 			})
 
 			require.NotEmpty(t, refreshed["access_token"])
@@ -208,7 +207,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTAuthorizationCodeFlow(t *testing.T
 			introspected := env.post(t, "/introspect", http.StatusOK, url.Values{
 				consts.FormParameterToken:               {refreshed["access_token"].(string)},
 				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-				consts.FormParameterClientAssertion:     {env.assertion(t, id, env.provider.URL+"/introspect")},
+				consts.FormParameterClientAssertion:     {env.assertion(t, id, cimdIssuer)},
 			})
 
 			assert.Equal(t, true, introspected["active"])
@@ -240,7 +239,7 @@ func TestClientIDMetadataDocumentJWKSURIFailsClosedWithoutGuardedFetcher(t *test
 		consts.FormParameterGrantType:           {consts.GrantTypeClientCredentials},
 		consts.FormParameterScope:               {"oauth2"},
 		consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-		consts.FormParameterClientAssertion:     {env.assertion(t, id, env.provider.URL+tokenRelativePath)},
+		consts.FormParameterClientAssertion:     {env.assertion(t, id, cimdIssuer)},
 	}
 
 	token := env.token(t, http.StatusUnauthorized, form)
@@ -451,8 +450,6 @@ func newCIMDEnv(t *testing.T, store cimdStore, enabled, fetcher bool, options ..
 
 	env.provider = mockServer(t, provider, &oauth2.DefaultSession{})
 	t.Cleanup(env.provider.Close)
-
-	config.AllowedJWTAssertionAudiences = []string{env.provider.URL + tokenRelativePath, env.provider.URL + "/introspect"}
 
 	return env
 }

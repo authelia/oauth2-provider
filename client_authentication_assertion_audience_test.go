@@ -5,9 +5,11 @@
 package oauth2_test
 
 import (
-	"context"
+	"crypto/rsa"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,79 +25,242 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-func TestClientAssertionAudienceIssuerEnforcement(t *testing.T) {
-	const (
-		issuer      = "https://as.example.com"
-		tokenURL    = "https://as.example.com/token"
-		otherIssuer = "https://other.example.com"
-	)
+const (
+	audienceTestIssuer   = "https://as.example.com"
+	audienceTestTokenURL = "https://as.example.com/token" //nolint:gosec
+	audienceTestMTLSURL  = "https://mtls.as.example.com/token"
+	audienceTestPARURL   = "https://as.example.com/par"
+	audienceTestListed   = "https://legacy.example.com"
+	audienceTestOther    = "https://other.example.com"
+	audienceTestSecret   = "0123456789abcdef0123456789abcdef"
+
+	audienceTestRSA = "rsa"
+	audienceTestHS  = "hs"
+
+	audienceTestPAR           = "par"
+	audienceTestDevice        = "device"
+	audienceTestRevocation    = string(ClientAuthEndpointRevocation)
+	audienceTestIntrospection = string(ClientAuthEndpointIntrospection)
+
+	audienceTestErrInvalid  = "invalid audience"
+	audienceTestErrSole     = "sole audience value"
+	audienceTestErrNoIssuer = "no issuer identifier configured"
+)
+
+func TestClientAssertionAudience(t *testing.T) {
+	testCases := []struct {
+		name     string
+		disable  bool
+		config   func(config *Config)
+		method   string
+		endpoint string
+		typ      string
+		aud      any
+		err      string
+	}{
+		{name: "ShouldAcceptTheIssuerAsAString", aud: audienceTestIssuer},
+		{name: "ShouldAcceptTheIssuerAsASingleElementArray", aud: []string{audienceTestIssuer}},
+		{name: "ShouldRejectTheTokenEndpointURL", aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldRejectTheMutualTLSTokenEndpointAlias", aud: audienceTestMTLSURL, err: audienceTestErrInvalid},
+		{name: "ShouldRejectThePushedAuthorizationRequestEndpointURL", aud: audienceTestPARURL, err: audienceTestErrInvalid},
+		{name: "ShouldRejectAConfiguredAudience", aud: audienceTestListed, err: audienceTestErrInvalid},
+		{name: "ShouldRejectAnUnknownAudience", aud: audienceTestOther, err: audienceTestErrInvalid},
+		{name: "ShouldRejectTheIssuerWithATrailingSlash", aud: audienceTestIssuer + "/", err: audienceTestErrInvalid},
+		{name: "ShouldRejectAMissingAudience", err: audienceTestErrInvalid},
+		{name: "ShouldRejectTheIssuerAlongsideTheTokenEndpointURL", aud: []string{audienceTestIssuer, audienceTestTokenURL}, err: audienceTestErrSole},
+		{name: "ShouldRejectTheIssuerRepeated", aud: []string{audienceTestIssuer, audienceTestIssuer}, err: audienceTestErrSole},
+		{
+			name:   "ShouldRejectWhenTheIssuerIsUnset",
+			config: func(config *Config) { config.Issuer = "" },
+			aud:    audienceTestTokenURL,
+			err:    audienceTestErrNoIssuer,
+		},
+		{
+			name:   "ShouldRejectAnEmptyAudienceWhenTheIssuerIsUnset",
+			config: func(config *Config) { config.Issuer = "" },
+			aud:    "",
+			err:    audienceTestErrNoIssuer,
+		},
+		{name: "ShouldAcceptTheClientAuthenticationType", typ: jwt.JSONWebTokenTypeClientAuthentication, aud: audienceTestIssuer},
+		{name: "ShouldAcceptTheClientAuthenticationMediaType", typ: "application/client-authentication+jwt", aud: audienceTestIssuer},
+		{name: "ShouldAcceptTheJWTType", typ: consts.JSONWebTokenTypeJWT, aud: audienceTestIssuer},
+		{name: "ShouldAcceptAnAbsentType", typ: "-", aud: audienceTestIssuer},
+		{name: "ShouldRejectAnotherExplicitType", typ: consts.JSONWebTokenTypeAccessToken, aud: audienceTestIssuer, err: "'typ' header value"},
+		{name: "ShouldAcceptTheIssuerWithClientSecretJWT", method: consts.ClientAuthMethodClientSecretJWT, aud: audienceTestIssuer},
+		{name: "ShouldRejectTheTokenEndpointURLWithClientSecretJWT", method: consts.ClientAuthMethodClientSecretJWT, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldAcceptTheIssuerAtTheRevocationEndpoint", endpoint: audienceTestRevocation, aud: audienceTestIssuer},
+		{name: "ShouldRejectTheTokenEndpointURLAtTheRevocationEndpoint", endpoint: audienceTestRevocation, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldAcceptTheIssuerAtTheIntrospectionEndpoint", endpoint: audienceTestIntrospection, aud: audienceTestIssuer},
+		{name: "ShouldRejectTheTokenEndpointURLAtTheIntrospectionEndpoint", endpoint: audienceTestIntrospection, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldAcceptTheIssuerAtThePushedAuthorizationRequestEndpoint", endpoint: audienceTestPAR, aud: audienceTestIssuer},
+		{name: "ShouldRejectThePushedAuthorizationRequestEndpointURLAtThatEndpoint", endpoint: audienceTestPAR, aud: audienceTestPARURL, err: audienceTestErrInvalid},
+		{name: "ShouldAcceptTheIssuerAtTheDeviceAuthorizationEndpoint", endpoint: audienceTestDevice, aud: audienceTestIssuer},
+		{name: "ShouldRejectTheTokenEndpointURLAtTheDeviceAuthorizationEndpoint", endpoint: audienceTestDevice, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldAcceptTheIssuerWhenDisabled", disable: true, aud: audienceTestIssuer},
+		{name: "ShouldAcceptTheTokenEndpointURLWhenDisabled", disable: true, aud: audienceTestTokenURL},
+		{name: "ShouldAcceptTheMutualTLSTokenEndpointAliasWhenDisabled", disable: true, aud: audienceTestMTLSURL},
+		{name: "ShouldAcceptThePushedAuthorizationRequestEndpointURLWhenDisabled", disable: true, aud: audienceTestPARURL},
+		{name: "ShouldAcceptAConfiguredAudienceWhenDisabled", disable: true, aud: audienceTestListed},
+		{name: "ShouldAcceptMultipleAudiencesWhenDisabled", disable: true, aud: []string{audienceTestOther, audienceTestTokenURL}},
+		{name: "ShouldRejectAnUnknownAudienceWhenDisabled", disable: true, aud: audienceTestOther, err: audienceTestErrInvalid},
+		{name: "ShouldAcceptTheTokenEndpointURLAtThePushedAuthorizationRequestEndpointWhenDisabled", disable: true, endpoint: audienceTestPAR, aud: audienceTestTokenURL},
+		{
+			name:    "ShouldAcceptTheTokenEndpointURLWhenDisabledWithoutAnIssuer",
+			disable: true,
+			config:  func(config *Config) { config.Issuer = "" },
+			aud:     audienceTestTokenURL,
+		},
+		{
+			name:    "ShouldRejectAnEmptyAudienceWhenDisabledWithoutAnIssuer",
+			disable: true,
+			config:  func(config *Config) { config.Issuer = "" },
+			aud:     "",
+			err:     audienceTestErrInvalid,
+		},
+		{
+			name:    "ShouldRejectWhenDisabledWithoutAnyAudience",
+			disable: true,
+			config: func(config *Config) {
+				config.Issuer = ""
+				config.EndpointURLs = EndpointURLs{}
+				config.AllowedJWTAssertionAudiences = nil
+			},
+			aud: audienceTestTokenURL,
+			err: "could not determine any safe value",
+		},
+	}
 
 	key := gen.MustRSAKey()
 
-	set := &jose.JSONWebKeySet{
-		Keys: []jose.JSONWebKey{{KeyID: "kid-foo", Use: "sig", Algorithm: "RS256", Key: &key.PublicKey}},
-	}
-
-	testCases := []struct {
-		name    string
-		enforce bool
-		aud     any
-		err     string
-	}{
-		{name: "ShouldAcceptTheTokenEndpointURLWhenNotEnforced", aud: []string{tokenURL}},
-		{name: "ShouldAcceptTheIssuerWhenNotEnforced", aud: []string{issuer}},
-		{name: "ShouldAcceptMultipleAudiencesWhenNotEnforced", aud: []string{issuer, tokenURL}},
-		{name: "ShouldAcceptTheIssuerWhenEnforced", enforce: true, aud: []string{issuer}},
-		{name: "ShouldRejectTheTokenEndpointURLWhenEnforced", enforce: true, aud: []string{tokenURL}, err: "audience"},
-		{name: "ShouldRejectAnotherIssuerWhenEnforced", enforce: true, aud: []string{otherIssuer}, err: "audience"},
-		{name: "ShouldRejectMultipleAudiencesWhenEnforced", enforce: true, aud: []string{issuer, tokenURL}, err: "sole"},
-	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := &Config{
-				JWKSFetcherStrategy:                  NewDefaultJWKSFetcherStrategy(),
-				AllowedJWTAssertionAudiences:         []string{issuer, tokenURL, otherIssuer},
-				Issuer:                               issuer,
-				EnforceClientAssertionIssuerAudience: tc.enforce,
+			config, provider := newAudienceTestProvider(key)
+			config.DisableClientAssertionIssuerAudience = tc.disable
+
+			if tc.config != nil {
+				tc.config(config)
 			}
-
-			config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
-
-			store := storage.NewMemoryStore()
-			store.Clients["bar"] = &DefaultJARClient{
-				DefaultClient:           &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar},
-				JSONWebKeys:             set,
-				TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
-			}
-
-			provider := &Fosite{Store: store, Config: config}
 
 			form := url.Values{
-				consts.FormParameterClientAssertion: {
-					mustGenerateClientAssertion(t, jwt.MapClaims{
-						consts.ClaimSubject:        "bar",
-						consts.ClaimIssuer:         "bar",
-						consts.ClaimJWTID:          "12345",
-						consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
-						consts.ClaimAudience:       tc.aud,
-					}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", key),
-				},
+				consts.FormParameterClientAssertion:     {newAudienceTestAssertion(t, key, tc.method, tc.typ, tc.aud)},
 				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
 			}
 
-			client, _, err := provider.AuthenticateClientWithAuthHandler(context.Background(), new(http.Request), form,
-				config.GetTokenEndpointClientAuthStrategy(context.Background()))
+			err := authenticateAudienceTestClient(t, config, provider, tc.endpoint, form)
 
 			if tc.err == "" {
-				require.NoError(t, ErrorToDebugRFC6749Error(err))
-				assert.NotNil(t, client)
+				switch tc.endpoint {
+				case audienceTestPAR, audienceTestDevice:
+					assert.NotErrorIs(t, err, ErrInvalidClient, "%+v", ErrorToDebugRFC6749Error(err))
+				default:
+					require.NoError(t, ErrorToDebugRFC6749Error(err))
+				}
 
 				return
 			}
 
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrInvalidClient)
 			assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), tc.err)
 		})
 	}
+}
+
+func TestClientAssertionAudienceDefaultsToEnforced(t *testing.T) {
+	config := &Config{}
+
+	assert.False(t, config.GetDisableClientAssertionIssuerAudience(t.Context()))
+}
+
+func newAudienceTestProvider(key *rsa.PrivateKey) (config *Config, provider *Fosite) {
+	config = &Config{
+		JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
+		Issuer:              audienceTestIssuer,
+		EndpointURLs: EndpointURLs{
+			Token:                      audienceTestTokenURL,
+			PushedAuthorizationRequest: audienceTestPARURL,
+			MutualTLSAliases:           RFC8705MutualTLSEndpointAliases{Token: audienceTestMTLSURL},
+		},
+		AllowedJWTAssertionAudiences: []string{audienceTestListed},
+	}
+
+	config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	store := storage.NewMemoryStore()
+	store.Clients[audienceTestRSA] = &DefaultJARClient{
+		DefaultClient: &DefaultClient{
+			ID:         audienceTestRSA,
+			GrantTypes: []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeOAuthDeviceCode},
+		},
+		JSONWebKeys: &jose.JSONWebKeySet{
+			Keys: []jose.JSONWebKey{{KeyID: "kid-foo", Use: "sig", Algorithm: "RS256", Key: &key.PublicKey}},
+		},
+		TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
+	}
+	store.Clients[audienceTestHS] = &DefaultJARClient{
+		DefaultClient:           &DefaultClient{ID: audienceTestHS, ClientSecret: NewPlainTextClientSecret(audienceTestSecret)},
+		TokenEndpointAuthMethod: consts.ClientAuthMethodClientSecretJWT,
+	}
+
+	return config, &Fosite{Store: store, Config: config}
+}
+
+func newAudienceTestAssertion(t *testing.T, key *rsa.PrivateKey, method, typ string, aud any) string {
+	t.Helper()
+
+	id := audienceTestRSA
+	if method == consts.ClientAuthMethodClientSecretJWT {
+		id = audienceTestHS
+	}
+
+	claims := jwt.MapClaims{
+		consts.ClaimSubject:        id,
+		consts.ClaimIssuer:         id,
+		consts.ClaimJWTID:          time.Now().String(),
+		consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+	}
+
+	if aud != nil {
+		claims[consts.ClaimAudience] = aud
+	}
+
+	if method == consts.ClientAuthMethodClientSecretJWT {
+		return mustGenerateHSAssertion(t, claims, []byte(audienceTestSecret))
+	}
+
+	switch typ {
+	case "":
+		typ = jwt.JSONWebTokenTypeClientAuthentication
+	case "-":
+		typ = ""
+	}
+
+	return mustGenerateClientAssertion(t, claims, jose.RS256, typ, "kid-foo", key)
+}
+
+func authenticateAudienceTestClient(t *testing.T, config *Config, provider *Fosite, endpoint string, form url.Values) (err error) {
+	t.Helper()
+
+	ctx := t.Context()
+
+	switch endpoint {
+	case audienceTestRevocation:
+		_, _, err = provider.AuthenticateClientWithAuthHandler(ctx, new(http.Request), form, config.GetRevocationEndpointClientAuthStrategy(ctx))
+	case audienceTestIntrospection:
+		_, _, err = provider.AuthenticateClientWithAuthHandler(ctx, new(http.Request), form, config.GetIntrospectionEndpointClientAuthStrategy(ctx))
+	case audienceTestPAR:
+		_, err = provider.NewPushedAuthorizeRequest(ctx, newAudienceTestFormRequest(audienceTestPARURL, form))
+	case audienceTestDevice:
+		_, err = provider.NewRFC862DeviceAuthorizeRequest(ctx, newAudienceTestFormRequest("https://as.example.com/device", form))
+	default:
+		_, _, err = provider.AuthenticateClientWithAuthHandler(ctx, new(http.Request), form, config.GetTokenEndpointClientAuthStrategy(ctx))
+	}
+
+	return err
+}
+
+func newAudienceTestFormRequest(target string, form url.Values) *http.Request {
+	r := httptest.NewRequest(http.MethodPost, target, strings.NewReader(form.Encode()))
+	r.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+
+	return r
 }

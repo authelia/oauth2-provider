@@ -24,7 +24,7 @@ import (
 )
 
 func TestClientAssertionRejectsUnadvertisedAlg(t *testing.T) {
-	const tokenURL = "https://as.example.com/token"
+	const issuer = "https://as.example.com"
 
 	key := gen.MustRSAKey()
 
@@ -37,7 +37,7 @@ func TestClientAssertionRejectsUnadvertisedAlg(t *testing.T) {
 		consts.ClaimIssuer:         "bar",
 		consts.ClaimJWTID:          "12345",
 		consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
-		consts.ClaimAudience:       []string{tokenURL},
+		consts.ClaimAudience:       issuer,
 	}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", key)
 
 	form := url.Values{
@@ -60,7 +60,7 @@ func TestClientAssertionRejectsUnadvertisedAlg(t *testing.T) {
 }
 
 func TestClientAssertionRejectsUnadvertisedJWE(t *testing.T) {
-	const tokenURL = "https://as.example.com/token"
+	const issuer = "https://as.example.com"
 
 	key := gen.MustRSAKey()
 
@@ -75,7 +75,7 @@ func TestClientAssertionRejectsUnadvertisedJWE(t *testing.T) {
 		consts.ClaimIssuer:         "bar",
 		consts.ClaimJWTID:          "12345",
 		consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
-		consts.ClaimAudience:       []string{tokenURL},
+		consts.ClaimAudience:       issuer,
 	}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", key)
 
 	encrypter, err := jose.NewEncrypter(jose.A128GCM, jose.Recipient{Algorithm: jose.RSA_OAEP_256, Key: &key.PublicKey}, (&jose.EncrypterOptions{}).WithContentType(jwt.JSONWebTokenTypeJWT))
@@ -105,7 +105,6 @@ func newUnadvertisedAlgProvider(t *testing.T, key any, set *jose.JSONWebKeySet, 
 
 	config = &Config{
 		JWKSFetcherStrategy:             NewDefaultJWKSFetcherStrategy(),
-		AllowedJWTAssertionAudiences:    []string{"https://as.example.com/token"},
 		Issuer:                          "https://as.example.com",
 		ClientAssertionSigningAlgValues: allowed,
 	}

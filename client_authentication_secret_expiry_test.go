@@ -86,7 +86,7 @@ func TestClientSecretJWTHonoursTheSecretExpiry(t *testing.T) {
 				ClientSecretExpiresAt:   tc.expires,
 			}
 
-			config := &oauth2.Config{AllowedJWTAssertionAudiences: []string{"token-url"}}
+			config := &oauth2.Config{Issuer: "token-url"}
 			config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{})}
 
 			provider := &oauth2.Fosite{Store: store, Config: config}

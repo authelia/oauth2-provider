@@ -152,8 +152,8 @@ func TestDefaultJARClientTokenEndpointAuthDefaults(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &Config{
-				JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
-				AllowedJWTAssertionAudiences: []string{audience},
+				JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
+				Issuer:              audience,
 			}
 
 			config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}

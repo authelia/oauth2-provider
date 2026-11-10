@@ -813,7 +813,7 @@ func TestAuthenticateClient(t *testing.T) {
 						consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
 						consts.ClaimIssuer:         "bar",
 						consts.ClaimJWTID:          "12345",
-						consts.ClaimAudience:       []string{"token-url-2", "token-url"},
+						consts.ClaimAudience:       []string{"token-url"},
 					}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", keyRSA),
 				},
 				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
@@ -1098,9 +1098,9 @@ func TestAuthenticateClient(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &Config{
-				JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
-				AllowedJWTAssertionAudiences: []string{"token-url"},
-				HTTPClient:                   retryablehttp.NewClient(),
+				JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
+				Issuer:              "token-url",
+				HTTPClient:          retryablehttp.NewClient(),
 			}
 
 			config.JWTStrategy = &jwt.DefaultStrategy{
@@ -1182,8 +1182,8 @@ func TestAuthenticateClientTwice(t *testing.T) {
 		store.Clients[registered.ID] = registered
 
 		config := &Config{
-			JWKSFetcherStrategy:          NewDefaultJWKSFetcherStrategy(),
-			AllowedJWTAssertionAudiences: []string{"token-url"},
+			JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
+			Issuer:              "token-url",
 		}
 
 		config.JWTStrategy = &jwt.DefaultStrategy{

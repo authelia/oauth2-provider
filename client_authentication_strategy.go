@@ -29,6 +29,8 @@ type DefaultClientAuthenticationStrategy struct {
 	Config interface {
 		JWTStrategyProvider
 		JWKSFetcherStrategyProvider
+		IssuerProvider
+		EndpointURLsProvider
 		AllowedJWTAssertionAudiencesProvider
 		ClientAssertionClientSecretEncryptionDisabledProvider
 		JWTClockSkewProvider
@@ -436,26 +438,25 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionJWTBearer(c
 }
 
 func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssertionJWTBearer(ctx context.Context, client AuthenticationMethodClient, assertion *ClientAssertion, strategy EndpointClientAuthStrategy) (method, kid, alg string, token *jwt.Token, err error) {
-	audience := s.Config.GetAllowedJWTAssertionAudiences(ctx)
+	var audience []string
 
-	// When enforced, the client assertion 'aud' must be solely the issuer identifier and never the token endpoint
-	// URL. This differs from the authorization grant handled in handler/rfc7523, which may use either.
+	// For client authentication the 'aud' claim must be solely the issuer identifier and never the token endpoint URL.
+	// This differs from the authorization grant handled in handler/rfc7523, which may use either.
 	//
-	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc7523bis-11#section-4
-	enforceIssuerAudience := s.Config.GetEnforceClientAssertionIssuerAudience(ctx)
+	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
+	// See: https://www.rfc-editor.org/rfc/rfc10070#section-5
+	enforceIssuerAudience := !s.Config.GetDisableClientAssertionIssuerAudience(ctx)
 
 	if enforceIssuerAudience {
-		var issuer string
-
-		if provider, ok := s.Config.(IssuerProvider); ok {
-			issuer = provider.GetIssuer(ctx)
-		}
+		issuer := s.Config.GetIssuer(ctx)
 
 		if issuer == "" {
-			return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The authorization server is configured to require the issuer identifier as the sole audience of a client assertion but has no issuer identifier configured. The draft requires that an authorization server have one to be used with this specification."))
+			return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The authorization server requires the issuer identifier as the sole audience of a client assertion but has no issuer identifier configured, which RFC 10070 requires of an authorization server using this method."))
 		}
 
 		audience = []string{issuer}
+	} else {
+		audience = clientAssertionLegacyAudiences(ctx, s.Config)
 	}
 
 	if len(audience) == 0 {

@@ -35,6 +35,8 @@ type Handler struct {
 
 	Config interface {
 		oauth2.AccessTokenLifespanProvider
+		oauth2.IssuerProvider
+		oauth2.EndpointURLsProvider
 		oauth2.AllowedJWTAssertionAudiencesProvider
 		oauth2.GrantTypeJWTBearerCanSkipClientAuthProvider
 		oauth2.GrantTypeJWTBearerIDOptionalProvider
@@ -336,7 +338,8 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 //
 //nolint:gocyclo,unparam
 func (c *Handler) validateTokenClaims(ctx context.Context, claims jwt.Claims, key *jose.JSONWebKey) error {
-	audiences := c.Config.GetAllowedJWTAssertionAudiences(ctx)
+	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
+	audiences := oauth2.JWTBearerGrantAudiences(ctx, c.Config)
 
 	if len(audiences) == 0 {
 		return errorsx.WithStack(oauth2.ErrServerError.WithHint("The JWT in 'assertion' request parameter can't be validated as the authorization server isn't configured to accept JWT assertions."))

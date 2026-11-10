@@ -122,7 +122,7 @@ const (
 
 	// JSONWebTokenTypeClientAuthentication represents the JWT type value for Client Assertions.
 	//
-	// See: https://www.ietf.org/archive/id/draft-ietf-oauth-rfc7523bis-02.html#section-4
+	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
 	JSONWebTokenTypeClientAuthentication = consts.JSONWebTokenTypeClientAuthentication
 
 	// JSONWebTokenTypeTokenIntrospection represents the JWT type value for a JWT Response for OAuth Token Introspection.

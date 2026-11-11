@@ -103,20 +103,12 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 
 	request.SetRequestedScopes(deviceRequester.GetRequestedScopes())
 
-	// RFC 8707 Section 2.2 applies to the token request of every grant type: when it omits the 'resource' parameter the
-	// values granted to the device code apply, and otherwise they must be a subset of them. The same rule is applied to
-	// the 'audience' parameter.
+	// RFC 8707 Section 2: a token request naming 'resource' or 'audience' restricts the token to exactly the values it
+	// names, each a subset of those granted to the device code. When it names neither, the granted values apply.
 	//
+	// See: https://www.rfc-editor.org/rfc/rfc8707#section-2
 	// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
-	if len(request.GetRequestedAudience()) == 0 {
-		request.SetRequestedAudience(deviceRequester.GetGrantedAudience())
-	} else if err = oauth2.GetAudienceStrategy(ctx, c.Config, request.GetClient())(deviceRequester.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
-		return err
-	}
-
-	if len(request.GetRequestedResource()) == 0 {
-		request.SetRequestedResource(deviceRequester.GetGrantedResource())
-	} else if err = oauth2.GetResourceStrategy(ctx, c.Config, request.GetClient())(deviceRequester.GetGrantedResource(), request.GetRequestedResource()); err != nil {
+	if err = restrictAudienceAndResource(ctx, c.Config, request, deviceRequester); err != nil {
 		return err
 	}
 

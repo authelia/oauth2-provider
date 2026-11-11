@@ -118,19 +118,12 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	// Override scopes
 	request.SetRequestedScopes(authorizeRequest.GetRequestedScopes())
 
-	// Per RFC 8707 Section 2.2, when the token request omits the 'resource' parameter, fall back
-	// to the resources granted at the authorize endpoint. Otherwise the resources requested at the
-	// token endpoint MUST be a subset of those granted at the authorize endpoint. The same rule
-	// is applied to the 'audience' parameter.
-	if len(request.GetRequestedAudience()) == 0 {
-		request.SetRequestedAudience(authorizeRequest.GetGrantedAudience())
-	} else if err = oauth2.GetAudienceStrategy(ctx, c.Config, request.GetClient())(authorizeRequest.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
-		return err
-	}
-
-	if len(request.GetRequestedResource()) == 0 {
-		request.SetRequestedResource(authorizeRequest.GetGrantedResource())
-	} else if err = oauth2.GetResourceStrategy(ctx, c.Config, request.GetClient())(authorizeRequest.GetGrantedResource(), request.GetRequestedResource()); err != nil {
+	// RFC 8707 Section 2: a token request naming 'resource' or 'audience' restricts the token to exactly the values it
+	// names, each a subset of those granted at the authorize endpoint. When it names neither, the granted values apply.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8707#section-2
+	// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+	if err = restrictAudienceAndResource(ctx, c.Config, request, authorizeRequest); err != nil {
 		return err
 	}
 
@@ -233,9 +226,9 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		request.GrantScope(scope)
 	}
 
-	// Grant the audience and resource requested at the token endpoint. HandleTokenEndpointRequest
-	// has already ensured these sets are subsets of the authorize request's granted values (or
-	// equal to them when the corresponding parameter was absent at the token endpoint).
+	// Grant the audience and resource requested at the token endpoint. HandleTokenEndpointRequest has already ensured
+	// these sets are subsets of the authorize request's granted values, or equal to them when the token request named
+	// neither parameter.
 	for _, audience := range request.GetRequestedAudience() {
 		request.GrantAudience(audience)
 	}

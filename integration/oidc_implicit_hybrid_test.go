@@ -45,7 +45,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 		{
 			name:         "ShouldPassImplicitBoth",
 			responseType: consts.ResponseTypeImplicitFlowBoth,
-			nonce:        "1111111111111111",
+			nonce:        newTestNonce(),
 			setup: func(t *testing.T, client *xoauth2.Config) {
 				client.Scopes = []string{"oauth2", consts.ScopeOpenID}
 			},
@@ -55,7 +55,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 		{
 			name:         "ShouldPassHybridBoth",
 			responseType: consts.ResponseTypeHybridFlowBoth,
-			nonce:        "1111111111111111",
+			nonce:        newTestNonce(),
 			setup: func(t *testing.T, client *xoauth2.Config) {
 				client.Scopes = []string{"oauth2", consts.ScopeOpenID}
 			},
@@ -66,7 +66,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 		{
 			name:         "ShouldPassHybridToken",
 			responseType: consts.ResponseTypeHybridFlowToken,
-			nonce:        "1111111111111111",
+			nonce:        newTestNonce(),
 			setup:        nil,
 			hasToken:     true,
 			hasCode:      true,
@@ -74,7 +74,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 		{
 			name:         "ShouldPassHybridIDToken",
 			responseType: consts.ResponseTypeHybridFlowIDToken,
-			nonce:        "1111111111111111",
+			nonce:        newTestNonce(),
 			setup: func(t *testing.T, client *xoauth2.Config) {
 				client.Scopes = []string{"oauth2", consts.ScopeOpenID}
 			},

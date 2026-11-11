@@ -211,7 +211,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 				state,
 				xoauth2.SetAuthURLParam(consts.FormParameterResponseType, tc.responseType),
 				xoauth2.SetAuthURLParam(consts.FormParameterResponseMode, tc.responseMode),
-				xoauth2.SetAuthURLParam(consts.FormParameterNonce, "111111111"))
+				xoauth2.SetAuthURLParam(consts.FormParameterNonce, newTestNonce()))
 
 			var (
 				callbackURL *url.URL

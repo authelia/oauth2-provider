@@ -160,7 +160,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 				authURL := client.AuthCodeURL(
 					tc.state,
 					xoauth2.SetAuthURLParam(consts.FormParameterResponseMode, "decorated_form_post"),
-					xoauth2.SetAuthURLParam(consts.FormParameterNonce, "111111111"),
+					xoauth2.SetAuthURLParam(consts.FormParameterNonce, newTestNonce()),
 					xoauth2.SetAuthURLParam(consts.FormParameterResponseType, tc.responseType),
 				)
 
@@ -220,7 +220,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 				authURL := client.AuthCodeURL(
 					tc.state,
 					xoauth2.SetAuthURLParam(consts.FormParameterResponseMode, "decorated_form_post"),
-					xoauth2.SetAuthURLParam(consts.FormParameterNonce, "111111111"),
+					xoauth2.SetAuthURLParam(consts.FormParameterNonce, newTestNonce()),
 					xoauth2.SetAuthURLParam(consts.FormParameterResponseType, tc.responseType),
 				)
 

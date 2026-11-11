@@ -318,7 +318,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 			},
 			oauth2.ErrInvalidRequest,
-			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'S252', but the authorization server doesn't know how to handle this method, try 'S256' instead.",
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with a 'code_challenge_method' value the authorization server doesn't know how to handle, try 'S256' instead. Authorization was requested with 'code_challenge_method' value 'S252'.",
 		},
 		{
 			"ShouldFailMethodS255WhenPlainEnforce",
@@ -1139,7 +1139,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				)
 			},
 			oauth2.ErrInvalidRequest,
-			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'nope', but the authorization server doesn't know how to handle this method, try 'S256' instead.",
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with a 'code_challenge_method' value the authorization server doesn't know how to handle, try 'S256' instead. Authorization was requested with 'code_challenge_method' value 'nope'.",
 		},
 		{
 			"ShouldFailMethodS256ClientRequiresPlain",
@@ -1615,7 +1615,7 @@ func TestHandler_HandleAuthorizeEndpointRequestDetectsReusedChallenges(t *testin
 
 				return r
 			}(),
-			firstErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'unknown', but the authorization server doesn't know how to handle this method, try 'S256' instead.",
+			firstErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with a 'code_challenge_method' value the authorization server doesn't know how to handle, try 'S256' instead. Authorization was requested with 'code_challenge_method' value 'unknown'.",
 			second:   newReusedChallengeRequest("client-a", future),
 		},
 	}

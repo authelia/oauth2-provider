@@ -26,7 +26,7 @@ func TestValidateResponseTypes(t *testing.T) {
 			name:     "ShouldFailClientNotAllowedCode",
 			rt:       "code",
 			art:      []string{"token"},
-			expected: "The authorization server does not support obtaining a token using this method. The client is not allowed to request response_type 'code'.",
+			expected: "The authorization server does not support obtaining a token using this method. The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter. The OAuth 2.0 Client is not allowed to request response_type 'code'.",
 		},
 		{
 			name: "ShouldPassToken",
@@ -55,7 +55,7 @@ func TestValidateResponseTypes(t *testing.T) {
 			name:     "ShouldFailClientNotAllowedCodeToken",
 			rt:       "code token",
 			art:      []string{"token", "code"},
-			expected: "The authorization server does not support obtaining a token using this method. The client is not allowed to request response_type 'code token'.",
+			expected: "The authorization server does not support obtaining a token using this method. The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter. The OAuth 2.0 Client is not allowed to request response_type 'code token'.",
 		},
 		{
 			name: "ShouldPassCodeTokenWithTokenCode",
@@ -71,13 +71,13 @@ func TestValidateResponseTypes(t *testing.T) {
 			name:     "ShouldFailClientNotAllowedCodeTokenIDToken",
 			rt:       "code token",
 			art:      []string{"token", "code token id_token"},
-			expected: "The authorization server does not support obtaining a token using this method. The client is not allowed to request response_type 'code token'.",
+			expected: "The authorization server does not support obtaining a token using this method. The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter. The OAuth 2.0 Client is not allowed to request response_type 'code token'.",
 		},
 		{
 			name:     "ShouldFailWhenClientResponseTypesUnsetAndRequestIsNotCode",
 			rt:       "token",
 			art:      nil,
-			expected: "The authorization server does not support obtaining a token using this method. The client is not allowed to request response_type 'token'.",
+			expected: "The authorization server does not support obtaining a token using this method. The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter. The OAuth 2.0 Client is not allowed to request response_type 'token'.",
 		},
 		{
 			name: "ShouldPassWhenClientHasMultipleResponseTypesAndOneMatches",

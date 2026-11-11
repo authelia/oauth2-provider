@@ -141,7 +141,7 @@ func (c *Handler) validate(ctx context.Context, challenge, method string, client
 				WithDebug("The authorization server is configured in a way that enforces the 'S256' PKCE 'code_challenge_method' for all clients."))
 		}
 	default:
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Authorization was requested with 'code_challenge_method' value '%s', but the authorization server doesn't know how to handle this method, try 'S256' instead.", method))
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Authorization was requested with a 'code_challenge_method' value the authorization server doesn't know how to handle, try 'S256' instead.").WithDebugf("Authorization was requested with 'code_challenge_method' value '%s'.", method))
 	}
 
 	if pkce, ok := client.(oauth2.ProofKeyCodeExchangeClient); ok {

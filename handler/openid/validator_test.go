@@ -230,7 +230,7 @@ func TestValidatePrompt(t *testing.T) {
 			name:     "ShouldFailPromptFoo",
 			prompt:   "foo",
 			isPublic: false,
-			err:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The requested prompt value 'foo' either contains unknown, unsupported, or prohibited prompt values. The permitted prompt values are 'login', 'none', 'consent', 'select_account'.",
+			err:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'prompt' parameter either contains unknown, unsupported, or prohibited prompt values. The requested prompt value 'foo' is not permitted, the permitted prompt values are 'login', 'none', 'consent', 'select_account'.",
 			session: &DefaultSession{
 				Subject: "foo",
 				Claims: &jwt.IDTokenClaims{
@@ -444,7 +444,7 @@ func TestValidatePromptDefaultsWithoutConfiguredPrompts(t *testing.T) {
 		{
 			name:   "ShouldRejectCreate",
 			prompt: "create",
-			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The requested prompt value 'create' either contains unknown, unsupported, or prohibited prompt values. The permitted prompt values are 'login', 'none', 'consent', 'select_account'.",
+			err:    "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'prompt' parameter either contains unknown, unsupported, or prohibited prompt values. The requested prompt value 'create' is not permitted, the permitted prompt values are 'login', 'none', 'consent', 'select_account'.",
 		},
 	}
 

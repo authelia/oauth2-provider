@@ -69,7 +69,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx conte
 
 	for _, scope := range request.GetRequestedScopes() {
 		if !strategy(client.GetScopes(), scope) {
-			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHint("The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 

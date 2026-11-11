@@ -683,7 +683,7 @@ func (f *Fosite) validateScope(ctx context.Context, _ *http.Request, request Req
 
 	for _, scope := range requested {
 		if !strategy(scopes, scope) {
-			return errorsx.WithStack(ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+			return errorsx.WithStack(ErrInvalidScope.WithHint("The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
@@ -711,7 +711,7 @@ func (f *Fosite) validateResponseTypes(_ context.Context, _ *http.Request, reque
 	}
 
 	if !found {
-		return errorsx.WithStack(ErrUnsupportedResponseType.WithHintf("The client is not allowed to request response_type '%s'.", request.Form.Get(consts.FormParameterResponseType)))
+		return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request response_type '%s'.", request.Form.Get(consts.FormParameterResponseType)))
 	}
 
 	request.ResponseTypes = responseTypes
@@ -735,7 +735,7 @@ func (f *Fosite) ParseResponseMode(ctx context.Context, _ *http.Request, request
 		}
 	}
 
-	return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("Request with unsupported response_mode '%s'.", m))
+	return errorsx.WithStack(ErrUnsupportedResponseMode.WithHint("The value of the 'response_mode' parameter is not supported.").WithDebugf("Request with unsupported response_mode '%s'.", m))
 }
 
 func (f *Fosite) validateResponseMode(_ context.Context, _ *http.Request, request *AuthorizeRequest) error {
@@ -861,7 +861,7 @@ func (f *Fosite) validateAuthorizeRequestFromPARClient(ctx context.Context, r *h
 
 	for _, scope := range request.GetRequestedScopes() {
 		if !strategy(client.GetScopes(), scope) {
-			return errorsx.WithStack(ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+			return errorsx.WithStack(ErrInvalidScope.WithHint("The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
@@ -888,7 +888,7 @@ func (f *Fosite) validateAuthorizeRequestFromPARClient(ctx context.Context, r *h
 	}
 
 	if !found {
-		return errorsx.WithStack(ErrUnsupportedResponseType.WithHintf("The client is not allowed to request response_type '%s'.", strings.Join(request.ResponseTypes, " ")))
+		return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request response_type '%s'.", strings.Join(request.ResponseTypes, " ")))
 	}
 
 	if len(request.Form.Get(consts.FormParameterResponseMode)) == 0 {

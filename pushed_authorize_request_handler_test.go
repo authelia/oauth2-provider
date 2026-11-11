@@ -156,7 +156,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
-			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'baz'.",
+			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter. The OAuth 2.0 Client is not allowed to request scope 'baz'.",
 		},
 		{
 			name: "ShouldFailClientWithoutAudience",
@@ -372,7 +372,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
-			err: "The authorization server does not support obtaining a response using this response mode. Request with unsupported response_mode 'unknown'.",
+			err: "The authorization server does not support obtaining a response using this response mode. The value of the 'response_mode' parameter is not supported. Request with unsupported response_mode 'unknown'.",
 		},
 		{
 			name: "ShouldFailResponseModeRequestedButClientDoesNotSupportResponseMode",

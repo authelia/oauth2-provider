@@ -47,7 +47,7 @@ type Config struct {
 	// refresh tokens that never expire.
 	RefreshTokenLifespan time.Duration
 
-	// AuthorizeCodeLifespan sets how long an authorize code is going to be valid. Defaults to fifteen minutes.
+	// AuthorizeCodeLifespan sets how long an authorize code is going to be valid. Defaults to two minutes.
 	AuthorizeCodeLifespan time.Duration
 
 	// IDTokenLifespan sets the default id token lifetime. Defaults to one hour.
@@ -1221,10 +1221,13 @@ func (c *Config) GetClientCredentialsFlowImplicitGrantRequested(_ context.Contex
 	return c.ClientCredentialsFlowImplicitGrantRequested
 }
 
-// GetAuthorizeCodeLifespan returns how long an authorize code should be valid. Defaults to one fifteen minutes.
+// GetAuthorizeCodeLifespan returns how long an authorize code should be valid. Defaults to two minutes. Authorization
+// codes must be short lived, with a recommended maximum lifetime of 10 minutes.
+//
+// See: https://www.rfc-editor.org/rfc/rfc6749#section-4.1.2
 func (c *Config) GetAuthorizeCodeLifespan(_ context.Context) time.Duration {
 	if c.AuthorizeCodeLifespan == 0 {
-		return time.Minute * 15
+		return time.Minute * 2
 	}
 
 	return c.AuthorizeCodeLifespan

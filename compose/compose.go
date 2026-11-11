@@ -35,6 +35,9 @@ type Factory func(config oauth2.Configurator, storage any, strategy any) any
 //	 )
 //
 // Compose makes use of any types in order to be able to handle a all types of stores, strategies and handlers.
+//
+// Compose also registers the RFC9207ResponseModeParameterHandler, so the 'iss' authorization response parameter is
+// returned whenever Issuer is set and DisableAuthorizationServerIdentification is not.
 func Compose(config *oauth2.Config, storage any, strategy any, factories ...Factory) oauth2.Provider {
 	f := oauth2.New(storage.(oauth2.Storage), config)
 	for _, factory := range factories {
@@ -76,6 +79,11 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 			config.RFC7592ClientConfigurationEndpointHandlers.Append(ch)
 		}
 	}
+
+	// The 'iss' authorization response parameter is returned by default as a mix-up attack defense; it is omitted when
+	// Issuer is empty or DisableAuthorizationServerIdentification is set.
+	// See: https://www.rfc-editor.org/rfc/rfc9700#section-4.4.2.1 and https://www.rfc-editor.org/rfc/rfc9207#section-2
+	config.ResponseModeParameterHandlers.Append(&oauth2.RFC9207ResponseModeParameterHandler{Config: config})
 
 	if err := ValidateHandlerOrder(config); err != nil {
 		panic(err)

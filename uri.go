@@ -216,6 +216,12 @@ func (BestPracticeURIComparisonStrategy) UseSimpleStringComparison() bool {
 
 // OriginURIComparisonStrategy is used to compare URIs. When the registered URI is a Origin URI (only scheme and host),
 // the comparison is truthy when the scheme and host parts are the same.
+//
+// This does not meet RFC 9700, which requires exact string matching of redirect URIs: a registered origin accepts any
+// path and query on that origin, so an open redirector or attacker-controlled page anywhere on it can receive the
+// authorization response. Use it only for clients that cannot register exact redirect URIs.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1 and https://www.rfc-editor.org/rfc/rfc9700#section-4.1.3
 type OriginURIComparisonStrategy struct{}
 
 // Compare returns true if the requested URI matches the registered URI. When the registered URI is an Origin URI only

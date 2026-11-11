@@ -302,6 +302,10 @@ type AuthenticationMethodClient interface {
 
 // RefreshFlowScopeClient is a client which can be customized to ignore scopes that were not originally granted.
 type RefreshFlowScopeClient interface {
+	// GetRefreshFlowIgnoreOriginalGrantedScopes returns true if a refresh token request skips requested scopes the
+	// resource owner did not originally grant, rather than rejecting the request with the 'invalid_scope' error.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc6749#section-6
 	GetRefreshFlowIgnoreOriginalGrantedScopes(ctx context.Context) (ignoreOriginalGrantedScopes bool)
 
 	Client

@@ -167,6 +167,8 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		response[jwt.ClaimAuthorizationDetails] = details
 	}
 
+	ApplyAuthenticationContext(response, r.GetAccessRequester().GetSession())
+
 	ApplyConfirmation(ctx, f.Config, response, r.GetAccessRequester().GetSession())
 
 	switch {

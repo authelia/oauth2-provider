@@ -108,3 +108,68 @@ func TestJWTProfileAccessTokenRequiredClaims(t *testing.T) {
 		})
 	}
 }
+
+func TestJWTProfileAccessTokenAuthenticationContext(t *testing.T) {
+	authTime := time.Now().Add(-time.Hour).Truncate(time.Second)
+
+	testCases := []struct {
+		name     string
+		extra    map[string]any
+		expected string
+	}{
+		{name: "ShouldIncludeTheAuthenticationContext", expected: "gold"},
+		{name: "ShouldPreferTheSessionClaims", extra: map[string]any{consts.ClaimAuthenticationContextClassReference: "silver"}, expected: "silver"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{
+				EnforceJWTProfileAccessTokens:        true,
+				Issuer:                               "https://as.example.com",
+				GlobalSecret:                         []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+				JWTProfileAccessTokenDefaultAudience: []string{"https://api.example.com"},
+			}
+
+			strategy := &JWTProfileCoreStrategy{
+				HMACCoreStrategy: NewHMACCoreStrategy(config, "authelia_%s_"),
+				Strategy:         &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())},
+				Config:           config,
+			}
+
+			session := &loginJWTSession{
+				JWTSession: &JWTSession{Subject: "alice", JWTClaims: &jwt.JWTClaims{Extra: tc.extra}},
+				login:      &jwt.IDTokenClaims{AuthTime: jwt.NewNumericDate(authTime), AuthenticationContextClassReference: "gold", AuthenticationMethodsReferences: []string{"mfa"}},
+			}
+			session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(time.Hour))
+
+			request := oauth2.NewAccessRequest(session)
+			request.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+			request.Client = &oauth2.DefaultClient{ID: "jwt-client"}
+
+			token, _, err := strategy.GenerateAccessToken(context.Background(), request)
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			payload, err := base64.RawURLEncoding.DecodeString(strings.Split(token, ".")[1])
+			require.NoError(t, err)
+
+			var claims map[string]any
+
+			require.NoError(t, json.Unmarshal(payload, &claims))
+
+			// RFC 9068 Section 2.2.1.
+			assert.Equal(t, float64(authTime.Unix()), claims[consts.ClaimAuthenticationTime])
+			assert.Equal(t, tc.expected, claims[consts.ClaimAuthenticationContextClassReference])
+			assert.Equal(t, []any{"mfa"}, claims[consts.ClaimAuthenticationMethodsReference])
+		})
+	}
+}
+
+type loginJWTSession struct {
+	*JWTSession
+
+	login *jwt.IDTokenClaims
+}
+
+func (s *loginJWTSession) IDTokenClaims() *jwt.IDTokenClaims {
+	return s.login
+}

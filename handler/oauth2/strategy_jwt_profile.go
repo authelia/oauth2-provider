@@ -279,6 +279,8 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 	// The claims above include the session's extra claims, which may carry a 'cnf' of their own. This rebuilds the
 	// claim from the session so the token asserts only the bindings the server actually established, and only for
 	// binding methods that are currently enabled.
+	oauth2.ApplyAuthenticationContext(mapClaims, request.GetSession())
+
 	oauth2.ApplyConfirmation(ctx, s.Config, mapClaims, request.GetSession())
 
 	return s.Encode(ctx, mapClaims, jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))

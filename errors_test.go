@@ -594,6 +594,35 @@ func TestRFC6749ErrorUnmarshalJSONInvalid(t *testing.T) {
 }
 
 func TestRFC6749ErrorToValues(t *testing.T) {
+	catalog := i18n.NewDefaultMessageCatalog([]*i18n.DefaultLocaleBundle{
+		{
+			LangTag: "es",
+			Messages: []*i18n.DefaultMessage{
+				{
+					ID:               "access_denied",
+					FormattedMessage: "El propietario del recurso o el servidor de autorización denegó la solicitud.",
+				},
+				{
+					ID:               "HTTP method is '%s', expected 'POST'.",
+					FormattedMessage: "El método HTTP es '%s', esperado 'POST'.",
+				},
+			},
+		},
+		{
+			LangTag: "it",
+			Messages: []*i18n.DefaultMessage{
+				{
+					ID:               "access_denied",
+					FormattedMessage: "Il proprietario della risorsa ha negato la richiesta.",
+				},
+				{
+					ID:               "HTTP method is '%s', expected 'POST'.",
+					FormattedMessage: "Il metodo HTTP e '%s', atteso 'POST'.",
+				},
+			},
+		},
+	})
+
 	testCases := []struct {
 		name     string
 		err      *RFC6749Error
@@ -626,10 +655,55 @@ func TestRFC6749ErrorToValues(t *testing.T) {
 				"error_debug":       {"debug detail"},
 			},
 		},
+		// RFC 6749 Section 4.1.2.1.
+		{
+			name: "ShouldReplaceCharactersOutsideThePermittedSet",
+			err:  ErrInvalidRequest.WithHint("a\nb\\c\"dée\tf\x7fg~ !#[]").WithDebug("x\r\ny\\z").WithExposeDebug(true),
+			expected: url.Values{
+				"error":             {"invalid_request"},
+				"error_description": {"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. a b c'd e f g~ !#[] x  y z"},
+			},
+		},
+		{
+			name: "ShouldReplaceCharactersOutsideThePermittedSetInLegacyFields",
+			err:  ErrInvalidRequest.WithLegacyFormat(true).WithDescription("desc\né").WithHint("hint\\\"").WithDebug("debug\x00").WithExposeDebug(true),
+			expected: url.Values{
+				"error":             {"invalid_request"},
+				"error_description": {"desc  "},
+				"error_hint":        {"hint '"},
+				"error_debug":       {"debug "},
+			},
+		},
+		{
+			name: "ShouldEmitARepresentableTranslation",
+			err:  ErrAccessDenied.WithLocalizer(catalog, language.Italian).WithHintf("HTTP method is '%s', expected 'POST'.", http.MethodGet),
+			expected: url.Values{
+				"error":             {"access_denied"},
+				"error_description": {"Il proprietario della risorsa ha negato la richiesta. Il metodo HTTP e 'GET', atteso 'POST'."},
+			},
+		},
+		{
+			name: "ShouldEmitTheDefaultHintInLegacyFieldsWhenLocalized",
+			err:  ErrAccessDenied.WithLocalizer(catalog, language.Spanish).WithLegacyFormat(true).WithHintf("HTTP method is '%s', expected 'POST'.", http.MethodGet),
+			expected: url.Values{
+				"error":             {"access_denied"},
+				"error_description": {"The resource owner or authorization server denied the request."},
+				"error_hint":        {"HTTP method is 'GET', expected 'POST'."},
+			},
+		},
+		{
+			name: "ShouldFallBackToTheDefaultMessagesWhenTheTranslationIsNotRepresentable",
+			err:  ErrAccessDenied.WithLocalizer(catalog, language.Spanish).WithHintf("HTTP method is '%s', expected 'POST'.", http.MethodGet),
+			expected: url.Values{
+				"error":             {"access_denied"},
+				"error_description": {"The resource owner or authorization server denied the request. HTTP method is 'GET', expected 'POST'."},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.err.ToValues())
 			assert.Equal(t, tc.expected, tc.err.ToValues())
 		})
 	}

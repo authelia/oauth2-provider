@@ -127,11 +127,13 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 		oscopes = true
 	}
 
-	if len(request.GetRequestedAudience()) == 0 {
+	// RFC 8707 Section 2: a token request naming 'resource' or 'audience' restricts the token to exactly the values it
+	// names, each a subset of those originally granted. When it names neither, the granted values apply.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8707#section-2
+	// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+	if len(request.GetRequestedAudience()) == 0 && len(request.GetRequestedResource()) == 0 {
 		request.SetRequestedAudience(orequest.GetGrantedAudience())
-	}
-
-	if len(request.GetRequestedResource()) == 0 {
 		request.SetRequestedResource(orequest.GetGrantedResource())
 	}
 

@@ -118,7 +118,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 	availablePrompts := oauth2.SupportedPromptValues(ctx, v.Config)
 
 	if !isWhitelisted(requiredPrompt, availablePrompts) {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The requested prompt value '%s' either contains unknown, unsupported, or prohibited prompt values.", strings.Join(requiredPrompt, " ")).WithDebugf("The permitted prompt values are '%s'.", strings.Join(availablePrompts, "', '")))
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'prompt' parameter either contains unknown, unsupported, or prohibited prompt values.").WithDebugf("The requested prompt value '%s' is not permitted, the permitted prompt values are '%s'.", strings.Join(requiredPrompt, " "), strings.Join(availablePrompts, "', '")))
 	}
 
 	if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && len(requiredPrompt) > 1 {

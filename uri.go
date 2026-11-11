@@ -92,7 +92,7 @@ func IsLocalhost(uri *url.URL) bool {
 
 	hostname := strings.ToLower(strings.TrimSuffix(uri.Hostname(), "."))
 
-	if hostname == "localhost" || strings.HasSuffix(hostname, ".localhost") {
+	if hostname == hostLocalhost || strings.HasSuffix(hostname, ".localhost") {
 		return true
 	}
 
@@ -120,7 +120,7 @@ func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL
 		}
 
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'.").WithDebugf("The 'redirect_uris' registered with OAuth 2.0 Client with id '%s' did not match 'redirect_uri' value '%s' because the only registered 'redirect_uri' is not a valid value.", client.GetID(), raw))
-	} else if redirectTo, ok := IsMatchingRedirectURI(raw, client.GetRedirectURIs(), strategy); raw != "" && ok {
+	} else if redirectTo, ok := isMatchingRedirectURI(raw, client.GetRedirectURIs(), strategy, client.IsPublic()); raw != "" && ok {
 		// If a redirect_uri was given and the clients knows it (simple string comparison!)
 		// return it.
 		if parsed, err := url.Parse(redirectTo); err == nil && IsValidRedirectURI(parsed) {
@@ -131,11 +131,16 @@ func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL
 	return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'.").WithDebugf("The 'redirect_uris' registered with OAuth 2.0 Client with id '%s' did not match 'redirect_uri' value '%s'.", client.GetID(), raw))
 }
 
-// IsMatchingRedirectURI matches a requested redirect URI against a pool of registered client URIs. A request for a
-// registered loopback IP literal URI, http://127.0.0.1 or http://[::1], may use any port.
+// IsMatchingRedirectURI matches a requested redirect URI against a pool of registered client URIs using the given
+// strategy. It does not apply the native app loopback port exemption, which MatchRedirectURIWithClientRedirectURIs
+// applies to public clients only.
 //
-// See: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
+// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1
 func IsMatchingRedirectURI(needle string, haystack []string, strategy URIComparisonStrategy) (uri string, ok bool) {
+	return isMatchingRedirectURI(needle, haystack, strategy, false)
+}
+
+func isMatchingRedirectURI(needle string, haystack []string, strategy URIComparisonStrategy, loopback bool) (uri string, ok bool) {
 	var (
 		requested, registered *url.URL
 		err                   error
@@ -149,7 +154,7 @@ func IsMatchingRedirectURI(needle string, haystack []string, strategy URICompari
 		for _, raw := range haystack {
 			if raw == needle {
 				return needle, true
-			} else if isMatchingRawLoopbackURI(requested, raw) {
+			} else if loopback && isMatchingRawLoopbackURI(requested, raw) {
 				return needle, true
 			}
 		}
@@ -159,9 +164,9 @@ func IsMatchingRedirectURI(needle string, haystack []string, strategy URICompari
 				continue
 			}
 
-			if strategy.Compare(&uriPair{uri: requested, registeredURI: registered}) {
+			if strategy.Compare(&uriPair{uri: requested, registeredURI: registered}) && (loopback || !isLoopbackPortMismatch(requested, registered)) {
 				return needle, true
-			} else if isMatchingLoopbackURI(requested, registered) {
+			} else if loopback && isMatchingLoopbackURI(requested, registered) {
 				return needle, true
 			}
 		}
@@ -216,6 +221,12 @@ func (BestPracticeURIComparisonStrategy) UseSimpleStringComparison() bool {
 
 // OriginURIComparisonStrategy is used to compare URIs. When the registered URI is a Origin URI (only scheme and host),
 // the comparison is truthy when the scheme and host parts are the same.
+//
+// This does not meet RFC 9700, which requires exact string matching of redirect URIs: a registered origin accepts any
+// path and query on that origin, so an open redirector or attacker-controlled page anywhere on it can receive the
+// authorization response. Use it only for clients that cannot register exact redirect URIs.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1 and https://www.rfc-editor.org/rfc/rfc9700#section-4.1.3
 type OriginURIComparisonStrategy struct{}
 
 // Compare returns true if the requested URI matches the registered URI. When the registered URI is an Origin URI only
@@ -256,18 +267,20 @@ func isMatchingRawLoopbackURI(requested *url.URL, registeredURI string) bool {
 }
 
 func isMatchingLoopbackURI(requested, registered *url.URL) bool {
-	// Loopback redirect URIs use the 'http' scheme, the loopback IP literal, and any port.
+	// Native app loopback redirect URIs use the 'http' scheme, a loopback IP literal or 'localhost', and any port. The
+	// port is the only component that may differ from the registered URI.
 	//
-	// See: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
+	// See: https://www.rfc-editor.org/rfc/rfc8252#section-7.3
+	// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1
 	if requested.Scheme != consts.SchemeHTTP || registered.Scheme != consts.SchemeHTTP {
 		return false
 	}
 
-	if !isLoopbackAddress(requested) {
+	if !isNativeAppLoopbackHost(requested) {
 		return false
 	}
 
-	if !isLoopbackAddress(registered) {
+	if !isNativeAppLoopbackHost(registered) {
 		return false
 	}
 
@@ -275,15 +288,14 @@ func isMatchingLoopbackURI(requested, registered *url.URL) bool {
 		return false
 	}
 
-	if registered.Path != requested.Path {
-		return false
-	}
+	normalized := *requested
+	normalized.Host = registered.Host
 
-	if registered.RawQuery != requested.RawQuery {
-		return false
-	}
+	return normalized.String() == registered.String()
+}
 
-	return true
+func isLoopbackPortMismatch(requested, registered *url.URL) bool {
+	return isLoopbackAddress(requested) && isLoopbackAddress(registered) && requested.Port() != registered.Port()
 }
 
 func isLoopbackAddress(uri *url.URL) bool {
@@ -294,6 +306,12 @@ func isLoopbackAddress(uri *url.URL) bool {
 	ip := net.ParseIP(uri.Hostname())
 
 	return ip != nil && ip.IsLoopback()
+}
+
+const hostLocalhost = "localhost"
+
+func isNativeAppLoopbackHost(uri *url.URL) bool {
+	return uri.Hostname() == hostLocalhost || isLoopbackAddress(uri)
 }
 
 func parseWHATWGIPv4(host string) (ipv4 uint64, ok bool) {

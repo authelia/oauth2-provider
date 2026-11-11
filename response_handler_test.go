@@ -271,6 +271,61 @@ func TestRFC9207ResponseModeParameterHandlerWriteParameters(t *testing.T) {
 	}
 }
 
+func TestDefaultResponseModeHandlerRedirectFragmentGuard(t *testing.T) {
+	testCases := []struct {
+		name     string
+		enable   bool
+		mode     ResponseModeType
+		err      bool
+		expected string
+	}{
+		{name: "ShouldNotAppendTheFragmentByDefault", mode: ResponseModeQuery, expected: "https://client.example.com/callback?code=code-value&foo=bar"},
+		{name: "ShouldAppendTheFragmentToAQueryResponse", enable: true, mode: ResponseModeQuery, expected: "https://client.example.com/callback?code=code-value&foo=bar#_"},
+		{name: "ShouldAppendTheFragmentToAQueryError", enable: true, mode: ResponseModeQuery, err: true, expected: "#_"},
+		{name: "ShouldNotChangeAFragmentResponse", enable: true, mode: ResponseModeFragment, expected: "https://client.example.com/callback?foo=bar#code=code-value"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := &DefaultResponseModeHandler{Config: &Config{EnableRedirectFragmentGuard: tc.enable}}
+
+			redirectURI, err := url.Parse("https://client.example.com/callback?foo=bar")
+			require.NoError(t, err)
+
+			request := NewAuthorizeRequest()
+			request.RedirectURI = redirectURI
+			request.ResponseMode = tc.mode
+			request.ResponseTypes = Arguments{consts.ResponseTypeAuthorizationCodeFlow}
+			request.Client = &DefaultClient{ID: "client", RedirectURIs: []string{"https://client.example.com/callback?foo=bar"}}
+
+			rw := httptest.NewRecorder()
+
+			if tc.err {
+				handler.WriteAuthorizeError(context.Background(), rw, request, ErrAccessDenied)
+			} else {
+				response := NewAuthorizeResponse()
+				response.AddParameter(consts.FormParameterAuthorizationCode, "code-value")
+
+				handler.WriteAuthorizeResponse(context.Background(), rw, request, response)
+			}
+
+			require.Equal(t, http.StatusSeeOther, rw.Code)
+
+			location := rw.Header().Get(consts.HeaderLocation)
+
+			// RFC 9700 Section 4.1.3.
+			if tc.err {
+				assert.Contains(t, location, "?error=access_denied&")
+				assert.True(t, strings.HasSuffix(location, tc.expected))
+
+				return
+			}
+
+			assert.Equal(t, tc.expected, location)
+		})
+	}
+}
+
 func testNewJARMResponseModeHandler() *DefaultResponseModeHandler {
 	config := &Config{Issuer: "https://auth.example.com"}
 	config.JWTSecuredAuthorizeResponseModeStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}

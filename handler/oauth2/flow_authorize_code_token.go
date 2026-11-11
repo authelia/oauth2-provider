@@ -41,6 +41,31 @@ func revokeCodeGrant(ctx context.Context, store TokenRevocationStorage, requestI
 
 // validateAuthorizeCodeBinding checks that the token request comes from the client the authorization code was issued
 // to and repeats the 'redirect_uri' from the authorization request, per RFC 6749 Section 4.1.3.
+var pkceParameters = []string{consts.FormParameterCodeChallenge, consts.FormParameterCodeChallengeMethod}
+
+func validateReplayedAuthorizeCode(authorizeRequest oauth2.Requester, request oauth2.AccessRequester, pkce bool) (err error) {
+	if err = validateAuthorizeCodeBinding(authorizeRequest, request); err != nil {
+		return err
+	}
+
+	if !pkce {
+		return nil
+	}
+
+	form := authorizeRequest.GetRequestForm()
+
+	challenge := form.Get(consts.FormParameterCodeChallenge)
+	if challenge == "" {
+		return nil
+	}
+
+	if !oauth2.IsPKCECodeVerifierMatch(form.Get(consts.FormParameterCodeChallengeMethod), challenge, request.GetRequestForm().Get(consts.FormParameterCodeVerifier)) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code challenge did not match the code verifier."))
+	}
+
+	return nil
+}
+
 func validateAuthorizeCodeBinding(authorizeRequest oauth2.Requester, request oauth2.AccessRequester) (err error) {
 	// The code must have been issued to this client.
 	//
@@ -95,10 +120,11 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(verr).WithDebugError(verr))
 		}
 
-		// A replayed code with invalid parameters does not revoke the grant.
+		// A replayed code with invalid parameters, including a 'code_verifier' that does not match the 'code_challenge'
+		// the code was issued for, does not revoke the grant.
 		//
 		// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-16#section-7.5.3
-		if err = validateAuthorizeCodeBinding(authorizeRequest, request); err != nil {
+		if err = validateReplayedAuthorizeCode(authorizeRequest, request, c.isPKCEVerified(ctx)); err != nil {
 			return err
 		}
 
@@ -118,19 +144,12 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	// Override scopes
 	request.SetRequestedScopes(authorizeRequest.GetRequestedScopes())
 
-	// Per RFC 8707 Section 2.2, when the token request omits the 'resource' parameter, fall back
-	// to the resources granted at the authorize endpoint. Otherwise the resources requested at the
-	// token endpoint MUST be a subset of those granted at the authorize endpoint. The same rule
-	// is applied to the 'audience' parameter.
-	if len(request.GetRequestedAudience()) == 0 {
-		request.SetRequestedAudience(authorizeRequest.GetGrantedAudience())
-	} else if err = oauth2.GetAudienceStrategy(ctx, c.Config, request.GetClient())(authorizeRequest.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
-		return err
-	}
-
-	if len(request.GetRequestedResource()) == 0 {
-		request.SetRequestedResource(authorizeRequest.GetGrantedResource())
-	} else if err = oauth2.GetResourceStrategy(ctx, c.Config, request.GetClient())(authorizeRequest.GetGrantedResource(), request.GetRequestedResource()); err != nil {
+	// RFC 8707 Section 2: a token request naming 'resource' or 'audience' restricts the token to exactly the values it
+	// names, each a subset of those granted at the authorize endpoint. When it names neither, the granted values apply.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8707#section-2
+	// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+	if err = restrictAudienceAndResource(ctx, c.Config, request, authorizeRequest); err != nil {
 		return err
 	}
 
@@ -169,8 +188,8 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	return nil
 }
 
-func canIssueRefreshToken(ctx context.Context, c *AuthorizeExplicitGrantHandler, request oauth2.Requester) (issue bool) {
-	scope := c.Config.GetRefreshTokenScopes(ctx)
+func canIssueRefreshToken(ctx context.Context, config oauth2.RefreshTokenScopesProvider, request oauth2.Requester) (issue bool) {
+	scope := config.GetRefreshTokenScopes(ctx)
 
 	// Require one of the refresh token scopes, if set.
 	if len(scope) > 0 && !request.GetGrantedScopes().HasOneOf(scope...) {
@@ -233,9 +252,9 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 		request.GrantScope(scope)
 	}
 
-	// Grant the audience and resource requested at the token endpoint. HandleTokenEndpointRequest
-	// has already ensured these sets are subsets of the authorize request's granted values (or
-	// equal to them when the corresponding parameter was absent at the token endpoint).
+	// Grant the audience and resource requested at the token endpoint. HandleTokenEndpointRequest has already ensured
+	// these sets are subsets of the authorize request's granted values, or equal to them when the token request named
+	// neither parameter.
 	for _, audience := range request.GetRequestedAudience() {
 		request.GrantAudience(audience)
 	}
@@ -254,7 +273,7 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 
 	var refresh, refreshSignature string
 
-	if canIssueRefreshToken(ctx, c, ar) {
+	if canIssueRefreshToken(ctx, c.Config, ar) {
 		if refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}

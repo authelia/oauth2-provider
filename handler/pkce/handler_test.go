@@ -224,6 +224,10 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
+						SetPKCEChallengeUsed(t.Context(), gomock.Any(), gomock.Any(), gomock.Any()).
+						Return(nil),
+					store.
+						EXPECT().
 						CreatePKCERequestSession(t.Context(), gomock.Any(), gomock.Any()).
 						Return(nil),
 				)
@@ -250,6 +254,10 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 
 				gomock.InOrder(
+					store.
+						EXPECT().
+						SetPKCEChallengeUsed(t.Context(), gomock.Any(), gomock.Any(), gomock.Any()).
+						Return(nil),
 					store.
 						EXPECT().
 						CreatePKCERequestSession(t.Context(), gomock.Any(), gomock.Any()).
@@ -280,6 +288,10 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
+						SetPKCEChallengeUsed(t.Context(), gomock.Any(), gomock.Any(), gomock.Any()).
+						Return(nil),
+					store.
+						EXPECT().
 						CreatePKCERequestSession(t.Context(), gomock.Any(), gomock.Any()).
 						Return(nil),
 				)
@@ -306,7 +318,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 			},
 			oauth2.ErrInvalidRequest,
-			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'S252', but the authorization server doesn't know how to handle this method, try 'S256' instead.",
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with a 'code_challenge_method' value the authorization server doesn't know how to handle, try 'S256' instead. Authorization was requested with 'code_challenge_method' value 'S252'.",
 		},
 		{
 			"ShouldFailMethodS255WhenPlainEnforce",
@@ -349,6 +361,10 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				gomock.InOrder(
 					store.
 						EXPECT().
+						SetPKCEChallengeUsed(t.Context(), gomock.Any(), gomock.Any(), gomock.Any()).
+						Return(nil),
+					store.
+						EXPECT().
 						CreatePKCERequestSession(t.Context(), gomock.Any(), gomock.Any()).
 						Return(nil),
 				)
@@ -374,6 +390,10 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123.sig")
 
 				gomock.InOrder(
+					store.
+						EXPECT().
+						SetPKCEChallengeUsed(t.Context(), gomock.Any(), gomock.Any(), gomock.Any()).
+						Return(nil),
 					store.
 						EXPECT().
 						CreatePKCERequestSession(t.Context(), gomock.Any(), gomock.Any()).
@@ -521,6 +541,10 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 
 				gomock.InOrder(
+					store.
+						EXPECT().
+						SetPKCEChallengeUsed(t.Context(), gomock.Any(), gomock.Any(), gomock.Any()).
+						Return(nil),
 					store.
 						EXPECT().
 						CreatePKCERequestSession(t.Context(), gomock.Any(), gomock.Any()).
@@ -1115,7 +1139,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				)
 			},
 			oauth2.ErrInvalidRequest,
-			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with 'code_challenge_method' value 'nope', but the authorization server doesn't know how to handle this method, try 'S256' instead.",
+			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with a 'code_challenge_method' value the authorization server doesn't know how to handle, try 'S256' instead. Authorization was requested with 'code_challenge_method' value 'nope'.",
 		},
 		{
 			"ShouldFailMethodS256ClientRequiresPlain",
@@ -1555,6 +1579,126 @@ func TestPKCERequestSessionSurvivesAFailedTokenRequest(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 }
 
+func TestHandler_HandleAuthorizeEndpointRequestDetectsReusedChallenges(t *testing.T) {
+	const expected = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The PKCE code challenge was already used by this client, a new code challenge must be generated for every authorization request. The client with id 'client-a' used a 'code_challenge' value which it used in an earlier authorization request."
+
+	future, past := time.Now().UTC().Add(time.Minute), time.Now().UTC().Add(-time.Minute)
+
+	testCases := []struct {
+		name     string
+		first    *oauth2.AuthorizeRequest
+		firstErr string
+		second   *oauth2.AuthorizeRequest
+		err      string
+	}{
+		{
+			name:   "ShouldRejectAChallengeTheSameClientUsed",
+			first:  newReusedChallengeRequest("client-a", future),
+			second: newReusedChallengeRequest("client-a", future),
+			err:    expected,
+		},
+		{
+			name:   "ShouldAllowAChallengeAnotherClientUsed",
+			first:  newReusedChallengeRequest("client-a", future),
+			second: newReusedChallengeRequest("client-b", future),
+		},
+		{
+			name:   "ShouldAllowAChallengeWhoseRecordExpired",
+			first:  newReusedChallengeRequest("client-a", past),
+			second: newReusedChallengeRequest("client-a", future),
+		},
+		{
+			name: "ShouldNotRecordARejectedRequest",
+			first: func() *oauth2.AuthorizeRequest {
+				r := newReusedChallengeRequest("client-a", future)
+				r.Form.Set(consts.FormParameterCodeChallengeMethod, "unknown")
+
+				return r
+			}(),
+			firstErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Authorization was requested with a 'code_challenge_method' value the authorization server doesn't know how to handle, try 'S256' instead. Authorization was requested with 'code_challenge_method' value 'unknown'.",
+			second:   newReusedChallengeRequest("client-a", future),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{GlobalSecret: []byte("foofoofoofoofoofoofoofoofoofoofoo"), AuthorizeCodeLifespan: time.Minute}
+			store := storage.NewMemoryStore()
+
+			handler := &Handler{AuthorizeCodeStrategy: hoauth2.NewCoreStrategy(config, "authelia_%s_", nil), Storage: store, Config: config}
+
+			authorize := func(request *oauth2.AuthorizeRequest) error {
+				response := oauth2.NewAuthorizeResponse()
+				response.AddParameter(consts.FormParameterAuthorizationCode, "authelia_ac_abc123.sig")
+
+				return oauth2.ErrorToDebugRFC6749Error(handler.HandleAuthorizeEndpointRequest(t.Context(), request, response))
+			}
+
+			if tc.firstErr == "" {
+				require.NoError(t, authorize(tc.first))
+			} else {
+				require.EqualError(t, authorize(tc.first), tc.firstErr)
+			}
+
+			err := authorize(tc.second)
+
+			if tc.err == "" {
+				assert.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tc.err)
+				assert.NotContains(t, err.Error(), testChallengeS256)
+			}
+		})
+	}
+}
+
+func TestHandler_HandleAuthorizeEndpointRequestRecordsChallengeExpiry(t *testing.T) {
+	expiresAt := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+
+	testCases := []struct {
+		name     string
+		session  *oauth2.DefaultSession
+		expected func(t *testing.T, actual time.Time)
+	}{
+		{
+			name:    "ShouldUseTheAuthorizationCodeExpiry",
+			session: &oauth2.DefaultSession{ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AuthorizeCode: expiresAt}},
+			expected: func(t *testing.T, actual time.Time) {
+				assert.Equal(t, expiresAt, actual)
+			},
+		},
+		{
+			name:    "ShouldFallBackToTheAuthorizationCodeLifespan",
+			session: &oauth2.DefaultSession{},
+			expected: func(t *testing.T, actual time.Time) {
+				assert.WithinDuration(t, time.Now().UTC().Add(time.Minute*7), actual, time.Second*5)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{GlobalSecret: []byte("foofoofoofoofoofoofoofoofoofoofoo"), AuthorizeCodeLifespan: time.Minute * 7}
+			store := storage.NewMemoryStore()
+
+			handler := &Handler{AuthorizeCodeStrategy: hoauth2.NewCoreStrategy(config, "authelia_%s_", nil), Storage: store, Config: config}
+
+			request := newReusedChallengeRequest("client-a", time.Time{})
+			request.Session = tc.session
+
+			response := oauth2.NewAuthorizeResponse()
+			response.AddParameter(consts.FormParameterAuthorizationCode, "authelia_ac_abc123.sig")
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleAuthorizeEndpointRequest(t.Context(), request, response)))
+
+			actual, ok := store.PKCEChallenges[storage.ClientValueMarker{ClientID: "client-a", Value: testChallengeS256}]
+			require.True(t, ok)
+
+			tc.expected(t, actual)
+		})
+	}
+}
+
 type TestPKCEClient struct {
 	*oauth2.DefaultClient
 	EnforcePKCE                bool
@@ -1596,3 +1740,17 @@ const (
 	testChallengeS256          = "X_rhBVULlQ_7LU7Cv25I6ouGvJQLtum1M-Fjw0f24hI"
 	testErrChallengeS256Syntax = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The PKCE code challenge for method 'S256' must be the base64url encoding of a SHA-256 hash without padding."
 )
+
+func newReusedChallengeRequest(clientID string, expiresAt time.Time) *oauth2.AuthorizeRequest {
+	return &oauth2.AuthorizeRequest{
+		ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+		Request: oauth2.Request{
+			Client: &oauth2.DefaultClient{ID: clientID},
+			Form: url.Values{
+				consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
+				consts.FormParameterCodeChallenge:       []string{testChallengeS256},
+			},
+			Session: &oauth2.DefaultSession{ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AuthorizeCode: expiresAt}},
+		},
+	}
+}

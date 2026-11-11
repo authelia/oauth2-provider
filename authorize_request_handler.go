@@ -163,14 +163,27 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		}
 	}
 
-	// The 'state' parameter must not be guessable.
+	// The 'state' parameter is optional, but when present it must not be guessable.
 	//
-	// See: https://www.rfc-editor.org/rfc/rfc6819#section-4.4.1.8
-	if len(request.State) < f.GetMinParameterEntropy(ctx) {
-		return request, errorsx.WithStack(ErrInvalidState.WithHintf("Request parameter 'state' must be at least be %d characters long to ensure sufficient entropy.", f.GetMinParameterEntropy(ctx)))
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-16#section-4.1.1 and
+	// https://www.rfc-editor.org/rfc/rfc6819#section-4.4.1.8
+	if minimum := f.GetMinParameterEntropy(ctx); len(request.State) != 0 && len(request.State) < minimum {
+		return request, errorsx.WithStack(ErrInvalidRequest.WithHintf("Request parameter 'state' is set but does not satisfy the minimum entropy of %d characters.", minimum))
+	}
+
+	if err = f.validateNonceEntropy(ctx, request.Form); err != nil {
+		return request, err
 	}
 
 	return request, nil
+}
+
+func (f *Fosite) validateNonceEntropy(ctx context.Context, form url.Values) (err error) {
+	if nonce := form.Get(consts.FormParameterNonce); len(nonce) > 0 && len(nonce) < f.GetMinParameterEntropy(ctx) {
+		return errorsx.WithStack(ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", f.GetMinParameterEntropy(ctx)))
+	}
+
+	return nil
 }
 
 func setAuthorizeErrorDefaultResponseMode(request *AuthorizeRequest) {
@@ -670,7 +683,7 @@ func (f *Fosite) validateScope(ctx context.Context, _ *http.Request, request Req
 
 	for _, scope := range requested {
 		if !strategy(scopes, scope) {
-			return errorsx.WithStack(ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+			return errorsx.WithStack(ErrInvalidScope.WithHint("The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
@@ -698,7 +711,7 @@ func (f *Fosite) validateResponseTypes(_ context.Context, _ *http.Request, reque
 	}
 
 	if !found {
-		return errorsx.WithStack(ErrUnsupportedResponseType.WithHintf("The client is not allowed to request response_type '%s'.", request.Form.Get(consts.FormParameterResponseType)))
+		return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request response_type '%s'.", request.Form.Get(consts.FormParameterResponseType)))
 	}
 
 	request.ResponseTypes = responseTypes
@@ -722,7 +735,7 @@ func (f *Fosite) ParseResponseMode(ctx context.Context, _ *http.Request, request
 		}
 	}
 
-	return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("Request with unsupported response_mode '%s'.", m))
+	return errorsx.WithStack(ErrUnsupportedResponseMode.WithHint("The value of the 'response_mode' parameter is not supported.").WithDebugf("Request with unsupported response_mode '%s'.", m))
 }
 
 func (f *Fosite) validateResponseMode(_ context.Context, _ *http.Request, request *AuthorizeRequest) error {
@@ -848,7 +861,7 @@ func (f *Fosite) validateAuthorizeRequestFromPARClient(ctx context.Context, r *h
 
 	for _, scope := range request.GetRequestedScopes() {
 		if !strategy(client.GetScopes(), scope) {
-			return errorsx.WithStack(ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+			return errorsx.WithStack(ErrInvalidScope.WithHint("The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
@@ -875,7 +888,7 @@ func (f *Fosite) validateAuthorizeRequestFromPARClient(ctx context.Context, r *h
 	}
 
 	if !found {
-		return errorsx.WithStack(ErrUnsupportedResponseType.WithHintf("The client is not allowed to request response_type '%s'.", strings.Join(request.ResponseTypes, " ")))
+		return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request response_type '%s'.", strings.Join(request.ResponseTypes, " ")))
 	}
 
 	if len(request.Form.Get(consts.FormParameterResponseMode)) == 0 {

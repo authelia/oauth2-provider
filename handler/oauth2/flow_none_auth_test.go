@@ -166,6 +166,25 @@ func TestNone_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldPassNoneResponseTypeWithoutState",
+			requester: &oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeNone},
+				Request: oauth2.Request{
+					Client: &oauth2.DefaultClient{
+						ResponseTypes: oauth2.Arguments{consts.ResponseTypeNone},
+						RedirectURIs:  []string{"https://asdf.de/cb"},
+					},
+					GrantedScope: oauth2.Arguments{"a"},
+					Session:      &oauth2.DefaultSession{},
+					RequestedAt:  time.Now().UTC(),
+				},
+				RedirectURI: parseUrl("https://asdf.de/cb"),
+			},
+			expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.AuthorizeResponse) {
+				assert.NotContains(t, aresp.GetParameters(), consts.FormParameterState)
+			},
+		},
+		{
 			name: "ShouldFailNoneResponseTypeWithInvalidScopes",
 			requester: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{consts.ResponseTypeNone},
@@ -190,7 +209,7 @@ func TestNone_HandleAuthorizeEndpointRequest(t *testing.T) {
 				assert.Equal(t, "", responder.GetParameters().Get(consts.FormParameterState))
 				assert.Equal(t, oauth2.ResponseModeQuery, requester.GetResponseMode())
 			},
-			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'a'.",
+			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter. The OAuth 2.0 Client is not allowed to request scope 'a'.",
 		},
 		{
 			name: "ShouldPassWithOnlyNoneResponseType",

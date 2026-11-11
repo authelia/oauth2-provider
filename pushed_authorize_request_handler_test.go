@@ -111,16 +111,22 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			},
 		},
 		{
-			name: "ShouldFailNoState",
+			name: "ShouldPassNoState",
 			query: url.Values{
 				consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb"},
 				consts.FormParameterClientID:     []string{"1234"},
 				consts.FormParameterClientSecret: []string{"1234"},
 				consts.FormParameterResponseType: []string{consts.ResponseTypeAuthorizationCodeFlow},
 			},
-			err: "The state is missing or does not have enough characters and is therefore considered too weak. Request parameter 'state' must be at least be 8 characters long to ensure sufficient entropy.",
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
+			},
+			expect: &AuthorizeRequest{
+				RedirectURI:   redir,
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: Request{
+					Client: &DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}, ClientSecret: testClientSecret1234},
+				},
 			},
 		},
 		{
@@ -132,7 +138,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 				consts.FormParameterResponseType: {"code"},
 				consts.FormParameterState:        {"short"},
 			},
-			err: "The state is missing or does not have enough characters and is therefore considered too weak. Request parameter 'state' must be at least be 8 characters long to ensure sufficient entropy.",
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Request parameter 'state' is set but does not satisfy the minimum entropy of 8 characters.",
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
@@ -150,7 +156,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
-			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'baz'.",
+			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter. The OAuth 2.0 Client is not allowed to request scope 'baz'.",
 		},
 		{
 			name: "ShouldFailClientWithoutAudience",
@@ -366,7 +372,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}, ClientSecret: testClientSecret1234}, nil).MaxTimes(2)
 			},
-			err: "The authorization server does not support obtaining a response using this response mode. Request with unsupported response_mode 'unknown'.",
+			err: "The authorization server does not support obtaining a response using this response mode. The value of the 'response_mode' parameter is not supported. Request with unsupported response_mode 'unknown'.",
 		},
 		{
 			name: "ShouldFailResponseModeRequestedButClientDoesNotSupportResponseMode",

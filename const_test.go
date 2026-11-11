@@ -39,7 +39,7 @@ const (
 	testRARHintNotArray          = "The 'authorization_details' parameter must be a JSON array."
 	testRARHintNotObject         = "The 'authorization_details' parameter element at index 0 must be a JSON object."
 	testRARHintMissingType       = "The 'authorization_details' parameter element at index 0 must have a non-empty 'type'."
-	testRARHintTypeNotAllowed    = "The OAuth 2.0 Client is not allowed to request authorization details type 'payment_initiation'."
+	testRARHintTypeNotAllowed    = "The OAuth 2.0 Client is not allowed to request one or more of the authorization details types."
 	testRARHintNullPrivileges    = "The 'authorization_details' parameter element at index 0 member 'privileges' must not be null."
 	testRARHintMaxObjectsDefault = "The 'authorization_details' parameter must not contain more than 32 authorization details objects."
 	testRARHintNotGranted        = "The requested authorization details of type 'payment_initiation' were not granted by the resource owner."

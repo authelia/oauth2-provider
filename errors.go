@@ -40,6 +40,14 @@ var (
 	// session.
 	ErrDuplicateUserCode = errors.New("user code is already in use")
 
+	// ErrPKCEChallengeReused is an error indicating that the client already used the PKCE code challenge in an
+	// authorization request whose record has not yet expired.
+	ErrPKCEChallengeReused = errors.New("PKCE code challenge has already been used by the client")
+
+	// ErrOpenIDConnectNonceReused is an error indicating that the client already used the OpenID Connect nonce in an
+	// authorization request whose record has not yet expired.
+	ErrOpenIDConnectNonceReused = errors.New("OpenID Connect nonce has already been used by the client")
+
 	// ErrSerializationFailure is an error indicating that the transactional capable storage could not guarantee
 	// consistency of Update & Delete operations on the same rows between multiple sessions. It does not by itself mean a
 	// token was replayed. The token endpoint handlers read the code or refresh token again after rolling the transaction
@@ -678,10 +686,8 @@ func (e *RFC6749Error) WithExposeDebug(exposeDebug bool) *RFC6749Error {
 // GetDescription returns a more descriptive description, combined with hint and debug (when available).
 func (e *RFC6749Error) GetDescription() string {
 	description := i18n.GetMessageOrDefault(e.catalog, e.ErrorField, e.lang, e.DescriptionField)
-	e.computeHintField()
-
-	if e.HintField != "" {
-		description += " " + e.HintField
+	if hint := e.getLocalizedHint(); hint != "" {
+		description += " " + hint
 	}
 
 	if e.exposeDebug && e.DebugField != "" {
@@ -768,33 +774,68 @@ func (e RFC6749Error) marshalWithExtra(data *RFC6749ErrorJSON) ([]byte, error) {
 	return json.Marshal(members)
 }
 
-// ToValues serializes the error into url.Values suitable for use as an authorize endpoint error response in either the
-// 'query' or 'fragment' response mode. Legacy-format errors produce additional 'error_hint' and 'error_debug' fields.
+// ToValues serializes the error into url.Values suitable for use as an authorize endpoint error response in any
+// response mode. Legacy-format errors produce additional 'error_hint' and 'error_debug' fields. Characters outside the
+// set permitted for the 'error_description' parameter are replaced in every descriptive field, except that a localized
+// description or hint containing such characters is replaced by the default message.
+//
+// See: https://www.rfc-editor.org/rfc/rfc6749#section-4.1.2.1
 func (e *RFC6749Error) ToValues() url.Values {
 	values := url.Values{}
 	values.Set("error", e.ErrorField)
-	values.Set("error_description", e.GetDescription())
+	values.Set("error_description", e.getRepresentableDescription())
 
 	if e.useLegacyFormat {
-		values.Set("error_description", e.DescriptionField)
+		values.Set("error_description", sanitizeErrorDescription(e.DescriptionField))
 		if e.HintField != "" {
-			values.Set("error_hint", e.HintField)
+			values.Set("error_hint", sanitizeErrorDescription(e.HintField))
 		}
 
 		if e.DebugField != "" && e.exposeDebug {
-			values.Set("error_debug", e.DebugField)
+			values.Set("error_debug", sanitizeErrorDescription(e.DebugField))
 		}
 	}
 
 	return values
 }
 
-func (e *RFC6749Error) computeHintField() {
-	if e.hintIDField == "" {
-		return
+func (e *RFC6749Error) getRepresentableDescription() string {
+	if description := e.GetDescription(); isErrorDescriptionRepresentable(description) {
+		return sanitizeErrorDescription(description)
 	}
 
-	e.HintField = i18n.GetMessageOrDefault(e.catalog, e.hintIDField, e.lang, e.HintField, e.hintArgs...)
+	return sanitizeErrorDescription(e.WithLocalizer(nil, e.lang).GetDescription())
+}
+
+func isErrorDescriptionRepresentable(description string) bool {
+	for _, r := range description {
+		if r < 0x20 || r > 0x7E {
+			return false
+		}
+	}
+
+	return true
+}
+
+func sanitizeErrorDescription(description string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '"':
+			return '\''
+		case r == '\\', r < 0x20, r > 0x7E:
+			return ' '
+		default:
+			return r
+		}
+	}, description)
+}
+
+func (e *RFC6749Error) getLocalizedHint() string {
+	if e.hintIDField == "" {
+		return e.HintField
+	}
+
+	return i18n.GetMessageOrDefault(e.catalog, e.hintIDField, e.lang, e.HintField, e.hintArgs...)
 }
 
 // ErrorToRFC6749ErrorFallback behaves like ErrorToRFC6749Error but returns a copy of fallback (wrapping err) instead of

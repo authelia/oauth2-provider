@@ -47,6 +47,14 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 	request.SetDefaultResponseMode(oauth2.ResponseModeFragment)
 
+	// The client must be registered for the 'implicit' grant to receive an ID Token or Access Token from the
+	// authorization endpoint.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+	if request.GetResponseTypes().HasOneOf(consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowToken) && !request.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
+	}
+
 	// OpenID Connect Core 1.0 Section 3.3.2.1: the 'id_token' response type issues an ID Token, which needs the
 	// 'openid' scope; checked before any code or token is issued.
 	if request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowIDToken) && !request.GetGrantedScopes().Has(consts.ScopeOpenID) {
@@ -91,7 +99,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 	for _, scope := range request.GetRequestedScopes() {
 		if !strategy(client.GetScopes(), scope) {
-			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHint("The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
@@ -103,6 +111,23 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	}
 
 	if err = oauth2.ValidateRedirectURISecurity(ctx, c.AuthorizeExplicitGrantHandler.Config, client, request.GetRedirectURI()); err != nil {
+		return err
+	}
+
+	if request.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) && !client.GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'authorization_code'."))
+	}
+
+	if request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken) && !client.GetGrantTypes().Has(consts.GrantTypeImplicit) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
+	}
+
+	// Hybrid flow uses implicit flow config for the ID Token's lifespan.
+	lifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+
+	idTokenExpiresAt := getIDTokenExpiresAt(session, lifespan)
+
+	if err = setNonceUsed(ctx, c.OpenIDConnectRequestStorage, request, c.getNonceExpiresAt(ctx, request, idTokenExpiresAt)); err != nil {
 		return err
 	}
 
@@ -127,10 +152,6 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	}
 
 	if request.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
-		if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'authorization_code'."))
-		}
-
 		var (
 			code, signature string
 		)
@@ -142,7 +163,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		// This is required because we must limit the authorize code lifespan.
 		request.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.AuthorizeExplicitGrantHandler.Config.GetAuthorizeCodeLifespan(ctx)).Truncate(jwt.TimePrecision))
 
-		if err = c.AuthorizeExplicitGrantHandler.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, request.Sanitize(c.AuthorizeExplicitGrantHandler.GetSanitationWhiteList(ctx))); err != nil {
+		if err = c.AuthorizeExplicitGrantHandler.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, request.Sanitize(c.AuthorizeExplicitGrantHandler.GetAuthorizeCodeSessionParameters(ctx))); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 
@@ -163,9 +184,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	}
 
 	if request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken) {
-		if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
-		} else if err = c.AuthorizeImplicitGrantTypeHandler.IssueImplicitAccessToken(ctx, request, response); err != nil {
+		if err = c.AuthorizeImplicitGrantTypeHandler.IssueImplicitAccessToken(ctx, request, response); err != nil {
 			return errorsx.WithStack(err)
 		}
 
@@ -178,9 +197,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		claims.AccessTokenHash = hash
 	}
 
-	var ok bool
-
-	if _, ok = response.GetParameters()[consts.FormParameterState]; !ok {
+	if _, ok := response.GetParameters()[consts.FormParameterState]; !ok && len(request.GetState()) != 0 {
 		response.AddParameter(consts.FormParameterState, request.GetState())
 	}
 
@@ -188,8 +205,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		return nil
 	}
 
-	// Hybrid flow uses implicit flow config for the ID Token's lifespan.
-	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+	setIDTokenExpiresAt(session, idTokenExpiresAt)
 
 	if err = c.IDTokenHandleHelper.IssueImplicitIDToken(ctx, lifespan, request, response); err != nil {
 		return errorsx.WithStack(err)
@@ -198,6 +214,22 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	request.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowIDToken)
 
 	return nil
+}
+
+func (c *OpenIDConnectHybridHandler) getNonceExpiresAt(ctx context.Context, request oauth2.AuthorizeRequester, idTokenExpiresAt time.Time) (expiresAt time.Time) {
+	now := time.Now().UTC()
+
+	if request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowIDToken) {
+		expiresAt = idTokenExpiresAt
+	}
+
+	if request.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
+		if code := now.Add(c.AuthorizeExplicitGrantHandler.Config.GetAuthorizeCodeLifespan(ctx)); code.After(expiresAt) {
+			expiresAt = code
+		}
+	}
+
+	return expiresAt
 }
 
 // ResponseTypesSupported returns the response types this handler serves.

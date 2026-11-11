@@ -403,11 +403,11 @@ func ValidateAuthorizationDetailsTypes(ctx context.Context, config any, client C
 
 	for _, detail := range details {
 		if allowed != nil && !slices.Contains(allowed, detail.Type) {
-			return errorsx.WithStack(ErrInvalidAuthorizationDetails.WithHintf("The OAuth 2.0 Client is not allowed to request authorization details type '%s'.", detail.Type))
+			return errorsx.WithStack(ErrInvalidAuthorizationDetails.WithHint("The OAuth 2.0 Client is not allowed to request one or more of the authorization details types.").WithDebugf("The OAuth 2.0 Client is not allowed to request authorization details type '%s'.", detail.Type))
 		}
 
 		if _, ok := handlers[detail.Type]; !ok {
-			return errorsx.WithStack(ErrInvalidAuthorizationDetails.WithHintf("The authorization details type '%s' is not supported.", detail.Type))
+			return errorsx.WithStack(ErrInvalidAuthorizationDetails.WithHint("One or more of the authorization details types is not supported.").WithDebugf("The authorization details type '%s' is not supported.", detail.Type))
 		}
 	}
 

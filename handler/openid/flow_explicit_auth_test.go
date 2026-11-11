@@ -90,6 +90,34 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldFailShortNonce",
+			setup: func(ctrl *gomock.Controller, request *oauth2.AuthorizeRequest, responder *mock.MockAuthorizeResponder) (handler OpenIDConnectExplicitHandler) {
+				handler, _ = makeOpenIDConnectExplicitHandler(ctrl, oauth2.MinParameterEntropy)
+
+				request.Form.Set(consts.FormParameterNonce, "abc")
+
+				responder.EXPECT().GetCode().Return("codeexample")
+
+				return
+			},
+			expected:      "The request used a security parameter (e.g., anti-replay, anti-csrf) with insufficient entropy. Parameter 'nonce' is set but does not satisfy the minimum entropy of 8 characters.",
+			expectedField: "insufficient_entropy",
+		},
+		{
+			name: "ShouldPassShortNonceEntropyDisabled",
+			setup: func(ctrl *gomock.Controller, request *oauth2.AuthorizeRequest, responder *mock.MockAuthorizeResponder) (handler OpenIDConnectExplicitHandler) {
+				handler, store := makeOpenIDConnectExplicitHandler(ctrl, -1)
+
+				request.Form.Set(consts.FormParameterNonce, "abc")
+
+				responder.EXPECT().GetCode().AnyTimes().Return("codeexample")
+				store.EXPECT().SetOpenIDConnectNonceUsed(t.Context(), gomock.Any(), "abc", gomock.Any()).Return(nil)
+				store.EXPECT().CreateOpenIDConnectSession(t.Context(), "codeexample", gomock.Eq(request.Sanitize(oidcParameters))).Return(nil)
+
+				return
+			},
+		},
+		{
 			name: "ShouldFailBecauseRedirectURLIsMissing",
 			setup: func(ctrl *gomock.Controller, request *oauth2.AuthorizeRequest, responder *mock.MockAuthorizeResponder) (handler OpenIDConnectExplicitHandler) {
 				request.Form.Del(consts.FormParameterRedirectURI)
@@ -116,7 +144,7 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 
 				return
 			},
-			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The requested prompt value 'x' either contains unknown, unsupported, or prohibited prompt values. The permitted prompt values are 'login', 'none', 'consent', 'select_account'.",
+			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'prompt' parameter either contains unknown, unsupported, or prohibited prompt values. The requested prompt value 'x' is not permitted, the permitted prompt values are 'login', 'none', 'consent', 'select_account'.",
 			expectedField: "invalid_request",
 		},
 	}

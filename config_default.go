@@ -167,6 +167,12 @@ type Config struct {
 	// to false.
 	EnforceClaimsParameter bool
 
+	// EnableRedirectFragmentGuard appends the '#_' fragment to the 'Location' of an authorization response redirect in
+	// a query response mode, so a browser does not reattach the fragment of the request URL to it. Defaults to false.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9700#section-4.1.3
+	EnableRedirectFragmentGuard bool
+
 	// EnforceAuthenticationRequirements treats the 'acr_values' and 'max_age' authorization request parameters as
 	// requirements for every response type and for the approval of a device authorization request: it fails with
 	// unmet_authentication_requirements unless the 'acr' recorded on the ID Token claims of the session is one of the
@@ -240,7 +246,8 @@ type Config struct {
 	// RefreshTokenScopes defines which OAuth scopes will be given refresh tokens during the authorization code grant exchange. This defaults to "offline" and "offline_access". When set to an empty array, all exchanges will be given refresh tokens.
 	RefreshTokenScopes []string
 
-	// MinParameterEntropy controls the minimum size of state and nonce parameters. Defaults to oauth2.MinParameterEntropy.
+	// MinParameterEntropy controls the minimum size of the state and nonce parameters when they are present. Defaults to
+	// oauth2.MinParameterEntropy when 0, and -1 disables the minimum.
 	MinParameterEntropy int
 
 	// UseLegacyErrorFormat controls whether the legacy error format (with `error_debug`, `error_hint`, ...)
@@ -312,8 +319,9 @@ type Config struct {
 	// OmitRedirectScopeParam indicates whether the "scope" parameter should be omitted from the redirect URL.
 	OmitRedirectScopeParam bool
 
-	// SanitationWhiteList is a whitelist of form values that are required by the token endpoint. These values
-	// are safe for storage in a database (cleartext).
+	// SanitationWhiteList is a list of additional form values retained when an authorize request is stored for the
+	// token endpoint. These values must be safe for storage in a database (cleartext). The list extends the parameters
+	// the token endpoint always requires ('scope' and 'redirect_uri') and cannot remove them.
 	SanitationWhiteList []string
 
 	// JWTScopeClaimKey defines the claim key to be used to set the scope in. Valid fields are "scope" or "scp" or both.
@@ -1073,6 +1081,11 @@ func (c *Config) GetEnforceAuthenticationRequirements(_ context.Context) (enforc
 	return c.EnforceAuthenticationRequirements
 }
 
+// GetEnableRedirectFragmentGuard returns the value of EnableRedirectFragmentGuard.
+func (c *Config) GetEnableRedirectFragmentGuard(_ context.Context) (enable bool) {
+	return c.EnableRedirectFragmentGuard
+}
+
 // GetEnforceClaimsParameter returns the value of EnforceClaimsParameter.
 func (c *Config) GetEnforceClaimsParameter(ctx context.Context) bool {
 	return c.EnforceClaimsParameter
@@ -1083,8 +1096,7 @@ func (c *Config) GetRFC9470StepUpAuthenticationEnabled(ctx context.Context) bool
 	return c.RFC9470StepUpAuthenticationEnabled
 }
 
-// GetSanitationWhiteList returns a list of allowed form values that are required by the token endpoint. These values
-// are safe for storage in a database (cleartext).
+// GetSanitationWhiteList returns the value of SanitationWhiteList.
 func (c *Config) GetSanitationWhiteList(ctx context.Context) []string {
 	return c.SanitationWhiteList
 }
@@ -1981,6 +1993,7 @@ var (
 	_ AllowInsecureRedirectURIForPublicClientsProvider      = (*Config)(nil)
 	_ EnablePKCEPlainChallengeMethodProvider                = (*Config)(nil)
 	_ ClaimsParameterEnforcementProvider                    = (*Config)(nil)
+	_ RedirectFragmentGuardProvider                         = (*Config)(nil)
 	_ AuthenticationRequirementsEnforcementProvider         = (*Config)(nil)
 	_ RFC9470StepUpAuthenticationProvider                   = (*Config)(nil)
 	_ EnforcePKCEProvider                                   = (*Config)(nil)

@@ -182,16 +182,22 @@ func TestNewAuthorizeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:   "ShouldFailNoState",
+			name:   "ShouldPassNoStateDefaultEntropy",
 			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{
 				consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb"},
 				consts.FormParameterClientID:     []string{"1234"},
 				consts.FormParameterResponseType: []string{consts.ResponseTypeAuthorizationCodeFlow},
 			},
-			err: "The state is missing or does not have enough characters and is therefore considered too weak. Request parameter 'state' must be at least be 8 characters long to ensure sufficient entropy.",
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}}, nil)
+			},
+			expect: &AuthorizeRequest{
+				RedirectURI:   redir,
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: Request{
+					Client: &DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}},
+				},
 			},
 		},
 		{
@@ -203,7 +209,22 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterResponseType: []string{consts.ResponseTypeAuthorizationCodeFlow},
 				consts.FormParameterState:        {"short"},
 			},
-			err: "The state is missing or does not have enough characters and is therefore considered too weak. Request parameter 'state' must be at least be 8 characters long to ensure sufficient entropy.",
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Request parameter 'state' is set but does not satisfy the minimum entropy of 8 characters.",
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}}, nil)
+			},
+		},
+		{
+			name:   "ShouldFailShortNonce",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			query: url.Values{
+				consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb"},
+				consts.FormParameterClientID:     []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeAuthorizationCodeFlow},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterNonce:        {"short"},
+			},
+			err: "The request used a security parameter (e.g., anti-replay, anti-csrf) with insufficient entropy. Parameter 'nonce' is set but does not satisfy the minimum entropy of 8 characters.",
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}}, nil)
 			},
@@ -221,7 +242,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}}, nil)
 			},
-			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'baz'.",
+			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter. The OAuth 2.0 Client is not allowed to request scope 'baz'.",
 		},
 		{
 			name:   "ShouldFailClientWithoutAudience",
@@ -458,7 +479,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{"code token"}}, nil)
 			},
-			err: "The authorization server does not support obtaining a response using this response mode. Request with unsupported response_mode 'unknown'.",
+			err: "The authorization server does not support obtaining a response using this response mode. The value of the 'response_mode' parameter is not supported. Request with unsupported response_mode 'unknown'.",
 		},
 		{
 			name:   "ShouldFailResponseModeRequestedButClientDoesNotSupportResponseMode",
@@ -809,7 +830,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterClientID:   {"1234"},
 				consts.FormParameterState:      {"strong-enough-state"},
 			},
-			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'bar'.",
+			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter. The OAuth 2.0 Client is not allowed to request scope 'bar'.",
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo"}, ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow}, Audience: []string{"https://cloud.authelia.com/api"}}, nil)
 			},
@@ -843,7 +864,7 @@ func TestNewAuthorizeRequest(t *testing.T) {
 				consts.FormParameterClientID:   {"1234"},
 				consts.FormParameterState:      {"strong-enough-state"},
 			},
-			err: "The authorization server does not support obtaining a token using this method. The client is not allowed to request response_type 'code'.",
+			err: "The authorization server does not support obtaining a token using this method. The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter. The OAuth 2.0 Client is not allowed to request response_type 'code'.",
 			mock: func(store *mock.MockStorage) {
 				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeImplicitFlowToken}, Audience: []string{"https://cloud.authelia.com/api"}}, nil)
 			},
@@ -1629,6 +1650,86 @@ func TestNewAuthorizeRequestEarlyErrorResponseMode(t *testing.T) {
 
 			assert.NotEmpty(t, values.Get(consts.FormParameterError))
 			assert.Equal(t, "strong-enough-state", values.Get(consts.FormParameterState))
+		})
+	}
+}
+
+func TestNewAuthorizeRequestErrorDescriptionDoesNotReflectParameters(t *testing.T) {
+	testCases := []struct {
+		name         string
+		responseType string
+		scope        string
+		payload      string
+		expected     string
+	}{
+		{
+			name:         "ShouldNotReflectResponseType",
+			responseType: "<svg onload=alert(1)> Your account is locked, call 555",
+			scope:        "foo",
+			payload:      "Your account is locked",
+			expected:     ErrUnsupportedResponseType.ErrorField,
+		},
+		{
+			name:         "ShouldNotReflectScope",
+			responseType: consts.ResponseTypeAuthorizationCodeFlow,
+			scope:        "foo <svg/onload=alert(1)>\\é\nDear",
+			payload:      "svg",
+			expected:     ErrInvalidScope.ErrorField,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			store := mock.NewMockStorage(ctrl)
+
+			client := &DefaultClient{
+				ID:            "1234",
+				RedirectURIs:  []string{"https://foo.bar/cb"},
+				Scopes:        []string{"foo"},
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+			}
+
+			store.EXPECT().GetClient(gomock.Any(), "1234").Return(client, nil)
+
+			query := url.Values{
+				consts.FormParameterClientID:     []string{"1234"},
+				consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb"},
+				consts.FormParameterResponseType: []string{tc.responseType},
+				consts.FormParameterScope:        []string{tc.scope},
+				consts.FormParameterState:        []string{"strong-enough-state"},
+			}
+
+			provider := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy}}
+
+			r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+			requester, err := provider.NewAuthorizeRequest(context.Background(), r)
+			require.Error(t, err)
+
+			rw := httptest.NewRecorder()
+
+			provider.WriteAuthorizeError(context.Background(), rw, requester, err)
+
+			require.Equal(t, http.StatusSeeOther, rw.Code)
+
+			location, err := url.Parse(rw.Header().Get(consts.HeaderLocation))
+			require.NoError(t, err)
+
+			values := location.Query()
+
+			assert.Equal(t, tc.expected, values.Get(consts.FormParameterError))
+
+			description := values.Get(consts.FormParameterErrorDescription)
+
+			assert.NotEmpty(t, description)
+			assert.NotContains(t, description, tc.payload)
+			assert.NotContains(t, description, "<")
+
+			// RFC 6749 Section 4.1.2.1.
+			for _, c := range description {
+				assert.True(t, c == 0x20 || c == 0x21 || (c >= 0x23 && c <= 0x5B) || (c >= 0x5D && c <= 0x7E), "character %q is outside the permitted set", c)
+			}
 		})
 	}
 }

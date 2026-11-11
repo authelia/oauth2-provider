@@ -716,6 +716,61 @@ func TestMemoryStoreScopesJTIs(t *testing.T) {
 	}
 }
 
+func TestMemoryStoreDetectsReusedAuthorizationRequestValues(t *testing.T) {
+	future, past := time.Now().Add(time.Minute), time.Now().Add(-time.Minute)
+
+	testCases := []struct {
+		name   string
+		set    func(s *MemoryStore, ctx context.Context, clientID, value string, expiresAt time.Time) error
+		reused error
+	}{
+		{
+			name:   "ShouldDetectPKCEChallenges",
+			set:    (*MemoryStore).SetPKCEChallengeUsed,
+			reused: oauth2.ErrPKCEChallengeReused,
+		},
+		{
+			name:   "ShouldDetectOpenIDConnectNonces",
+			set:    (*MemoryStore).SetOpenIDConnectNonceUsed,
+			reused: oauth2.ErrOpenIDConnectNonceReused,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("ShouldRejectTheSameClient", func(t *testing.T) {
+				s := NewMemoryStore()
+
+				require.NoError(t, tc.set(s, t.Context(), "client-a", "value", future))
+				assert.ErrorIs(t, tc.set(s, t.Context(), "client-a", "value", future), tc.reused)
+			})
+
+			t.Run("ShouldAllowAnotherClient", func(t *testing.T) {
+				s := NewMemoryStore()
+
+				require.NoError(t, tc.set(s, t.Context(), "client-a", "value", future))
+				assert.NoError(t, tc.set(s, t.Context(), "client-b", "value", future))
+				assert.NoError(t, tc.set(s, t.Context(), "client-a", "other", future))
+			})
+
+			t.Run("ShouldAllowReuseAfterExpiry", func(t *testing.T) {
+				s := NewMemoryStore()
+
+				require.NoError(t, tc.set(s, t.Context(), "client-a", "value", past))
+				assert.NoError(t, tc.set(s, t.Context(), "client-a", "value", future))
+				assert.ErrorIs(t, tc.set(s, t.Context(), "client-a", "value", future), tc.reused)
+			})
+
+			t.Run("ShouldInitialiseAnUnsetMap", func(t *testing.T) {
+				s := &MemoryStore{}
+
+				require.NoError(t, tc.set(s, t.Context(), "client-a", "value", future))
+				assert.ErrorIs(t, tc.set(s, t.Context(), "client-a", "value", future), tc.reused)
+			})
+		})
+	}
+}
+
 func TestMemoryStoreRevokeAccessTokenRevokesEveryTokenForTheRequest(t *testing.T) {
 	testCases := []struct {
 		name  string
@@ -829,6 +884,28 @@ func TestMemoryStorePrunesExpiredEntriesAtAnInterval(t *testing.T) {
 				return ok
 			},
 			rewind: func(s *MemoryStore) { s.dpopNoncesPruneAt = time.Time{} },
+		},
+		{
+			name: "ShouldPrunePKCEChallenges",
+			insert: func(t *testing.T, s *MemoryStore, key string, exp time.Time) {
+				require.NoError(t, s.SetPKCEChallengeUsed(t.Context(), "client", key, exp))
+			},
+			contain: func(s *MemoryStore, key string) bool {
+				_, ok := s.PKCEChallenges[ClientValueMarker{ClientID: "client", Value: key}]
+				return ok
+			},
+			rewind: func(s *MemoryStore) { s.pkceChallengesPruneAt = time.Time{} },
+		},
+		{
+			name: "ShouldPruneOpenIDConnectNonces",
+			insert: func(t *testing.T, s *MemoryStore, key string, exp time.Time) {
+				require.NoError(t, s.SetOpenIDConnectNonceUsed(t.Context(), "client", key, exp))
+			},
+			contain: func(s *MemoryStore, key string) bool {
+				_, ok := s.OpenIDConnectNonces[ClientValueMarker{ClientID: "client", Value: key}]
+				return ok
+			},
+			rewind: func(s *MemoryStore) { s.openIDConnectNoncesPruneAt = time.Time{} },
 		},
 	}
 

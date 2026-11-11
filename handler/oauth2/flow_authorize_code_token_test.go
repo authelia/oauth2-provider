@@ -1504,6 +1504,149 @@ func TestAuthorizeCode_AuthorizationDetails(t *testing.T) {
 	})
 }
 
+func TestAuthorizeCode_SanitationWhiteListRetainsRedirectURI(t *testing.T) {
+	const (
+		redirectA = "https://client.example.com/a"
+		redirectB = "https://client.example.com/b"
+		custom    = "custom"
+		mismatch  = "The 'redirect_uri' from this request does not match the one from the authorize request."
+	)
+
+	stores := []struct {
+		name string
+		new  func() CoreStorage
+	}{
+		{"MemoryStore", func() CoreStorage { return storage.NewMemoryStore() }},
+		{"HydratingMemoryStore", func() CoreStorage { return storage.NewHydratingMemoryStore() }},
+	}
+
+	testCases := []struct {
+		name      string
+		whitelist []string
+		scopes    oauth2.Arguments
+		redirect  []string
+		err       string
+	}{
+		{
+			name:      "ShouldRejectMismatchedRedirectURIWithConfiguredWhiteList",
+			whitelist: []string{consts.FormParameterScope, custom},
+			scopes:    oauth2.Arguments{"foo"},
+			redirect:  []string{redirectB},
+			err:       mismatch,
+		},
+		{
+			name:      "ShouldRejectMissingRedirectURIWithConfiguredWhiteList",
+			whitelist: []string{consts.FormParameterScope, custom},
+			scopes:    oauth2.Arguments{"foo"},
+			err:       mismatch,
+		},
+		{
+			name:      "ShouldAcceptMatchingRedirectURIWithConfiguredWhiteList",
+			whitelist: []string{consts.FormParameterScope, custom},
+			scopes:    oauth2.Arguments{"foo"},
+			redirect:  []string{redirectA},
+		},
+		{
+			name:      "ShouldAcceptMatchingRedirectURIForOpenIDWithConfiguredWhiteList",
+			whitelist: []string{custom},
+			scopes:    oauth2.Arguments{consts.ScopeOpenID},
+			redirect:  []string{redirectA},
+		},
+		{
+			name:     "ShouldRejectMismatchedRedirectURIWithDefaultWhiteList",
+			scopes:   oauth2.Arguments{"foo"},
+			redirect: []string{redirectB},
+			err:      mismatch,
+		},
+	}
+
+	for _, s := range stores {
+		for _, tc := range testCases {
+			t.Run(s.name+tc.name, func(t *testing.T) {
+				store := s.new()
+				strategy := &hmacshaStrategy
+
+				handler := AuthorizeExplicitGrantHandler{
+					CoreStorage:           store,
+					AuthorizeCodeStrategy: strategy,
+					AccessTokenStrategy:   strategy,
+					RefreshTokenStrategy:  strategy,
+					Config: &oauth2.Config{
+						ScopeStrategy:         oauth2.HierarchicScopeStrategy,
+						AudienceStrategy:      oauth2.DefaultAudienceStrategy,
+						AccessTokenLifespan:   time.Minute,
+						AuthorizeCodeLifespan: time.Minute,
+						SanitationWhiteList:   tc.whitelist,
+					},
+				}
+
+				client := &oauth2.DefaultClient{
+					ID:            "foo",
+					GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+					RedirectURIs:  []string{redirectA, redirectB},
+					Scopes:        []string{"foo", consts.ScopeOpenID},
+				}
+
+				authorize := &oauth2.AuthorizeRequest{
+					ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+					RedirectURI:   parseUrl(redirectA),
+					Request: oauth2.Request{
+						Client: client,
+						Form: url.Values{
+							consts.FormParameterRedirectURI: []string{redirectA},
+							custom:                          []string{"value"},
+						},
+						RequestedScope: tc.scopes,
+						GrantedScope:   tc.scopes,
+						Session:        &oauth2.DefaultSession{},
+						RequestedAt:    time.Now().UTC(),
+					},
+				}
+
+				aresp := oauth2.NewAuthorizeResponse()
+				require.NoError(t, handler.HandleAuthorizeEndpointRequest(t.Context(), authorize, aresp))
+
+				code := aresp.GetCode()
+				require.NotEmpty(t, code)
+
+				stored, err := store.GetAuthorizeCodeSession(t.Context(), strategy.AuthorizeCodeSignature(t.Context(), code), &oauth2.DefaultSession{})
+				require.NoError(t, err)
+
+				if len(tc.whitelist) > 0 {
+					assert.Equal(t, "value", stored.GetRequestForm().Get(custom))
+				}
+
+				access := &oauth2.AccessRequest{
+					GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+					Request: oauth2.Request{
+						Client: client,
+						Form: url.Values{
+							consts.FormParameterAuthorizationCode: []string{code},
+						},
+						Session:     &oauth2.DefaultSession{},
+						RequestedAt: time.Now().UTC(),
+					},
+				}
+
+				if tc.redirect != nil {
+					access.Form[consts.FormParameterRedirectURI] = tc.redirect
+				}
+
+				// RFC 6749 Section 4.1.3.
+				err = handler.HandleTokenEndpointRequest(t.Context(), access)
+
+				if tc.err == "" {
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				} else {
+					require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+					require.ErrorContains(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+				}
+			})
+		}
+	}
+}
+
 type hydratingAuthorizeCodeStore struct {
 	*storage.MemoryStore
 

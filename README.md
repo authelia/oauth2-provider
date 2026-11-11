@@ -176,6 +176,33 @@ Drafts adopted by the IETF OAuth Working Group or the OpenID Foundation which ar
 
 Planned work and notable differences from ORY Fosite are tracked in [TODO.md](TODO.md).
 
+## Security Considerations
+
+This library implements the protocol endpoints but not the pages that authenticate the user or ask for consent, and it
+does not control the HTTP server it runs in. The following requirements of
+[RFC 9700: Best Current Practice for OAuth 2.0 Security](https://datatracker.ietf.org/doc/html/rfc9700) are therefore
+the responsibility of the application that uses it:
+
+- **Authenticate the user before redirecting**
+  ([Section 4.11.2](https://datatracker.ietf.org/doc/html/rfc9700#section-4.11.2)): once the client and redirect URI are
+  valid, the library redirects authorization errors to the redirect URI without any user interaction. Authenticate the
+  user before calling `NewAuthorizeResponse` or `WriteAuthorizeError` for a request. Silent authentication
+  (`prompt=none`) only skips prompting for credentials: respond successfully only when the user already has a session.
+  Neither authentication nor consent, including declined consent, makes an attacker-chosen redirect URI trustworthy, so
+  only redirect automatically, including a `login_required` or `access_denied` error, to a redirect URI you trust;
+  otherwise inform the user and let them decide whether to continue. This matters most when anyone can register a
+  client, through Dynamic Client Registration or Client ID Metadata Documents, as the redirect URI is then
+  attacker-chosen.
+- **Prevent clickjacking** ([Section 4.16](https://datatracker.ietf.org/doc/html/rfc9700#section-4.16)): send
+  `Content-Security-Policy: frame-ancestors` (and `X-Frame-Options` for older browsers) on the authorization endpoint,
+  the device authorization verification page, and the login, consent and error pages.
+- **Suppress the Referer header** ([Section 4.2.4](https://datatracker.ietf.org/doc/html/rfc9700#section-4.2.4)): send
+  `Referrer-Policy: no-referrer` on the authorization endpoint and the pages it leads to, and avoid third-party
+  resources on them, so authorization codes and state values do not leak to other sites.
+- **Do not enable CORS at the authorization endpoint**
+  ([Section 2.6](https://datatracker.ietf.org/doc/html/rfc9700#section-2.6)): the client redirects the user agent to it
+  rather than calling it. CORS may be enabled for the token, metadata, `jwks_uri` and registration endpoints.
+
 ## Thanks
 
 This is a hard fork of [ORY Fosite](https://github.com/ory/fosite) under the [Apache 2.0 License](LICENSE) for the

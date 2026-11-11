@@ -19,6 +19,7 @@ type OpenIDConnectImplicitHandler struct {
 
 	AuthorizeImplicitGrantTypeHandler *hoauth2.AuthorizeImplicitGrantTypeHandler
 	OpenIDConnectRequestValidator     *OpenIDConnectRequestValidator
+	OpenIDConnectRequestStorage       OpenIDConnectRequestStorage
 	RS256JWTStrategy                  *jwt.DefaultStrategy
 
 	Config interface {
@@ -77,8 +78,16 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 
 	for _, scope := range request.GetRequestedScopes() {
 		if !strategy(client.GetScopes(), scope) {
-			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHint("The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
+	}
+
+	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+
+	idTokenExpiresAt := getIDTokenExpiresAt(session, lifespan)
+
+	if err = setNonceUsed(ctx, c.OpenIDConnectRequestStorage, request, idTokenExpiresAt); err != nil {
+		return err
 	}
 
 	claims := session.IDTokenClaims()
@@ -96,11 +105,11 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		}
 
 		claims.AccessTokenHash = hash
-	} else {
-		response.AddParameter(consts.FormParameterState, request.GetState())
+	} else if state := request.GetState(); len(state) != 0 {
+		response.AddParameter(consts.FormParameterState, state)
 	}
 
-	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+	setIDTokenExpiresAt(session, idTokenExpiresAt)
 
 	if err = c.IssueImplicitIDToken(ctx, lifespan, request, response); err != nil {
 		return errorsx.WithStack(err)

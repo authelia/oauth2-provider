@@ -64,6 +64,13 @@ type JTIMarker struct {
 	JTI    string
 }
 
+// ClientValueMarker identifies a value a client sent in an authorization request, such as a PKCE code challenge or an
+// OpenID Connect nonce, for detecting a client which reuses it.
+type ClientValueMarker struct {
+	ClientID string
+	Value    string
+}
+
 // IDJAGRelationshipKey identifies an ID-JAG relationship by requesting client and requested audience.
 type IDJAGRelationshipKey struct {
 	ClientID string
@@ -149,6 +156,8 @@ type MemoryStore struct {
 	UserCodes                map[string]oauth2.Requester
 	InvalidatedDeviceCodes   map[string]bool
 	PKCES                    map[string]oauth2.Requester
+	PKCEChallenges           map[ClientValueMarker]time.Time
+	OpenIDConnectNonces      map[ClientValueMarker]time.Time
 	Users                    map[string]MemoryUserRelation
 	ClientAssertionJTIs      map[JTIMarker]time.Time
 	RFC7523JTIs              map[JTIMarker]time.Time
@@ -200,6 +209,8 @@ type MemoryStore struct {
 	dpopProofJTIsPruneAt       time.Time
 	dpopNoncesPruneAt          time.Time
 	idjagJTIsPruneAt           time.Time
+	pkceChallengesPruneAt      time.Time
+	openIDConnectNoncesPruneAt time.Time
 }
 
 const memoryStorePruneInterval = time.Minute
@@ -217,6 +228,8 @@ func NewMemoryStore() *MemoryStore {
 		UserCodes:                make(map[string]oauth2.Requester),
 		InvalidatedDeviceCodes:   make(map[string]bool),
 		PKCES:                    make(map[string]oauth2.Requester),
+		PKCEChallenges:           make(map[ClientValueMarker]time.Time),
+		OpenIDConnectNonces:      make(map[ClientValueMarker]time.Time),
 		Users:                    make(map[string]MemoryUserRelation),
 		AccessTokenRequestIDs:    make(map[string]map[string]struct{}),
 		RefreshTokenRequestIDs:   make(map[string]string),
@@ -387,6 +400,23 @@ func (s *MemoryStore) GetOpenIDConnectSession(_ context.Context, authorizeCode s
 		return nil, oauth2.ErrNotFound
 	}
 	return cl, nil
+}
+
+// SetOpenIDConnectNonceUsed records the nonce as used by the client until expiresAt, returning
+// oauth2.ErrOpenIDConnectNonceReused when the client already used it and the record has not expired.
+func (s *MemoryStore) SetOpenIDConnectNonceUsed(_ context.Context, clientID, nonce string, expiresAt time.Time) error {
+	s.idSessionsMutex.Lock()
+	defer s.idSessionsMutex.Unlock()
+
+	if s.OpenIDConnectNonces == nil {
+		s.OpenIDConnectNonces = make(map[ClientValueMarker]time.Time)
+	}
+
+	if !setClientValue(s.OpenIDConnectNonces, &s.openIDConnectNoncesPruneAt, ClientValueMarker{ClientID: clientID, Value: nonce}, expiresAt) {
+		return oauth2.ErrOpenIDConnectNonceReused
+	}
+
+	return nil
 }
 
 // DeleteOpenIDConnectSession is not really called from anywhere and it is deprecated.
@@ -622,6 +652,20 @@ func (s *MemoryStore) setJTI(jtis map[JTIMarker]time.Time, pruneAt *time.Time, m
 	return nil
 }
 
+func setClientValue(values map[ClientValueMarker]time.Time, pruneAt *time.Time, marker ClientValueMarker, expiresAt time.Time) (ok bool) {
+	now := time.Now()
+
+	pruneExpired(values, pruneAt, now)
+
+	if e, exists := values[marker]; exists && !e.Before(now) {
+		return false
+	}
+
+	values[marker] = expiresAt
+
+	return true
+}
+
 func pruneExpired[K comparable](entries map[K]time.Time, pruneAt *time.Time, now time.Time) {
 	if now.Before(*pruneAt) {
 		return
@@ -705,6 +749,23 @@ func (s *MemoryStore) GetPKCERequestSession(_ context.Context, code string, _ oa
 		return nil, oauth2.ErrNotFound
 	}
 	return rel, nil
+}
+
+// SetPKCEChallengeUsed records the code challenge as used by the client until expiresAt, returning
+// oauth2.ErrPKCEChallengeReused when the client already used it and the record has not expired.
+func (s *MemoryStore) SetPKCEChallengeUsed(_ context.Context, clientID, challenge string, expiresAt time.Time) error {
+	s.pkcesMutex.Lock()
+	defer s.pkcesMutex.Unlock()
+
+	if s.PKCEChallenges == nil {
+		s.PKCEChallenges = make(map[ClientValueMarker]time.Time)
+	}
+
+	if !setClientValue(s.PKCEChallenges, &s.pkceChallengesPruneAt, ClientValueMarker{ClientID: clientID, Value: challenge}, expiresAt) {
+		return oauth2.ErrPKCEChallengeReused
+	}
+
+	return nil
 }
 
 // DeletePKCERequestSession removes the PKCE request stored against the authorization code. Deleting a code that has no

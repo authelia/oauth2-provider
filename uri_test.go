@@ -61,6 +61,24 @@ func TestIsMatchingNativeAppLoopbackURI(t *testing.T) {
 			MustParseURI(t, "http://127.0.0.1"),
 			true,
 		},
+		{
+			"ShouldHandleLocalhostDifferentPorts",
+			MustParseURI(t, "http://localhost:1234/cb"),
+			MustParseURI(t, "http://localhost/cb"),
+			true,
+		},
+		{
+			"ShouldHandleLocalhostSubdomain",
+			MustParseURI(t, "http://app.localhost:1234/cb"),
+			MustParseURI(t, "http://app.localhost/cb"),
+			false,
+		},
+		{
+			"ShouldHandleDifferentFragments",
+			MustParseURI(t, "http://127.0.0.1:1234/cb#a"),
+			MustParseURI(t, "http://127.0.0.1/cb"),
+			false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -111,6 +129,26 @@ func TestValidateRedirectURISecurity(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestOriginURIComparisonStrategyCompare(t *testing.T) {
+	testCases := []struct {
+		name       string
+		uri        string
+		registered string
+		expected   bool
+	}{
+		{name: "ShouldIgnoreThePortOfABareLoopbackOrigin", uri: "http://127.0.0.1:1024/cb", registered: "http://127.0.0.1", expected: true},
+		{name: "ShouldIgnoreThePortOfABareIPv6LoopbackOrigin", uri: "http://[::1]:1024", registered: "http://[::1]", expected: true},
+		{name: "ShouldCompareThePortOfABareOrigin", uri: "https://example.com:8443/cb", registered: "https://example.com"},
+		{name: "ShouldCompareAPathRegistrationExactly", uri: "http://127.0.0.1:1024/cb", registered: "http://127.0.0.1/cb"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, OriginURIComparisonStrategy{}.Compare(&uriPair{uri: MustParseURI(t, tc.uri), registeredURI: MustParseURI(t, tc.registered)}))
 		})
 	}
 }

@@ -57,7 +57,7 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 
 	for _, scope := range request.GetRequestedScopes() {
 		if !strategy(client.GetScopes(), scope) {
-			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHint("The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
 		}
 	}
 
@@ -99,7 +99,9 @@ func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context
 	response.AddParameter(consts.AccessResponseAccessToken, token)
 	response.AddParameter(consts.AccessResponseExpiresIn, strconv.FormatInt(int64(getExpiresIn(request, oauth2.AccessToken, atLifespan, time.Now().UTC())/time.Second), 10))
 	response.AddParameter(consts.AccessResponseTokenType, oauth2.BearerAccessToken)
-	response.AddParameter(consts.FormParameterState, request.GetState())
+	if state := request.GetState(); len(state) != 0 {
+		response.AddParameter(consts.FormParameterState, state)
+	}
 	response.AddParameter(consts.AccessResponseScope, strings.Join(request.GetGrantedScopes(), " "))
 
 	request.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowToken)

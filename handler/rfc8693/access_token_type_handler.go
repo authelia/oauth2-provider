@@ -110,6 +110,7 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 
 		session.SetSubjectToken(claims)
 		session.SetSubject(subjectTokenSession.GetSubject())
+		carryAuthenticationContext(session, sessionAuthentication(subjectTokenSession))
 	}
 
 	return nil

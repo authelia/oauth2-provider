@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -109,14 +110,20 @@ func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, 
 	return nil
 }
 
-// GetSanitationWhiteList returns the configured form parameters retained when the authorize request is sanitized for
-// storage, or 'scope' and 'redirect_uri' when none are configured.
+// GetSanitationWhiteList returns the form parameters retained when the authorize request is sanitized for storage:
+// 'scope' and 'redirect_uri', which the token endpoint always requires, followed by any configured parameters.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
 func (c *AuthorizeExplicitGrantHandler) GetSanitationWhiteList(ctx context.Context) (whitelist []string) {
-	if allowedList := c.Config.GetSanitationWhiteList(ctx); len(allowedList) > 0 {
-		return allowedList
+	whitelist = []string{consts.FormParameterScope, consts.FormParameterRedirectURI}
+
+	for _, parameter := range c.Config.GetSanitationWhiteList(ctx) {
+		if !slices.Contains(whitelist, parameter) {
+			whitelist = append(whitelist, parameter)
+		}
 	}
 
-	return []string{consts.FormParameterScope, consts.FormParameterRedirectURI}
+	return whitelist
 }
 
 // ResponseTypesSupported returns the response types this handler serves.

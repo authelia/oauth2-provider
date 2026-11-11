@@ -159,8 +159,9 @@ type Config struct {
 	// EnforcePKCE, if set to true, requires clients to perform authorize code flows with PKCE. Defaults to false.
 	EnforcePKCE bool
 
-	// EnforcePKCEForPublicClients requires only public clients to use PKCE with the authorize code flow. Defaults to false.
-	EnforcePKCEForPublicClients bool
+	// AllowPublicClientsWithoutPKCE, if set to true, permits public clients to perform the authorize code flow without
+	// PKCE, which RFC 9700 Section 2.1.1 requires of them. Defaults to false.
+	AllowPublicClientsWithoutPKCE bool
 
 	// EnforceClaimsParameter enforces the requirements of the OpenID Connect 1.0 'claims' request parameter: a
 	// requested 'sub' value, an Essential 'acr' value, and the access token needed for a 'userinfo' request. Defaults
@@ -1078,9 +1079,9 @@ func (c *Config) GetEnablePKCEPlainChallengeMethod(ctx context.Context) bool {
 	return c.EnablePKCEPlainChallengeMethod
 }
 
-// GetEnforcePKCEForPublicClients returns the value of EnforcePKCEForPublicClients.
-func (c *Config) GetEnforcePKCEForPublicClients(ctx context.Context) bool {
-	return c.EnforcePKCEForPublicClients
+// GetAllowPublicClientsWithoutPKCE returns the value of AllowPublicClientsWithoutPKCE.
+func (c *Config) GetAllowPublicClientsWithoutPKCE(ctx context.Context) bool {
+	return c.AllowPublicClientsWithoutPKCE
 }
 
 // GetEnforceAuthenticationRequirements returns the value of EnforceAuthenticationRequirements.
@@ -2004,7 +2005,7 @@ var (
 	_ OmitRedirectScopeParamProvider                        = (*Config)(nil)
 	_ MinParameterEntropyProvider                           = (*Config)(nil)
 	_ SanitationAllowedProvider                             = (*Config)(nil)
-	_ EnforcePKCEForPublicClientsProvider                   = (*Config)(nil)
+	_ AllowPublicClientsWithoutPKCEProvider                 = (*Config)(nil)
 	_ AllowInsecureRedirectURIForPublicClientsProvider      = (*Config)(nil)
 	_ EnablePKCEPlainChallengeMethodProvider                = (*Config)(nil)
 	_ ClaimsParameterEnforcementProvider                    = (*Config)(nil)

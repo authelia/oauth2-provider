@@ -111,7 +111,7 @@ func TestAuthorizeOptionalState(t *testing.T) {
 				consts.FormParameterRedirectURI:  {ts.URL + "/callback"},
 				consts.FormParameterResponseType: {tc.responseType},
 				consts.FormParameterScope:        {tc.scope},
-				consts.FormParameterNonce:        {"1234567890"},
+				consts.FormParameterNonce:        {"nonce-" + tc.name},
 			}
 
 			if tc.state != "" {

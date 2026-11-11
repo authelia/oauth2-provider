@@ -76,6 +76,25 @@ func TestEndpointURLsURLs(t *testing.T) {
 	assert.Equal(t, "https://as/register", (&Config{EndpointURLs: urls}).GetRFC7591ClientRegistrationEndpointURL(context.Background()))
 }
 
+func TestConfigGetAuthorizeCodeLifespan(t *testing.T) {
+	testCases := []struct {
+		name     string
+		lifespan time.Duration
+		expected time.Duration
+	}{
+		{"ShouldDefaultToTwoMinutes", 0, time.Minute * 2},
+		{"ShouldUseConfiguredLifespan", time.Minute * 15, time.Minute * 15},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{AuthorizeCodeLifespan: tc.lifespan}
+
+			assert.Equal(t, tc.expected, config.GetAuthorizeCodeLifespan(t.Context()))
+		})
+	}
+}
+
 func TestConfigBackChannelLogoutDefaults(t *testing.T) {
 	config := &Config{}
 

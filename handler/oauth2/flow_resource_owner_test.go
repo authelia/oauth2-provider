@@ -17,6 +17,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -221,6 +222,19 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldNotIssueRefreshTokenWithoutRefreshTokenGrant",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, chgen *mock.MockAccessTokenStrategy, rtstr *mock.MockRefreshTokenStrategy, config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
+				areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}}
+				areq.GrantScope(consts.ScopeOffline)
+				chgen.EXPECT().GenerateAccessToken(t.Context(), areq).Return(mockAT, "at-sig", nil)
+				store.EXPECT().CreateAccessTokenSession(t.Context(), "at-sig", gomock.Eq(areq.Sanitize([]string{}))).Return(nil)
+			},
+			expect: func(t *testing.T, aresp *oauth2.AccessResponse) {
+				assert.Nil(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+			},
+		},
+		{
 			name: "ShouldPassRefreshTokenWithoutOfflineScope",
 			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, chgen *mock.MockAccessTokenStrategy, rtstr *mock.MockRefreshTokenStrategy, config *oauth2.Config) {
 				config.RefreshTokenScopes = []string{}
@@ -248,6 +262,7 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 			areq := oauth2.NewAccessRequest(nil)
 			aresp := oauth2.NewAccessResponse()
 			areq.Session = &oauth2.DefaultSession{}
+			areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeRefreshToken}}
 			config := &oauth2.Config{
 				RefreshTokenScopes:  []string{consts.ScopeOffline},
 				AccessTokenLifespan: time.Hour,
@@ -269,6 +284,137 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 				if tc.expect != nil {
 					tc.expect(t, aresp)
 				}
+			}
+		})
+	}
+}
+
+func TestResourceOwnerFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
+	type transactionalStore struct {
+		storage.Transactional
+		ResourceOwnerPasswordCredentialsGrantStorage
+	}
+
+	errDatabase := errors.New("Whoops, a nasty database error occurred!")
+
+	testCases := []struct {
+		name  string
+		setup func(ctx context.Context, tx *mock.MockTransactional, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage)
+		err   string
+	}{
+		{
+			name: "ShouldCommitTransactionWhenNoErrors",
+			setup: func(ctx context.Context, tx *mock.MockTransactional, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage) {
+				gomock.InOrder(
+					tx.EXPECT().BeginTX(ctx).Return(ctx, nil),
+					store.EXPECT().CreateAccessTokenSession(ctx, gomock.Any(), gomock.Any()).Return(nil),
+					store.EXPECT().CreateRefreshTokenSession(ctx, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil),
+					tx.EXPECT().Commit(ctx).Return(nil),
+				)
+			},
+		},
+		{
+			name: "ShouldRollbackTransactionWhenCreateAccessTokenSessionReturnsError",
+			setup: func(ctx context.Context, tx *mock.MockTransactional, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage) {
+				gomock.InOrder(
+					tx.EXPECT().BeginTX(ctx).Return(ctx, nil),
+					store.EXPECT().CreateAccessTokenSession(ctx, gomock.Any(), gomock.Any()).Return(errDatabase),
+					tx.EXPECT().Rollback(ctx).Return(nil),
+				)
+			},
+			err: "Whoops, a nasty database error occurred!",
+		},
+		{
+			name: "ShouldRollbackTransactionWhenCreateRefreshTokenSessionReturnsError",
+			setup: func(ctx context.Context, tx *mock.MockTransactional, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage) {
+				gomock.InOrder(
+					tx.EXPECT().BeginTX(ctx).Return(ctx, nil),
+					store.EXPECT().CreateAccessTokenSession(ctx, gomock.Any(), gomock.Any()).Return(nil),
+					store.EXPECT().CreateRefreshTokenSession(ctx, gomock.Any(), gomock.Any(), gomock.Any()).Return(errDatabase),
+					tx.EXPECT().Rollback(ctx).Return(nil),
+				)
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
+		},
+		{
+			name: "ShouldReportRollbackErrorWhenRollbackFails",
+			setup: func(ctx context.Context, tx *mock.MockTransactional, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage) {
+				gomock.InOrder(
+					tx.EXPECT().BeginTX(ctx).Return(ctx, nil),
+					store.EXPECT().CreateAccessTokenSession(ctx, gomock.Any(), gomock.Any()).Return(nil),
+					store.EXPECT().CreateRefreshTokenSession(ctx, gomock.Any(), gomock.Any(), gomock.Any()).Return(errDatabase),
+					tx.EXPECT().Rollback(ctx).Return(errors.New("rollback failed")),
+				)
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. error: server_error; rollback error: rollback failed",
+		},
+		{
+			name: "ShouldFailWhenTransactionCannotBeCreated",
+			setup: func(ctx context.Context, tx *mock.MockTransactional, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage) {
+				tx.EXPECT().BeginTX(ctx).Return(nil, errDatabase)
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
+		},
+		{
+			name: "ShouldFailWhenTransactionCannotBeCommitted",
+			setup: func(ctx context.Context, tx *mock.MockTransactional, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage) {
+				gomock.InOrder(
+					tx.EXPECT().BeginTX(ctx).Return(ctx, nil),
+					store.EXPECT().CreateAccessTokenSession(ctx, gomock.Any(), gomock.Any()).Return(nil),
+					store.EXPECT().CreateRefreshTokenSession(ctx, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil),
+					tx.EXPECT().Commit(ctx).Return(errDatabase),
+					tx.EXPECT().Rollback(ctx).Return(nil),
+				)
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			tx := mock.NewMockTransactional(ctrl)
+			store := mock.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
+			chgen := mock.NewMockAccessTokenStrategy(ctrl)
+			rtstr := mock.NewMockRefreshTokenStrategy(ctrl)
+
+			ctx := t.Context()
+
+			areq := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+			areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
+			areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeRefreshToken}}
+			areq.GrantScope(consts.ScopeOffline)
+
+			chgen.EXPECT().GenerateAccessToken(gomock.Any(), gomock.Any()).Return("accesstoken.foo.bar", "at-sig", nil).AnyTimes()
+			rtstr.EXPECT().GenerateRefreshToken(gomock.Any(), gomock.Any()).Return("refreshtoken.bar.foo", "rt-sig", nil).AnyTimes()
+
+			tc.setup(ctx, tx, store)
+
+			txstore := transactionalStore{Transactional: tx, ResourceOwnerPasswordCredentialsGrantStorage: store}
+
+			config := &oauth2.Config{
+				RefreshTokenScopes:  []string{consts.ScopeOffline},
+				AccessTokenLifespan: time.Hour,
+			}
+
+			h := ResourceOwnerPasswordCredentialsGrantHandler{
+				ResourceOwnerPasswordCredentialsGrantStorage: txstore,
+				HandleHelper: &HandleHelper{
+					AccessTokenStorage:  txstore,
+					AccessTokenStrategy: chgen,
+					Config:              config,
+				},
+				RefreshTokenStrategy: rtstr,
+				Config:               config,
+			}
+
+			err := h.PopulateTokenEndpointResponse(ctx, areq, oauth2.NewAccessResponse())
+			if tc.err != "" {
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}

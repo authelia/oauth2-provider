@@ -195,8 +195,8 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	return nil
 }
 
-func canIssueRefreshToken(ctx context.Context, c *AuthorizeExplicitGrantHandler, request oauth2.Requester) (issue bool) {
-	scope := c.Config.GetRefreshTokenScopes(ctx)
+func canIssueRefreshToken(ctx context.Context, config oauth2.RefreshTokenScopesProvider, request oauth2.Requester) (issue bool) {
+	scope := config.GetRefreshTokenScopes(ctx)
 
 	// Require one of the refresh token scopes, if set.
 	if len(scope) > 0 && !request.GetGrantedScopes().HasOneOf(scope...) {
@@ -280,7 +280,7 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 
 	var refresh, refreshSignature string
 
-	if canIssueRefreshToken(ctx, c, ar) {
+	if canIssueRefreshToken(ctx, c.Config, ar) {
 		if refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}

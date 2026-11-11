@@ -112,41 +112,14 @@ func (v *OpenIDConnectRequestValidator) ValidateClaims(ctx context.Context, requ
 //
 //nolint:gocyclo
 func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, request oauth2.AuthorizeRequester) (session Session, err error) {
+	if err = v.validatePromptParameters(ctx, request); err != nil {
+		return nil, err
+	}
+
 	// Specification Note: prompt is case-sensitive.
 	requiredPrompt := oauth2.RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterPrompt), " "))
 
-	availablePrompts := oauth2.SupportedPromptValues(ctx, v.Config)
-
-	if !isWhitelisted(requiredPrompt, availablePrompts) {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'prompt' parameter either contains unknown, unsupported, or prohibited prompt values.").WithDebugf("The requested prompt value '%s' is not permitted, the permitted prompt values are '%s'.", strings.Join(requiredPrompt, " "), strings.Join(availablePrompts, "', '")))
-	}
-
-	if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && len(requiredPrompt) > 1 {
-		// If this parameter contains none with any other value, an error is returned.
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
-	}
-
-	if request.GetClient().IsPublic() {
-		// Threat: Malicious Client Obtains Existing Authorization by Fraud
-		// https://datatracker.ietf.org/doc/html/rfc6819#section-4.2.3
-		//
-		//  Authorization servers should not automatically process repeat
-		//  authorizations to public clients unless the client is validated
-		//  using a pre-registered redirect URI
-
-		// Client Impersonation: a request is not processed without user interaction unless the client's identity is
-		// assured.
-		// See: https://datatracker.ietf.org/doc/html/rfc8252#section-8.6
-
-		if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && !v.getPublicClientIdentityChecker(ctx)(ctx, request) {
-			return nil, errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and the redirect uri does not assure the identity of the client, but 'prompt' type 'none' was requested."))
-		}
-	}
-
-	maxAge, hasMaxAge, err := requestedMaxAge(request.GetRequestForm())
-	if err != nil {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'max_age' must be a non-negative integer.").WithWrap(err).WithDebugError(err))
-	}
+	maxAge, hasMaxAge, _ := requestedMaxAge(request.GetRequestForm())
 
 	session, ok := request.GetSession().(Session)
 	if !ok {
@@ -219,6 +192,45 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 	}
 
 	return session, nil
+}
+
+func (v *OpenIDConnectRequestValidator) validatePromptParameters(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
+	// Specification Note: prompt is case-sensitive.
+	requiredPrompt := oauth2.RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterPrompt), " "))
+
+	availablePrompts := oauth2.SupportedPromptValues(ctx, v.Config)
+
+	if !isWhitelisted(requiredPrompt, availablePrompts) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'prompt' parameter either contains unknown, unsupported, or prohibited prompt values.").WithDebugf("The requested prompt value '%s' is not permitted, the permitted prompt values are '%s'.", strings.Join(requiredPrompt, " "), strings.Join(availablePrompts, "', '")))
+	}
+
+	if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && len(requiredPrompt) > 1 {
+		// If this parameter contains none with any other value, an error is returned.
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
+	}
+
+	if request.GetClient().IsPublic() {
+		// Threat: Malicious Client Obtains Existing Authorization by Fraud
+		// https://datatracker.ietf.org/doc/html/rfc6819#section-4.2.3
+		//
+		//  Authorization servers should not automatically process repeat
+		//  authorizations to public clients unless the client is validated
+		//  using a pre-registered redirect URI
+
+		// Client Impersonation: a request is not processed without user interaction unless the client's identity is
+		// assured.
+		// See: https://datatracker.ietf.org/doc/html/rfc8252#section-8.6
+
+		if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && !v.getPublicClientIdentityChecker(ctx)(ctx, request) {
+			return errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and the redirect uri does not assure the identity of the client, but 'prompt' type 'none' was requested."))
+		}
+	}
+
+	if _, _, err = requestedMaxAge(request.GetRequestForm()); err != nil {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'max_age' must be a non-negative integer.").WithWrap(err).WithDebugError(err))
+	}
+
+	return nil
 }
 
 func isWhitelisted(items []string, whiteList []string) bool {

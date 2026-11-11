@@ -65,6 +65,20 @@ func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	return nil
 }
 
+// ValidateAuthorizeRequest validates the 'redirect_uri', 'prompt', and 'max_age' parameters of an authorize request whose
+// 'response_type' is exactly 'code' and which requests the 'openid' scope.
+func (c *OpenIDConnectExplicitHandler) ValidateAuthorizeRequest(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
+	if !(request.GetRequestedScopes().Has(consts.ScopeOpenID) && request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow)) {
+		return nil
+	}
+
+	if err = c.OpenIDConnectRequestValidator.ValidateRedirectURIs(ctx, request); err != nil {
+		return err
+	}
+
+	return c.OpenIDConnectRequestValidator.validatePromptParameters(ctx, request)
+}
+
 // ResponseTypesSupported returns nil because the handler only augments another flow.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
@@ -103,8 +117,9 @@ var oidcParameters = []string{
 }
 
 var (
-	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectExplicitHandler)(nil)
-	_ oauth2.TokenEndpointHandler     = (*OpenIDConnectExplicitHandler)(nil)
+	_ oauth2.AuthorizeEndpointHandler  = (*OpenIDConnectExplicitHandler)(nil)
+	_ oauth2.AuthorizeRequestValidator = (*OpenIDConnectExplicitHandler)(nil)
+	_ oauth2.TokenEndpointHandler      = (*OpenIDConnectExplicitHandler)(nil)
 )
 
 // IsOpenIDConnectHandler marks this handler as an OpenID Connect authorization flow handler.

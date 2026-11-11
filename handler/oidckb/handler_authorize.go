@@ -38,6 +38,38 @@ func (h *AuthorizeHandler) BindAuthorizeRequest(ctx context.Context, request oau
 		return nil
 	}
 
+	if err = h.ValidateAuthorizeRequest(ctx, request); err != nil {
+		return err
+	}
+
+	// The granted scopes decide whether this grant's ID Tokens are key bound, and this is the last point at which
+	// that answer is known and can still be persisted with the authorization code: the token endpoint's binding
+	// phase runs before the authorization code grant copies its granted scopes onto the request.
+	if !request.GetGrantedScopes().Has(consts.ScopeBoundKey) {
+		return nil
+	}
+
+	session, ok := request.GetSession().(oauth2.DPoPBoundSession)
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrServerError.WithHint("The session does not support DPoP key binding."))
+	}
+
+	session.SetOIDCKeyBindingGranted(true)
+
+	return nil
+}
+
+// ValidateAuthorizeRequest applies Section 1.4 and Section 2.1 to an authentication request that requests the
+// 'bound_key' scope.
+func (h *AuthorizeHandler) ValidateAuthorizeRequest(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
+	if !h.Config.GetOIDCKeyBindingEnabled(ctx) || !h.Config.GetDPoPEnabled(ctx) {
+		return nil
+	}
+
+	if !request.GetRequestedScopes().Has(consts.ScopeBoundKey) {
+		return nil
+	}
+
 	// Section 2.1 describes the key binding request as one whose scope already contains 'openid'. Without it no ID
 	// Token is issued at all, so there is nothing for a 'cnf' claim to bind, and a client asking to bind one has
 	// asked for something this request can never produce.
@@ -58,23 +90,10 @@ func (h *AuthorizeHandler) BindAuthorizeRequest(ctx context.Context, request oau
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'dpop_jkt' parameter is required when the 'bound_key' scope is requested."))
 	}
 
-	// The granted scopes decide whether this grant's ID Tokens are key bound, and this is the last point at which
-	// that answer is known and can still be persisted with the authorization code: the token endpoint's binding
-	// phase runs before the authorization code grant copies its granted scopes onto the request.
-	if !request.GetGrantedScopes().Has(consts.ScopeBoundKey) {
-		return nil
-	}
-
-	session, ok := request.GetSession().(oauth2.DPoPBoundSession)
-	if !ok {
-		return errorsx.WithStack(oauth2.ErrServerError.WithHint("The session does not support DPoP key binding."))
-	}
-
-	session.SetOIDCKeyBindingGranted(true)
-
 	return nil
 }
 
 var (
 	_ oauth2.AuthorizeEndpointBindingHandler = (*AuthorizeHandler)(nil)
+	_ oauth2.AuthorizeRequestValidator       = (*AuthorizeHandler)(nil)
 )

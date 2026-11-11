@@ -20,8 +20,8 @@ const (
 	testRARActionCancel         = "cancel"
 	testRARIdentifierEnriched   = "enriched"
 	testRARExtraSpoofed         = "spoofed"
-	testRARHintTypeNotAllowed   = "The OAuth 2.0 Client is not allowed to request authorization details type 'payment_initiation'."
-	testRARHintTypeNotSupported = "The authorization details type 'payment_initiation' is not supported."
+	testRARHintTypeNotAllowed   = "The OAuth 2.0 Client is not allowed to request one or more of the authorization details types."
+	testRARHintTypeNotSupported = "One or more of the authorization details types is not supported."
 )
 
 var hmacshaStrategy = HMACCoreStrategy{

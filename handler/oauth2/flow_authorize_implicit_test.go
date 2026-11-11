@@ -84,7 +84,7 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
 				}
 			},
-			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'scope'.",
+			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter. The OAuth 2.0 Client is not allowed to request scope 'scope'.",
 		},
 		{
 			name: "ShouldFailAudienceInvalid",

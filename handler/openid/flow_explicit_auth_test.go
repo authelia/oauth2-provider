@@ -144,7 +144,7 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 
 				return
 			},
-			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The requested prompt value 'x' either contains unknown, unsupported, or prohibited prompt values. The permitted prompt values are 'login', 'none', 'consent', 'select_account'.",
+			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'prompt' parameter either contains unknown, unsupported, or prohibited prompt values. The requested prompt value 'x' is not permitted, the permitted prompt values are 'login', 'none', 'consent', 'select_account'.",
 			expectedField: "invalid_request",
 		},
 	}

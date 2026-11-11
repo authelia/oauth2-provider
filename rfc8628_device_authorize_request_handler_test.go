@@ -118,7 +118,7 @@ func TestNewDeviceAuthorizeRequest(t *testing.T) {
 					Scopes:     []string{"foo", "bar"},
 				}, nil)
 			},
-			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'baz'.",
+			err: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request one or more of the values of the 'scope' parameter. The OAuth 2.0 Client is not allowed to request scope 'baz'.",
 		},
 		{
 			name: "ShouldFailClientWithoutDeviceCodeGrant",

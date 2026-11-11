@@ -167,6 +167,12 @@ type Config struct {
 	// to false.
 	EnforceClaimsParameter bool
 
+	// EnableRedirectFragmentGuard appends the '#_' fragment to the 'Location' of an authorization response redirect in
+	// a query response mode, so a browser does not reattach the fragment of the request URL to it. Defaults to false.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9700#section-4.1.3
+	EnableRedirectFragmentGuard bool
+
 	// EnforceAuthenticationRequirements treats the 'acr_values' and 'max_age' authorization request parameters as
 	// requirements for every response type and for the approval of a device authorization request: it fails with
 	// unmet_authentication_requirements unless the 'acr' recorded on the ID Token claims of the session is one of the
@@ -1072,6 +1078,11 @@ func (c *Config) GetEnforcePKCEForPublicClients(ctx context.Context) bool {
 // GetEnforceAuthenticationRequirements returns the value of EnforceAuthenticationRequirements.
 func (c *Config) GetEnforceAuthenticationRequirements(_ context.Context) (enforce bool) {
 	return c.EnforceAuthenticationRequirements
+}
+
+// GetEnableRedirectFragmentGuard returns the value of EnableRedirectFragmentGuard.
+func (c *Config) GetEnableRedirectFragmentGuard(_ context.Context) (enable bool) {
+	return c.EnableRedirectFragmentGuard
 }
 
 // GetEnforceClaimsParameter returns the value of EnforceClaimsParameter.
@@ -1981,6 +1992,7 @@ var (
 	_ AllowInsecureRedirectURIForPublicClientsProvider      = (*Config)(nil)
 	_ EnablePKCEPlainChallengeMethodProvider                = (*Config)(nil)
 	_ ClaimsParameterEnforcementProvider                    = (*Config)(nil)
+	_ RedirectFragmentGuardProvider                         = (*Config)(nil)
 	_ AuthenticationRequirementsEnforcementProvider         = (*Config)(nil)
 	_ RFC9470StepUpAuthenticationProvider                   = (*Config)(nil)
 	_ EnforcePKCEProvider                                   = (*Config)(nil)

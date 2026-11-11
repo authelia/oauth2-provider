@@ -1173,10 +1173,12 @@ func TestDeviceAuthorizeCodeReplayRevokesTheGrant(t *testing.T) {
 		name     string
 		lookup   bool
 		redeemed bool
+		other    bool
 	}{
 		{name: "ShouldRevokeWhenTheLookupReportsTheCodeInvalidated", lookup: true},
 		{name: "ShouldRevokeWhenTheInvalidationReportsTheCodeInvalidated"},
 		{name: "ShouldRevokeWhenTheCodeIsPresentedAgainAfterRedemption", redeemed: true},
+		{name: "ShouldNotRevokeWhenAnotherClientPresentsTheRedeemedCode", redeemed: true, other: true},
 	}
 
 	for _, tc := range testCases {
@@ -1269,6 +1271,10 @@ func TestDeviceAuthorizeCodeReplayRevokesTheGrant(t *testing.T) {
 					},
 				}
 
+				if tc.other {
+					replay.Client = &oauth2.DefaultClient{ID: "other-client", GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode}}
+				}
+
 				err = h.HandleTokenEndpointRequest(t.Context(), replay)
 			case tc.lookup:
 				store.lookupInvalidated = true
@@ -1285,11 +1291,18 @@ func TestDeviceAuthorizeCodeReplayRevokesTheGrant(t *testing.T) {
 			require.Error(t, err)
 			assert.Equal(t, oauth2.ErrInvalidGrant.ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
 
-			_, err = store.GetAccessTokenSession(t.Context(), atSig, nil)
-			assert.ErrorIs(t, err, oauth2.ErrNotFound)
+			_, aerr := store.GetAccessTokenSession(t.Context(), atSig, nil)
+			_, rerr := store.GetRefreshTokenSession(t.Context(), rtSig, nil)
 
-			_, err = store.GetRefreshTokenSession(t.Context(), rtSig, nil)
-			assert.ErrorIs(t, err, oauth2.ErrInactiveToken)
+			if tc.other {
+				assert.NoError(t, aerr)
+				assert.NoError(t, rerr)
+
+				return
+			}
+
+			assert.ErrorIs(t, aerr, oauth2.ErrNotFound)
+			assert.ErrorIs(t, rerr, oauth2.ErrInactiveToken)
 		})
 	}
 }

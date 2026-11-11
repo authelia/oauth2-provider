@@ -39,6 +39,35 @@ func revokeCodeGrant(ctx context.Context, store TokenRevocationStorage, requestI
 	return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hint).WithDebug(debug))
 }
 
+// validateAuthorizeCodeBinding checks that the token request comes from the client the authorization code was issued
+// to and repeats the 'redirect_uri' from the authorization request, per RFC 6749 Section 4.1.3.
+func validateAuthorizeCodeBinding(authorizeRequest oauth2.Requester, request oauth2.AccessRequester) (err error) {
+	// The code must have been issued to this client.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
+	if authorizeRequest.GetClient().GetID() != request.GetClient().GetID() {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the one from the authorize request."))
+	}
+
+	// The 'redirect_uri' must be identical to the one included in the authorization request.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
+	redirectURI := authorizeRequest.GetRequestForm().Get(consts.FormParameterRedirectURI)
+
+	switch redirectURI {
+	case "":
+		if authorizeRequest.GetRequestedScopes().Has(consts.ScopeOpenID) {
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' parameter is required when using OpenID Connect 1.0."))
+		}
+	case request.GetRequestForm().Get(consts.FormParameterRedirectURI):
+		return nil
+	default:
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' from this request does not match the one from the authorize request.").WithDebugf("The 'redirect_uri' parameter value '%s' utilized in the Access Request does not match the original 'redirect_uri' parameter value '%s' requested in the Authorize Request which is not permitted.", request.GetRequestForm().Get(consts.FormParameterRedirectURI), redirectURI))
+	}
+
+	return nil
+}
+
 // HandleTokenEndpointRequest implements
 // * https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3 (everything)
 func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
@@ -64,6 +93,13 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 
 		if verr := c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, authorizeRequest, code); !IsIntactToken(verr) {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(verr).WithDebugError(verr))
+		}
+
+		// A replayed code with invalid parameters does not revoke the grant.
+		//
+		// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-16#section-7.5.3
+		if err = validateAuthorizeCodeBinding(authorizeRequest, request); err != nil {
+			return err
 		}
 
 		return revokeCodeGrant(ctx, c.TokenRevocationStorage, authorizeRequest.GetID())
@@ -98,11 +134,8 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		return err
 	}
 
-	// The code must have been issued to this client.
-	//
-	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
-	if authorizeRequest.GetClient().GetID() != request.GetClient().GetID() {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the one from the authorize request."))
+	if err = validateAuthorizeCodeBinding(authorizeRequest, request); err != nil {
+		return err
 	}
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
@@ -117,22 +150,6 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	// See: https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
 	if requester, ok := authorizeRequest.(oauth2.ClaimsRequester); ok {
 		request.SetClaims(requester.GetClaims())
-	}
-
-	// The 'redirect_uri' must be identical to the one included in the authorization request.
-	//
-	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
-	redirectURI := authorizeRequest.GetRequestForm().Get(consts.FormParameterRedirectURI)
-
-	switch redirectURI {
-	case "":
-		if authorizeRequest.GetRequestedScopes().Has(consts.ScopeOpenID) {
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' parameter is required when using OpenID Connect 1.0."))
-		}
-	case request.GetRequestForm().Get(consts.FormParameterRedirectURI):
-		break
-	default:
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' from this request does not match the one from the authorize request.").WithDebugf("The 'redirect_uri' parameter value '%s' utilized in the Access Request does not match the original 'redirect_uri' parameter value '%s' requested in the Authorize Request which is not permitted.", request.GetRequestForm().Get(consts.FormParameterRedirectURI), redirectURI))
 	}
 
 	// The POST client_id is not checked as the client is already authenticated.

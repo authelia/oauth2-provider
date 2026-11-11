@@ -47,6 +47,14 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 	request.SetDefaultResponseMode(oauth2.ResponseModeFragment)
 
+	// The client must be registered for the 'implicit' grant to receive an ID Token or Access Token from the
+	// authorization endpoint.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+	if request.GetResponseTypes().HasOneOf(consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowToken) && !request.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
+	}
+
 	// OpenID Connect Core 1.0 Section 3.3.2.1: the 'id_token' response type issues an ID Token, which needs the
 	// 'openid' scope; checked before any code or token is issued.
 	if request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowIDToken) && !request.GetGrantedScopes().Has(consts.ScopeOpenID) {
@@ -163,9 +171,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	}
 
 	if request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken) {
-		if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
-		} else if err = c.AuthorizeImplicitGrantTypeHandler.IssueImplicitAccessToken(ctx, request, response); err != nil {
+		if err = c.AuthorizeImplicitGrantTypeHandler.IssueImplicitAccessToken(ctx, request, response); err != nil {
 			return errorsx.WithStack(err)
 		}
 

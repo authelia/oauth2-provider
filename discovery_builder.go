@@ -83,6 +83,8 @@ func (f *Fosite) NewOAuth2AuthorizationServerMetadata(ctx context.Context) (meta
 	return &wrapper.OAuth2AuthorizationServerMetadata, nil
 }
 
+// newOAuth2AuthorizationServerMetadata builds the OAuth 2.0 Authorization Server Metadata document before the
+// DiscoveryMetadataHooks run and before it is signed.
 func (f *Fosite) newOAuth2AuthorizationServerMetadata(ctx context.Context, capabilities *discoveryCapabilities) (metadata *OAuth2AuthorizationServerMetadata, err error) {
 	config := f.Config
 
@@ -106,6 +108,10 @@ func (f *Fosite) newOAuth2AuthorizationServerMetadata(ctx context.Context, capab
 		OPPolicyURI:                       config.GetOPPolicyURI(ctx),
 		OPTOSURI:                          config.GetOPTOSURI(ctx),
 		CodeChallengeMethodsSupported:     SupportedCodeChallengeMethods(ctx, config),
+	}
+
+	if isRFC9470StepUpAuthenticationEnabled(ctx, config) {
+		metadata.ACRValuesSupported = config.GetACRValuesSupported(ctx)
 	}
 
 	if len(config.GetAuthorizeEndpointHandlers(ctx)) != 0 {
@@ -196,6 +202,8 @@ func (f *Fosite) NewOpenIDConnectProviderMetadata(ctx context.Context) (metadata
 	return metadata, nil
 }
 
+// newOpenIDConnectProviderMetadata builds the OpenID Provider Metadata document before the DiscoveryMetadataHooks run
+// and before it is signed. It always carries 'acr_values_supported', unlike the OAuth 2.0 document.
 func (f *Fosite) newOpenIDConnectProviderMetadata(ctx context.Context) (metadata *OpenIDConnectProviderMetadata, err error) {
 	config := f.Config
 
@@ -234,7 +242,6 @@ func (f *Fosite) newOpenIDConnectProviderMetadata(ctx context.Context) (metadata
 	metadata = &OpenIDConnectProviderMetadata{
 		OAuth2AuthorizationServerMetadata:    *base,
 		UserinfoEndpoint:                     urls.UserInfo,
-		ACRValuesSupported:                   config.GetACRValuesSupported(ctx),
 		SubjectTypesSupported:                subjectTypes,
 		IDTokenSigningAlgValuesSupported:     algs,
 		IDTokenEncryptionAlgValuesSupported:  config.GetResponseEncryptionAlgValues(ctx, ResponseEncryptionTargetIDToken),
@@ -252,6 +259,7 @@ func (f *Fosite) newOpenIDConnectProviderMetadata(ctx context.Context) (metadata
 		RequireRequestURIRegistration:        true,
 	}
 
+	metadata.ACRValuesSupported = config.GetACRValuesSupported(ctx)
 	metadata.OpenIDConnectRPInitiatedLogoutMetadata = rpInitiatedLogoutMetadata(urls)
 	metadata.OpenIDConnectBackChannelLogoutMetadata = f.backChannelLogoutMetadata(ctx)
 	metadata.OpenIDConnectPromptCreateMetadata = f.promptCreateMetadata(ctx)
@@ -697,6 +705,16 @@ func isClaimsParameterEnforced(ctx context.Context, config Configurator) bool {
 	provider, ok := config.(ClaimsParameterEnforcementProvider)
 
 	return ok && provider.GetEnforceClaimsParameter(ctx)
+}
+
+// isRFC9470StepUpAuthenticationEnabled reports whether 'acr_values_supported' is advertised in the OAuth 2.0
+// Authorization Server Metadata, which signals that 'acr_values' and 'max_age' are honoured without the 'openid' scope.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9470#section-7
+func isRFC9470StepUpAuthenticationEnabled(ctx context.Context, config Configurator) bool {
+	provider, ok := config.(RFC9470StepUpAuthenticationProvider)
+
+	return ok && provider.GetRFC9470StepUpAuthenticationEnabled(ctx)
 }
 
 func hasMarker[T any](ctx context.Context, config Configurator) bool {

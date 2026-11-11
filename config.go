@@ -382,6 +382,16 @@ type ClaimsParameterEnforcementProvider interface {
 	GetEnforceClaimsParameter(ctx context.Context) (enforce bool)
 }
 
+// RFC9470StepUpAuthenticationProvider returns the provider for configuring the advertisement of OAuth 2.0 Step Up
+// Authentication Challenge Protocol support in the OAuth 2.0 Authorization Server Metadata.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9470#section-7
+type RFC9470StepUpAuthenticationProvider interface {
+	// GetRFC9470StepUpAuthenticationEnabled returns true if the 'acr_values' and 'max_age' authorization request
+	// parameters are honoured for requests which do not grant the 'openid' scope.
+	GetRFC9470StepUpAuthenticationEnabled(ctx context.Context) (enabled bool)
+}
+
 // EnforcePKCEForPublicClientsProvider returns the provider for configuring the enforcement of PKCE for public clients.
 type EnforcePKCEForPublicClientsProvider interface {
 	// GetEnforcePKCEForPublicClients returns the enforcement of PKCE for public clients.

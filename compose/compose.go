@@ -88,7 +88,11 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 	return f
 }
 
-// ComposeAllEnabled returns a oauth2 instance with all OAuth2 and OpenID Connect handlers enabled.
+// ComposeAllEnabled returns a oauth2 instance with all OAuth2 and OpenID Connect handlers enabled, except the resource
+// owner password credentials grant, which must not be used. Compose OAuth2ResourceOwnerPasswordCredentialsFactory
+// explicitly with Compose to enable it.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.4
 func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provider {
 	keyGetter := func(context.Context) (any, error) {
 		return key, nil
@@ -116,7 +120,6 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		RFC8628UserAuthorizeFactory,
 		RFC8628DeviceAuthorizeTokenFactory,
 
-		OAuth2ResourceOwnerPasswordCredentialsFactory,
 		RFC7523AssertionGrantFactory,
 
 		RFC8693TokenExchangeGrantFactory,

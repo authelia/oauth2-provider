@@ -1175,41 +1175,59 @@ func authenticationContextClaims(session oauth2.Session) (claims map[string]any)
 	return claims
 }
 
-// carryIDTokenAuthentication records the End-User and the authentication of a refresh token granted the 'openid' scope
-// on the ID Token claims of the exchange, as the refresh token it issues refreshes an ID Token from these. OpenID
-// Connect Core 1.0 Section 12.2 requires the 'auth_time' claim of a refreshed ID Token to be the original one.
+// carryIDTokenSubject records the End-User on the ID Token claims of the exchange when the claims grant the 'openid'
+// scope, as the refresh token it issues refreshes an ID Token from these.
 //
 // See: https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
-func carryIDTokenAuthentication(session, subject any, claims map[string]any) {
+func carryIDTokenSubject(session any, claims map[string]any) {
 	scopes, _ := claims[consts.ClaimScope].(oauth2.Arguments)
 	if !scopes.Has(consts.ScopeOpenID) {
 		return
 	}
 
+	if target, ok := session.(openid.Session); ok {
+		target.IDTokenClaims().Subject = target.GetSubject()
+	}
+}
+
+// carryAuthenticationContext replaces the 'auth_time', 'acr' and 'amr' claims of the session with those of the subject
+// token authentication, clearing them when login is nil. OpenID Connect Core 1.0 Section 12.2 requires the 'auth_time'
+// claim of a refreshed ID Token to be the original one.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse and
+// https://datatracker.ietf.org/doc/html/rfc9068#section-2.2.1
+func carryAuthenticationContext(session any, login *jwt.IDTokenClaims) {
 	target, ok := session.(openid.Session)
 	if !ok {
 		return
 	}
 
+	var (
+		authTime *jwt.NumericDate
+		acr      string
+		amr      []string
+	)
+
+	if login != nil {
+		if login.AuthTime != nil {
+			authTime = jwt.NewNumericDate(login.AuthTime.Time)
+		}
+
+		acr, amr = login.AuthenticationContextClassReference, slices.Clone(login.AuthenticationMethodsReferences)
+	}
+
 	issued := target.IDTokenClaims()
-	issued.Subject = target.GetSubject()
 
-	source, ok := subject.(interface{ IDTokenClaims() *jwt.IDTokenClaims })
-	if !ok {
-		return
+	issued.AuthTime, issued.AuthenticationContextClassReference, issued.AuthenticationMethodsReferences = authTime, acr, amr
+}
+
+// sessionAuthentication returns the ID Token claims recording the authentication of the session, or nil when it has none.
+func sessionAuthentication(session oauth2.Session) (login *jwt.IDTokenClaims) {
+	if s, ok := session.(interface{ IDTokenClaims() *jwt.IDTokenClaims }); ok {
+		return s.IDTokenClaims()
 	}
 
-	login := source.IDTokenClaims()
-	if login == nil {
-		return
-	}
-
-	if login.AuthTime != nil {
-		issued.AuthTime = jwt.NewNumericDate(login.AuthTime.Time)
-	}
-
-	issued.AuthenticationContextClassReference = login.AuthenticationContextClassReference
-	issued.AuthenticationMethodsReferences = slices.Clone(login.AuthenticationMethodsReferences)
+	return nil
 }
 
 func bindingOfConfirmation(claims map[string]any) (binding tokenBinding, err error) {

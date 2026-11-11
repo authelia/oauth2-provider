@@ -6,6 +6,7 @@ package rfc8693_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,9 +24,14 @@ func TestJWTProfileAccessTokenExchange(t *testing.T) {
 			testCases := []struct {
 				name  string
 				actor map[string]any
+				login bool
 			}{
 				{
 					name: "ShouldIssueAJWTProfileAccessToken",
+				},
+				{
+					name:  "ShouldIssueAJWTProfileAccessTokenWithTheAuthenticationContext",
+					login: true,
 				},
 				{
 					name:  "ShouldIssueAJWTProfileAccessTokenWithTheActorClaim",
@@ -49,6 +55,15 @@ func TestJWTProfileAccessTokenExchange(t *testing.T) {
 
 					subject := NewDefaultSession()
 					subject.SetSubject("peter")
+
+					authTime := time.Now().Add(-time.Hour).Truncate(time.Second)
+
+					if tc.login {
+						claims := subject.IDTokenClaims()
+						claims.AuthTime = jwt.NewNumericDate(authTime)
+						claims.AuthenticationContextClassReference = "gold"
+						claims.AuthenticationMethodsReferences = []string{"mfa"}
+					}
 
 					request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693AccessToken, createSessionAccessToken(t.Context(), hmacStrategy, store, store.GetClients()["custom-lifespan-client"], subject), "")
 
@@ -86,6 +101,17 @@ func TestJWTProfileAccessTokenExchange(t *testing.T) {
 						assert.Equal(t, tc.actor, claims[consts.ClaimActor])
 					} else {
 						assert.NotContains(t, claims, consts.ClaimActor)
+					}
+
+					// RFC 9068 Section 2.2.1.
+					if tc.login {
+						assert.Equal(t, float64(authTime.Unix()), claims[consts.ClaimAuthenticationTime])
+						assert.Equal(t, "gold", claims[consts.ClaimAuthenticationContextClassReference])
+						assert.Equal(t, []any{"mfa"}, claims[consts.ClaimAuthenticationMethodsReference])
+					} else {
+						assert.NotContains(t, claims, consts.ClaimAuthenticationTime)
+						assert.NotContains(t, claims, consts.ClaimAuthenticationContextClassReference)
+						assert.NotContains(t, claims, consts.ClaimAuthenticationMethodsReference)
 					}
 				})
 			}

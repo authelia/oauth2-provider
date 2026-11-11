@@ -110,6 +110,11 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 		// Get the subject and populate session
 		session.SetSubject(unpacked[consts.ClaimSubject].(string))
 		session.SetSubjectToken(unpacked)
+
+		login := &jwt.IDTokenClaims{}
+		login.FromMap(unpacked)
+
+		carryAuthenticationContext(session, login)
 	}
 
 	return nil

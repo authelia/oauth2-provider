@@ -129,14 +129,18 @@ func TestRefreshTokenFromAnExchangeRefreshesTheIDToken(t *testing.T) {
 				return response
 			}
 
-			exchange := func(subject, scope, requested string) url.Values {
+			exchangeOf := func(subject, subjectType, scope, requested string) url.Values {
 				return url.Values{
 					consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
 					consts.FormParameterSubjectToken:       {subject},
-					consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
+					consts.FormParameterSubjectTokenType:   {subjectType},
 					consts.FormParameterRequestedTokenType: {requested},
 					consts.FormParameterScope:              {scope},
 				}
+			}
+
+			exchange := func(subject, scope, requested string) url.Values {
+				return exchangeOf(subject, consts.TokenTypeRFC8693RefreshToken, scope, requested)
 			}
 
 			refresh := func(token string) url.Values {
@@ -184,6 +188,15 @@ func TestRefreshTokenFromAnExchangeRefreshesTheIDToken(t *testing.T) {
 				provider, subject := setup(t, granted)
 
 				assertLogin(t, token(t, provider, exchange(subject, "", consts.TokenTypeRFC8693IDToken)).GetAccessToken())
+			})
+
+			t.Run("ShouldCarryTheLoginThroughAnExchangedIDToken", func(t *testing.T) {
+				provider, subject := setup(t, granted)
+
+				idToken := token(t, provider, exchange(subject, "", consts.TokenTypeRFC8693IDToken)).GetAccessToken()
+				require.NotEmpty(t, idToken)
+
+				assertLogin(t, token(t, provider, exchangeOf(idToken, consts.TokenTypeRFC8693IDToken, "", consts.TokenTypeRFC8693IDToken)).GetAccessToken())
 			})
 
 			t.Run("ShouldNotIssueAnIDTokenWithoutOpenID", func(t *testing.T) {

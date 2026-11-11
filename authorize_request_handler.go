@@ -170,7 +170,19 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		return request, errorsx.WithStack(ErrInvalidState.WithHintf("Request parameter 'state' must be at least be %d characters long to ensure sufficient entropy.", f.GetMinParameterEntropy(ctx)))
 	}
 
+	if err = f.validateNonceEntropy(ctx, request.Form); err != nil {
+		return request, err
+	}
+
 	return request, nil
+}
+
+func (f *Fosite) validateNonceEntropy(ctx context.Context, form url.Values) (err error) {
+	if nonce := form.Get(consts.FormParameterNonce); len(nonce) > 0 && len(nonce) < f.GetMinParameterEntropy(ctx) {
+		return errorsx.WithStack(ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", f.GetMinParameterEntropy(ctx)))
+	}
+
+	return nil
 }
 
 func setAuthorizeErrorDefaultResponseMode(request *AuthorizeRequest) {

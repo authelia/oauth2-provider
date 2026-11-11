@@ -19,14 +19,15 @@ type OpenIDConnectExplicitHandler struct {
 
 	Config interface {
 		oauth2.IDTokenLifespanProvider
+		oauth2.MinParameterEntropyProvider
 	}
 
 	*IDTokenHandleHelper
 }
 
 // HandleAuthorizeEndpointRequest handles an authorize request whose 'response_type' is exactly 'code' and which was
-// granted the 'openid' scope. It validates the 'redirect_uri' and 'prompt' parameters and persists the OpenID Connect
-// 1.0 session under the authorization code, which must already have been issued.
+// granted the 'openid' scope. It validates the 'redirect_uri', 'prompt', 'claims', and 'nonce' parameters and persists
+// the OpenID Connect 1.0 session under the authorization code, which must already have been issued.
 func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
 	if !(request.GetGrantedScopes().Has(consts.ScopeOpenID) && request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow)) {
 		return nil
@@ -46,6 +47,10 @@ func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 
 	if err = c.OpenIDConnectRequestValidator.ValidateClaims(ctx, request); err != nil {
 		return err
+	}
+
+	if nonce := request.GetRequestForm().Get(consts.FormParameterNonce); len(nonce) > 0 && len(nonce) < c.Config.GetMinParameterEntropy(ctx) {
+		return errorsx.WithStack(oauth2.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", c.Config.GetMinParameterEntropy(ctx)))
 	}
 
 	if err = c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, response.GetCode(), request.Sanitize(oidcParameters)); err != nil {

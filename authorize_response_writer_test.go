@@ -6,7 +6,9 @@ package oauth2_test
 
 import (
 	"context"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -204,36 +206,49 @@ func TestNewAuthorizeResponse(t *testing.T) {
 	}
 }
 
-func TestNewAuthorizeResponseEnforcesACRValues(t *testing.T) {
+func TestNewAuthorizeResponseEnforcesAuthenticationRequirements(t *testing.T) {
+	now := time.Now().UTC()
+
 	testCases := []struct {
-		name      string
-		enforce   bool
-		requested string
-		session   Session
-		err       bool
+		name     string
+		enforce  bool
+		form     url.Values
+		session  Session
+		expected error
 	}{
-		{name: "ShouldPassWhenNotEnforced", requested: "gold", session: &acrValuesSession{DefaultSession: &DefaultSession{}, acr: "bronze"}},
-		{name: "ShouldPassWhenNotRequested", enforce: true, session: &acrValuesSession{DefaultSession: &DefaultSession{}, acr: "bronze"}},
-		{name: "ShouldPassWhenARequestedValueIsMet", enforce: true, requested: "gold silver", session: &acrValuesSession{DefaultSession: &DefaultSession{}, acr: "silver"}},
-		{name: "ShouldFailWhenNoRequestedValueIsMet", enforce: true, requested: "gold silver", session: &acrValuesSession{DefaultSession: &DefaultSession{}, acr: "bronze"}, err: true},
-		{name: "ShouldFailWhenTheSessionHasNoACR", enforce: true, requested: "gold", session: &acrValuesSession{DefaultSession: &DefaultSession{}}, err: true},
-		{name: "ShouldFailWhenTheSessionCannotRecordAnACR", enforce: true, requested: "gold", session: &DefaultSession{}, err: true},
+		{name: "ShouldPassWhenNotEnforced", form: url.Values{"acr_values": {"gold"}, "max_age": {"0"}}, session: newACRValuesSession("bronze", now.Add(-time.Hour))},
+		{name: "ShouldPassWhenNotRequested", enforce: true, session: newACRValuesSession("bronze", time.Time{})},
+		{name: "ShouldPassWhenARequestedValueIsMet", enforce: true, form: url.Values{"acr_values": {"gold silver"}}, session: newACRValuesSession("silver", time.Time{})},
+		{name: "ShouldFailWhenNoRequestedValueIsMet", enforce: true, form: url.Values{"acr_values": {"gold silver"}}, session: newACRValuesSession("bronze", time.Time{}), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldFailWhenTheSessionHasNoACR", enforce: true, form: url.Values{"acr_values": {"gold"}}, session: newACRValuesSession("", time.Time{}), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldFailWhenTheSessionCannotRecordAnACR", enforce: true, form: url.Values{"acr_values": {"gold"}}, session: &DefaultSession{}, expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldPassWhenTheAuthenticationIsRecentEnough", enforce: true, form: url.Values{"max_age": {"300"}}, session: newACRValuesSession("", now.Add(-time.Minute))},
+		{name: "ShouldFailWhenTheAuthenticationIsTooOld", enforce: true, form: url.Values{"max_age": {"300"}}, session: newACRValuesSession("", now.Add(-time.Hour)), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldFailWhenTheSessionHasNoAuthenticationTime", enforce: true, form: url.Values{"max_age": {"300"}}, session: newACRValuesSession("", time.Time{}), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldFailWhenMaxAgeIsNotAnInteger", enforce: true, form: url.Values{"max_age": {"soon"}}, session: newACRValuesSession("", now), expected: ErrInvalidRequest},
+		{name: "ShouldFailWhenMaxAgeIsNegative", enforce: true, form: url.Values{"max_age": {"-1"}}, session: newACRValuesSession("", now), expected: ErrInvalidRequest},
+		{name: "ShouldFailWhenOnlyMaxAgeIsMet", enforce: true, form: url.Values{"acr_values": {"gold"}, "max_age": {"300"}}, session: newACRValuesSession("bronze", now), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldPassWhenBothAreMet", enforce: true, form: url.Values{"acr_values": {"gold"}, "max_age": {"300"}}, session: newACRValuesSession("gold", now)},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			handler := &acrValuesHandler{}
 
-			provider := &Fosite{Config: &Config{EnforceACRValues: tc.enforce, AuthorizeEndpointHandlers: AuthorizeEndpointHandlers{handler}}}
+			provider := &Fosite{Config: &Config{EnforceAuthenticationRequirements: tc.enforce, AuthorizeEndpointHandlers: AuthorizeEndpointHandlers{handler}}}
 
 			request := NewAuthorizeRequest()
+			request.RequestedAt = now
 			request.ResponseTypes = Arguments{consts.ResponseTypeAuthorizationCodeFlow}
-			request.Form.Set(consts.FormParameterAuthenticationContextClassReferenceValues, tc.requested)
+
+			for key, values := range tc.form {
+				request.Form[key] = values
+			}
 
 			_, err := provider.NewAuthorizeResponse(context.Background(), request, tc.session)
 
-			if tc.err {
-				require.ErrorIs(t, err, ErrUnmetAuthenticationRequirements)
+			if tc.expected != nil {
+				require.ErrorIs(t, err, tc.expected)
 				assert.False(t, handler.called)
 
 				return
@@ -245,14 +260,25 @@ func TestNewAuthorizeResponseEnforcesACRValues(t *testing.T) {
 	}
 }
 
+func newACRValuesSession(acr string, authTime time.Time) *acrValuesSession {
+	session := &acrValuesSession{DefaultSession: &DefaultSession{}, acr: acr}
+
+	if !authTime.IsZero() {
+		session.authTime = jwt.NewNumericDate(authTime)
+	}
+
+	return session
+}
+
 type acrValuesSession struct {
 	*DefaultSession
 
-	acr string
+	acr      string
+	authTime *jwt.NumericDate
 }
 
 func (s *acrValuesSession) IDTokenClaims() *jwt.IDTokenClaims {
-	return &jwt.IDTokenClaims{AuthenticationContextClassReference: s.acr}
+	return &jwt.IDTokenClaims{AuthenticationContextClassReference: s.acr, AuthTime: s.authTime}
 }
 
 type acrValuesHandler struct {

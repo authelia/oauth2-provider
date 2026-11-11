@@ -366,12 +366,12 @@ type EnforcePKCEProvider interface {
 	GetEnforcePKCE(ctx context.Context) (enforce bool)
 }
 
-// ACRValuesEnforcementProvider returns the provider for configuring the enforcement of the 'acr_values' authorization
-// request parameter.
-type ACRValuesEnforcementProvider interface {
-	// GetEnforceACRValues returns true if an authorization request with the 'acr_values' parameter fails unless the
-	// End-User authentication satisfied one of the requested values.
-	GetEnforceACRValues(ctx context.Context) (enforce bool)
+// AuthenticationRequirementsEnforcementProvider returns the provider for configuring the enforcement of the 'acr_values'
+// and 'max_age' authorization request parameters.
+type AuthenticationRequirementsEnforcementProvider interface {
+	// GetEnforceAuthenticationRequirements returns true if an authorization request, or the approval of a device
+	// authorization request, fails unless the End-User authentication satisfied the requested 'acr_values' and 'max_age'.
+	GetEnforceAuthenticationRequirements(ctx context.Context) (enforce bool)
 }
 
 // ClaimsParameterEnforcementProvider returns the provider for configuring the enforcement of the OpenID Connect 1.0

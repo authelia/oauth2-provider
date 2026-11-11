@@ -6,7 +6,9 @@ package oauth2_test
 
 import (
 	"context"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -14,6 +16,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	. "authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -120,4 +123,60 @@ func TestFosite_NewRFC8628UserAuthorizeResponse(t *testing.T) {
 			require.NotNil(t, actual)
 		})
 	}
+}
+
+func TestFosite_NewRFC8628UserAuthorizeResponseEnforcesAuthenticationRequirements(t *testing.T) {
+	now := time.Now().UTC()
+
+	testCases := []struct {
+		name     string
+		status   DeviceAuthorizeStatus
+		session  Session
+		expected error
+	}{
+		{name: "ShouldPassAnApprovalThatMeetsTheRequirements", status: DeviceAuthorizeStatusApproved, session: newACRValuesSession("gold", now)},
+		{name: "ShouldFailAnApprovalWithAnUnmetACR", status: DeviceAuthorizeStatusApproved, session: newACRValuesSession("bronze", now), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldFailAnApprovalWithAnAuthenticationTooOld", status: DeviceAuthorizeStatusApproved, session: newACRValuesSession("gold", now.Add(-time.Hour)), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldPassADenialWithUnmetRequirements", status: DeviceAuthorizeStatusDenied, session: newACRValuesSession("bronze", now.Add(-time.Hour))},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := &deviceDecisionHandler{}
+
+			provider := &Fosite{Config: &Config{EnforceAuthenticationRequirements: true, RFC8628UserAuthorizeEndpointHandlers: RFC8628UserAuthorizeEndpointHandlers{handler}}}
+
+			request := NewDeviceAuthorizeRequest()
+			request.RequestedAt = now
+			request.Session = &DefaultSession{}
+			request.Form = url.Values{consts.FormParameterAuthenticationContextClassReferenceValues: {"gold"}, consts.FormParameterMaximumAge: {"300"}}
+			request.SetStatus(tc.status)
+
+			_, err := provider.NewRFC8628UserAuthorizeResponse(context.Background(), request, tc.session)
+
+			if tc.expected != nil {
+				require.ErrorIs(t, err, tc.expected)
+				assert.False(t, handler.called)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.True(t, handler.called)
+		})
+	}
+}
+
+type deviceDecisionHandler struct {
+	called bool
+}
+
+func (h *deviceDecisionHandler) HandleRFC8628UserAuthorizeEndpointRequest(_ context.Context, _ DeviceAuthorizeRequester) error {
+	return nil
+}
+
+func (h *deviceDecisionHandler) PopulateRFC8628UserAuthorizeEndpointResponse(_ context.Context, _ DeviceAuthorizeRequester, _ DeviceUserAuthorizeResponder) error {
+	h.called = true
+
+	return nil
 }

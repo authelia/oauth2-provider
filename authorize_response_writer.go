@@ -8,10 +8,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
-	"slices"
-	"strings"
 
-	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -31,8 +28,10 @@ func (f *Fosite) NewAuthorizeResponse(ctx context.Context, request AuthorizeRequ
 
 	request.SetSession(session)
 
-	if err = f.validateACRValues(ctx, request, session); err != nil {
-		return nil, err
+	if f.isAuthenticationRequirementsEnforced(ctx) {
+		if err = validateAuthenticationRequirements(request, session); err != nil {
+			return nil, err
+		}
 	}
 
 	for _, h := range f.Config.GetAuthorizeEndpointBindingHandlers(ctx) {
@@ -63,30 +62,6 @@ func (f *Fosite) NewAuthorizeResponse(ctx context.Context, request AuthorizeRequ
 	}
 
 	return response, nil
-}
-
-func (f *Fosite) validateACRValues(ctx context.Context, request AuthorizeRequester, session Session) (err error) {
-	if provider, ok := f.Config.(ACRValuesEnforcementProvider); !ok || !provider.GetEnforceACRValues(ctx) {
-		return nil
-	}
-
-	requested := strings.Fields(request.GetRequestForm().Get(consts.FormParameterAuthenticationContextClassReferenceValues))
-	if len(requested) == 0 {
-		return nil
-	}
-
-	var acr string
-
-	if s, ok := session.(interface{ IDTokenClaims() *jwt.IDTokenClaims }); ok && s.IDTokenClaims() != nil {
-		acr = s.IDTokenClaims().AuthenticationContextClassReference
-	}
-
-	// See: https://www.rfc-editor.org/rfc/rfc9470#section-5
-	if acr == "" || !slices.Contains(requested, acr) {
-		return errorsx.WithStack(ErrUnmetAuthenticationRequirements.WithHint("The Authentication Context Class Reference requested by the 'acr_values' parameter was not met."))
-	}
-
-	return nil
 }
 
 func isEncryptedJARMClient(client Client) bool {

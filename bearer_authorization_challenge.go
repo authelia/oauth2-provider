@@ -21,16 +21,17 @@ import (
 // r may be nil, in which case the scheme used cannot be established and both the Bearer and DPoP challenges carry the
 // error information.
 //
-// ErrInvalidDPoPProof and ErrUseDPoPNonce are HTTP 400 at the token endpoint but are returned as 401 here, as required
-// at a protected resource.
+// ErrInvalidDPoPProof, ErrUseDPoPNonce and ErrInsufficientUserAuthentication are HTTP 400 at the token endpoint but
+// are returned as 401 here, as required at a protected resource. The 'acr_values' and 'max_age' members set on an
+// insufficient_user_authentication error with WithExtra are carried as challenge parameters.
 //
 // See: https://www.rfc-editor.org/rfc/rfc6750#section-3, https://www.rfc-editor.org/rfc/rfc9449#section-7.1, and
-// https://www.rfc-editor.org/rfc/rfc9449#section-7.2
+// https://www.rfc-editor.org/rfc/rfc9449#section-7.2, and https://www.rfc-editor.org/rfc/rfc9470#section-3
 func (f *Fosite) WriteBearerAuthorizationChallenge(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) (rfc *RFC6749Error) {
 	rfc = ErrorToRFC6749Error(err)
 
 	switch rfc.ErrorField {
-	case errInvalidDPoPProofName, errUseDPoPNonceName:
+	case errInvalidDPoPProofName, errUseDPoPNonceName, errInsufficientUserAuthenticationName:
 		rfc = rfc.WithCode(http.StatusUnauthorized)
 	}
 
@@ -59,6 +60,8 @@ func (f *Fosite) WriteBearerAuthorizationChallenge(ctx context.Context, rw http.
 //   - When it cannot - r is nil, see WriteBearerAuthorizationChallenge - both carry it (Figure 19).
 //   - The 'algs' parameter is always offered on the DPoP challenge (SHOULD, Section 7.1).
 //   - A 'scope' parameter is offered on an insufficient_scope challenge (MAY, RFC 6750 Section 3.1).
+//   - The 'acr_values' and 'max_age' parameters are offered on an insufficient_user_authentication challenge (RFC 9470
+//     Section 3).
 func (f *Fosite) bearerAuthorizationChallenge(ctx context.Context, r *http.Request, rfc *RFC6749Error) (value string) {
 	var scheme string
 
@@ -81,6 +84,10 @@ func (f *Fosite) bearerAuthorizationChallenge(ctx context.Context, r *http.Reque
 
 		if rfc.ErrorField == errInsufficientScopeName && rfc.ScopeField != "" {
 			params = append(params, fmt.Sprintf("scope=%q", rfc.ScopeField))
+		}
+
+		if rfc.ErrorField == errInsufficientUserAuthenticationName {
+			params = append(params, authenticationRequirementParams(rfc)...)
 		}
 	}
 
@@ -112,6 +119,30 @@ func (f *Fosite) bearerAuthorizationChallenge(ctx context.Context, r *http.Reque
 	return challengeScheme(consts.AuthSchemeBearer, params...) + ", " + challengeScheme(consts.AuthSchemeDPoP, algs)
 }
 
+// authenticationRequirementParams returns the RFC 9470 Section 3 'acr_values' and 'max_age' challenge parameters from
+// the error extras. An 'acr_values' slice is joined with spaces.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9470#section-3
+func authenticationRequirementParams(rfc *RFC6749Error) (params []string) {
+	switch value := rfc.extra[consts.FormParameterAuthenticationContextClassReferenceValues].(type) {
+	case string:
+		if value != "" {
+			params = append(params, fmt.Sprintf("acr_values=%q", value))
+		}
+	case []string:
+		if len(value) != 0 {
+			params = append(params, fmt.Sprintf("acr_values=%q", strings.Join(value, " ")))
+		}
+	}
+
+	if value, ok := rfc.extra[consts.FormParameterMaximumAge]; ok && value != nil {
+		params = append(params, fmt.Sprintf("max_age=%q", fmt.Sprint(value)))
+	}
+
+	return params
+}
+
+// challengeScheme formats a single 'WWW-Authenticate' challenge for scheme, omitting empty params.
 func challengeScheme(scheme string, params ...string) (value string) {
 	set := make([]string, 0, len(params))
 
@@ -138,6 +169,7 @@ func challengeScheme(scheme string, params ...string) (value string) {
 func IsBearerCredentialError(err error) (is bool) {
 	return errors.Is(err, ErrInvalidToken) ||
 		errors.Is(err, ErrInsufficientScope) ||
+		errors.Is(err, ErrInsufficientUserAuthentication) ||
 		errors.Is(err, ErrInvalidDPoPProof) ||
 		errors.Is(err, ErrUseDPoPNonce)
 }

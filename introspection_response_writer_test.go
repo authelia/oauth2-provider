@@ -76,6 +76,19 @@ func TestWriteIntrospectionError(t *testing.T) {
 			},
 		},
 		{
+			name:     "ShouldChallengeForErrInsufficientUserAuthentication",
+			err:      errorsx.WithStack(ErrInsufficientUserAuthentication.WithDescription("x").WithExtra("acr_values", "gold").WithExtra("max_age", 5)),
+			expected: "x",
+			code:     http.StatusUnauthorized,
+			body:     `{"acr_values":"gold","error":"insufficient_user_authentication","error_description":"x","max_age":5}`,
+			headers: http.Header{
+				consts.HeaderContentType:                              []string{consts.ContentTypeApplicationJSON},
+				consts.HeaderCacheControl:                             []string{consts.CacheControlNoStore},
+				consts.HeaderPragma:                                   []string{consts.PragmaNoCache},
+				http.CanonicalHeaderKey(consts.HeaderWWWAuthenticate): []string{`Bearer error="insufficient_user_authentication", error_description="x", acr_values="gold", max_age="5"`},
+			},
+		},
+		{
 			name:     "ShouldWriteInactiveForGenericError",
 			err:      errors.New("some other error"),
 			expected: "some other error",

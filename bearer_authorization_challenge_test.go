@@ -99,12 +99,58 @@ func TestWriteBearerAuthorizationChallengeIncludesScope(t *testing.T) {
 	assert.Contains(t, rw.Header().Get("WWW-Authenticate"), `error="insufficient_scope"`)
 }
 
+func TestWriteBearerAuthorizationChallengeIncludesAuthenticationRequirements(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name     string
+		err      *RFC6749Error
+		expected string
+	}{
+		{
+			name:     "ShouldIncludeACRValues",
+			err:      ErrInsufficientUserAuthentication.WithDescription("A different authentication level is required").WithExtra("acr_values", "myACR"),
+			expected: `Bearer error="insufficient_user_authentication", error_description="A different authentication level is required", acr_values="myACR"`,
+		},
+		{
+			name:     "ShouldIncludeMaxAge",
+			err:      ErrInsufficientUserAuthentication.WithDescription("More recent authentication is required").WithExtra("max_age", int64(5)),
+			expected: `Bearer error="insufficient_user_authentication", error_description="More recent authentication is required", max_age="5"`,
+		},
+		{
+			name:     "ShouldIncludeBothAndJoinACRValues",
+			err:      ErrInsufficientUserAuthentication.WithDescription("x").WithExtra("acr_values", []string{"gold", "silver"}).WithExtra("max_age", 0),
+			expected: `Bearer error="insufficient_user_authentication", error_description="x", acr_values="gold silver", max_age="0"`,
+		},
+		{
+			name:     "ShouldOmitRequirementsOnOtherErrors",
+			err:      ErrInvalidToken.WithDescription("x").WithExtra("acr_values", "myACR").WithExtra("max_age", 5),
+			expected: `Bearer error="invalid_token", error_description="x"`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &Fosite{Config: &Config{}}
+
+			r := httptest.NewRequest(http.MethodGet, "https://rs.example.com/resource", nil)
+			r.Header.Set("Authorization", "Bearer abc")
+
+			rw := httptest.NewRecorder()
+
+			f.WriteBearerAuthorizationChallenge(ctx, rw, r, errorsx.WithStack(tc.err))
+
+			assert.Equal(t, tc.expected, rw.Header().Get("WWW-Authenticate"))
+		})
+	}
+}
+
 func TestWriteBearerAuthorizationChallengePromotesResourceStatuses(t *testing.T) {
 	ctx := context.Background()
 	config := &Config{DPoPEnabled: true, DPoPAllowedJWSAlgorithms: []string{"ES256"}}
 	f := &Fosite{Config: config}
 
-	for _, err := range []*RFC6749Error{ErrInvalidDPoPProof, ErrUseDPoPNonce} {
+	for _, err := range []*RFC6749Error{ErrInvalidDPoPProof, ErrUseDPoPNonce, ErrInsufficientUserAuthentication} {
 		rw := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodPost, "https://as.example.com/introspect", nil)
 
@@ -158,4 +204,10 @@ type testNonceStrategy struct {
 
 func (testNonceStrategy) NewDPoPNonce(ctx context.Context) (nonce string, err error) {
 	return "fixed-nonce", nil
+}
+
+func TestIsBearerCredentialError(t *testing.T) {
+	assert.True(t, IsBearerCredentialError(errorsx.WithStack(ErrInsufficientUserAuthentication.WithExtra("max_age", 5))))
+	assert.True(t, IsBearerCredentialError(errorsx.WithStack(ErrInsufficientScope)))
+	assert.False(t, IsBearerCredentialError(errorsx.WithStack(ErrRequestUnauthorized)))
 }

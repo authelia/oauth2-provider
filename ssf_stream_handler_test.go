@@ -610,6 +610,20 @@ func TestWriteSSFErrorDPoP(t *testing.T) {
 		})
 	}
 
+	t.Run("ShouldChallengeInsufficientUserAuthentication", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, ssfHandlerURL, nil)
+		r.Header.Set(consts.HeaderAuthorization, "DPoP abc")
+
+		rw := httptest.NewRecorder()
+		provider.WriteSSFError(context.Background(), rw, r, ErrInsufficientUserAuthentication.WithDescription("x").WithExtra("acr_values", "gold").WithExtra("max_age", 5))
+
+		assert.Equal(t, http.StatusUnauthorized, rw.Code)
+		assert.Equal(t, `Bearer, DPoP error="insufficient_user_authentication", error_description="x", acr_values="gold", max_age="5", algs="ES256"`, rw.Header().Get("WWW-Authenticate"))
+		assert.Empty(t, rw.Header().Get("DPoP-Nonce"))
+		assert.Equal(t, "no-store", rw.Header().Get("Cache-Control"))
+		assert.JSONEq(t, `{"acr_values":"gold","error":"insufficient_user_authentication","error_description":"x","max_age":5}`, rw.Body.String())
+	})
+
 	t.Run("ShouldWriteStatusForOtherErrors", func(t *testing.T) {
 		rw := httptest.NewRecorder()
 		provider.WriteSSFError(context.Background(), rw, httptest.NewRequest(http.MethodGet, ssfHandlerURL, nil), ErrNotFound)

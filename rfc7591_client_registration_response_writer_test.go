@@ -80,6 +80,19 @@ func TestWriteRFC7591ClientRegistrationErrorChallenge(t *testing.T) {
 		assert.Contains(t, rw.Header().Get(consts.HeaderWWWAuthenticate), `scope="authelia:oauth2:dynamic-client-registration"`)
 	})
 
+	t.Run("ShouldChallengeAnInsufficientUserAuthenticationWith401", func(t *testing.T) {
+		rfc := ErrInsufficientUserAuthentication.WithDescription("x").WithExtra("acr_values", []string{"gold", "silver"}).WithExtra("max_age", 5)
+
+		rw := httptest.NewRecorder()
+
+		newProvider().WriteRFC7591ClientRegistrationError(ctx, rw, nil, errorsx.WithStack(rfc))
+
+		assert.Equal(t, http.StatusUnauthorized, rw.Code)
+		assert.Equal(t, `Bearer error="insufficient_user_authentication", error_description="x", acr_values="gold silver", max_age="5", DPoP error="insufficient_user_authentication", error_description="x", acr_values="gold silver", max_age="5", algs="ES256"`, rw.Header().Get(consts.HeaderWWWAuthenticate))
+		assert.Empty(t, rw.Header().Get(consts.HeaderDPoPNonce))
+		assert.JSONEq(t, `{"acr_values":["gold","silver"],"error":"insufficient_user_authentication","error_description":"x","max_age":5}`, rw.Body.String())
+	})
+
 	t.Run("ShouldLeaveAMalformedRequestAlone", func(t *testing.T) {
 		rw := httptest.NewRecorder()
 

@@ -74,7 +74,7 @@ finalized, so support for one may change in any release.
 | [RFC 9396: Rich Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9396)                                                          |   ✅   |            |                                                                                                                 |
 | [RFC 9449: Demonstrating Proof of Possession (DPoP)](https://datatracker.ietf.org/doc/html/rfc9449)                                             |   ✅   |            |                                                                                                                 |
 | [RFC 9470: Step Up Authentication Challenge Protocol](https://datatracker.ietf.org/doc/html/rfc9470)                                            |   ✅   |            | Resource server challenges, `acr` and `auth_time` in tokens, opt-in `acr_values` and `max_age` enforcement      |
-| [RFC 9700: Best Current Practice for OAuth 2.0 Security](https://datatracker.ietf.org/doc/html/rfc9700)                                         |   🟡   |            | Assessed as a whole; the RFC 9207 `iss` parameter is opt-in                                                     |
+| [RFC 9700: Best Current Practice for OAuth 2.0 Security](https://datatracker.ietf.org/doc/html/rfc9700)                                         |   ✅   |            | Assessed as a whole; see [Security Considerations](#security-considerations) for the application's part         |
 | [RFC 9701: JWT Response for Token Introspection](https://datatracker.ietf.org/doc/html/rfc9701)                                                 |   ✅   |            |                                                                                                                 |
 | [RFC 10070: Updates to JWT Client Authentication and Authorization Grants](https://datatracker.ietf.org/doc/html/rfc10070)                      |   ✅   |            | Issuer as the sole client assertion audience, with an opt-out                                                   |
 | [JWT Secured Authorization Response Mode (JARM)](https://openid.net/specs/oauth-v2-jarm.html)                                                   |   ✅   |            |                                                                                                                 |
@@ -238,8 +238,9 @@ Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Cons
 - `EnablePKCEPlainChallengeMethod` should stay disabled: the `plain` method exposes the verifier in the authorization
   request ([Section 2.1.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1.1)).
 - The RFC 9207 `iss` authorization response parameter, a mix-up defense
-  ([Section 4.4.2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-4.4.2.1)), is returned only when `Issuer` is
-  set and an `RFC9207ResponseModeParameterHandler` is registered in `ResponseModeParameterHandlers`.
+  ([Section 4.4.2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-4.4.2.1)), is returned when `Issuer` is set.
+  `Compose` and `ComposeAllEnabled` register the `RFC9207ResponseModeParameterHandler` that returns it, which must be
+  registered in `ResponseModeParameterHandlers` when composing by other means.
   `DisableAuthorizationServerIdentification` should stay disabled. Clients that do not check it ignore it.
 - `JWTSecuredAuthorizeResponseModeStrategy` enables JARM, whose signed authorization responses carry the issuer. Only
   clients that request a JWT response mode are affected.

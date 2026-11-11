@@ -116,6 +116,20 @@ type RedirectSecureCheckerProvider interface {
 	GetRedirectSecureChecker(ctx context.Context) func(context.Context, *url.URL) bool
 }
 
+// AllowInsecureRedirectURIForPublicClientsProvider returns the provider for configuring whether public clients are
+// exempt from the redirect URL security validator.
+type AllowInsecureRedirectURIForPublicClientsProvider interface {
+	// GetAllowInsecureRedirectURIForPublicClients returns true if public clients are exempt from the redirect URL
+	// security validator.
+	GetAllowInsecureRedirectURIForPublicClients(ctx context.Context) (allow bool)
+}
+
+// RedirectURISecurityProvider returns the providers ValidateRedirectURISecurity requires.
+type RedirectURISecurityProvider interface {
+	RedirectSecureCheckerProvider
+	AllowInsecureRedirectURIForPublicClientsProvider
+}
+
 // RefreshTokenScopesProvider returns the provider for configuring the refresh token scopes.
 type RefreshTokenScopesProvider interface {
 	// GetRefreshTokenScopes returns the refresh token scopes.

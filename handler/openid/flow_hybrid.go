@@ -102,6 +102,10 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		}
 	}
 
+	if err = oauth2.ValidateRedirectURISecurity(ctx, c.AuthorizeExplicitGrantHandler.Config, client, request.GetRedirectURI()); err != nil {
+		return err
+	}
+
 	claims := session.IDTokenClaims()
 
 	var hash string
@@ -125,10 +129,6 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 	if request.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
 		if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'authorization_code'."))
-		}
-
-		if client.IsPublic() && !c.AuthorizeExplicitGrantHandler.GetRedirectSecureChecker(ctx)(ctx, request.GetRedirectURI()) {
-			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for confidential clients or hosts with suffix 'localhost', for example: http://myapp.localhost/."))
 		}
 
 		var (
@@ -197,8 +197,6 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 
 	request.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowIDToken)
 
-	// There is no need to check for https, because implicit flow does not require https,
-	// See: https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
 	return nil
 }
 

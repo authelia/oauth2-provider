@@ -31,6 +31,7 @@ type AuthorizeExplicitGrantHandler struct {
 		oauth2.AudienceStrategyProvider
 		oauth2.ResourceStrategyProvider
 		oauth2.RedirectSecureCheckerProvider
+		oauth2.AllowInsecureRedirectURIForPublicClientsProvider
 		oauth2.RefreshTokenScopesProvider
 		oauth2.OmitRedirectScopeParamProvider
 		oauth2.SanitationAllowedProvider
@@ -48,7 +49,7 @@ func (c *AuthorizeExplicitGrantHandler) GetRedirectSecureChecker(ctx context.Con
 }
 
 // HandleAuthorizeEndpointRequest handles an authorize request whose 'response_type' is exactly 'code'. It rejects an
-// insecure redirect URI for a public client, validates the requested scopes, audience and resources against the client,
+// insecure redirect URI, validates the requested scopes, audience and resources against the client,
 // and then issues the authorization code.
 func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
 	// This let's us define multiple response types, for example open id connect's id_token
@@ -61,8 +62,8 @@ func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx conte
 	client := request.GetClient()
 	strategy := oauth2.GetScopeStrategy(ctx, c.Config, client)
 
-	if client.IsPublic() && !c.GetRedirectSecureChecker(ctx)(ctx, request.GetRedirectURI()) {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for confidential clients or hosts with suffix 'localhost', for example: http://myapp.localhost/."))
+	if err = oauth2.ValidateRedirectURISecurity(ctx, c.Config, client, request.GetRedirectURI()); err != nil {
+		return err
 	}
 
 	for _, scope := range request.GetRequestedScopes() {

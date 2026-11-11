@@ -28,6 +28,7 @@ type AuthorizeImplicitGrantTypeHandler struct {
 		oauth2.ScopeStrategyProvider
 		oauth2.AudienceStrategyProvider
 		oauth2.ResourceStrategyProvider
+		oauth2.RedirectURISecurityProvider
 	}
 }
 
@@ -47,6 +48,11 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 	}
 
 	client := request.GetClient()
+
+	if err = oauth2.ValidateRedirectURISecurity(ctx, c.Config, client, request.GetRedirectURI()); err != nil {
+		return err
+	}
+
 	strategy := oauth2.GetScopeStrategy(ctx, c.Config, client)
 
 	for _, scope := range request.GetRequestedScopes() {
@@ -62,9 +68,6 @@ func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx c
 	if err = oauth2.GetResourceStrategy(ctx, c.Config, client)(client.GetResource(), request.GetRequestedResource()); err != nil {
 		return err
 	}
-
-	// There is no need to check for https, because implicit flow does not require https
-	// See; https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
 
 	return c.IssueImplicitAccessToken(ctx, request, response)
 }

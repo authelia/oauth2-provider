@@ -25,6 +25,7 @@ type OpenIDConnectImplicitHandler struct {
 		oauth2.IDTokenLifespanProvider
 		oauth2.MinParameterEntropyProvider
 		oauth2.ScopeStrategyProvider
+		oauth2.RedirectURISecurityProvider
 	}
 }
 
@@ -48,6 +49,10 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	}
 
 	if err = c.OpenIDConnectRequestValidator.ValidateRedirectURIs(ctx, request); err != nil {
+		return err
+	}
+
+	if err = oauth2.ValidateRedirectURISecurity(ctx, c.Config, request.GetClient(), request.GetRedirectURI()); err != nil {
 		return err
 	}
 
@@ -103,8 +108,6 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 
 	request.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowIDToken)
 
-	// There is no need to check for https, because implicit flow does not require https,
-	// See: https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.2
 	return nil
 }
 

@@ -22,6 +22,7 @@ type NoneResponseTypeHandler struct {
 		oauth2.AudienceStrategyProvider
 		oauth2.ResourceStrategyProvider
 		oauth2.RedirectSecureCheckerProvider
+		oauth2.AllowInsecureRedirectURIForPublicClientsProvider
 		oauth2.OmitRedirectScopeParamProvider
 	}
 }
@@ -36,11 +37,12 @@ func (c *NoneResponseTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Con
 
 	request.SetDefaultResponseMode(oauth2.ResponseModeQuery)
 
-	if !c.GetRedirectSecureChecker(ctx)(ctx, request.GetRedirectURI()) {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/."))
+	client := request.GetClient()
+
+	if err = oauth2.ValidateRedirectURISecurity(ctx, c.Config, client, request.GetRedirectURI()); err != nil {
+		return err
 	}
 
-	client := request.GetClient()
 	strategy := oauth2.GetScopeStrategy(ctx, c.Config, client)
 
 	for _, scope := range request.GetRequestedScopes() {

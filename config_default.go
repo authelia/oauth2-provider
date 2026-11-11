@@ -217,7 +217,13 @@ type Config struct {
 	PublicClientIdentityChecker func(context.Context, AuthorizeRequester) bool
 
 	// RedirectSecureChecker is a function that returns true if the provided URL can be securely used as a redirect URL.
+	// It applies to every client unless AllowInsecureRedirectURIForPublicClients exempts public clients.
 	RedirectSecureChecker func(context.Context, *url.URL) bool
+
+	// AllowInsecureRedirectURIForPublicClients exempts public clients from RedirectSecureChecker: the checker is not
+	// called for them, so any redirect URI scheme and host it would reject is accepted, including 'http' for any host.
+	// This is not compliant with RFC 9700 Section 2.6. Defaults to false.
+	AllowInsecureRedirectURIForPublicClients bool
 
 	// RefreshTokenScopes defines which OAuth scopes will be given refresh tokens during the authorization code grant exchange. This defaults to "offline" and "offline_access". When set to an empty array, all exchanges will be given refresh tokens.
 	RefreshTokenScopes []string
@@ -1322,6 +1328,11 @@ func (c *Config) GetRedirectSecureChecker(_ context.Context) func(context.Contex
 	return c.RedirectSecureChecker
 }
 
+// GetAllowInsecureRedirectURIForPublicClients returns the value of AllowInsecureRedirectURIForPublicClients.
+func (c *Config) GetAllowInsecureRedirectURIForPublicClients(_ context.Context) (allow bool) {
+	return c.AllowInsecureRedirectURIForPublicClients
+}
+
 // GetRefreshTokenScopes returns which scopes will provide refresh tokens.
 func (c *Config) GetRefreshTokenScopes(_ context.Context) []string {
 	if c.RefreshTokenScopes == nil {
@@ -1945,6 +1956,7 @@ var (
 	_ MinParameterEntropyProvider                           = (*Config)(nil)
 	_ SanitationAllowedProvider                             = (*Config)(nil)
 	_ EnforcePKCEForPublicClientsProvider                   = (*Config)(nil)
+	_ AllowInsecureRedirectURIForPublicClientsProvider      = (*Config)(nil)
 	_ EnablePKCEPlainChallengeMethodProvider                = (*Config)(nil)
 	_ ClaimsParameterEnforcementProvider                    = (*Config)(nil)
 	_ EnforcePKCEProvider                                   = (*Config)(nil)

@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"context"
 	"net/url"
 	"testing"
 
@@ -65,6 +66,51 @@ func TestIsMatchingNativeAppLoopbackURI(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.expected, isMatchingLoopbackURI(tc.uri, tc.registered))
+		})
+	}
+}
+
+func TestValidateRedirectURISecurity(t *testing.T) {
+	strict := func(_ context.Context, uri *url.URL) bool { return IsRedirectURISecureStrict(uri) }
+
+	testCases := []struct {
+		name    string
+		uri     string
+		public  bool
+		allow   bool
+		checker func(context.Context, *url.URL) bool
+		err     bool
+	}{
+		{name: "ShouldAllowHTTPSConfidential", uri: "https://client.example.com/cb"},
+		{name: "ShouldAllowHTTPSPublic", uri: "https://client.example.com/cb", public: true},
+		{name: "ShouldAllowLoopbackConfidential", uri: "http://127.0.0.1:8080/cb"},
+		{name: "ShouldAllowLoopbackPublic", uri: "http://127.0.0.1:8080/cb", public: true},
+		{name: "ShouldRejectHTTPConfidential", uri: "http://client.example.com/cb", err: true},
+		{name: "ShouldRejectHTTPPublic", uri: "http://client.example.com/cb", public: true, err: true},
+		{name: "ShouldRejectHTTPConfidentialWhenPublicClientsAllowed", uri: "http://client.example.com/cb", allow: true, err: true},
+		{name: "ShouldAllowHTTPPublicWhenPublicClientsAllowed", uri: "http://client.example.com/cb", public: true, allow: true},
+		{name: "ShouldRejectCustomSchemeWithStrictChecker", uri: "com.example.app:/cb", public: true, checker: strict, err: true},
+		{name: "ShouldAllowCustomSchemeWithStrictCheckerWhenPublicClientsAllowed", uri: "com.example.app:/cb", public: true, allow: true, checker: strict},
+		{name: "ShouldAllowNoRedirectURI"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{RedirectSecureChecker: tc.checker, AllowInsecureRedirectURIForPublicClients: tc.allow}
+
+			var uri *url.URL
+
+			if tc.uri != "" {
+				uri = MustParseURI(t, tc.uri)
+			}
+
+			err := ValidateRedirectURISecurity(t.Context(), config, &DefaultClient{ID: "client", Public: tc.public}, uri)
+
+			if tc.err {
+				assert.ErrorIs(t, err, ErrInvalidRequest)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

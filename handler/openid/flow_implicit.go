@@ -120,6 +120,40 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	return nil
 }
 
+// ValidateAuthorizeRequest validates the client's grant types and the 'redirect_uri', 'prompt', 'max_age', and 'nonce'
+// parameters of an OpenID Connect 1.0 Implicit Flow authorize request which requests the 'openid' scope.
+func (c *OpenIDConnectImplicitHandler) ValidateAuthorizeRequest(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
+	types := request.GetResponseTypes()
+
+	if !(types.Has(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken) || types.ExactOne(consts.ResponseTypeImplicitFlowIDToken)) || types.Has(consts.ResponseTypeAuthorizationCodeFlow) {
+		return nil
+	}
+
+	// OpenID Connect Core 1.0 Section 3.2.2.1: the 'id_token' response type issues an ID Token, which needs the
+	// 'openid' scope.
+	if !request.GetRequestedScopes().Has(consts.ScopeOpenID) {
+		return errorsx.WithStack(oauth2.ErrInvalidScope.WithHint("The 'id_token' response type requires the 'openid' scope."))
+	}
+
+	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
+	}
+
+	if err = c.OpenIDConnectRequestValidator.ValidateRedirectURIs(ctx, request); err != nil {
+		return err
+	}
+
+	if err = c.OpenIDConnectRequestValidator.validatePromptParameters(ctx, request); err != nil {
+		return err
+	}
+
+	if len(request.GetRequestForm().Get(consts.FormParameterNonce)) == 0 {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'nonce' must be set when using the OpenID Connect Implicit Flow."))
+	}
+
+	return nil
+}
+
 // ResponseTypesSupported returns the response types this handler serves.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
@@ -142,5 +176,6 @@ func (c *OpenIDConnectImplicitHandler) CodeChallengeMethodsSupported(ctx context
 }
 
 var (
-	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectImplicitHandler)(nil)
+	_ oauth2.AuthorizeEndpointHandler  = (*OpenIDConnectImplicitHandler)(nil)
+	_ oauth2.AuthorizeRequestValidator = (*OpenIDConnectImplicitHandler)(nil)
 )

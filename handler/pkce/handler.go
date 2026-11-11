@@ -40,26 +40,17 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, request oa
 		return nil
 	}
 
-	challenge := request.GetRequestForm().Get(consts.FormParameterCodeChallenge)
-	method := request.GetRequestForm().Get(consts.FormParameterCodeChallengeMethod)
-
-	client := request.GetClient()
-
-	if err = c.validate(ctx, challenge, method, client); err != nil {
+	if err = c.ValidateAuthorizeRequest(ctx, request); err != nil {
 		return err
 	}
 
-	if len(challenge) == 0 {
-		if len(method) != 0 {
-			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithDebug("The client requested PKCE but no challenge was provided in the authorize request."))
-		}
+	challenge := request.GetRequestForm().Get(consts.FormParameterCodeChallenge)
 
+	if len(challenge) == 0 {
 		return nil
 	}
 
-	if err = validateChallengeSyntax(challenge, method); err != nil {
-		return err
-	}
+	client := request.GetClient()
 
 	code := response.GetCode()
 
@@ -89,6 +80,33 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, request oa
 	}
 
 	return nil
+}
+
+// ValidateAuthorizeRequest validates the 'code_challenge' and 'code_challenge_method' parameters of an authorize request
+// whose 'response_type' includes 'code' against the configuration and the client.
+//
+// See: https://www.rfc-editor.org/rfc/rfc7636#section-4.4.1
+func (c *Handler) ValidateAuthorizeRequest(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
+	if !request.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
+		return nil
+	}
+
+	challenge := request.GetRequestForm().Get(consts.FormParameterCodeChallenge)
+	method := request.GetRequestForm().Get(consts.FormParameterCodeChallengeMethod)
+
+	if err = c.validate(ctx, challenge, method, request.GetClient()); err != nil {
+		return err
+	}
+
+	if len(challenge) == 0 {
+		if len(method) != 0 {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithDebug("The client requested PKCE but no challenge was provided in the authorize request."))
+		}
+
+		return nil
+	}
+
+	return validateChallengeSyntax(challenge, method)
 }
 
 func (c *Handler) getChallengeExpiresAt(ctx context.Context, request oauth2.AuthorizeRequester) (expiresAt time.Time) {
@@ -341,6 +359,7 @@ func (c *Handler) RFC8693TokenTypesSupported(ctx context.Context) (types []strin
 }
 
 var (
-	_ oauth2.AuthorizeEndpointHandler = (*Handler)(nil)
-	_ oauth2.TokenEndpointHandler     = (*Handler)(nil)
+	_ oauth2.AuthorizeRequestValidator = (*Handler)(nil)
+	_ oauth2.AuthorizeEndpointHandler  = (*Handler)(nil)
+	_ oauth2.TokenEndpointHandler      = (*Handler)(nil)
 )

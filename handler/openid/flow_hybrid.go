@@ -232,6 +232,42 @@ func (c *OpenIDConnectHybridHandler) getNonceExpiresAt(ctx context.Context, requ
 	return expiresAt
 }
 
+// ValidateAuthorizeRequest validates the client's grant types, the requested scopes, and the 'redirect_uri', 'prompt',
+// 'max_age', and 'nonce' parameters of an OpenID Connect 1.0 Hybrid Flow authorize request.
+func (c *OpenIDConnectHybridHandler) ValidateAuthorizeRequest(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
+	types := request.GetResponseTypes()
+
+	if len(types) < 2 || !(types.Matches(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow) || types.Matches(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow) || types.Matches(consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow)) {
+		return nil
+	}
+
+	if types.HasOneOf(consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowToken) && !request.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
+	}
+
+	if types.Has(consts.ResponseTypeImplicitFlowIDToken) && !request.GetRequestedScopes().Has(consts.ScopeOpenID) {
+		return errorsx.WithStack(oauth2.ErrInvalidScope.WithHint("The 'id_token' response type requires the 'openid' scope."))
+	}
+
+	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeAuthorizationCode) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is not allowed to use authorization grant 'authorization_code'."))
+	}
+
+	if err = c.OpenIDConnectRequestValidator.ValidateRedirectURIs(ctx, request); err != nil {
+		return err
+	}
+
+	if err = c.OpenIDConnectRequestValidator.validatePromptParameters(ctx, request); err != nil {
+		return err
+	}
+
+	if types.Has(consts.ResponseTypeImplicitFlowIDToken) && len(request.GetRequestForm().Get(consts.FormParameterNonce)) == 0 {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'nonce' must be set when requesting an ID Token using the OpenID Connect Hybrid Flow."))
+	}
+
+	return nil
+}
+
 // ResponseTypesSupported returns the response types this handler serves.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
@@ -261,5 +297,6 @@ func (c *OpenIDConnectHybridHandler) IDTokenSigningAlgValuesSupported(ctx contex
 }
 
 var (
-	_ oauth2.AuthorizeEndpointHandler = (*OpenIDConnectHybridHandler)(nil)
+	_ oauth2.AuthorizeEndpointHandler  = (*OpenIDConnectHybridHandler)(nil)
+	_ oauth2.AuthorizeRequestValidator = (*OpenIDConnectHybridHandler)(nil)
 )

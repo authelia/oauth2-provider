@@ -117,6 +117,19 @@ type AuthorizeEndpointBindingHandler interface {
 	BindAuthorizeRequest(ctx context.Context, request AuthorizeRequester) (err error)
 }
 
+// AuthorizeRequestValidator is implemented by an AuthorizeEndpointHandler or AuthorizeEndpointBindingHandler which can
+// check an authorization request without the user's session. The pushed authorization request endpoint runs these
+// checks so that it refuses a request the authorization endpoint would refuse, rather than issuing a 'request_uri' that
+// can only fail once it is redeemed.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9126#section-2.1
+type AuthorizeRequestValidator interface {
+	// ValidateAuthorizeRequest returns the error the handler would return for the request at the authorization endpoint
+	// for a reason which does not depend on the user's session. It must not store anything or modify the request, and
+	// returns nil when the handler is not responsible for the request.
+	ValidateAuthorizeRequest(ctx context.Context, request AuthorizeRequester) (err error)
+}
+
 // TokenEndpointBindingHandler records and enforces a proof-of-possession binding on an access request that a grant
 // handler has already accepted.
 //

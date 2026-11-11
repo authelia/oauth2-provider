@@ -32,6 +32,20 @@ type AuthorizeImplicitGrantTypeHandler struct {
 	}
 }
 
+// ValidateAuthorizeRequest validates that the client may use the 'implicit' grant for an authorize request whose
+// 'response_type' is exactly 'token'.
+func (c *AuthorizeImplicitGrantTypeHandler) ValidateAuthorizeRequest(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
+	if !request.GetResponseTypes().ExactOne(consts.ResponseTypeImplicitFlowToken) {
+		return nil
+	}
+
+	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeImplicit) {
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'."))
+	}
+
+	return nil
+}
+
 // HandleAuthorizeEndpointRequest handles an authorize request whose 'response_type' is exactly 'token'. It requires the
 // client to be registered for the 'implicit' grant type, validates the requested scopes, audience and resources against
 // the client, and then issues the access token.
@@ -138,5 +152,6 @@ func (c *AuthorizeImplicitGrantTypeHandler) IDTokenSigningAlgValuesSupported(ctx
 }
 
 var (
-	_ oauth2.AuthorizeEndpointHandler = (*AuthorizeImplicitGrantTypeHandler)(nil)
+	_ oauth2.AuthorizeEndpointHandler  = (*AuthorizeImplicitGrantTypeHandler)(nil)
+	_ oauth2.AuthorizeRequestValidator = (*AuthorizeImplicitGrantTypeHandler)(nil)
 )

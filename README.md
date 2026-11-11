@@ -231,10 +231,10 @@ the responsibility of the application that uses it:
 
 Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Consider the following:
 
-- `EnforcePKCEForPublicClients` requires PKCE from public clients, which
-  [Section 2.1.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1.1) mandates, and `EnforcePKCE` requires it
-  from every client, which is recommended for confidential clients. Clients that do not send a `code_challenge` are
-  rejected. A client implementing `ProofKeyCodeExchangeClient` can be enforced individually.
+- `AllowPublicClientsWithoutPKCE` should stay disabled: public clients are then required to use PKCE, which
+  [Section 2.1.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1.1) mandates. `EnforcePKCE` requires it from
+  every client, which is recommended for confidential clients. Clients that do not send a `code_challenge` are rejected.
+  A client implementing `ProofKeyCodeExchangeClient` can be enforced individually.
 - `EnablePKCEPlainChallengeMethod` should stay disabled: the `plain` method exposes the verifier in the authorization
   request ([Section 2.1.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1.1)).
 - The RFC 9207 `iss` authorization response parameter, a mix-up defense
@@ -264,6 +264,15 @@ Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Cons
   ([Section 4.1.3](https://datatracker.ietf.org/doc/html/rfc9700#section-4.1.3)).
 - `AllowInsecureRedirectURIForPublicClients` should stay disabled: it accepts any redirect URI scheme and host for
   public clients, including `http` ([Section 2.6](https://datatracker.ietf.org/doc/html/rfc9700#section-2.6)).
+- `AllowPostLogoutRedirectWithoutIDTokenHint` should stay disabled. The library does not perform the post logout
+  redirect: `GetPostLogoutRedirectURI` returns the registered `post_logout_redirect_uri` for the application to redirect
+  to. A request with an `id_token_hint` that fails validation is rejected with `invalid_request`. A request without one
+  returns no redirect URI, as
+  [OpenID Connect RP-Initiated Logout 1.0 Section 3](https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout)
+  permits post logout redirection without an `id_token_hint` only when the OP can confirm the legitimacy of the target
+  by other means. Enabling the option returns it in that case as well, so an application that enables it must make that
+  confirmation itself before redirecting, or the logout endpoint becomes an open redirector
+  ([Section 4.11](https://datatracker.ietf.org/doc/html/rfc9700#section-4.11)).
 - Redirect URIs are compared by exact string by default. A client returning `OriginURIComparisonStrategy` from
   `RedirectURICustomComparisonClient` accepts any path on a registered origin, which does not meet
   [Section 2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1).

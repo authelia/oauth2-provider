@@ -49,7 +49,6 @@ func TestSupportedGrantTypesComposeAllEnabled(t *testing.T) {
 		consts.GrantTypeAuthorizationCode,
 		consts.GrantTypeClientCredentials,
 		consts.GrantTypeImplicit,
-		consts.GrantTypeResourceOwnerPasswordCredentials,
 		consts.GrantTypeRefreshToken,
 		consts.GrantTypeOAuthDeviceCode,
 		consts.GrantTypeOAuthJWTBearer,

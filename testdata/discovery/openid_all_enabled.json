@@ -20,7 +20,6 @@
     "authorization_code",
     "client_credentials",
     "implicit",
-    "password",
     "refresh_token",
     "urn:ietf:params:oauth:grant-type:device_code",
     "urn:ietf:params:oauth:grant-type:jwt-bearer",

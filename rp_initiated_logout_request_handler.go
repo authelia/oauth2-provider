@@ -19,7 +19,8 @@ import (
 //
 // It resolves the client from the 'client_id' parameter, the 'id_token_hint' parameter, or both; validates the
 // 'id_token_hint' when present, permitting it to be expired; and validates 'post_logout_redirect_uri' against the
-// client's registered post logout redirect URIs.
+// client's registered post logout redirect URIs. The validated 'post_logout_redirect_uri' is only exposed when a valid
+// 'id_token_hint' was supplied, unless a PostLogoutRedirectWithoutIDTokenHintProvider permits otherwise.
 //
 // It does not authenticate the client: the end session endpoint is a front channel endpoint reached via the user
 // agent. It does not end any session and does not write a response; the caller decides whether to confirm the logout
@@ -59,7 +60,7 @@ func (f *Fosite) NewRPInitiatedLogoutRequest(ctx context.Context, r *http.Reques
 		return NewRPInitiatedLogoutRequest(), err
 	}
 
-	if err = f.validateRPInitiatedLogoutRedirectURI(request); err != nil {
+	if err = f.validateRPInitiatedLogoutRedirectURI(ctx, request); err != nil {
 		return NewRPInitiatedLogoutRequest(), err
 	}
 
@@ -171,7 +172,7 @@ func (f *Fosite) validateRPInitiatedLogoutIDTokenHint(ctx context.Context, reque
 	return nil
 }
 
-func (f *Fosite) validateRPInitiatedLogoutRedirectURI(request *RPInitiatedLogoutRequest) (err error) {
+func (f *Fosite) validateRPInitiatedLogoutRedirectURI(ctx context.Context, request *RPInitiatedLogoutRequest) (err error) {
 	raw := request.Form.Get(consts.FormParameterPostLogoutRedirectURI)
 
 	if raw == "" {
@@ -202,7 +203,21 @@ func (f *Fosite) validateRPInitiatedLogoutRedirectURI(request *RPInitiatedLogout
 		return errorsx.WithStack(ErrInvalidRequest.WithHintf("The 'post_logout_redirect_uri' parameter uses the '%s' scheme which is not permitted.", uri.Scheme))
 	}
 
+	// The OP MUST NOT perform post-logout redirection without an 'id_token_hint' unless it has other means of
+	// confirming the legitimacy of the post-logout redirection target.
+	//
+	// See: https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout
+	if request.IDTokenHintClaims == nil && !f.allowPostLogoutRedirectWithoutIDTokenHint(ctx) {
+		return nil
+	}
+
 	request.PostLogoutRedirectURI = uri
 
 	return nil
+}
+
+func (f *Fosite) allowPostLogoutRedirectWithoutIDTokenHint(ctx context.Context) (allow bool) {
+	provider, ok := f.Config.(PostLogoutRedirectWithoutIDTokenHintProvider)
+
+	return ok && provider.GetAllowPostLogoutRedirectWithoutIDTokenHint(ctx)
 }

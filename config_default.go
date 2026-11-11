@@ -173,6 +173,13 @@ type Config struct {
 	// See: https://www.rfc-editor.org/rfc/rfc9700#section-4.1.3
 	EnableRedirectFragmentGuard bool
 
+	// AllowPostLogoutRedirectWithoutIDTokenHint exposes a registered 'post_logout_redirect_uri' from an RP-Initiated
+	// Logout request that carries no 'id_token_hint'. Only enable it when the caller has other means of confirming the
+	// legitimacy of the post-logout redirection target. Defaults to false.
+	//
+	// See: https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout
+	AllowPostLogoutRedirectWithoutIDTokenHint bool
+
 	// EnforceAuthenticationRequirements treats the 'acr_values' and 'max_age' authorization request parameters as
 	// requirements for every response type and for the approval of a device authorization request: it fails with
 	// unmet_authentication_requirements unless the 'acr' recorded on the ID Token claims of the session is one of the
@@ -1086,6 +1093,11 @@ func (c *Config) GetEnableRedirectFragmentGuard(_ context.Context) (enable bool)
 	return c.EnableRedirectFragmentGuard
 }
 
+// GetAllowPostLogoutRedirectWithoutIDTokenHint returns the value of AllowPostLogoutRedirectWithoutIDTokenHint.
+func (c *Config) GetAllowPostLogoutRedirectWithoutIDTokenHint(_ context.Context) (allow bool) {
+	return c.AllowPostLogoutRedirectWithoutIDTokenHint
+}
+
 // GetEnforceClaimsParameter returns the value of EnforceClaimsParameter.
 func (c *Config) GetEnforceClaimsParameter(ctx context.Context) bool {
 	return c.EnforceClaimsParameter
@@ -1997,6 +2009,7 @@ var (
 	_ EnablePKCEPlainChallengeMethodProvider                = (*Config)(nil)
 	_ ClaimsParameterEnforcementProvider                    = (*Config)(nil)
 	_ RedirectFragmentGuardProvider                         = (*Config)(nil)
+	_ PostLogoutRedirectWithoutIDTokenHintProvider          = (*Config)(nil)
 	_ AuthenticationRequirementsEnforcementProvider         = (*Config)(nil)
 	_ RFC9470StepUpAuthenticationProvider                   = (*Config)(nil)
 	_ EnforcePKCEProvider                                   = (*Config)(nil)

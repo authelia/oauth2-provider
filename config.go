@@ -354,6 +354,17 @@ type SanitationAllowedProvider interface {
 	GetSanitationWhiteList(ctx context.Context) (whitelist []string)
 }
 
+// PostLogoutRedirectWithoutIDTokenHintProvider returns the provider for configuring whether a validated
+// 'post_logout_redirect_uri' is exposed by an RP-Initiated Logout request that carries no 'id_token_hint'.
+//
+// See: https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout
+type PostLogoutRedirectWithoutIDTokenHintProvider interface {
+	// GetAllowPostLogoutRedirectWithoutIDTokenHint returns true if a registered 'post_logout_redirect_uri' is exposed
+	// when the request carries no 'id_token_hint'. The caller must then have other means of confirming the legitimacy
+	// of the post-logout redirection target.
+	GetAllowPostLogoutRedirectWithoutIDTokenHint(ctx context.Context) (allow bool)
+}
+
 // OmitRedirectScopeParamProvider returns the provider for configuring the omit redirect scope param.
 // RedirectFragmentGuardProvider returns the provider for configuring whether an arbitrary fragment is appended to
 // authorization response redirects in the query response modes.

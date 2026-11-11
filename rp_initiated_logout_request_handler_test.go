@@ -311,20 +311,106 @@ func TestNewRPInitiatedLogoutRequest_AcceptsAuthorizedPartyMatchingClient(t *tes
 	assert.Equal(t, "test-client", requester.GetClient().GetID())
 }
 
-func TestNewRPInitiatedLogoutRequest_AcceptsRegisteredPostLogoutRedirectURI(t *testing.T) {
-	client := newLogoutClient("test-client", "https://rp.example/logged-out")
-	f, _, _ := newLogoutProviderWithJWT(t, client)
+func TestNewRPInitiatedLogoutRequest_PostLogoutRedirectURIRequiresIDTokenHint(t *testing.T) {
+	const uri = "https://rp.example/logged-out"
 
-	requester, err := f.NewRPInitiatedLogoutRequest(t.Context(), newLogoutGet(url.Values{
-		"client_id":                []string{"test-client"},
-		"post_logout_redirect_uri": []string{"https://rp.example/logged-out"},
-		"state":                    []string{"opaque"},
-	}))
+	testCases := []struct {
+		name     string
+		allow    bool
+		clientID string
+		hintFor  string
+		expected string
+		err      error
+	}{
+		{
+			name:     "ShouldWithholdWithoutHint",
+			clientID: "test-client",
+		},
+		{
+			name:     "ShouldExposeWithoutHintWhenAllowed",
+			allow:    true,
+			clientID: "test-client",
+			expected: uri,
+		},
+		{
+			name:     "ShouldExposeWithHintAndClientID",
+			clientID: "test-client",
+			hintFor:  "test-client",
+			expected: uri,
+		},
+		{
+			name:     "ShouldExposeWithHintOnly",
+			hintFor:  "test-client",
+			expected: uri,
+		},
+		{
+			name:     "ShouldExposeWithHintWhenAllowed",
+			allow:    true,
+			hintFor:  "test-client",
+			expected: uri,
+		},
+		{
+			name:     "ShouldRejectHintForAnotherClient",
+			clientID: "other-client",
+			hintFor:  "test-client",
+			err:      oauth2.ErrInvalidRequest,
+		},
+		{
+			name:    "ShouldRejectURIRegisteredToAnotherClient",
+			hintFor: "plain-client",
+			err:     oauth2.ErrInvalidRequest,
+		},
+		{
+			name:     "ShouldRejectURIRegisteredToAnotherClientWhenAllowed",
+			allow:    true,
+			clientID: "plain-client",
+			err:      oauth2.ErrInvalidRequest,
+		},
+	}
 
-	require.NoError(t, err)
-	require.NotNil(t, requester.GetPostLogoutRedirectURI())
-	assert.Equal(t, "https://rp.example/logged-out", requester.GetPostLogoutRedirectURI().String())
-	assert.Equal(t, "opaque", requester.GetState())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, jwtStrategy, config := newLogoutProviderWithJWT(t,
+				newLogoutClient("test-client", uri),
+				newLogoutClient("other-client", uri),
+				newLogoutClient("plain-client", "https://plain.example/logged-out"),
+			)
+
+			config.AllowPostLogoutRedirectWithoutIDTokenHint = tc.allow
+
+			query := url.Values{"post_logout_redirect_uri": {uri}, "state": {"opaque"}}
+
+			if tc.clientID != "" {
+				query.Set("client_id", tc.clientID)
+			}
+
+			if tc.hintFor != "" {
+				query.Set("id_token_hint", mintIDToken(t, jwtStrategy, baseHintClaims(tc.hintFor)))
+			}
+
+			requester, err := f.NewRPInitiatedLogoutRequest(t.Context(), newLogoutGet(query))
+
+			if tc.err != nil {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, tc.err)
+				assert.Nil(t, requester.GetPostLogoutRedirectURI())
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, "opaque", requester.GetState())
+
+			if tc.expected == "" {
+				assert.Nil(t, requester.GetPostLogoutRedirectURI())
+
+				return
+			}
+
+			require.NotNil(t, requester.GetPostLogoutRedirectURI())
+			assert.Equal(t, tc.expected, requester.GetPostLogoutRedirectURI().String())
+		})
+	}
 }
 
 func TestNewRPInitiatedLogoutRequest_PostLogoutRedirectURIRejections(t *testing.T) {

@@ -28,6 +28,12 @@ func (f *Fosite) NewAuthorizeResponse(ctx context.Context, request AuthorizeRequ
 
 	request.SetSession(session)
 
+	if f.isAuthenticationRequirementsEnforced(ctx) {
+		if err = validateAuthenticationRequirements(request, session); err != nil {
+			return nil, err
+		}
+	}
+
 	for _, h := range f.Config.GetAuthorizeEndpointBindingHandlers(ctx) {
 		if err = h.BindAuthorizeRequest(ctx, request); err != nil {
 			return nil, err

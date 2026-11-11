@@ -167,6 +167,13 @@ type Config struct {
 	// to false.
 	EnforceClaimsParameter bool
 
+	// EnforceAuthenticationRequirements treats the 'acr_values' and 'max_age' authorization request parameters as
+	// requirements for every response type and for the approval of a device authorization request: it fails with
+	// unmet_authentication_requirements unless the 'acr' recorded on the ID Token claims of the session is one of the
+	// requested values, and the 'auth_time' recorded there is no older than 'max_age' seconds before the request.
+	// Defaults to false.
+	EnforceAuthenticationRequirements bool
+
 	// EnablePKCEPlainChallengeMethod sets whether or not to allow the plain challenge method (S256 should be used whenever possible, plain is really discouraged). Defaults to false.
 	EnablePKCEPlainChallengeMethod bool
 
@@ -1054,6 +1061,11 @@ func (c *Config) GetEnablePKCEPlainChallengeMethod(ctx context.Context) bool {
 // GetEnforcePKCEForPublicClients returns the value of EnforcePKCEForPublicClients.
 func (c *Config) GetEnforcePKCEForPublicClients(ctx context.Context) bool {
 	return c.EnforcePKCEForPublicClients
+}
+
+// GetEnforceAuthenticationRequirements returns the value of EnforceAuthenticationRequirements.
+func (c *Config) GetEnforceAuthenticationRequirements(_ context.Context) (enforce bool) {
+	return c.EnforceAuthenticationRequirements
 }
 
 // GetEnforceClaimsParameter returns the value of EnforceClaimsParameter.
@@ -1959,6 +1971,7 @@ var (
 	_ AllowInsecureRedirectURIForPublicClientsProvider      = (*Config)(nil)
 	_ EnablePKCEPlainChallengeMethodProvider                = (*Config)(nil)
 	_ ClaimsParameterEnforcementProvider                    = (*Config)(nil)
+	_ AuthenticationRequirementsEnforcementProvider         = (*Config)(nil)
 	_ EnforcePKCEProvider                                   = (*Config)(nil)
 	_ GrantTypeJWTBearerCanSkipClientAuthProvider           = (*Config)(nil)
 	_ GrantTypeJWTBearerIDOptionalProvider                  = (*Config)(nil)

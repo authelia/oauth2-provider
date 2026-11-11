@@ -206,7 +206,7 @@ func TestClientRedirectURIMatchingStrategies(t *testing.T) {
 		},
 		{
 			name:     "ShouldReturnMatchOnIPv6LoopbackRedirectURIWithUnregisteredPort",
-			client:   &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}},
+			client:   &oauth2.DefaultClient{Public: true, RedirectURIs: []string{"http://[::1]"}},
 			url:      "http://[::1]:1024",
 			expected: "http://[::1]:1024",
 		},
@@ -218,7 +218,7 @@ func TestClientRedirectURIMatchingStrategies(t *testing.T) {
 		},
 		{
 			name:     "ShouldReturnMatchOnIPv6LoopbackRedirectURIWithUnregisteredPortAndRegisteredPath",
-			client:   &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]/cb"}},
+			client:   &oauth2.DefaultClient{Public: true, RedirectURIs: []string{"http://[::1]/cb"}},
 			url:      "http://[::1]:1024/cb",
 			expected: "http://[::1]:1024/cb",
 		},
@@ -230,7 +230,7 @@ func TestClientRedirectURIMatchingStrategies(t *testing.T) {
 		},
 		{
 			name:     "ShouldReturnMatchOnIPv4LoopbackRedirectURIWithUnregisteredPort",
-			client:   &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}},
+			client:   &oauth2.DefaultClient{Public: true, RedirectURIs: []string{"http://127.0.0.1"}},
 			url:      "http://127.0.0.1:1024",
 			expected: "http://127.0.0.1:1024",
 		},
@@ -242,7 +242,7 @@ func TestClientRedirectURIMatchingStrategies(t *testing.T) {
 		},
 		{
 			name:     "ShouldReturnMatchOnIPv4LoopbackRedirectURIWithUnregisteredPortAndRegisteredPath",
-			client:   &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1/cb"}},
+			client:   &oauth2.DefaultClient{Public: true, RedirectURIs: []string{"http://127.0.0.1/cb"}},
 			url:      "http://127.0.0.1:64000/cb",
 			expected: "http://127.0.0.1:64000/cb",
 		},
@@ -254,7 +254,7 @@ func TestClientRedirectURIMatchingStrategies(t *testing.T) {
 		},
 		{
 			name:     "ShouldReturnMatchOnIPv4LoopbackExactMatchWithPath",
-			client:   &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1/Cb"}},
+			client:   &oauth2.DefaultClient{Public: true, RedirectURIs: []string{"http://127.0.0.1/Cb"}},
 			url:      "http://127.0.0.1:8080/Cb",
 			expected: "http://127.0.0.1:8080/Cb",
 		},
@@ -374,19 +374,31 @@ func TestClientRedirectURIMatchingStrategies(t *testing.T) {
 		},
 		{
 			name:     "ShouldReturnMatchOnIPv6LoopbackRedirectURIWithUnregisteredPortRedirectURIOriginStrategy",
-			client:   &originClient{DefaultClient: &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}}},
+			client:   &originClient{DefaultClient: &oauth2.DefaultClient{Public: true, RedirectURIs: []string{"http://[::1]"}}},
 			url:      "http://[::1]:1024",
 			expected: "http://[::1]:1024",
 		},
 		{
+			name:   "ShouldErrorOnConfidentialClientIPv6LoopbackRedirectURIWithUnregisteredPortRedirectURIOriginStrategy",
+			client: &originClient{DefaultClient: &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}}},
+			url:    "http://[::1]:1024",
+			error:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '' did not match 'redirect_uri' value 'http://[::1]:1024'.",
+		},
+		{
 			name:     "ShouldMatchOnIPv6LoopbackRedirectURIWithPathWhenRegistrationHasNoPathRedirectURIOriginStrategy",
-			client:   &originClient{DefaultClient: &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}}},
+			client:   &originClient{DefaultClient: &oauth2.DefaultClient{Public: true, RedirectURIs: []string{"http://[::1]"}}},
 			url:      "http://[::1]:1024/cb",
 			expected: "http://[::1]:1024/cb",
 		},
 		{
+			name:   "ShouldErrorOnConfidentialClientIPv6LoopbackRedirectURIWithPathWhenRegistrationHasNoPathRedirectURIOriginStrategy",
+			client: &originClient{DefaultClient: &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]"}}},
+			url:    "http://[::1]:1024/cb",
+			error:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '' did not match 'redirect_uri' value 'http://[::1]:1024/cb'.",
+		},
+		{
 			name:     "ShouldReturnMatchOnIPv6LoopbackRedirectURIWithUnregisteredPortAndRegisteredPathRedirectURIOriginStrategy",
-			client:   &originClient{DefaultClient: &oauth2.DefaultClient{RedirectURIs: []string{"http://[::1]/cb"}}},
+			client:   &originClient{DefaultClient: &oauth2.DefaultClient{Public: true, RedirectURIs: []string{"http://[::1]/cb"}}},
 			url:      "http://[::1]:1024/cb",
 			expected: "http://[::1]:1024/cb",
 		},
@@ -398,15 +410,27 @@ func TestClientRedirectURIMatchingStrategies(t *testing.T) {
 		},
 		{
 			name:     "ShouldReturnMatchOnIPv4LoopbackRedirectURIWithUnregisteredPortRedirectURIOriginStrategy",
-			client:   &originClient{DefaultClient: &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}}},
+			client:   &originClient{DefaultClient: &oauth2.DefaultClient{Public: true, RedirectURIs: []string{"http://127.0.0.1"}}},
 			url:      "http://127.0.0.1:1024",
 			expected: "http://127.0.0.1:1024",
 		},
 		{
+			name:   "ShouldErrorOnConfidentialClientIPv4LoopbackRedirectURIWithUnregisteredPortRedirectURIOriginStrategy",
+			client: &originClient{DefaultClient: &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1"}}},
+			url:    "http://127.0.0.1:1024",
+			error:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '' did not match 'redirect_uri' value 'http://127.0.0.1:1024'.",
+		},
+		{
 			name:     "ShouldNotErrorOnIPv4LoopbackRedirectURIWithNoRegisteredPathRedirectURIOriginStrategy",
-			client:   &originClient{DefaultClient: &oauth2.DefaultClient{RedirectURIs: []string{"!@HN#!YUI@#B!@YIH%B!@J#$HK", "http://127.0.0.1"}}},
+			client:   &originClient{DefaultClient: &oauth2.DefaultClient{Public: true, RedirectURIs: []string{"!@HN#!YUI@#B!@YIH%B!@J#$HK", "http://127.0.0.1"}}},
 			url:      "http://127.0.0.1:64000/cb",
 			expected: "http://127.0.0.1:64000/cb",
+		},
+		{
+			name:   "ShouldErrorOnConfidentialClientIPv4LoopbackRedirectURIWithNoRegisteredPathRedirectURIOriginStrategy",
+			client: &originClient{DefaultClient: &oauth2.DefaultClient{RedirectURIs: []string{"!@HN#!YUI@#B!@YIH%B!@J#$HK", "http://127.0.0.1"}}},
+			url:    "http://127.0.0.1:64000/cb",
+			error:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'. The 'redirect_uris' registered with OAuth 2.0 Client with id '' did not match 'redirect_uri' value 'http://127.0.0.1:64000/cb'.",
 		},
 		{
 			name:   "ShouldErrorOnIPv4LoopbackRedirectURIWithUnregisteredPathRedirectURIOriginStrategy",
@@ -416,9 +440,15 @@ func TestClientRedirectURIMatchingStrategies(t *testing.T) {
 		},
 		{
 			name:     "ShouldReturnMatchOnIPv4LoopbackRedirectURIWithUnregisteredPortAndRegisteredPathRedirectURIOriginStrategy",
-			client:   &originClient{DefaultClient: &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1/cb"}}},
+			client:   &originClient{DefaultClient: &oauth2.DefaultClient{Public: true, RedirectURIs: []string{"http://127.0.0.1/cb"}}},
 			url:      "http://127.0.0.1:64000/cb",
 			expected: "http://127.0.0.1:64000/cb",
+		},
+		{
+			name:     "ShouldReturnMatchOnConfidentialClientIPv4LoopbackRedirectURIWithRegisteredPortRedirectURIOriginStrategy",
+			client:   &originClient{DefaultClient: &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1:1024"}}},
+			url:      "http://127.0.0.1:1024/cb",
+			expected: "http://127.0.0.1:1024/cb",
 		},
 		{
 			name:     "ShouldReturnMatchOnIPv4LoopbackExactMatchRedirectURIOriginStrategy",
@@ -428,7 +458,7 @@ func TestClientRedirectURIMatchingStrategies(t *testing.T) {
 		},
 		{
 			name:     "ShouldReturnMatchOnIPv4LoopbackExactMatchWithPathRedirectURIOriginStrategy",
-			client:   &originClient{DefaultClient: &oauth2.DefaultClient{RedirectURIs: []string{"http://127.0.0.1/Cb"}}},
+			client:   &originClient{DefaultClient: &oauth2.DefaultClient{Public: true, RedirectURIs: []string{"http://127.0.0.1/Cb"}}},
 			url:      "http://127.0.0.1:8080/Cb",
 			expected: "http://127.0.0.1:8080/Cb",
 		},
@@ -508,6 +538,59 @@ func TestClientRedirectURIMatchingStrategies(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMatchRedirectURIWithClientRedirectURIsNativeAppLoopback(t *testing.T) {
+	// RFC 8252 Section 7.3 and RFC 9700 Section 2.1.
+	testCases := []struct {
+		name       string
+		public     bool
+		registered string
+		requested  string
+		match      bool
+	}{
+		{name: "ShouldMatchPublicIPv4LoopbackAnyPort", public: true, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/cb", match: true},
+		{name: "ShouldMatchPublicIPv6LoopbackAnyPort", public: true, registered: "http://[::1]/cb", requested: "http://[::1]:51004/cb", match: true},
+		{name: "ShouldMatchPublicLocalhostAnyPort", public: true, registered: "http://localhost/cb", requested: "http://localhost:51004/cb", match: true},
+		{name: "ShouldMatchPublicLocalhostRegisteredPortDifferentPort", public: true, registered: "http://localhost:8080/cb", requested: "http://localhost:51004/cb", match: true},
+		{name: "ShouldMatchPublicLocalhostRegisteredPortNoPort", public: true, registered: "http://localhost:8080/cb", requested: "http://localhost/cb", match: true},
+		{name: "ShouldMatchPublicLocalhostWithQuery", public: true, registered: "http://localhost/cb?a=b", requested: "http://localhost:51004/cb?a=b", match: true},
+		{name: "ShouldNotMatchConfidentialIPv4LoopbackAnyPort", registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/cb"},
+		{name: "ShouldNotMatchConfidentialIPv6LoopbackAnyPort", registered: "http://[::1]/cb", requested: "http://[::1]:51004/cb"},
+		{name: "ShouldNotMatchConfidentialLocalhostAnyPort", registered: "http://localhost/cb", requested: "http://localhost:51004/cb"},
+		{name: "ShouldMatchConfidentialLocalhostExact", registered: "http://localhost:51004/cb", requested: "http://localhost:51004/cb", match: true},
+		{name: "ShouldNotMatchPublicIPv4LoopbackDifferentPath", public: true, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/other"},
+		{name: "ShouldNotMatchPublicIPv6LoopbackDifferentPath", public: true, registered: "http://[::1]/cb", requested: "http://[::1]:51004/cb/"},
+		{name: "ShouldNotMatchPublicLocalhostDifferentPath", public: true, registered: "http://localhost/cb", requested: "http://localhost:51004/Cb"},
+		{name: "ShouldNotMatchPublicIPv4LoopbackEscapedPath", public: true, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/c%62"},
+		{name: "ShouldNotMatchPublicLocalhostDifferentQuery", public: true, registered: "http://localhost/cb?a=b", requested: "http://localhost:51004/cb?a=c"},
+		{name: "ShouldNotMatchPublicLocalhostAddedQuery", public: true, registered: "http://localhost/cb", requested: "http://localhost:51004/cb?a=b"},
+		{name: "ShouldNotMatchPublicIPv4LoopbackAddedUserInfo", public: true, registered: "http://127.0.0.1/cb", requested: "http://user@127.0.0.1:51004/cb"},
+		{name: "ShouldNotMatchPublicLocalhostHTTPS", public: true, registered: "https://localhost/cb", requested: "https://localhost:51004/cb"},
+		{name: "ShouldNotMatchPublicLocalhostSubdomain", public: true, registered: "http://app.localhost/cb", requested: "http://app.localhost:51004/cb"},
+		{name: "ShouldNotMatchPublicLocalhostAgainstIPv4Loopback", public: true, registered: "http://localhost/cb", requested: "http://127.0.0.1:51004/cb"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &oauth2.DefaultClient{Public: tc.public, RedirectURIs: []string{tc.registered}}
+
+			uri, err := oauth2.MatchRedirectURIWithClientRedirectURIs(tc.requested, client)
+
+			if tc.match {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				assert.Equal(t, tc.requested, uri.String())
+			} else {
+				assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+			}
+		})
+	}
+}
+
+func TestIsMatchingRedirectURIShouldNotApplyLoopbackPortExemption(t *testing.T) {
+	_, ok := oauth2.IsMatchingRedirectURI("http://127.0.0.1:51004/cb", []string{"http://127.0.0.1/cb"}, &oauth2.BestPracticeURIComparisonStrategy{})
+
+	assert.False(t, ok)
 }
 
 func TestIsRedirectURISecure(t *testing.T) {

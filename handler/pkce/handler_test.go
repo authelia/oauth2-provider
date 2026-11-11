@@ -77,7 +77,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			"",
 		},
 		{
-			"ShouldFailNoPKCEWithoutClientWithEnforceForPublicClients",
+			"ShouldFailNoPKCEWithoutClient",
 			&oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 				Request: oauth2.Request{
@@ -87,7 +87,6 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
-				config.EnforcePKCEForPublicClients = true
 			},
 			oauth2.ErrServerError,
 			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The client for the request wasn't properly loaded.",
@@ -147,13 +146,28 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
-				config.EnforcePKCEForPublicClients = true
 			},
 			oauth2.ErrInvalidRequest,
 			"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a 'code_challenge' when performing the authorize code flow, but it is missing. The authorization server is configured in a way that enforces PKCE for all public client type clients and the 'test' client is using the public client type.",
 		},
 		{
-			"ShouldPassNoPKCEConfidentialClientWhenRequirePKCEForPublicClients",
+			"ShouldPassNoPKCEPublicClientWhenAllowed",
+			&oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &TestPKCEClient{EnforcePKCE: false, DefaultClient: &oauth2.DefaultClient{ID: "test", Public: true}},
+					Form:   nil,
+				},
+			},
+			nil,
+			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
+				config.AllowPublicClientsWithoutPKCE = true
+			},
+			nil,
+			"",
+		},
+		{
+			"ShouldPassNoPKCEConfidentialClient",
 			&oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 				Request: oauth2.Request{
@@ -163,7 +177,6 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
-				config.EnforcePKCEForPublicClients = true
 			},
 			nil,
 			"",
@@ -764,6 +777,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.AllowPublicClientsWithoutPKCE = true
 				config.EnforcePKCE = false
 				gomock.InOrder(
 					store.
@@ -843,7 +857,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
-				config.EnforcePKCEForPublicClients = true
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -870,7 +883,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
-				config.EnforcePKCEForPublicClients = true
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -924,7 +936,6 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
-				config.EnforcePKCEForPublicClients = true
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -952,6 +963,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.AllowPublicClientsWithoutPKCE = true
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -979,6 +991,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.AllowPublicClientsWithoutPKCE = true
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -1006,6 +1019,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
+				config.AllowPublicClientsWithoutPKCE = true
 				gomock.InOrder(
 					store.
 						EXPECT().

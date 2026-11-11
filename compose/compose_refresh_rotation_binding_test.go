@@ -6,8 +6,11 @@ package compose
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -127,12 +130,17 @@ func newRRBPublicClient() *oauth2.DefaultClient {
 func rrbExchange(t *testing.T, provider oauth2.Provider) string {
 	t.Helper()
 
+	verifier := rand.Text() + rand.Text()
+	sum := sha256.Sum256([]byte(verifier))
+
 	form := url.Values{
-		consts.FormParameterClientID:     []string{rrbClientID},
-		consts.FormParameterResponseType: []string{consts.ResponseTypeAuthorizationCodeFlow},
-		consts.FormParameterRedirectURI:  []string{rrbRedirectURI},
-		consts.FormParameterScope:        []string{consts.ScopeOffline},
-		consts.FormParameterState:        []string{"abcdefghijklmnop"},
+		consts.FormParameterClientID:            []string{rrbClientID},
+		consts.FormParameterResponseType:        []string{consts.ResponseTypeAuthorizationCodeFlow},
+		consts.FormParameterRedirectURI:         []string{rrbRedirectURI},
+		consts.FormParameterScope:               []string{consts.ScopeOffline},
+		consts.FormParameterState:               []string{"abcdefghijklmnop"},
+		consts.FormParameterCodeChallenge:       []string{base64.RawURLEncoding.EncodeToString(sum[:])},
+		consts.FormParameterCodeChallengeMethod: []string{consts.PKCEChallengeMethodSHA256},
 	}
 
 	requester, err := provider.NewAuthorizeRequest(context.Background(), httptest.NewRequest(http.MethodGet, "https://as.example.com/authorize?"+form.Encode(), nil))
@@ -150,6 +158,7 @@ func rrbExchange(t *testing.T, provider oauth2.Provider) string {
 		consts.FormParameterGrantType:         []string{consts.GrantTypeAuthorizationCode},
 		consts.FormParameterAuthorizationCode: []string{code},
 		consts.FormParameterRedirectURI:       []string{rrbRedirectURI},
+		consts.FormParameterCodeVerifier:      []string{verifier},
 	}, "", nil)
 
 	ar, err := provider.NewAccessRequest(context.Background(), r, &oauth2.DefaultSession{})

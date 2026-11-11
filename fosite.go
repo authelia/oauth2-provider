@@ -219,7 +219,7 @@ type Configurator interface {
 	AuthorizationServerIdentificationProvider
 	AllowedPromptsProvider
 	EnforcePKCEProvider
-	EnforcePKCEForPublicClientsProvider
+	AllowPublicClientsWithoutPKCEProvider
 	EnablePKCEPlainChallengeMethodProvider
 	GrantTypeJWTBearerCanSkipClientAuthProvider
 	GrantTypeJWTBearerIDOptionalProvider

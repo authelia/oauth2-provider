@@ -25,7 +25,7 @@ type Handler struct {
 	Storage               Storage
 	Config                interface {
 		oauth2.EnforcePKCEProvider
-		oauth2.EnforcePKCEForPublicClientsProvider
+		oauth2.AllowPublicClientsWithoutPKCEProvider
 		oauth2.EnablePKCEPlainChallengeMethodProvider
 		oauth2.AuthorizeCodeLifespanProvider
 	}
@@ -274,7 +274,9 @@ func (c *Handler) validateNoPKCE(ctx context.Context, parameter string, client o
 			WithDebug("The authorization server is configured in a way that enforces PKCE for all clients."))
 	}
 
-	if c.Config.GetEnforcePKCEForPublicClients(ctx) {
+	// Public clients MUST use PKCE.
+	// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1.1
+	if !c.Config.GetAllowPublicClientsWithoutPKCE(ctx) {
 		if client == nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The client for the request wasn't properly loaded."))
 		}

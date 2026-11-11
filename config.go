@@ -348,8 +348,9 @@ type MinParameterEntropyProvider interface {
 
 // SanitationAllowedProvider returns the provider for configuring the sanitation white list.
 type SanitationAllowedProvider interface {
-	// GetSanitationWhiteList is a whitelist of form values that are required by the token endpoint. These values
-	// are safe for storage in a database (cleartext).
+	// GetSanitationWhiteList returns additional form values retained when an authorize request is stored for the token
+	// endpoint. These values must be safe for storage in a database (cleartext). The list extends the parameters the
+	// token endpoint always requires ('scope' and 'redirect_uri') and cannot remove them.
 	GetSanitationWhiteList(ctx context.Context) (whitelist []string)
 }
 

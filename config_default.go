@@ -312,8 +312,9 @@ type Config struct {
 	// OmitRedirectScopeParam indicates whether the "scope" parameter should be omitted from the redirect URL.
 	OmitRedirectScopeParam bool
 
-	// SanitationWhiteList is a whitelist of form values that are required by the token endpoint. These values
-	// are safe for storage in a database (cleartext).
+	// SanitationWhiteList is a list of additional form values retained when an authorize request is stored for the
+	// token endpoint. These values must be safe for storage in a database (cleartext). The list extends the parameters
+	// the token endpoint always requires ('scope' and 'redirect_uri') and cannot remove them.
 	SanitationWhiteList []string
 
 	// JWTScopeClaimKey defines the claim key to be used to set the scope in. Valid fields are "scope" or "scp" or both.
@@ -1083,8 +1084,7 @@ func (c *Config) GetRFC9470StepUpAuthenticationEnabled(ctx context.Context) bool
 	return c.RFC9470StepUpAuthenticationEnabled
 }
 
-// GetSanitationWhiteList returns a list of allowed form values that are required by the token endpoint. These values
-// are safe for storage in a database (cleartext).
+// GetSanitationWhiteList returns the value of SanitationWhiteList.
 func (c *Config) GetSanitationWhiteList(ctx context.Context) []string {
 	return c.SanitationWhiteList
 }

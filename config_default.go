@@ -173,18 +173,18 @@ type Config struct {
 	// AllowedPromptValues sets which OpenID Connect prompt values the server supports. Defaults to []string{"login", "none", "consent", "select_account"}.
 	AllowedPromptValues []string
 
-	// EnforceClientAssertionIssuerAudience requires a JWT client authentication assertion to carry the issuer
-	// identifier as the sole value of its 'aud' claim. See GetEnforceClientAssertionIssuerAudience.
-	EnforceClientAssertionIssuerAudience bool
+	// DisableClientAssertionIssuerAudience stops requiring a JWT client authentication assertion to carry the issuer
+	// identifier as the sole value of its 'aud' claim. See GetDisableClientAssertionIssuerAudience.
+	DisableClientAssertionIssuerAudience bool
 
 	// ClientAssertionClientSecretEncryptionDisabled rejects client assertions encrypted with a key derived from the
 	// client secret. Defaults to false, which accepts them when the request includes the 'client_id' parameter. See
 	// ClientAssertionClientSecretEncryptionDisabledProvider.
 	ClientAssertionClientSecretEncryptionDisabled bool
 
-	// AllowedJWTAssertionAudiences is a list of permitted client assertion audiences. If the authorization server is
-	// intended to be compatible with the client_secret_jwt or private_key_jwt client authentication methods
-	// (see http://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth), this value MUST be set.
+	// AllowedJWTAssertionAudiences are audiences accepted for an RFC 7523 JWT authorization grant in addition to the
+	// issuer identifier and the token endpoint URL. They are accepted for a JWT client authentication assertion only
+	// when DisableClientAssertionIssuerAudience is true.
 	AllowedJWTAssertionAudiences []string
 
 	// AllowedIntrospectionAudiences is a list of audiences permitted for an Access Token used to authenticate a request
@@ -862,19 +862,21 @@ func (c *Config) GetClientIDMetadataDocumentAllowedDomainSuffixes(_ context.Cont
 	return c.ClientIDMetadataDocumentAllowedDomainSuffixes
 }
 
-// GetAllowedJWTAssertionAudiences returns the permitted client assertion audiences.
+// GetAllowedJWTAssertionAudiences returns the audiences accepted for an RFC 7523 JWT authorization grant in addition
+// to the issuer identifier and the token endpoint URL. See AllowedJWTAssertionAudiencesProvider.
 func (c *Config) GetAllowedJWTAssertionAudiences(ctx context.Context) []string {
 	return c.AllowedJWTAssertionAudiences
 }
 
-// GetEnforceClientAssertionIssuerAudience returns whether a JWT client authentication assertion must carry this
-// server's issuer identifier as the sole value of its 'aud' claim. It is off by default, as RFC 7523 permits the token
-// endpoint URL.
+// GetDisableClientAssertionIssuerAudience returns whether a JWT client authentication assertion may carry an 'aud'
+// claim other than this server's issuer identifier as its sole value. When true, an 'aud' claim containing the issuer
+// identifier, the token or pushed authorization request endpoint URL, or a value of AllowedJWTAssertionAudiences is
+// accepted, as RFC 7523 Section 3 and RFC 9126 Section 2 permitted before RFC 10070. Defaults to false.
 //
-// See: https://www.ietf.org/archive/id/draft-ietf-oauth-rfc7523bis-02.html#section-4
-// See: https://www.rfc-editor.org/rfc/rfc7523#section-3
-func (c *Config) GetEnforceClientAssertionIssuerAudience(ctx context.Context) (enforce bool) {
-	return c.EnforceClientAssertionIssuerAudience
+// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
+// See: https://www.rfc-editor.org/rfc/rfc10070#section-5
+func (c *Config) GetDisableClientAssertionIssuerAudience(ctx context.Context) (disable bool) {
+	return c.DisableClientAssertionIssuerAudience
 }
 
 // GetClientAssertionClientSecretEncryptionDisabled returns whether client assertions encrypted with a key derived from

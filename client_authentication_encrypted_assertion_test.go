@@ -65,7 +65,7 @@ func TestClientAssertionEncryptedWithClientSecret(t *testing.T) {
 			}
 
 			config := &oauth2.Config{
-				AllowedJWTAssertionAudiences:                  []string{audience},
+				Issuer: audience,
 				ClientAssertionClientSecretEncryptionDisabled: tc.disabled,
 			}
 			config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{})}

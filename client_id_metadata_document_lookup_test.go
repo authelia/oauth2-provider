@@ -317,6 +317,8 @@ func TestGetClientReservedIdentifiers(t *testing.T) {
 		{"ShouldRejectTheIssuer", &Config{Issuer: id}},
 		{"ShouldRejectAnAllowedJWTAssertionAudience", &Config{AllowedJWTAssertionAudiences: []string{"https://auth.example.com/token", id}}},
 		{"ShouldRejectAnAllowedIntrospectionAudience", &Config{AllowedIntrospectionAudiences: []string{id}}},
+		{"ShouldRejectTheTokenEndpointURL", &Config{EndpointURLs: EndpointURLs{Token: id}}},
+		{"ShouldRejectTheTokenEndpointMutualTLSAlias", &Config{EndpointURLs: EndpointURLs{MutualTLSAliases: RFC8705MutualTLSEndpointAliases{Token: id}}}},
 		{"ShouldRejectTheIntrospectionEndpointURL", &Config{EndpointURLs: EndpointURLs{Introspection: id}}},
 		{"ShouldRejectTheIntrospectionEndpointMutualTLSAlias", &Config{EndpointURLs: EndpointURLs{MutualTLSAliases: RFC8705MutualTLSEndpointAliases{Introspection: id}}}},
 		{"ShouldRejectTheRegistrationEndpointURL", &Config{EndpointURLs: EndpointURLs{Registration: id}}},

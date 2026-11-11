@@ -204,7 +204,7 @@ func TestEndpointAuthSigningAlgValuesReplaceAllowList(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.config.JWKSFetcherStrategy = NewDefaultJWKSFetcherStrategy()
-			tc.config.AllowedJWTAssertionAudiences = []string{audience}
+			tc.config.Issuer = audience
 			tc.config.JWTStrategy = &jwt.DefaultStrategy{Config: tc.config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
 			store := storage.NewMemoryStore()

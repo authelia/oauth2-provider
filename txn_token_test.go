@@ -50,16 +50,15 @@ func TestIsTxnTokenType(t *testing.T) {
 func TestTxnTokenIsNotAcceptedAsClientAssertion(t *testing.T) {
 	const (
 		clientID = "workload"
-		tokenURL = "https://as.example.com/token"
+		asIssuer = "https://as.example.com"
 		keyID    = "issuer-key"
 	)
 
 	key := gen.MustRSAKey()
 
 	config := &oauth2.Config{
-		JWKSFetcherStrategy:          oauth2.NewDefaultJWKSFetcherStrategy(),
-		AllowedJWTAssertionAudiences: []string{tokenURL},
-		Issuer:                       "https://op.example.com",
+		JWKSFetcherStrategy: oauth2.NewDefaultJWKSFetcherStrategy(),
+		Issuer:              asIssuer,
 	}
 
 	issuer, err := jwt.NewDefaultIssuer(jose.JSONWebKey{Key: key, KeyID: keyID, Algorithm: "RS256", Use: "sig"})
@@ -94,7 +93,7 @@ func TestTxnTokenIsNotAcceptedAsClientAssertion(t *testing.T) {
 		authenticated, err := authenticate(t, mustGenerateClientAssertion(t, jwt.MapClaims{
 			consts.ClaimIssuer:         clientID,
 			consts.ClaimSubject:        clientID,
-			consts.ClaimAudience:       tokenURL,
+			consts.ClaimAudience:       asIssuer,
 			consts.ClaimJWTID:          "control",
 			consts.ClaimExpirationTime: time.Now().Add(time.Minute).Unix(),
 		}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, keyID, key))
@@ -105,7 +104,7 @@ func TestTxnTokenIsNotAcceptedAsClientAssertion(t *testing.T) {
 
 	t.Run("ShouldRefuseAnIssuedTxnToken", func(t *testing.T) {
 		tokenTypes := map[string]oauth2.RFC8693TokenType{
-			consts.TokenTypeRFC8693TxnToken: &rfc8693.TxnTokenType{Name: consts.TokenTypeRFC8693TxnToken, TrustDomain: tokenURL, Issuer: clientID},
+			consts.TokenTypeRFC8693TxnToken: &rfc8693.TxnTokenType{Name: consts.TokenTypeRFC8693TxnToken, TrustDomain: asIssuer, Issuer: clientID},
 		}
 
 		config.RFC8693TokenTypes = tokenTypes

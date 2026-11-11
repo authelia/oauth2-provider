@@ -96,8 +96,8 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		}
 
 		claims.AccessTokenHash = hash
-	} else {
-		response.AddParameter(consts.FormParameterState, request.GetState())
+	} else if state := request.GetState(); len(state) != 0 {
+		response.AddParameter(consts.FormParameterState, state)
 	}
 
 	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))

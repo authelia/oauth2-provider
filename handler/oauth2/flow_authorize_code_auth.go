@@ -98,7 +98,9 @@ func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, 
 	}
 
 	response.AddParameter(consts.FormParameterAuthorizationCode, code)
-	response.AddParameter(consts.FormParameterState, request.GetState())
+	if state := request.GetState(); len(state) != 0 {
+		response.AddParameter(consts.FormParameterState, state)
+	}
 
 	if !c.Config.GetOmitRedirectScopeParam(ctx) {
 		response.AddParameter(consts.FormParameterScope, strings.Join(request.GetGrantedScopes(), " "))

@@ -105,8 +105,8 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		}
 
 		claims.AccessTokenHash = hash
-	} else {
-		response.AddParameter(consts.FormParameterState, request.GetState())
+	} else if state := request.GetState(); len(state) != 0 {
+		response.AddParameter(consts.FormParameterState, state)
 	}
 
 	setIDTokenExpiresAt(session, idTokenExpiresAt)

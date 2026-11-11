@@ -59,7 +59,9 @@ func (c *NoneResponseTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Con
 		return err
 	}
 
-	response.AddParameter(consts.FormParameterState, request.GetState())
+	if state := request.GetState(); len(state) != 0 {
+		response.AddParameter(consts.FormParameterState, state)
+	}
 
 	if !c.Config.GetOmitRedirectScopeParam(ctx) {
 		response.AddParameter(consts.FormParameterScope, strings.Join(request.GetGrantedScopes(), " "))

@@ -246,7 +246,8 @@ type Config struct {
 	// RefreshTokenScopes defines which OAuth scopes will be given refresh tokens during the authorization code grant exchange. This defaults to "offline" and "offline_access". When set to an empty array, all exchanges will be given refresh tokens.
 	RefreshTokenScopes []string
 
-	// MinParameterEntropy controls the minimum size of state and nonce parameters. Defaults to oauth2.MinParameterEntropy.
+	// MinParameterEntropy controls the minimum size of the state and nonce parameters when they are present. Defaults to
+	// oauth2.MinParameterEntropy when 0, and -1 disables the minimum.
 	MinParameterEntropy int
 
 	// UseLegacyErrorFormat controls whether the legacy error format (with `error_debug`, `error_hint`, ...)

@@ -114,7 +114,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				return oauthClient.AuthCodeURL("123") + "&nonce=" + newTestNonce()
 			},
-			expectAuthErr:  "invalid_state",
+			expectAuthErr:  "invalid_request",
 			authStatusCode: http.StatusNotAcceptable,
 		},
 		{

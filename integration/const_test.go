@@ -110,7 +110,7 @@ var store = &storage.MemoryStore{
 			Public:        true,
 			RedirectURIs:  []string{"http://localhost:3846/callback"},
 			ResponseTypes: []string{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeHybridFlowIDToken},
-			GrantTypes:    []string{consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode},
+			GrantTypes:    []string{consts.GrantTypeImplicit, consts.GrantTypeRefreshToken, consts.GrantTypeAuthorizationCode},
 			Scopes:        []string{"oauth2", consts.ScopeOffline, consts.ScopeOpenID},
 			Audience:      []string{tokenURL},
 		},

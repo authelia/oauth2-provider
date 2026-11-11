@@ -269,6 +269,9 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			setup: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) OpenIDConnectHybridHandler {
 				request.Form.Del(consts.FormParameterRedirectURI)
 				request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken}
+				request.Client = &oauth2.DefaultClient{
+					GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+				}
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
 			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0.",
@@ -708,6 +711,81 @@ func TestHybrid_HandleAuthorizeEndpointRequestEnforcesClaims(t *testing.T) {
 			}
 
 			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+		})
+	}
+}
+
+func TestHybrid_HandleAuthorizeEndpointRequestRequiresImplicitGrant(t *testing.T) {
+	testCases := []struct {
+		name          string
+		responseTypes oauth2.Arguments
+		grantTypes    oauth2.Arguments
+		err           error
+	}{
+		{
+			name:          "ShouldFailCodeIDTokenWithoutImplicitGrant",
+			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+			grantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+			err:           oauth2.ErrInvalidGrant,
+		},
+		{
+			name:          "ShouldFailCodeTokenWithoutImplicitGrant",
+			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowToken},
+			grantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+			err:           oauth2.ErrInvalidGrant,
+		},
+		{
+			name:          "ShouldFailCodeIDTokenTokenWithoutImplicitGrant",
+			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowToken},
+			grantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+			err:           oauth2.ErrInvalidGrant,
+		},
+		{
+			name:          "ShouldPassCodeIDTokenWithImplicitGrant",
+			responseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+			grantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+
+			request := oauth2.NewAuthorizeRequest()
+			request.Form.Set(consts.FormParameterNonce, testNonce)
+			request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
+			request.RedirectURI, _ = url.ParseRequestURI("https://example.com")
+			request.ResponseTypes = tc.responseTypes
+			request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+				DefaultClient: &oauth2.DefaultClient{
+					GrantTypes: tc.grantTypes,
+					Scopes:     []string{consts.ScopeOpenID},
+				},
+			}
+			request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+			request.Session = &DefaultSession{
+				Claims:  &jwt.IDTokenClaims{Subject: testSubjectPeter},
+				Headers: &jwt.Headers{},
+				Subject: testSubjectPeter,
+			}
+
+			response := oauth2.NewAuthorizeResponse()
+
+			// OpenID Connect Dynamic Client Registration 1.0 Section 2.
+			err := handler.HandleAuthorizeEndpointRequest(t.Context(), request, response)
+
+			if tc.err != nil {
+				require.ErrorIs(t, err, tc.err)
+				assert.Empty(t, response.GetCode())
+				assert.Empty(t, response.GetParameters().Get(consts.ResponseTypeImplicitFlowIDToken))
+				assert.Empty(t, response.GetParameters().Get(consts.AccessResponseAccessToken))
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.NotEmpty(t, response.GetCode())
+			assert.NotEmpty(t, response.GetParameters().Get(consts.ResponseTypeImplicitFlowIDToken))
 		})
 	}
 }

@@ -31,6 +31,7 @@ type OAuth2AuthorizationServerMetadata struct {
 	IntrospectionEndpointAuthMethodsSupported          []string `json:"introspection_endpoint_auth_methods_supported,omitempty"`
 	IntrospectionEndpointAuthSigningAlgValuesSupported []string `json:"introspection_endpoint_auth_signing_alg_values_supported,omitempty"`
 	CodeChallengeMethodsSupported                      []string `json:"code_challenge_methods_supported,omitempty"`
+	ACRValuesSupported                                 []string `json:"acr_values_supported,omitempty"`
 	SignedMetadata                                     string   `json:"signed_metadata,omitempty"`
 
 	*RFC8628DeviceAuthorizationMetadata
@@ -67,7 +68,6 @@ type OpenIDConnectProviderMetadata struct {
 	OAuth2AuthorizationServerMetadata
 
 	UserinfoEndpoint                     string   `json:"userinfo_endpoint,omitempty"`
-	ACRValuesSupported                   []string `json:"acr_values_supported,omitempty"`
 	SubjectTypesSupported                []string `json:"subject_types_supported,omitempty"`
 	IDTokenSigningAlgValuesSupported     []string `json:"id_token_signing_alg_values_supported,omitempty"`
 	IDTokenEncryptionAlgValuesSupported  []string `json:"id_token_encryption_alg_values_supported,omitempty"`

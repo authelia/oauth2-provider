@@ -688,6 +688,57 @@ func TestOAuth2MetadataRequestObjectSigningAlgNone(t *testing.T) {
 	assert.Equal(t, []string{"RS256", consts.JSONWebTokenAlgNone}, metadata.RequestObjectSigningAlgValuesSupported)
 }
 
+const testDiscoveryACRValue = "urn:example:acr:mfa"
+
+func TestOAuth2MetadataACRValuesSupported(t *testing.T) {
+	testCases := []struct {
+		name     string
+		values   []string
+		enabled  bool
+		expected any
+	}{
+		{name: "ShouldAdvertiseTheConfiguredValuesWhenEnabled", values: []string{testDiscoveryACRValue}, enabled: true, expected: []any{testDiscoveryACRValue}},
+		{name: "ShouldOmitTheMemberWhenNotEnabled", values: []string{testDiscoveryACRValue}},
+		{name: "ShouldOmitTheMemberWithoutValues", enabled: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := newDiscoveryAllEnabledConfig()
+			config.ACRValuesSupported = tc.values
+			config.RFC9470StepUpAuthenticationEnabled = tc.enabled
+
+			provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), gen.MustRSAKey())
+
+			metadata, err := provider.NewOAuth2AuthorizationServerMetadata(context.Background())
+			require.NoError(t, err)
+
+			// RFC 9470 Section 7.
+			members := marshalMembers(t, metadata)
+
+			if tc.expected == nil {
+				assert.NotContains(t, members, consts.DiscoveryACRValuesSupported)
+
+				return
+			}
+
+			assert.Equal(t, tc.expected, members[consts.DiscoveryACRValuesSupported])
+		})
+	}
+}
+
+func TestOpenIDMetadataACRValuesSupportedWithoutRFC9470(t *testing.T) {
+	config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
+	config.ACRValuesSupported = []string{testDiscoveryACRValue}
+
+	provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), gen.MustRSAKey())
+
+	metadata, err := provider.NewOpenIDConnectProviderMetadata(context.Background())
+	require.NoError(t, err)
+
+	assert.Equal(t, []any{testDiscoveryACRValue}, marshalMembers(t, metadata)[consts.DiscoveryACRValuesSupported])
+}
+
 func TestOpenIDMetadataComposeAllEnabled(t *testing.T) {
 	config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
 	provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), gen.MustRSAKey())
@@ -899,7 +950,7 @@ func newDiscoveryOpenIDConfig(key any) *oauth2.Config {
 	}
 	config.BackChannelLogoutTokenStrategy = &openid.DefaultStrategy{Strategy: &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}, Config: config}
 	config.AllowedPromptValues = []string{consts.PromptTypeNone, consts.PromptTypeLogin, consts.PromptTypeConsent, consts.PromptTypeSelectAccount, "create"}
-	config.ACRValuesSupported = []string{"urn:example:acr:mfa"}
+	config.ACRValuesSupported = []string{testDiscoveryACRValue}
 	config.DisplayValuesSupported = []string{"page", "popup"}
 	config.ClaimsLocalesSupported = []string{"en-AU"}
 	config.ClaimsSupported = []string{"email", "name"}

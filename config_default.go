@@ -174,6 +174,11 @@ type Config struct {
 	// Defaults to false.
 	EnforceAuthenticationRequirements bool
 
+	// RFC9470StepUpAuthenticationEnabled advertises 'acr_values_supported' in the OAuth 2.0 Authorization Server
+	// Metadata, which signals that the 'acr_values' and 'max_age' authorization request parameters are honoured for
+	// requests which do not grant the 'openid' scope. Defaults to false.
+	RFC9470StepUpAuthenticationEnabled bool
+
 	// EnablePKCEPlainChallengeMethod sets whether or not to allow the plain challenge method (S256 should be used whenever possible, plain is really discouraged). Defaults to false.
 	EnablePKCEPlainChallengeMethod bool
 
@@ -1071,6 +1076,11 @@ func (c *Config) GetEnforceAuthenticationRequirements(_ context.Context) (enforc
 // GetEnforceClaimsParameter returns the value of EnforceClaimsParameter.
 func (c *Config) GetEnforceClaimsParameter(ctx context.Context) bool {
 	return c.EnforceClaimsParameter
+}
+
+// GetRFC9470StepUpAuthenticationEnabled returns the value of RFC9470StepUpAuthenticationEnabled.
+func (c *Config) GetRFC9470StepUpAuthenticationEnabled(ctx context.Context) bool {
+	return c.RFC9470StepUpAuthenticationEnabled
 }
 
 // GetSanitationWhiteList returns a list of allowed form values that are required by the token endpoint. These values
@@ -1972,6 +1982,7 @@ var (
 	_ EnablePKCEPlainChallengeMethodProvider                = (*Config)(nil)
 	_ ClaimsParameterEnforcementProvider                    = (*Config)(nil)
 	_ AuthenticationRequirementsEnforcementProvider         = (*Config)(nil)
+	_ RFC9470StepUpAuthenticationProvider                   = (*Config)(nil)
 	_ EnforcePKCEProvider                                   = (*Config)(nil)
 	_ GrantTypeJWTBearerCanSkipClientAuthProvider           = (*Config)(nil)
 	_ GrantTypeJWTBearerIDOptionalProvider                  = (*Config)(nil)

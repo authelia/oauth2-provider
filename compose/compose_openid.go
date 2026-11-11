@@ -52,6 +52,7 @@ func OpenIDConnectImplicitFactory(config oauth2.Configurator, storage any, strat
 		IDTokenHandleHelper: &openid.IDTokenHandleHelper{
 			IDTokenStrategy: strategy.(openid.OpenIDConnectTokenStrategy),
 		},
+		OpenIDConnectRequestStorage:   storage.(openid.OpenIDConnectRequestStorage),
 		OpenIDConnectRequestValidator: openid.NewOpenIDConnectRequestValidator(strategy.(jwt.Strategy), config),
 	}
 }

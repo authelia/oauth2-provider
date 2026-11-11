@@ -12,6 +12,7 @@ package mock
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	oauth2 "authelia.com/provider/oauth2"
 	gomock "go.uber.org/mock/gomock"
@@ -82,4 +83,18 @@ func (m *MockOpenIDConnectRequestStorage) GetOpenIDConnectSession(ctx context.Co
 func (mr *MockOpenIDConnectRequestStorageMockRecorder) GetOpenIDConnectSession(ctx, authorizeCode, request any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOpenIDConnectSession", reflect.TypeOf((*MockOpenIDConnectRequestStorage)(nil).GetOpenIDConnectSession), ctx, authorizeCode, request)
+}
+
+// SetOpenIDConnectNonceUsed mocks base method.
+func (m *MockOpenIDConnectRequestStorage) SetOpenIDConnectNonceUsed(ctx context.Context, clientID, nonce string, expiresAt time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetOpenIDConnectNonceUsed", ctx, clientID, nonce, expiresAt)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetOpenIDConnectNonceUsed indicates an expected call of SetOpenIDConnectNonceUsed.
+func (mr *MockOpenIDConnectRequestStorageMockRecorder) SetOpenIDConnectNonceUsed(ctx, clientID, nonce, expiresAt any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetOpenIDConnectNonceUsed", reflect.TypeOf((*MockOpenIDConnectRequestStorage)(nil).SetOpenIDConnectNonceUsed), ctx, clientID, nonce, expiresAt)
 }

@@ -40,6 +40,14 @@ var (
 	// session.
 	ErrDuplicateUserCode = errors.New("user code is already in use")
 
+	// ErrPKCEChallengeReused is an error indicating that the client already used the PKCE code challenge in an
+	// authorization request whose record has not yet expired.
+	ErrPKCEChallengeReused = errors.New("PKCE code challenge has already been used by the client")
+
+	// ErrOpenIDConnectNonceReused is an error indicating that the client already used the OpenID Connect nonce in an
+	// authorization request whose record has not yet expired.
+	ErrOpenIDConnectNonceReused = errors.New("OpenID Connect nonce has already been used by the client")
+
 	// ErrSerializationFailure is an error indicating that the transactional capable storage could not guarantee
 	// consistency of Update & Delete operations on the same rows between multiple sessions. It does not by itself mean a
 	// token was replayed. The token endpoint handlers read the code or refresh token again after rolling the transaction

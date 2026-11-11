@@ -5,6 +5,8 @@
 package integration_test
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,11 +18,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	xoauth2 "golang.org/x/oauth2"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestPushedAuthorizeCodeFlow(t *testing.T) {
@@ -29,6 +34,91 @@ func TestPushedAuthorizeCodeFlow(t *testing.T) {
 	} {
 		runPushedAuthorizeCodeGrantTest(t, strategy)
 	}
+}
+
+func TestPushedAuthorizeCodeFlowDetectsReusedValues(t *testing.T) {
+	f := compose.ComposeAllEnabled(&oauth2.Config{
+		GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
+		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+	}, store, gen.MustRSAKey())
+
+	ts := mockServer(t, f, newIDSession(&jwt.IDTokenClaims{Subject: "peter"}))
+	defer ts.Close()
+
+	oauthClient := newOAuth2Client(ts)
+	oauthClient.Scopes = []string{consts.ScopeOpenID}
+	store.Clients["my-client"].(*oauth2.DefaultClient).RedirectURIs = []string{ts.URL + "/callback"}
+
+	verifier := newTestNonce() + newTestNonce()
+	sum := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(sum[:])
+	nonce := newTestNonce()
+
+	freshChallenge := func() string {
+		sum := sha256.Sum256([]byte(newTestNonce() + newTestNonce()))
+
+		return base64.RawURLEncoding.EncodeToString(sum[:])
+	}
+
+	authorize := func(t *testing.T, challenge, nonce string) *http.Response {
+		data := url.Values{}
+		data.Set(consts.FormParameterClientID, oauthClient.ClientID)
+		data.Set(consts.FormParameterClientSecret, oauthClient.ClientSecret)
+		data.Set(consts.FormParameterResponseType, consts.ResponseTypeAuthorizationCodeFlow)
+		data.Set(consts.FormParameterState, testState)
+		data.Set(consts.FormParameterScope, consts.ScopeOpenID)
+		data.Set(consts.FormParameterRedirectURI, oauthClient.RedirectURL)
+		data.Set(consts.FormParameterCodeChallenge, challenge)
+		data.Set(consts.FormParameterCodeChallengeMethod, consts.PKCEChallengeMethodSHA256)
+		data.Set(consts.FormParameterNonce, nonce)
+
+		resp, err := http.PostForm(ts.URL+"/par", data)
+		require.NoError(t, err)
+
+		body, err := checkStatusAndGetBody(t, resp, http.StatusCreated)
+		require.NoError(t, err)
+
+		m := map[string]any{}
+		require.NoError(t, json.Unmarshal(body, &m))
+
+		resp, err = http.PostForm(ts.URL+"/auth", url.Values{
+			consts.FormParameterClientID:   {oauthClient.ClientID},
+			consts.FormParameterRequestURI: {m[consts.FormParameterRequestURI].(string)},
+		})
+		require.NoError(t, err)
+
+		t.Cleanup(func() { _ = resp.Body.Close() })
+
+		return resp
+	}
+
+	t.Run("ShouldNotRejectThePushedRequestAsAReuseOfItself", func(t *testing.T) {
+		resp := authorize(t, challenge, nonce)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		token, err := oauthClient.Exchange(t.Context(), resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode), xoauth2.SetAuthURLParam(consts.FormParameterCodeVerifier, verifier))
+		require.NoError(t, err)
+		assert.NotEmpty(t, token.Extra(consts.AccessResponseIDToken))
+	})
+
+	t.Run("ShouldRejectAReusedChallenge", func(t *testing.T) {
+		resp := authorize(t, challenge, newTestNonce())
+		require.Equal(t, http.StatusNotAcceptable, resp.StatusCode)
+		assert.Equal(t, "invalid_request", resp.Request.URL.Query().Get(consts.FormParameterError))
+		assert.Empty(t, resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
+	})
+
+	t.Run("ShouldRejectAReusedNonce", func(t *testing.T) {
+		resp := authorize(t, freshChallenge(), nonce)
+		require.Equal(t, http.StatusNotAcceptable, resp.StatusCode)
+		assert.Equal(t, "invalid_request", resp.Request.URL.Query().Get(consts.FormParameterError))
+		assert.Empty(t, resp.Request.URL.Query().Get(consts.FormParameterAuthorizationCode))
+	})
+
+	t.Run("ShouldAllowFreshValues", func(t *testing.T) {
+		resp := authorize(t, freshChallenge(), newTestNonce())
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
 }
 
 func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {

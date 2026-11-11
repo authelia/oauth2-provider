@@ -390,6 +390,7 @@ func makeOpenIDConnectImplicitHandler(minParameterEntropy int) OpenIDConnectImpl
 		IDTokenHandleHelper: &IDTokenHandleHelper{
 			IDTokenStrategy: idStrategy,
 		},
+		OpenIDConnectRequestStorage:   storage.NewMemoryStore(),
 		OpenIDConnectRequestValidator: NewOpenIDConnectRequestValidator(j.Strategy, config),
 		Config:                        config,
 	}

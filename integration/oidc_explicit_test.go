@@ -43,7 +43,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			name:    "should pass",
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
-				return oauthClient.AuthCodeURL(testState) + "&nonce=11234123"
+				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce()
 			},
 			authStatusCode: http.StatusOK,
 		},
@@ -54,7 +54,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 				oauthClient.Scopes = []string{"openid"}
 				oauthClient.RedirectURL = ""
 
-				return oauthClient.AuthCodeURL(testState) + "&nonce=11234123"
+				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce()
 			},
 			authStatusCode: http.StatusBadRequest,
 			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
@@ -66,7 +66,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 				oauthClient.Scopes = []string{"openid"}
 				oauthClient.RedirectURL = ""
 
-				return oauthClient.AuthCodeURL(testState) + "&nonce=11234123"
+				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce()
 			},
 			authStatusCode: http.StatusBadRequest,
 			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
@@ -78,7 +78,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				oauthClient.RedirectURL = ""
 
-				return oauthClient.AuthCodeURL(testState) + "&nonce=11234123"
+				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce()
 			},
 			authStatusCode: http.StatusBadRequest,
 			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
@@ -102,7 +102,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.RedirectURL = ""
 				oauthClient.Scopes = []string{"openid"}
-				return oauthClient.AuthCodeURL(testState) + "&nonce=1234567890&prompt=login"
+				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce() + "&prompt=login"
 			},
 			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
 			authStatusCode: http.StatusBadRequest,
@@ -112,7 +112,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			name:    "should fail because state is not long enough",
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
-				return oauthClient.AuthCodeURL("123") + "&nonce=1234567890"
+				return oauthClient.AuthCodeURL("123") + "&nonce=" + newTestNonce()
 			},
 			expectAuthErr:  "invalid_state",
 			authStatusCode: http.StatusNotAcceptable,
@@ -126,7 +126,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 
-				return oauthClient.AuthCodeURL(testState) + "&nonce=1234567890&prompt=login"
+				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce() + "&prompt=login"
 			},
 			authStatusCode: http.StatusOK,
 		},
@@ -139,7 +139,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.RedirectURL = ""
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
-				return oauthClient.AuthCodeURL(testState) + "&nonce=1234567890&prompt=login"
+				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce() + "&prompt=login"
 			},
 			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
 			authStatusCode: http.StatusBadRequest,
@@ -153,7 +153,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.RedirectURL = ""
 				oauthClient.Scopes = []string{"openid"}
-				return oauthClient.AuthCodeURL(testState) + "&nonce=1234567890&prompt=login"
+				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce() + "&prompt=login"
 			},
 			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
 			authStatusCode: http.StatusBadRequest,
@@ -166,7 +166,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			name: "should fail because authentication was in the past",
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
-				return oauthClient.AuthCodeURL(testState) + "&nonce=1234567890&prompt=login"
+				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce() + "&prompt=login"
 			},
 			authStatusCode: http.StatusNotAcceptable,
 			expectAuthErr:  "login_required",
@@ -179,7 +179,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			name: "should pass because authorization was in the past and no login was required",
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
-				return oauthClient.AuthCodeURL(testState) + "&nonce=1234567890&prompt=none"
+				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce() + "&prompt=none"
 			},
 			authStatusCode: http.StatusOK,
 		},

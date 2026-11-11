@@ -111,6 +111,7 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 				request.Form.Set(consts.FormParameterNonce, "abc")
 
 				responder.EXPECT().GetCode().AnyTimes().Return("codeexample")
+				store.EXPECT().SetOpenIDConnectNonceUsed(t.Context(), gomock.Any(), "abc", gomock.Any()).Return(nil)
 				store.EXPECT().CreateOpenIDConnectSession(t.Context(), "codeexample", gomock.Eq(request.Sanitize(oidcParameters))).Return(nil)
 
 				return

@@ -18,8 +18,13 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/integration/clients"
+	"authelia.com/provider/oauth2/internal/randx"
 	"authelia.com/provider/oauth2/storage"
 )
+
+func newTestNonce() string {
+	return randx.MustString(32, randx.AlphaNum)
+}
 
 func newDefaultSession() *defaultSession {
 	return &defaultSession{DefaultSession: &openid.DefaultSession{}}

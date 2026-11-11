@@ -34,7 +34,7 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) HandleRFC8628UserAuthorizeEndpoint
 
 // PopulateRFC8628UserAuthorizeEndpointResponse persists the OpenID Connect 1.0 session under the device code signature
 // when the 'openid' scope was granted and the client is registered for the device code grant type, and otherwise does
-// nothing.
+// nothing. A 'nonce' the client already used while the device code issued for it could still be redeemed is rejected.
 func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, req oauth2.DeviceAuthorizeRequester, _ oauth2.DeviceUserAuthorizeResponder) (err error) {
 	if !req.GetGrantedScopes().Has(consts.ScopeOpenID) {
 		return nil
@@ -46,6 +46,10 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpoi
 
 	if len(req.GetDeviceCodeSignature()) == 0 {
 		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("The device code has not been issued yet, indicating a broken code configuration."))
+	}
+
+	if err = setNonceUsed(ctx, c.OpenIDConnectRequestStorage, req, getSessionExpiresAt(req, oauth2.DeviceCode, c.Config.GetIDTokenLifespan(ctx))); err != nil {
+		return err
 	}
 
 	if err = c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, req.GetDeviceCodeSignature(), req.Sanitize(oidcParameters)); err != nil {

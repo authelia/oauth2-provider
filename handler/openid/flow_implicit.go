@@ -19,6 +19,7 @@ type OpenIDConnectImplicitHandler struct {
 
 	AuthorizeImplicitGrantTypeHandler *hoauth2.AuthorizeImplicitGrantTypeHandler
 	OpenIDConnectRequestValidator     *OpenIDConnectRequestValidator
+	OpenIDConnectRequestStorage       OpenIDConnectRequestStorage
 	RS256JWTStrategy                  *jwt.DefaultStrategy
 
 	Config interface {
@@ -81,6 +82,14 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		}
 	}
 
+	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+
+	idTokenExpiresAt := getIDTokenExpiresAt(session, lifespan)
+
+	if err = setNonceUsed(ctx, c.OpenIDConnectRequestStorage, request, idTokenExpiresAt); err != nil {
+		return err
+	}
+
 	claims := session.IDTokenClaims()
 	if request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken) {
 		if err = c.AuthorizeImplicitGrantTypeHandler.IssueImplicitAccessToken(ctx, request, response); err != nil {
@@ -100,7 +109,7 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		response.AddParameter(consts.FormParameterState, request.GetState())
 	}
 
-	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeImplicit, oauth2.IDToken, c.Config.GetIDTokenLifespan(ctx))
+	setIDTokenExpiresAt(session, idTokenExpiresAt)
 
 	if err = c.IssueImplicitIDToken(ctx, lifespan, request, response); err != nil {
 		return errorsx.WithStack(err)

@@ -64,7 +64,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 				},
 				RedirectURI: parseUrl("http://asdf.com/cb"),
 			},
-			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for confidential clients or hosts with suffix 'localhost', for example: http://myapp.localhost/.",
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/.",
 		},
 		{
 			name: "ShouldFailAudienceMismatch",
@@ -83,7 +83,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://www.authelia.com/not-api' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			name: "ShouldPassRedirectURIHTTPConfidential",
+			name: "ShouldFailRedirectURIHTTPConfidential",
 			areq: &oauth2.AuthorizeRequest{
 				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
 				Request: oauth2.Request{
@@ -102,14 +102,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 				State:       "superstate",
 				RedirectURI: parseUrl("http://asdf.de/cb"),
 			},
-			expect: func(t *testing.T, areq *oauth2.AuthorizeRequest, aresp *oauth2.AuthorizeResponse) {
-				code := aresp.GetParameters().Get(consts.FormParameterAuthorizationCode)
-				assert.NotEmpty(t, code)
-
-				assert.Equal(t, strings.Join(areq.GrantedScope, " "), aresp.GetParameters().Get(consts.FormParameterScope))
-				assert.Equal(t, areq.State, aresp.GetParameters().Get(consts.FormParameterState))
-				assert.Equal(t, oauth2.ResponseModeQuery, areq.GetResponseMode())
-			},
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/.",
 		},
 		{
 			name: "ShouldPass",

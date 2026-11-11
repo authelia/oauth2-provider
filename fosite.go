@@ -230,6 +230,7 @@ type Configurator interface {
 	AudienceStrategyProvider
 	ClientCredentialsImplicitProvider
 	RedirectSecureCheckerProvider
+	AllowInsecureRedirectURIForPublicClientsProvider
 	OmitRedirectScopeParamProvider
 	SanitationAllowedProvider
 	JWTScopeFieldProvider

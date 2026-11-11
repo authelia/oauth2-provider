@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"net/url"
 	"time"
 
 	"authelia.com/provider/oauth2"
@@ -47,11 +46,12 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		return nil
 	}
 
-	if !c.secureChecker(ctx, request.GetRedirectURI()) {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/."))
+	client := request.GetClient()
+
+	if err = oauth2.ValidateRedirectURISecurity(ctx, c.Config, client, request.GetRedirectURI()); err != nil {
+		return err
 	}
 
-	client := request.GetClient()
 	strategy := oauth2.GetScopeStrategy(ctx, c.Config, client)
 
 	for _, scope := range request.GetRequestedScopes() {
@@ -95,13 +95,4 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 	response.SetExpiresIn(int(expiresIn.Seconds()))
 
 	return nil
-}
-
-func (c *PushedAuthorizeHandler) secureChecker(ctx context.Context, u *url.URL) bool {
-	isRedirectURISecure := c.Config.GetRedirectSecureChecker(ctx)
-	if isRedirectURISecure == nil {
-		isRedirectURISecure = oauth2.IsRedirectURISecure
-	}
-
-	return isRedirectURISecure(ctx, u)
 }

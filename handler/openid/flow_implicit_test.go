@@ -44,6 +44,16 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldFailBecauseRedirectURIIsInsecure",
+			setup: func(requester *oauth2.AuthorizeRequest, responder *oauth2.AuthorizeResponse) (handler OpenIDConnectImplicitHandler) {
+				requester.Form.Set(consts.FormParameterRedirectURI, "http://example.com")
+				requester.RedirectURI, _ = url.Parse("http://example.com")
+				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
+			},
+			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/.",
+			expectedField: oauth2.ErrInvalidRequest.ErrorField,
+		},
+		{
 			name: "ShouldPassBecauseHandlerNotResponsibleForOAuth2AuthorizeCodeFlow",
 			setup: func(requester *oauth2.AuthorizeRequest, responder *oauth2.AuthorizeResponse) (handler OpenIDConnectImplicitHandler) {
 				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}

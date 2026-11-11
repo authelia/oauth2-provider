@@ -42,6 +42,28 @@ func IsRedirectURISecure(ctx context.Context, uri *url.URL) bool {
 	return !(uri.Scheme == consts.SchemeHTTP && !IsLocalhost(uri))
 }
 
+// ValidateRedirectURISecurity returns an invalid_request error when the redirect URI fails the configured
+// RedirectSecureChecker, or IsRedirectURISecure when none is configured. The check applies to every client, unless the
+// client is public and AllowInsecureRedirectURIForPublicClients is enabled.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.6
+func ValidateRedirectURISecurity(ctx context.Context, config RedirectURISecurityProvider, client Client, uri *url.URL) (err error) {
+	if uri == nil || (client != nil && client.IsPublic() && config.GetAllowInsecureRedirectURIForPublicClients(ctx)) {
+		return nil
+	}
+
+	checker := config.GetRedirectSecureChecker(ctx)
+	if checker == nil {
+		checker = IsRedirectURISecure
+	}
+
+	if !checker(ctx, uri) {
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/."))
+	}
+
+	return nil
+}
+
 // IsPublicClientIdentityAssured reports whether the redirect URI of an authorization request assures the identity of a
 // public client. Only a claimed 'https' redirect URI in a domain the app controls does, as a private-use URI scheme or a
 // loopback or localhost redirect URI, over 'https' or not, can be claimed by any application on the device. See RFC

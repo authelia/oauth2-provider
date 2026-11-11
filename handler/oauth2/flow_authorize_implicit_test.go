@@ -6,6 +6,8 @@ package oauth2
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"testing"
 	"time"
 
@@ -138,6 +140,31 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestAuthorizeImplicit_RejectsInsecureRedirectURI(t *testing.T) {
+	for _, public := range []bool{false, true} {
+		t.Run(fmt.Sprintf("Public=%t", public), func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			h, _, _, aresp := makeAuthorizeImplicitGrantTypeHandler(ctrl)
+
+			areq := oauth2.NewAuthorizeRequest()
+			areq.Session = new(oauth2.DefaultSession)
+			areq.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken}
+			areq.RedirectURI, _ = url.Parse("http://client.example.com/cb")
+			areq.Client = &oauth2.DefaultClient{
+				Public:        public,
+				GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken},
+			}
+
+			err := h.HandleAuthorizeEndpointRequest(t.Context(), areq, aresp)
+			require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+			assert.Contains(t, oauth2.ErrorToRFC6749Error(err).GetDescription(), "insecure protocol")
 		})
 	}
 }

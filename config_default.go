@@ -167,6 +167,11 @@ type Config struct {
 	// to false.
 	EnforceClaimsParameter bool
 
+	// EnforceACRValues treats the 'acr_values' authorization request parameter as a requirement: the request fails with
+	// unmet_authentication_requirements unless the 'acr' recorded on the ID Token claims of the session is one of the
+	// requested values. Defaults to false.
+	EnforceACRValues bool
+
 	// EnablePKCEPlainChallengeMethod sets whether or not to allow the plain challenge method (S256 should be used whenever possible, plain is really discouraged). Defaults to false.
 	EnablePKCEPlainChallengeMethod bool
 
@@ -1054,6 +1059,11 @@ func (c *Config) GetEnablePKCEPlainChallengeMethod(ctx context.Context) bool {
 // GetEnforcePKCEForPublicClients returns the value of EnforcePKCEForPublicClients.
 func (c *Config) GetEnforcePKCEForPublicClients(ctx context.Context) bool {
 	return c.EnforcePKCEForPublicClients
+}
+
+// GetEnforceACRValues returns the value of EnforceACRValues.
+func (c *Config) GetEnforceACRValues(_ context.Context) (enforce bool) {
+	return c.EnforceACRValues
 }
 
 // GetEnforceClaimsParameter returns the value of EnforceClaimsParameter.
@@ -1959,6 +1969,7 @@ var (
 	_ AllowInsecureRedirectURIForPublicClientsProvider      = (*Config)(nil)
 	_ EnablePKCEPlainChallengeMethodProvider                = (*Config)(nil)
 	_ ClaimsParameterEnforcementProvider                    = (*Config)(nil)
+	_ ACRValuesEnforcementProvider                          = (*Config)(nil)
 	_ EnforcePKCEProvider                                   = (*Config)(nil)
 	_ GrantTypeJWTBearerCanSkipClientAuthProvider           = (*Config)(nil)
 	_ GrantTypeJWTBearerIDOptionalProvider                  = (*Config)(nil)

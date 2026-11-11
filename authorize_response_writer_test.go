@@ -16,6 +16,7 @@ import (
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -202,3 +203,76 @@ func TestNewAuthorizeResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestNewAuthorizeResponseEnforcesACRValues(t *testing.T) {
+	testCases := []struct {
+		name      string
+		enforce   bool
+		requested string
+		session   Session
+		err       bool
+	}{
+		{name: "ShouldPassWhenNotEnforced", requested: "gold", session: &acrValuesSession{DefaultSession: &DefaultSession{}, acr: "bronze"}},
+		{name: "ShouldPassWhenNotRequested", enforce: true, session: &acrValuesSession{DefaultSession: &DefaultSession{}, acr: "bronze"}},
+		{name: "ShouldPassWhenARequestedValueIsMet", enforce: true, requested: "gold silver", session: &acrValuesSession{DefaultSession: &DefaultSession{}, acr: "silver"}},
+		{name: "ShouldFailWhenNoRequestedValueIsMet", enforce: true, requested: "gold silver", session: &acrValuesSession{DefaultSession: &DefaultSession{}, acr: "bronze"}, err: true},
+		{name: "ShouldFailWhenTheSessionHasNoACR", enforce: true, requested: "gold", session: &acrValuesSession{DefaultSession: &DefaultSession{}}, err: true},
+		{name: "ShouldFailWhenTheSessionCannotRecordAnACR", enforce: true, requested: "gold", session: &DefaultSession{}, err: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := &acrValuesHandler{}
+
+			provider := &Fosite{Config: &Config{EnforceACRValues: tc.enforce, AuthorizeEndpointHandlers: AuthorizeEndpointHandlers{handler}}}
+
+			request := NewAuthorizeRequest()
+			request.ResponseTypes = Arguments{consts.ResponseTypeAuthorizationCodeFlow}
+			request.Form.Set(consts.FormParameterAuthenticationContextClassReferenceValues, tc.requested)
+
+			_, err := provider.NewAuthorizeResponse(context.Background(), request, tc.session)
+
+			if tc.err {
+				require.ErrorIs(t, err, ErrUnmetAuthenticationRequirements)
+				assert.False(t, handler.called)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.True(t, handler.called)
+		})
+	}
+}
+
+type acrValuesSession struct {
+	*DefaultSession
+
+	acr string
+}
+
+func (s *acrValuesSession) IDTokenClaims() *jwt.IDTokenClaims {
+	return &jwt.IDTokenClaims{AuthenticationContextClassReference: s.acr}
+}
+
+type acrValuesHandler struct {
+	called bool
+}
+
+func (h *acrValuesHandler) HandleAuthorizeEndpointRequest(_ context.Context, request AuthorizeRequester, _ AuthorizeResponder) error {
+	h.called = true
+
+	request.SetResponseTypeHandled(consts.ResponseTypeAuthorizationCodeFlow)
+
+	return nil
+}
+
+func (h *acrValuesHandler) ResponseTypesSupported(_ context.Context) []string {
+	return []string{consts.ResponseTypeAuthorizationCodeFlow}
+}
+
+func (h *acrValuesHandler) GrantTypesSupported(_ context.Context) []string { return nil }
+
+func (h *acrValuesHandler) CodeChallengeMethodsSupported(_ context.Context) []string { return nil }
+
+func (h *acrValuesHandler) IDTokenSigningAlgValuesSupported(_ context.Context) []string { return nil }

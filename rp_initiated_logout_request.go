@@ -34,7 +34,10 @@ type RPInitiatedLogoutRequester interface {
 	GetClient() (client Client)
 
 	// GetPostLogoutRedirectURI returns the validated, registered redirect URI. It is nil when the parameter was
-	// absent and nil on every error path, so an error can never be redirected to an unvalidated URI.
+	// absent and nil on every error path, so an error can never be redirected to an unvalidated URI. It is also nil
+	// when no valid 'id_token_hint' was supplied, unless a PostLogoutRedirectWithoutIDTokenHintProvider permits it.
+	//
+	// See: https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout
 	GetPostLogoutRedirectURI() (uri *url.URL)
 
 	// GetState returns the raw 'state' parameter, to be echoed back on the redirect.

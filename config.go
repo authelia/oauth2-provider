@@ -354,6 +354,14 @@ type SanitationAllowedProvider interface {
 }
 
 // OmitRedirectScopeParamProvider returns the provider for configuring the omit redirect scope param.
+// RedirectFragmentGuardProvider returns the provider for configuring whether an arbitrary fragment is appended to
+// authorization response redirects in the query response modes.
+type RedirectFragmentGuardProvider interface {
+	// GetEnableRedirectFragmentGuard returns true if the '#_' fragment is appended to the 'Location' of an authorization
+	// response redirect in a query response mode, so a browser does not reattach the fragment of the request URL.
+	GetEnableRedirectFragmentGuard(ctx context.Context) (enable bool)
+}
+
 type OmitRedirectScopeParamProvider interface {
 	// GetOmitRedirectScopeParam must be set to true if the scope query param is to be omitted
 	// in the authorization's redirect URI

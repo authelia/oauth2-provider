@@ -85,15 +85,19 @@ func TestRefreshTokenReplayRequiresAnIntactToken(t *testing.T) {
 
 func TestAuthorizeCodeReplayRequiresAnIntactCode(t *testing.T) {
 	testCases := []struct {
-		name    string
-		forge   bool
-		expired bool
-		revoked bool
+		name     string
+		forge    bool
+		expired  bool
+		client   string
+		redirect string
+		revoked  bool
 	}{
 		{name: "ShouldRevokeTheGrantForAGenuineCodeReplay", revoked: true},
 		{name: "ShouldRevokeTheGrantForAGenuineExpiredCodeReplay", expired: true, revoked: true},
 		{name: "ShouldNotRevokeTheGrantForAForgedCode", forge: true},
 		{name: "ShouldNotRevokeTheGrantForAForgedExpiredCode", forge: true, expired: true},
+		{name: "ShouldNotRevokeTheGrantForACodeReplayedByAnotherClient", client: "other-client"},
+		{name: "ShouldNotRevokeTheGrantForACodeReplayedWithAnotherRedirectURI", redirect: "https://attacker.example.com/cb"},
 	}
 
 	for _, tc := range testCases {
@@ -108,6 +112,7 @@ func TestAuthorizeCodeReplayRequiresAnIntactCode(t *testing.T) {
 				Client:      client,
 				Session:     &oauth2.DefaultSession{},
 				RequestedAt: time.Now().UTC(),
+				Form:        url.Values{consts.FormParameterRedirectURI: {"https://client.example.com/cb"}},
 			}
 
 			if tc.expired {
@@ -127,10 +132,18 @@ func TestAuthorizeCodeReplayRequiresAnIntactCode(t *testing.T) {
 				code = forgeHMACToken(code)
 			}
 
+			if tc.redirect == "" {
+				tc.redirect = "https://client.example.com/cb"
+			}
+
 			request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
 			request.Client = client
 			request.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
-			request.Form = url.Values{consts.FormParameterAuthorizationCode: {code}}
+			request.Form = url.Values{consts.FormParameterAuthorizationCode: {code}, consts.FormParameterRedirectURI: {tc.redirect}}
+
+			if tc.client != "" {
+				request.Client = &oauth2.DefaultClient{ID: tc.client, GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode}}
+			}
 
 			handler := &AuthorizeExplicitGrantHandler{
 				AuthorizeCodeStrategy:  strategy,

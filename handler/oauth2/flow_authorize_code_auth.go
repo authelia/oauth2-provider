@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -93,7 +94,7 @@ func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, 
 
 	request.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.Config.GetAuthorizeCodeLifespan(ctx)))
 
-	if err = c.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, request.Sanitize(c.GetSanitationWhiteList(ctx))); err != nil {
+	if err = c.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, request.Sanitize(c.GetAuthorizeCodeSessionParameters(ctx))); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -117,6 +118,27 @@ func (c *AuthorizeExplicitGrantHandler) GetSanitationWhiteList(ctx context.Conte
 	}
 
 	return []string{consts.FormParameterScope, consts.FormParameterRedirectURI}
+}
+
+// GetAuthorizeCodeSessionParameters returns the form parameters retained when the authorize request is stored as the
+// authorization code session: the sanitation whitelist, and the 'code_challenge' and 'code_challenge_method' when a
+// registered handler verifies PKCE, so a replayed code only revokes the grant for the matching 'code_verifier'.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-16#section-7.5.3
+func (c *AuthorizeExplicitGrantHandler) GetAuthorizeCodeSessionParameters(ctx context.Context) (parameters []string) {
+	parameters = c.GetSanitationWhiteList(ctx)
+
+	if c.isPKCEVerified(ctx) {
+		return slices.Concat(parameters, pkceParameters)
+	}
+
+	return parameters
+}
+
+func (c *AuthorizeExplicitGrantHandler) isPKCEVerified(ctx context.Context) bool {
+	config, ok := c.Config.(oauth2.Configurator)
+
+	return ok && len(oauth2.SupportedCodeChallengeMethods(ctx, config)) != 0
 }
 
 // ResponseTypesSupported returns the response types this handler serves.

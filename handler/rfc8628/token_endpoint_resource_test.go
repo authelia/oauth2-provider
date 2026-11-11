@@ -42,16 +42,21 @@ func TestDeviceCodeTokenRequestResourceAndAudience(t *testing.T) {
 			grantedResource: oauth2.Arguments{resourceA, resourceB},
 		},
 		{
-			name:            "ShouldNarrowTheResource",
+			name:            "ShouldRestrictToTheNamedResource",
 			resource:        oauth2.Arguments{resourceA},
-			grantedAudience: oauth2.Arguments{audienceA, audienceB},
 			grantedResource: oauth2.Arguments{resourceA},
 		},
 		{
-			name:            "ShouldNarrowTheAudience",
+			name:            "ShouldRestrictToTheNamedAudience",
 			audience:        oauth2.Arguments{audienceB},
 			grantedAudience: oauth2.Arguments{audienceB},
-			grantedResource: oauth2.Arguments{resourceA, resourceB},
+		},
+		{
+			name:            "ShouldRestrictToTheNamedAudienceAndResource",
+			audience:        oauth2.Arguments{audienceA},
+			resource:        oauth2.Arguments{resourceB},
+			grantedAudience: oauth2.Arguments{audienceA},
+			grantedResource: oauth2.Arguments{resourceB},
 		},
 		{
 			name:     "ShouldRefuseAResourceOutsideTheGrant",

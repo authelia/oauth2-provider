@@ -163,14 +163,27 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		}
 	}
 
-	// The 'state' parameter must not be guessable.
+	// The 'state' parameter is optional, but when present it must not be guessable.
 	//
-	// See: https://www.rfc-editor.org/rfc/rfc6819#section-4.4.1.8
-	if len(request.State) < f.GetMinParameterEntropy(ctx) {
-		return request, errorsx.WithStack(ErrInvalidState.WithHintf("Request parameter 'state' must be at least be %d characters long to ensure sufficient entropy.", f.GetMinParameterEntropy(ctx)))
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-16#section-4.1.1 and
+	// https://www.rfc-editor.org/rfc/rfc6819#section-4.4.1.8
+	if minimum := f.GetMinParameterEntropy(ctx); len(request.State) != 0 && len(request.State) < minimum {
+		return request, errorsx.WithStack(ErrInvalidRequest.WithHintf("Request parameter 'state' is set but does not satisfy the minimum entropy of %d characters.", minimum))
+	}
+
+	if err = f.validateNonceEntropy(ctx, request.Form); err != nil {
+		return request, err
 	}
 
 	return request, nil
+}
+
+func (f *Fosite) validateNonceEntropy(ctx context.Context, form url.Values) (err error) {
+	if nonce := form.Get(consts.FormParameterNonce); len(nonce) > 0 && len(nonce) < f.GetMinParameterEntropy(ctx) {
+		return errorsx.WithStack(ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", f.GetMinParameterEntropy(ctx)))
+	}
+
+	return nil
 }
 
 func setAuthorizeErrorDefaultResponseMode(request *AuthorizeRequest) {

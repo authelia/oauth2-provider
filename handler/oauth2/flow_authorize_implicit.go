@@ -99,7 +99,9 @@ func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context
 	response.AddParameter(consts.AccessResponseAccessToken, token)
 	response.AddParameter(consts.AccessResponseExpiresIn, strconv.FormatInt(int64(getExpiresIn(request, oauth2.AccessToken, atLifespan, time.Now().UTC())/time.Second), 10))
 	response.AddParameter(consts.AccessResponseTokenType, oauth2.BearerAccessToken)
-	response.AddParameter(consts.FormParameterState, request.GetState())
+	if state := request.GetState(); len(state) != 0 {
+		response.AddParameter(consts.FormParameterState, state)
+	}
 	response.AddParameter(consts.AccessResponseScope, strings.Join(request.GetGrantedScopes(), " "))
 
 	request.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowToken)

@@ -156,7 +156,7 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 
 		redirectURI.RawQuery = form.Encode()
 
-		location = redirectURI.String()
+		location = h.guardRedirectFragment(ctx, redirectURI.String())
 	case ResponseModeFragment, ResponseModeFragmentJWT:
 		if form, err = h.EncodeResponseForm(ctx, rm, request, parameters); err != nil {
 			h.handleWriteAuthorizeErrorFieldResponse(ctx, rw, request, ErrServerError.WithWrap(err).WithDebugError(err))
@@ -169,6 +169,14 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 
 	rw.Header().Set(consts.HeaderLocation, location)
 	rw.WriteHeader(http.StatusSeeOther)
+}
+
+func (h *DefaultResponseModeHandler) guardRedirectFragment(ctx context.Context, location string) string {
+	if provider, ok := h.Config.(RedirectFragmentGuardProvider); ok && provider.GetEnableRedirectFragmentGuard(ctx) {
+		return location + "#_"
+	}
+
+	return location
 }
 
 // EncodeResponseForm encodes the response form if necessary.

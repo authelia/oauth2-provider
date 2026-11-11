@@ -90,6 +90,34 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldFailShortNonce",
+			setup: func(ctrl *gomock.Controller, request *oauth2.AuthorizeRequest, responder *mock.MockAuthorizeResponder) (handler OpenIDConnectExplicitHandler) {
+				handler, _ = makeOpenIDConnectExplicitHandler(ctrl, oauth2.MinParameterEntropy)
+
+				request.Form.Set(consts.FormParameterNonce, "abc")
+
+				responder.EXPECT().GetCode().Return("codeexample")
+
+				return
+			},
+			expected:      "The request used a security parameter (e.g., anti-replay, anti-csrf) with insufficient entropy. Parameter 'nonce' is set but does not satisfy the minimum entropy of 8 characters.",
+			expectedField: "insufficient_entropy",
+		},
+		{
+			name: "ShouldPassShortNonceEntropyDisabled",
+			setup: func(ctrl *gomock.Controller, request *oauth2.AuthorizeRequest, responder *mock.MockAuthorizeResponder) (handler OpenIDConnectExplicitHandler) {
+				handler, store := makeOpenIDConnectExplicitHandler(ctrl, -1)
+
+				request.Form.Set(consts.FormParameterNonce, "abc")
+
+				responder.EXPECT().GetCode().AnyTimes().Return("codeexample")
+				store.EXPECT().SetOpenIDConnectNonceUsed(t.Context(), gomock.Any(), "abc", gomock.Any()).Return(nil)
+				store.EXPECT().CreateOpenIDConnectSession(t.Context(), "codeexample", gomock.Eq(request.Sanitize(oidcParameters))).Return(nil)
+
+				return
+			},
+		},
+		{
 			name: "ShouldFailBecauseRedirectURLIsMissing",
 			setup: func(ctrl *gomock.Controller, request *oauth2.AuthorizeRequest, responder *mock.MockAuthorizeResponder) (handler OpenIDConnectExplicitHandler) {
 				request.Form.Del(consts.FormParameterRedirectURI)

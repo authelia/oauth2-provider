@@ -7,15 +7,16 @@ package pkce
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/reflection"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -26,12 +27,14 @@ type Handler struct {
 		oauth2.EnforcePKCEProvider
 		oauth2.EnforcePKCEForPublicClientsProvider
 		oauth2.EnablePKCEPlainChallengeMethodProvider
+		oauth2.AuthorizeCodeLifespanProvider
 	}
 }
 
 // HandleAuthorizeEndpointRequest handles an authorize request whose 'response_type' includes 'code'. It validates the
 // 'code_challenge' and 'code_challenge_method' parameters against the configuration and the client, and when a
 // challenge is present persists it under the signature of the authorization code, which must already have been issued.
+// A challenge the client already used while the authorization code issued for it could still be redeemed is rejected.
 func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
 	if !request.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
@@ -64,6 +67,18 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, request oa
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The PKCE handler must be loaded after the authorize code handler."))
 	}
 
+	// The authorization server makes a reasonable effort at detecting and preventing the use of a constant PKCE challenge.
+	// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1.1
+	if err = c.Storage.SetPKCEChallengeUsed(ctx, client.GetID(), challenge, c.getChallengeExpiresAt(ctx, request)); err != nil {
+		if errors.Is(err, oauth2.ErrPKCEChallengeReused) {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.
+				WithHint("The PKCE code challenge was already used by this client, a new code challenge must be generated for every authorization request.").
+				WithDebugf("The client with id '%s' used a 'code_challenge' value which it used in an earlier authorization request.", client.GetID()))
+		}
+
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Error occurred attempting to record the PKCE code challenge: %s.", err.Error()))
+	}
+
 	signature := c.AuthorizeCodeStrategy.AuthorizeCodeSignature(ctx, code)
 
 	if err = c.Storage.CreatePKCERequestSession(ctx, signature, request.Sanitize([]string{
@@ -74,6 +89,16 @@ func (c *Handler) HandleAuthorizeEndpointRequest(ctx context.Context, request oa
 	}
 
 	return nil
+}
+
+func (c *Handler) getChallengeExpiresAt(ctx context.Context, request oauth2.AuthorizeRequester) (expiresAt time.Time) {
+	if session := request.GetSession(); !reflection.IsNil(session) {
+		if expiresAt = session.GetExpiresAt(oauth2.AuthorizeCode); !expiresAt.IsZero() {
+			return expiresAt
+		}
+	}
+
+	return time.Now().UTC().Add(c.Config.GetAuthorizeCodeLifespan(ctx))
 }
 
 func validateChallengeSyntax(challenge, method string) (err error) {
@@ -203,23 +228,8 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	// Verify the 'code_verifier' against the stored 'code_challenge' using the stored method; a mismatch is
 	// 'invalid_grant'.
 	// See: https://www.rfc-editor.org/rfc/rfc7636#section-4.6
-	switch method {
-	case consts.PKCEChallengeMethodSHA256:
-		sum := sha256.Sum256([]byte(verifier))
-
-		expected := make([]byte, base64.RawURLEncoding.EncodedLen(len(sum)))
-
-		base64.RawURLEncoding.Strict().Encode(expected, sum[:])
-
-		if subtle.ConstantTimeCompare(expected, []byte(challenge)) == 0 {
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code challenge did not match the code verifier."))
-		}
-	case consts.PKCEChallengeMethodPlain:
-		fallthrough
-	default:
-		if subtle.ConstantTimeCompare([]byte(verifier), []byte(challenge)) == 0 {
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code challenge did not match the code verifier."))
-		}
+	if !oauth2.IsPKCECodeVerifierMatch(method, challenge, verifier) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code challenge did not match the code verifier."))
 	}
 
 	return nil

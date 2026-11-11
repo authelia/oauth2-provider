@@ -15,11 +15,15 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/reflection"
 	"authelia.com/provider/oauth2/token/jwt"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 type IDTokenHandleHelper struct {
@@ -163,4 +167,71 @@ func requestedMaxAge(form url.Values) (maxAge int64, ok bool, err error) {
 	}
 
 	return maxAge, true, nil
+}
+
+// The authorization server makes a reasonable effort at detecting and preventing the use of a constant OpenID Connect
+// nonce.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1.1
+func getIDTokenExpiresAt(session any, lifespan time.Duration) (expiresAt time.Time) {
+	if lifespan == 0 {
+		lifespan = defaultExpiryTime
+	}
+
+	expiresAt = time.Now().UTC().Add(lifespan)
+
+	if s, ok := session.(Session); ok {
+		if claims := s.IDTokenClaims(); claims != nil && claims.ExpirationTime != nil && claims.ExpirationTime.After(expiresAt) {
+			expiresAt = claims.ExpirationTime.UTC()
+		}
+	}
+
+	return expiresAt
+}
+
+func setIDTokenExpiresAt(session any, expiresAt time.Time) {
+	s, ok := session.(Session)
+	if !ok {
+		return
+	}
+
+	if claims := s.IDTokenClaims(); claims != nil && (claims.ExpirationTime == nil || claims.ExpirationTime.IsZero()) {
+		claims.ExpirationTime = jwt.NewNumericDate(expiresAt)
+	}
+}
+
+func setNonceUsed(ctx context.Context, storage OpenIDConnectRequestStorage, request oauth2.Requester, expiresAt time.Time) (err error) {
+	nonce := request.GetRequestForm().Get(consts.FormParameterNonce)
+
+	if len(nonce) == 0 {
+		return nil
+	}
+
+	if reflection.IsNil(storage) {
+		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("The OpenID Connect request storage is not configured, so the nonce cannot be recorded."))
+	}
+
+	client := request.GetClient()
+
+	if err = storage.SetOpenIDConnectNonceUsed(ctx, client.GetID(), nonce, expiresAt); err != nil {
+		if errors.Is(err, oauth2.ErrOpenIDConnectNonceReused) {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.
+				WithHint("The 'nonce' was already used by this client, a new nonce must be generated for every authentication request.").
+				WithDebugf("The client with id '%s' used a 'nonce' value which it used in an earlier authentication request.", client.GetID()))
+		}
+
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Error occurred attempting to record the nonce: %s.", err.Error()))
+	}
+
+	return nil
+}
+
+func getSessionExpiresAt(request oauth2.Requester, key oauth2.TokenType, fallback time.Duration) (expiresAt time.Time) {
+	if session := request.GetSession(); !reflection.IsNil(session) {
+		if expiresAt = session.GetExpiresAt(key); !expiresAt.IsZero() {
+			return expiresAt
+		}
+	}
+
+	return time.Now().UTC().Add(fallback)
 }

@@ -202,6 +202,77 @@ the responsibility of the application that uses it:
 - **Do not enable CORS at the authorization endpoint**
   ([Section 2.6](https://datatracker.ietf.org/doc/html/rfc9700#section-2.6)): the client redirects the user agent to it
   rather than calling it. CORS may be enabled for the token, metadata, `jwks_uri` and registration endpoints.
+- **Only trust forwarded headers from your own proxy**
+  ([Section 4.13](https://datatracker.ietf.org/doc/html/rfc9700#section-4.13)): `RequestURL` rebuilds the request URL
+  from the `Host` header and, when the request did not arrive over TLS, the scheme from the first `X-Forwarded-Proto`
+  value. It is the DPoP `htu` a proof is compared against, alongside the configured `EndpointURLs`, and the audience
+  required of a bearer credential at an endpoint with no configured audience or URL, including the RFC 7592 client
+  configuration endpoint when `EndpointURLs.Registration` is empty. When `MTLSClientCertificateHeader` is set, the
+  client certificate is read only from that header and is treated as already validated, so the reverse proxy must
+  complete the TLS handshake in which the client proves possession of the certificate's private key, and validate the
+  certificate as the client's authentication method requires, before forwarding it. No other forwarded header is read,
+  and `Issuer` and `EndpointURLs` are used as configured. Have the reverse proxy overwrite, not append to,
+  `X-Forwarded-Proto` and the certificate header on every request, make the server unreachable except through it, and
+  protect the connection between them with authenticated TLS or an equivalent so it cannot be eavesdropped on, injected
+  into, or replayed. Set `EndpointURLs` so audiences do not depend on the request. If the application itself applies
+  `Forwarded`, `X-Forwarded-Host` or similar headers to the request, it must do so only for requests from proxies it
+  trusts.
+- **Revoke tokens when the session ends**
+  ([Section 4.14.2](https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2)): the lifetime of the tokens the
+  library issues is not tied to the user's login session, and neither `NewRPInitiatedLogoutRequest` nor
+  `SendBackChannelLogout` ends a session or revokes a token. When the user logs out, or the session ends for another
+  reason such as a password change, revoke the grants issued during it with `RevokeRefreshToken` and `RevokeAccessToken`
+  of the `TokenRevocationStorage` interface in `handler/oauth2`. Both take the request ID, which is the `GetID` of the
+  authorization request and is kept by every token issued from it, including rotated refresh tokens, so record it
+  against the session when the user grants consent.
+  [OpenID Connect Back-Channel Logout 1.0 Section 2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions)
+  expects refresh tokens issued without `offline_access` to be revoked at logout, and those issued with it normally to
+  be kept.
+
+Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Consider the following:
+
+- `EnforcePKCEForPublicClients` requires PKCE from public clients, which
+  [Section 2.1.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1.1) mandates, and `EnforcePKCE` requires it
+  from every client, which is recommended for confidential clients. Clients that do not send a `code_challenge` are
+  rejected. A client implementing `ProofKeyCodeExchangeClient` can be enforced individually.
+- `EnablePKCEPlainChallengeMethod` should stay disabled: the `plain` method exposes the verifier in the authorization
+  request ([Section 2.1.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1.1)).
+- The RFC 9207 `iss` authorization response parameter, a mix-up defense
+  ([Section 4.4.2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-4.4.2.1)), is returned only when `Issuer` is
+  set and an `RFC9207ResponseModeParameterHandler` is registered in `ResponseModeParameterHandlers`.
+  `DisableAuthorizationServerIdentification` should stay disabled. Clients that do not check it ignore it.
+- `JWTSecuredAuthorizeResponseModeStrategy` enables JARM, whose signed authorization responses carry the issuer. Only
+  clients that request a JWT response mode are affected.
+- `DisableRefreshTokenRotation` should stay disabled
+  ([Section 4.14.2](https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2)). It is ignored for a public client
+  whose refresh token is not sender-constrained.
+- `DPoPEnabled` and `MTLSEnabled` enable sender-constrained tokens
+  ([Section 2.2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.2.1)) for clients that request them, and
+  `DPoPEnforce` and `MTLSEnforce` require them from every client, which then must all support the mechanism. Resource
+  servers must also verify the binding.
+- `DPoPStrictRefreshTokenBinding` and `MTLSStrictRefreshTokenBinding` keep a confidential client's refresh token bound
+  to the key or certificate it was issued for, rather than re-binding it on refresh. The client cannot then change its
+  key without a new grant. Public clients are always strictly bound.
+- `RequirePushedAuthorizationRequests` requires PAR, so the client sends the authorization request, including the
+  redirect URI, directly to the authorization server, which authenticates a confidential client
+  ([Section 4.1.3](https://datatracker.ietf.org/doc/html/rfc9700#section-4.1.3)). A public client pushes its request
+  with the `none` authentication method, so PAR alone does not establish a public client's identity. Every client must
+  support PAR. A client implementing `PushedAuthorizationRequestClient` can be required individually.
+- `EnableRedirectFragmentGuard` appends `#_` to authorization response redirects in a query response mode, so a browser
+  does not carry the request URL's fragment over to the redirect URI
+  ([Section 4.1.3](https://datatracker.ietf.org/doc/html/rfc9700#section-4.1.3)).
+- `AllowInsecureRedirectURIForPublicClients` should stay disabled: it accepts any redirect URI scheme and host for
+  public clients, including `http` ([Section 2.6](https://datatracker.ietf.org/doc/html/rfc9700#section-2.6)).
+- Redirect URIs are compared by exact string by default. A client returning `OriginURIComparisonStrategy` from
+  `RedirectURICustomComparisonClient` accepts any path on a registered origin, which does not meet
+  [Section 2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1).
+- `MinParameterEntropy` sets the minimum length of the `state` and `nonce` parameters when present. Setting it to `-1`
+  disables the check.
+- `RefreshTokenScopes` limits refresh tokens to grants including one of its scopes, `offline` and `offline_access` by
+  default, in line with the risk assessment
+  [Section 4.14.2](https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2) asks for. An empty list issues a
+  refresh token for every authorization code and device code grant.
+- `AuthorizeCodeLifespan` should be kept short, as an authorization code only has to survive a single redirect.
 
 ## Thanks
 

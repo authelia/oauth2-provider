@@ -90,8 +90,8 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
 				return oauthClient.AuthCodeURL(testState) + "&nonce=1"
 			},
-			authStatusCode: http.StatusOK,
-			expectTokenErr: "insufficient_entropy",
+			authStatusCode: http.StatusNotAcceptable,
+			expectAuthErr:  "insufficient_entropy",
 		},
 		{
 			session: newIDSession(&jwt.IDTokenClaims{

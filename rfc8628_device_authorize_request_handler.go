@@ -53,6 +53,10 @@ func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Re
 		return request, err
 	}
 
+	if err = f.validateNonceEntropy(ctx, request.Form); err != nil {
+		return request, err
+	}
+
 	if err = ValidateResourceIndicators(request.Form); err != nil {
 		return request, err
 	}

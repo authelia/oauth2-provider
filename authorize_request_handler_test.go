@@ -209,6 +209,21 @@ func TestNewAuthorizeRequest(t *testing.T) {
 			},
 		},
 		{
+			name:   "ShouldFailShortNonce",
+			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+			query: url.Values{
+				consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb"},
+				consts.FormParameterClientID:     []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeAuthorizationCodeFlow},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterNonce:        {"short"},
+			},
+			err: "The request used a security parameter (e.g., anti-replay, anti-csrf) with insufficient entropy. Parameter 'nonce' is set but does not satisfy the minimum entropy of 8 characters.",
+			mock: func(store *mock.MockStorage) {
+				store.EXPECT().GetClient(gomock.Any(), "1234").Return(&DefaultClient{RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{}}, nil)
+			},
+		},
+		{
 			name:   "ShouldFailClientWithoutScopeBaz",
 			config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
 			query: url.Values{

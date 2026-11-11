@@ -7,7 +7,6 @@ package pkce
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
 
@@ -203,23 +202,8 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	// Verify the 'code_verifier' against the stored 'code_challenge' using the stored method; a mismatch is
 	// 'invalid_grant'.
 	// See: https://www.rfc-editor.org/rfc/rfc7636#section-4.6
-	switch method {
-	case consts.PKCEChallengeMethodSHA256:
-		sum := sha256.Sum256([]byte(verifier))
-
-		expected := make([]byte, base64.RawURLEncoding.EncodedLen(len(sum)))
-
-		base64.RawURLEncoding.Strict().Encode(expected, sum[:])
-
-		if subtle.ConstantTimeCompare(expected, []byte(challenge)) == 0 {
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code challenge did not match the code verifier."))
-		}
-	case consts.PKCEChallengeMethodPlain:
-		fallthrough
-	default:
-		if subtle.ConstantTimeCompare([]byte(verifier), []byte(challenge)) == 0 {
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code challenge did not match the code verifier."))
-		}
+	if !oauth2.IsPKCECodeVerifierMatch(method, challenge, verifier) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code challenge did not match the code verifier."))
 	}
 
 	return nil

@@ -41,6 +41,31 @@ func revokeCodeGrant(ctx context.Context, store TokenRevocationStorage, requestI
 
 // validateAuthorizeCodeBinding checks that the token request comes from the client the authorization code was issued
 // to and repeats the 'redirect_uri' from the authorization request, per RFC 6749 Section 4.1.3.
+var pkceParameters = []string{consts.FormParameterCodeChallenge, consts.FormParameterCodeChallengeMethod}
+
+func validateReplayedAuthorizeCode(authorizeRequest oauth2.Requester, request oauth2.AccessRequester, pkce bool) (err error) {
+	if err = validateAuthorizeCodeBinding(authorizeRequest, request); err != nil {
+		return err
+	}
+
+	if !pkce {
+		return nil
+	}
+
+	form := authorizeRequest.GetRequestForm()
+
+	challenge := form.Get(consts.FormParameterCodeChallenge)
+	if challenge == "" {
+		return nil
+	}
+
+	if !oauth2.IsPKCECodeVerifierMatch(form.Get(consts.FormParameterCodeChallengeMethod), challenge, request.GetRequestForm().Get(consts.FormParameterCodeVerifier)) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code challenge did not match the code verifier."))
+	}
+
+	return nil
+}
+
 func validateAuthorizeCodeBinding(authorizeRequest oauth2.Requester, request oauth2.AccessRequester) (err error) {
 	// The code must have been issued to this client.
 	//
@@ -95,10 +120,11 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(verr).WithDebugError(verr))
 		}
 
-		// A replayed code with invalid parameters does not revoke the grant.
+		// A replayed code with invalid parameters, including a 'code_verifier' that does not match the 'code_challenge'
+		// the code was issued for, does not revoke the grant.
 		//
 		// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-16#section-7.5.3
-		if err = validateAuthorizeCodeBinding(authorizeRequest, request); err != nil {
+		if err = validateReplayedAuthorizeCode(authorizeRequest, request, c.isPKCEVerified(ctx)); err != nil {
 			return err
 		}
 

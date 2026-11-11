@@ -88,3 +88,18 @@ func IsTokenRejection(err error) bool {
 		return false
 	}
 }
+
+func restrictAudienceAndResource(ctx context.Context, config oauth2.AudienceResourceStrategyProvider, request oauth2.AccessRequester, grant oauth2.Requester) (err error) {
+	if len(request.GetRequestedAudience()) == 0 && len(request.GetRequestedResource()) == 0 {
+		request.SetRequestedAudience(grant.GetGrantedAudience())
+		request.SetRequestedResource(grant.GetGrantedResource())
+
+		return nil
+	}
+
+	if err = oauth2.GetAudienceStrategy(ctx, config, request.GetClient())(grant.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
+		return err
+	}
+
+	return oauth2.GetResourceStrategy(ctx, config, request.GetClient())(grant.GetGrantedResource(), request.GetRequestedResource())
+}

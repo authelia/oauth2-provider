@@ -311,6 +311,29 @@ type RefreshFlowScopeClient interface {
 	Client
 }
 
+// ApplicationTypeClient is a client which reports its OpenID Connect Dynamic Client Registration 1.0
+// 'application_type', being 'web' or 'native'. A 'native' client may use a loopback redirect URI on any port, whether
+// or not it is public; see MatchRedirectURIWithClientRedirectURIs.
+//
+// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+// See: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
+type ApplicationTypeClient interface {
+	// GetApplicationType should return the 'application_type' of the client, being 'web' or 'native', or an empty
+	// string for the default of 'web'.
+	GetApplicationType() (applicationType string)
+
+	Client
+}
+
+// IsNativeClient returns true if the client is an ApplicationTypeClient whose 'application_type' is 'native'.
+//
+// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+func IsNativeClient(client Client) (native bool) {
+	c, ok := client.(ApplicationTypeClient)
+
+	return ok && c.GetApplicationType() == consts.ApplicationTypeNative
+}
+
 // RefreshTokenRotationClient is a client which keeps its refresh token during its own refresh token grants. Rotation
 // is disabled when either this or the provider-wide option is set, except for a public client whose refresh token is
 // not sender-constrained by an enabled DPoP or mTLS binding; see IsRefreshTokenRotationDisabledForRequest.

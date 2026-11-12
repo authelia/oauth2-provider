@@ -480,6 +480,11 @@ func (c *DefaultRegisteredClient) GetRequestObjectMaximumLifetime() time.Duratio
 	return c.RequestObjectMaximumLifetime
 }
 
+// GetApplicationType returns the 'application_type' client metadata value.
+func (c *DefaultRegisteredClient) GetApplicationType() (applicationType string) {
+	return c.ApplicationType
+}
+
 // GetDisableRefreshTokenRotation returns true if the refresh token grant should keep this client's refresh token rather
 // than issue a new one.
 func (c *DefaultRegisteredClient) GetDisableRefreshTokenRotation() bool {

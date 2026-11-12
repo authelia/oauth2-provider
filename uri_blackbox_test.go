@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestIsLocalhost(t *testing.T) {
@@ -543,11 +544,12 @@ func TestClientRedirectURIMatchingStrategies(t *testing.T) {
 func TestMatchRedirectURIWithClientRedirectURIsNativeAppLoopback(t *testing.T) {
 	// RFC 8252 Section 7.3 and RFC 9700 Section 2.1.
 	testCases := []struct {
-		name       string
-		public     bool
-		registered string
-		requested  string
-		match      bool
+		name            string
+		public          bool
+		applicationType string
+		registered      string
+		requested       string
+		match           bool
 	}{
 		{name: "ShouldMatchPublicIPv4LoopbackAnyPort", public: true, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/cb", match: true},
 		{name: "ShouldMatchPublicIPv6LoopbackAnyPort", public: true, registered: "http://[::1]/cb", requested: "http://[::1]:51004/cb", match: true},
@@ -569,11 +571,18 @@ func TestMatchRedirectURIWithClientRedirectURIsNativeAppLoopback(t *testing.T) {
 		{name: "ShouldNotMatchPublicLocalhostHTTPS", public: true, registered: "https://localhost/cb", requested: "https://localhost:51004/cb"},
 		{name: "ShouldNotMatchPublicLocalhostSubdomain", public: true, registered: "http://app.localhost/cb", requested: "http://app.localhost:51004/cb"},
 		{name: "ShouldNotMatchPublicLocalhostAgainstIPv4Loopback", public: true, registered: "http://localhost/cb", requested: "http://127.0.0.1:51004/cb"},
+		{name: "ShouldMatchConfidentialNativeIPv4LoopbackAnyPort", applicationType: consts.ApplicationTypeNative, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/cb", match: true},
+		{name: "ShouldMatchConfidentialNativeIPv6LoopbackAnyPort", applicationType: consts.ApplicationTypeNative, registered: "http://[::1]/cb", requested: "http://[::1]:51004/cb", match: true},
+		{name: "ShouldMatchConfidentialNativeLocalhostAnyPort", applicationType: consts.ApplicationTypeNative, registered: "http://localhost/cb", requested: "http://localhost:51004/cb", match: true},
+		{name: "ShouldNotMatchConfidentialNativeLoopbackDifferentPath", applicationType: consts.ApplicationTypeNative, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/other"},
+		{name: "ShouldNotMatchConfidentialNativeLocalhostHTTPS", applicationType: consts.ApplicationTypeNative, registered: "https://localhost/cb", requested: "https://localhost:51004/cb"},
+		{name: "ShouldNotMatchConfidentialWebLoopbackAnyPort", applicationType: consts.ApplicationTypeWeb, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/cb"},
+		{name: "ShouldMatchPublicWebLoopbackAnyPort", public: true, applicationType: consts.ApplicationTypeWeb, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/cb", match: true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			client := &oauth2.DefaultClient{Public: tc.public, RedirectURIs: []string{tc.registered}}
+			client := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{Public: tc.public, RedirectURIs: []string{tc.registered}}, ApplicationType: tc.applicationType}
 
 			uri, err := oauth2.MatchRedirectURIWithClientRedirectURIs(tc.requested, client)
 
@@ -583,6 +592,25 @@ func TestMatchRedirectURIWithClientRedirectURIsNativeAppLoopback(t *testing.T) {
 			} else {
 				assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 			}
+		})
+	}
+}
+
+func TestIsNativeClient(t *testing.T) {
+	testCases := []struct {
+		name     string
+		client   oauth2.Client
+		expected bool
+	}{
+		{"ShouldBeNative", &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, ApplicationType: consts.ApplicationTypeNative}, true},
+		{"ShouldNotBeNativeForWeb", &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, ApplicationType: consts.ApplicationTypeWeb}, false},
+		{"ShouldNotBeNativeByDefault", &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}}, false},
+		{"ShouldNotBeNativeWithoutAnApplicationType", &oauth2.DefaultClient{}, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, oauth2.IsNativeClient(tc.client))
 		})
 	}
 }

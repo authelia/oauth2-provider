@@ -6,6 +6,7 @@ package rfc7591
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -18,6 +19,7 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -430,6 +432,79 @@ func TestClientConfigurationHandlerRejectsUnsupportedAuthorizationDetailsType(t 
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
+}
+
+func TestClientConfigurationHandlerRoundTripsAuthorizationDetailsTypes(t *testing.T) {
+	testCases := []struct {
+		name     string
+		types    []string
+		expected any
+	}{
+		{name: "ShouldOmitUnrestricted", types: nil, expected: nil},
+		{name: "ShouldReturnEmpty", types: []string{}, expected: []any{}},
+		{name: "ShouldReturnPopulated", types: []string{internal.AuthorizationDetailsTypePaymentInitiation}, expected: []any{internal.AuthorizationDetailsTypePaymentInitiation}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			handler, registrar, config, store := newConfigurationHandler(t)
+			config.AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
+
+			registration := oauth2.NewClientRegistrationRequest()
+			registration.Metadata = &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:              []string{"https://example.com/cb"},
+				GrantTypes:                []string{"authorization_code"},
+				ResponseTypes:             []string{"code"},
+				AuthorizationDetailsTypes: tc.types,
+			}
+
+			registered := oauth2.NewClientRegistrationResponse()
+			require.NoError(t, registrar.HandleRFC7591ClientRegistrationEndpointRequest(ctx, registration, registered))
+
+			id := registered.ToMap()["client_id"].(string)
+
+			read := oauth2.NewClientConfigurationRequest()
+			read.Method = http.MethodGet
+			read.ClientID = id
+
+			readResponse := oauth2.NewClientRegistrationResponse()
+			require.NoError(t, handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, read, readResponse))
+
+			values := readResponse.ToMap()
+
+			for _, v := range []map[string]any{registered.ToMap(), values} {
+				if tc.expected == nil {
+					assert.NotContains(t, v, "authorization_details_types")
+				} else {
+					assert.Equal(t, tc.expected, v["authorization_details_types"])
+				}
+			}
+
+			for _, name := range []string{consts.ClientRegistrationResponseRegistrationAccessToken, consts.ClientRegistrationResponseRegistrationClientURI, consts.ClientRegistrationResponseClientSecretExpiresAt, consts.ClientRegistrationResponseClientIDIssuedAt} {
+				delete(values, name)
+			}
+
+			data, err := json.Marshal(values)
+			require.NoError(t, err)
+
+			update := oauth2.NewClientConfigurationRequest()
+			update.Method = http.MethodPut
+			update.ClientID = id
+			update.Metadata = &oauth2.ClientRegistrationMetadata{}
+			update.Authenticated = grantableFixtureWithAudience(id, nil, nil)
+			require.NoError(t, json.Unmarshal(data, update.Metadata))
+
+			require.NoError(t, handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, update, oauth2.NewClientRegistrationResponse()))
+
+			client, err := store.GetClient(ctx, id)
+			require.NoError(t, err)
+
+			restricted, ok := client.(oauth2.AuthorizationDetailsClient)
+			require.True(t, ok)
+			assert.Equal(t, tc.types, restricted.GetAuthorizationDetailsTypes())
+		})
+	}
 }
 
 func TestClientConfigurationHandlerPreservesCeilingAcrossRotation(t *testing.T) {

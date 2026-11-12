@@ -140,7 +140,7 @@ type ClientRegistrationMetadata struct {
 	ResponseModes                       []string `json:"response_modes,omitempty"`
 	Audience                            []string `json:"audience,omitempty"`
 	Resource                            []string `json:"resource,omitempty"`
-	AuthorizationDetailsTypes           []string `json:"authorization_details_types,omitempty"`
+	AuthorizationDetailsTypes           []string `json:"authorization_details_types,omitzero"`
 	SoftwareStatementMembers            []string `json:"-"`
 
 	// Extra holds every unregistered client metadata parameter so it survives a registration round trip.

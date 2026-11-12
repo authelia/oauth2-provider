@@ -447,7 +447,10 @@ func ValidateAuthorizationDetails(ctx context.Context, config any, request Reque
 // ParseRequestedAuthorizationDetails parses the 'authorization_details' parameter of form and rejects details which
 // fail CheckAuthorizationDetailsMaxObjects or ValidateAuthorizationDetailsTypes. It does not call the type handlers:
 // the caller validates the details with ValidateAuthorizationDetails or assigns them with AssignAuthorizationDetails.
-// It returns nil without reading the parameter when no handlers are configured.
+// It returns nil without reading the parameter when no handlers are configured, and rejects the parameter when it is
+// included more than once.
+//
+// See: https://www.rfc-editor.org/rfc/rfc6749#section-3.1
 func ParseRequestedAuthorizationDetails(ctx context.Context, config any, client Client, form url.Values) (details AuthorizationDetails, err error) {
 	return parseRequestedAuthorizationDetails(ctx, config, client, form, true)
 }
@@ -455,6 +458,10 @@ func ParseRequestedAuthorizationDetails(ctx context.Context, config any, client 
 func parseRequestedAuthorizationDetails(ctx context.Context, config any, client Client, form url.Values, types bool) (details AuthorizationDetails, err error) {
 	if !IsAuthorizationDetailsEnabled(ctx, config) {
 		return nil, nil
+	}
+
+	if len(form[consts.FormParameterAuthorizationDetails]) > 1 {
+		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'authorization_details' parameter must not be included more than once."))
 	}
 
 	if details, err = ParseAuthorizationDetails(form.Get(consts.FormParameterAuthorizationDetails)); err != nil {

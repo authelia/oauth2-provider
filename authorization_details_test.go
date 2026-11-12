@@ -217,6 +217,35 @@ func TestParseRequestedAuthorizationDetails(t *testing.T) {
 	}
 }
 
+func TestParseRequestedAuthorizationDetailsRejectsRepeatedParameter(t *testing.T) {
+	testCases := []struct {
+		name   string
+		values []string
+	}{
+		{name: "ShouldRejectEmptyFirst", values: []string{"", testRARDetailsJSON}},
+		{name: "ShouldRejectIdentical", values: []string{testRARDetailsJSON, testRARDetailsJSON}},
+		{name: "ShouldRejectBothEmpty", values: []string{"", ""}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := oauth2.ParseRequestedAuthorizationDetails(context.Background(), newRARConfig(), &oauth2.DefaultClient{}, url.Values{"authorization_details": tc.values})
+
+			require.Error(t, err)
+			assert.Nil(t, actual)
+			assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+			assert.Equal(t, "The 'authorization_details' parameter must not be included more than once.", oauth2.ErrorToRFC6749Error(err).HintField)
+		})
+	}
+
+	t.Run("ShouldIgnoreWhenNoHandlers", func(t *testing.T) {
+		actual, err := oauth2.ParseRequestedAuthorizationDetails(context.Background(), &oauth2.Config{}, &oauth2.DefaultClient{}, url.Values{"authorization_details": {"", testRARDetailsJSON}})
+
+		require.NoError(t, err)
+		assert.Nil(t, actual)
+	})
+}
+
 func TestGetAuthorizationDetailsMaxObjects(t *testing.T) {
 	testCases := []struct {
 		name     string

@@ -74,19 +74,15 @@ func IsIntactToken(err error) bool {
 // a server error that must be answered as one, which is any error with a 5xx status such as oauth2.ErrServerError,
 // oauth2.ErrTemporarilyUnavailable or oauth2.ErrMisconfiguration.
 func IsTokenRejection(err error) bool {
-	var (
-		rfc     *oauth2.RFC6749Error
-		corrupt base64.CorruptInputError
-	)
-
-	switch {
-	case errors.As(err, &corrupt):
+	if _, ok := errors.AsType[base64.CorruptInputError](err); ok {
 		return true
-	case errors.As(err, &rfc):
-		return rfc.CodeField < http.StatusInternalServerError
-	default:
-		return false
 	}
+
+	if rfc, ok := errors.AsType[*oauth2.RFC6749Error](err); ok {
+		return rfc.CodeField < http.StatusInternalServerError
+	}
+
+	return false
 }
 
 func restrictAudienceAndResource(ctx context.Context, config oauth2.AudienceResourceStrategyProvider, request oauth2.AccessRequester, grant oauth2.Requester) (err error) {

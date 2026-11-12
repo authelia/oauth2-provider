@@ -6,12 +6,11 @@ package openid
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -342,8 +341,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 			tokenHint, err = h.Decode(ctx, tokenHintString, jwt.WithIDTokenHintClient(request.GetClient()))
 
-			var ve *jwt.ValidationError
-			if errors.As(err, &ve) && ve.IsExactly(jwt.ValidationErrorExpired) {
+			if ve, ok := errors.AsType[*jwt.ValidationError](err); ok && ve.IsExactly(jwt.ValidationErrorExpired) {
 				// Expired ID Tokens are allowed as values to id_token_hint
 			} else if err != nil {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Unable to decode ID Token from 'id_token_hint' parameter because %s.", err.Error()))

@@ -107,12 +107,10 @@ func isUnrecognizedIntrospectionError(err error) bool {
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.3
 func IntrospectionStorageError(err error) *oauth2.RFC6749Error {
-	var (
-		pointer *oauth2.RFC6749Error
-		value   oauth2.RFC6749Error
-	)
+	_, pointer := errors.AsType[*oauth2.RFC6749Error](err)
+	_, value := errors.AsType[oauth2.RFC6749Error](err)
 
-	if (errors.As(err, &pointer) || errors.As(err, &value)) && !errors.Is(err, oauth2.ErrServerError) {
+	if (pointer || value) && !errors.Is(err, oauth2.ErrServerError) {
 		return oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebugError(err)
 	}
 

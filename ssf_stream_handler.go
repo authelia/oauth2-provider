@@ -692,9 +692,7 @@ func (f *Fosite) prepareSSFError(ctx context.Context, rw http.ResponseWriter, r 
 	}
 
 	if rfc.CodeField == http.StatusMethodNotAllowed {
-		var methodErr *ssfMethodNotAllowedError
-
-		if errors.As(err, &methodErr) {
+		if methodErr, ok := errors.AsType[*ssfMethodNotAllowedError](err); ok {
 			allow = methodErr.allow
 		}
 

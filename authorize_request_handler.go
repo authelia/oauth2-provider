@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,7 +19,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2/i18n"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -981,7 +981,7 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 		token = &jwt.Token{Claims: jwt.MapClaims{}}
 	}
 
-	if errJWTValidation := new(jwt.ValidationError); errors.As(inner, &errJWTValidation) {
+	if errJWTValidation, ok := errors.AsType[*jwt.ValidationError](inner); ok {
 		switch {
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyIDInvalid):
 			return outer.WithDebugf("%s client with id '%s' expects request objects to be signed with the 'kid' header value '%s' due to the client registration 'request_object_signing_key_id' value but the request object was signed with the 'kid' header value '%s'.", hintRequestObjectPrefix(openid), client.GetID(), client.GetRequestObjectSigningKeyID(), token.KeyID)
@@ -1062,7 +1062,7 @@ func fmtRequestObjectDecodeError(token *jwt.Token, client JARClient, issuer stri
 		default:
 			return outer.WithDebugf("%s client with id '%s' provided a request object that could not be validated. Error occurred trying to validate the request object: %s", hintRequestObjectPrefix(openid), client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
 		}
-	} else if errJWKLookup := new(jwt.JWKLookupError); errors.As(inner, &errJWKLookup) {
+	} else if errJWKLookup, ok := errors.AsType[*jwt.JWKLookupError](inner); ok {
 		return outer.WithDebugf("%s client with id '%s' provided a request object that could not be validated due to a key lookup error. %s.", hintRequestObjectPrefix(openid), client.GetID(), errJWKLookup.Description)
 	} else {
 		return outer.WithDebugf("%s client with id '%s' provided a request object that could not be validated. %s.", hintRequestObjectPrefix(openid), client.GetID(), ErrorToDebugRFC6749Error(inner).Error())

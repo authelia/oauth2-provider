@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
 	"net/url"
 	"strings"
@@ -121,7 +122,31 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 		}
 	}
 
+	// FAPI 2.0 Security Profile Section 5.3.2.1: only sender-constrained access tokens may be issued, and the request
+	// must prove possession of the key or certificate the session is bound to.
+	provider, _ := f.Config.(EnforceSenderConstrainedAccessTokensProvider)
+
+	if IsSenderConstrainedAccessTokenEnforced(ctx, provider, requester.GetClient()) && !f.isSenderConstrainedByRequest(ctx, r, requester.GetSession()) {
+		return requester, errorsx.WithStack(ErrInvalidRequest.WithHint("The request requires a sender-constrained access token, but neither a DPoP proof nor a mutual-TLS client certificate was presented to bind it to."))
+	}
+
 	return requester, nil
+}
+
+func (f *Fosite) isSenderConstrainedByRequest(ctx context.Context, r *http.Request, session Session) bool {
+	if s, ok := session.(DPoPBoundSession); ok && s.GetDPoPJWKThumbprint() != "" && f.Config.GetDPoPEnabled(ctx) {
+		if proof := GetDPoPProof(ctx); proof != nil && subtle.ConstantTimeCompare([]byte(proof.Thumbprint), []byte(s.GetDPoPJWKThumbprint())) == 1 {
+			return true
+		}
+	}
+
+	if s, ok := session.(MTLSBoundSession); ok && s.GetClientCertificateSHA256Thumbprint() != "" && f.Config.GetMTLSEnabled(ctx) {
+		if _, err := ValidateClientCertificateBinding(r, f.Config.GetMTLSClientCertificateHeader(ctx), s.GetClientCertificateSHA256Thumbprint()); err == nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 func hasClientCredentials(r *http.Request, form url.Values) bool {

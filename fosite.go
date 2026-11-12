@@ -405,6 +405,20 @@ func isRefreshTokenRotationDisabledForRequest(ctx context.Context, config Disabl
 	return isSenderConstrained(ctx, config, request.GetSession())
 }
 
+// IsSenderConstrainedAccessTokenEnforced determines if a token request must bind its tokens to a DPoP proof or a
+// mutual-TLS client certificate, being when either the provider-wide option or the client's own policy is set.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+func IsSenderConstrainedAccessTokenEnforced(ctx context.Context, config EnforceSenderConstrainedAccessTokensProvider, client Client) (enforce bool) {
+	if config != nil && config.GetEnforceSenderConstrainedAccessTokens(ctx) {
+		return true
+	}
+
+	c, ok := client.(SenderConstrainedAccessTokensClient)
+
+	return ok && c.GetEnforceSenderConstrainedAccessTokens()
+}
+
 func isSenderConstrained(ctx context.Context, config any, session Session) bool {
 	if s, ok := session.(DPoPBoundSession); ok && s.GetDPoPJWKThumbprint() != "" {
 		if c, ok := config.(interface {

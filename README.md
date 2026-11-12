@@ -291,6 +291,12 @@ Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Cons
   ([Section 2.2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.2.1)) for clients that request them, and
   `DPoPEnforce` and `MTLSEnforce` require them from every client, which then must all support the mechanism. Resource
   servers must also verify the binding.
+- `EnforceSenderConstrainedAccessTokens` requires every token request to bind its tokens to a DPoP proof or a mutual-TLS
+  client certificate, whichever the client presents, as
+  [FAPI 2.0 Security Profile Section 5.3.2.1](https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1)
+  requires. Unlike `DPoPEnforce` and `MTLSEnforce`, either method satisfies it, so clients need only support one. A
+  request carrying a DPoP proof is bound to it, and otherwise to the client certificate. A client implementing
+  `SenderConstrainedAccessTokensClient` can be required individually.
 - `DPoPStrictRefreshTokenBinding` and `MTLSStrictRefreshTokenBinding` keep a confidential client's refresh token bound
   to the key or certificate it was issued for, rather than re-binding it on refresh. The client cannot then change its
   key without a new grant. Public clients are always strictly bound.

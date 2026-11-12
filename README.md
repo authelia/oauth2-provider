@@ -61,7 +61,7 @@ finalized, so support for one may change in any release.
 | [RFC 7592: Dynamic Client Registration Management Protocol](https://datatracker.ietf.org/doc/html/rfc7592)                                      |   ✅   |            |                                                                                                                                                    |
 | [RFC 7636: Proof Key for Code Exchange (PKCE)](https://datatracker.ietf.org/doc/html/rfc7636)                                                   |   ✅   |            | Per-client enforcement policy                                                                                                                      |
 | [RFC 7662: Token Introspection](https://datatracker.ietf.org/doc/html/rfc7662)                                                                  |   ✅   |            | Client authentication for the introspection endpoint                                                                                               |
-| [RFC 8252: OAuth 2.0 for Native Apps](https://datatracker.ietf.org/doc/html/rfc8252)                                                            |   🟡   |            | Redirect URI handling for native clients; the loopback any-port exemption applies to public clients only                                           |
+| [RFC 8252: OAuth 2.0 for Native Apps](https://datatracker.ietf.org/doc/html/rfc8252)                                                            |   🟡   |            | Any loopback port for public clients and those whose `application_type` is `native`; private-use URI schemes are only checked at registration      |
 | [RFC 8414: Authorization Server Metadata](https://datatracker.ietf.org/doc/html/rfc8414)                                                        |   ✅   |            | Built from the registered handlers and configuration, with optional signed metadata                                                                |
 | [RFC 8628: Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)                                                           |   ✅   |            |                                                                                                                                                    |
 | [RFC 8693: Token Exchange](https://datatracker.ietf.org/doc/html/rfc8693)                                                                       |   ✅   |            | Access token, refresh token, ID Token, and custom JWT token types                                                                                  |
@@ -244,7 +244,10 @@ the responsibility of the application that uses it:
   [RFC 8252 Section 8.5](https://datatracker.ietf.org/doc/html/rfc8252#section-8.5)): a secret shipped in an app's code
   is readable by every user of the app, so it does not authenticate the client. Register these clients as public
   clients, whose `IsPublic` returns true and whose token endpoint authentication method is `none`. A native app may
-  still register each installation through Dynamic Client Registration and receive a secret of its own.
+  still register each installation through Dynamic Client Registration and receive a secret of its own, and a client
+  whose `GetApplicationType` of the `ApplicationTypeClient` interface returns `native` may use a registered loopback
+  redirect URI on any port ([RFC 8252 Section 7.3](https://datatracker.ietf.org/doc/html/rfc8252#section-7.3)), as a
+  public client may.
 - **Only skip consent when the client's identity is assured**
   ([RFC 10017 Section 6.3.3.2](https://datatracker.ietf.org/doc/html/rfc10017#section-6.3.3.2),
   [RFC 8252 Section 8.6](https://datatracker.ietf.org/doc/html/rfc8252#section-8.6)): any app can send the client ID of

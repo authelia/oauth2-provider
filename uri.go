@@ -106,9 +106,10 @@ func IsLocalhost(uri *url.URL) bool {
 }
 
 // MatchRedirectURIWithClientRedirectURIs if the given uri is a registered redirect uri. Does not perform
-// uri validation.
+// uri validation. A public or native client may use a registered loopback redirect URI on any port.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.3
+// See: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
 // See: https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.1.7
 func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL, error) {
 	strategy := GetClientRedirectURIComparisonStrategy(client)
@@ -120,7 +121,7 @@ func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL
 		}
 
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'.").WithDebugf("The 'redirect_uris' registered with OAuth 2.0 Client with id '%s' did not match 'redirect_uri' value '%s' because the only registered 'redirect_uri' is not a valid value.", client.GetID(), raw))
-	} else if redirectTo, ok := isMatchingRedirectURI(raw, client.GetRedirectURIs(), strategy, client.IsPublic()); raw != "" && ok {
+	} else if redirectTo, ok := isMatchingRedirectURI(raw, client.GetRedirectURIs(), strategy, client.IsPublic() || IsNativeClient(client)); raw != "" && ok {
 		// If a redirect_uri was given and the clients knows it (simple string comparison!)
 		// return it.
 		if parsed, err := url.Parse(redirectTo); err == nil && IsValidRedirectURI(parsed) {
@@ -133,7 +134,7 @@ func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL
 
 // IsMatchingRedirectURI matches a requested redirect URI against a pool of registered client URIs using the given
 // strategy. It does not apply the native app loopback port exemption, which MatchRedirectURIWithClientRedirectURIs
-// applies to public clients only.
+// applies to public and native clients only.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1
 func IsMatchingRedirectURI(needle string, haystack []string, strategy URIComparisonStrategy) (uri string, ok bool) {

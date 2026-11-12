@@ -86,7 +86,7 @@ finalized, so support for one may change in any release.
 | [JWT Authorization Grant with DPoP Binding](https://datatracker.ietf.org/doc/html/draft-parecki-oauth-jwt-dpop-grant-02)                        |   ✅   | `draft-02` | Redeeming a DPoP-bound ID-JAG                                                                                                                      |
 | [Transaction Tokens](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11)                                              |   ✅   | `draft-11` | Opt-in, including the `self_signed` and `unsigned_json` subject tokens and replacement tokens                                                      |
 | [OAuth Client ID Metadata Document](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)                      |   ✅   | `draft-03` | Opt-in through `Config.ClientIDMetadataDocumentResolver`, with a default resolver in `handler/cimd`                                                |
-| [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html)                                                      |   🟡   |            | Individual requirements such as refresh token rotation policy; not a complete profile                                                              |
+| [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html)                                                      |   🟡   |            | Checked by `compose.ValidateFAPI2SecurityProfile` and applied by `compose.ApplyFAPI2SecurityProfile`; clients are not checked                      |
 | [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html)                                                        |   🟡   |            | Signed request objects, JARM and RFC 9701 responses; callers of the introspection endpoint are not restricted                                      |
 
 ### OpenID Connect 1.0
@@ -329,6 +329,16 @@ Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Cons
   [Section 4.14.2](https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2) asks for. An empty list issues a
   refresh token for every authorization code and device code grant.
 - `AuthorizeCodeLifespan` should be kept short, as an authorization code only has to survive a single redirect.
+
+For the [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html),
+`compose.ApplyFAPI2SecurityProfile` sets the options above that it requires on an `oauth2.Config`, and
+`compose.ValidateFAPI2SecurityProfile` checks any `oauth2.Configurator` once the provider is composed, returning every
+setting that does not meet the profile and every missing required handler. Of the authorize endpoint handlers it refuses
+only `AuthorizeImplicitGrantTypeHandler`, `OpenIDConnectImplicitHandler`, `OpenIDConnectHybridHandler` and
+`NoneResponseTypeHandler`; a custom handler is not checked, even one serving a response type other than `code`. It does
+not set `Issuer`, enable DPoP or mTLS, or check the clients, which must be confidential and use the `code` response
+type. Nor does it check the keys which sign the JWTs the server issues, such as ID Tokens and JWT access tokens: these
+must use PS256, ES256 or EdDSA, and a configuration signing with RS256 still passes.
 
 ## Thanks
 

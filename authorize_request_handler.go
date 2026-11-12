@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -395,10 +396,22 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	var (
 		k, value string
 		v        any
+		raw      map[string]json.RawMessage
 	)
+
+	if err = token.UnsafeClaimsWithoutVerification(&raw); err != nil {
+		return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugError(err))
+	}
 
 	for k, v = range claims.ToMapClaims() {
 		switch k {
+		case consts.FormParameterAuthorizationDetails, consts.FormParameterClaims:
+			// These claims are JSON values whose numbers must reach the parameter exactly as the client signed them.
+			if value, err = requestObjectJSONFormValue(raw[k]); err != nil {
+				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object with a '%s' claim whose value could not be represented as an authorization request parameter: %v.", request.GetClient().GetID(), k, err))
+			}
+
+			request.Form.Set(k, value)
 		case consts.FormParameterRequest, consts.FormParameterRequestURI:
 			// The request and request_uri parameters MUST NOT be included in Request Objects.
 			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' included a request object which contained the 'request' or 'request_uri' claims but this is not permitted.", request.GetClient().GetID()))
@@ -555,6 +568,30 @@ func requestObjectFormValue(v any) (value string, err error) {
 
 		return string(data), nil
 	}
+}
+
+// requestObjectJSONFormValue renders a Request Object claim carrying a JSON value as the string the equivalent OAuth
+// 2.0 request syntax parameter would have carried, from the claim's source text. A string is the parameter value
+// itself, and any other value is its compacted JSON text.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9101#section-4
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-3
+func requestObjectJSONFormValue(raw json.RawMessage) (value string, err error) {
+	if isJSONNull(raw) {
+		return "", nil
+	}
+
+	if err = json.Unmarshal(raw, &value); err == nil {
+		return value, nil
+	}
+
+	buf := &bytes.Buffer{}
+
+	if err = json.Compact(buf, raw); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
 }
 
 func requestObjectFormValues(v any) (values []string, err error) {

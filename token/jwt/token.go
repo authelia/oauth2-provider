@@ -148,6 +148,17 @@ func (t *Token) IsSignatureValid() bool {
 	return t.valid
 }
 
+// UnsafeClaimsWithoutVerification decodes the JWT Claims Set of a parsed token into each dest without verifying the
+// token. Unlike Claims, which holds every number as an integer or a float, dest controls how values decode, so a
+// json.RawMessage keeps a member exactly as it was signed.
+func (t *Token) UnsafeClaimsWithoutVerification(dest ...any) (err error) {
+	if t == nil || t.parsedToken == nil {
+		return errorsx.WithStack(errors.New("the token was not parsed"))
+	}
+
+	return t.parsedToken.UnsafeClaimsWithoutVerification(dest...)
+}
+
 func (t *Token) toSignedJoseHeader() (header map[jose.HeaderKey]any) {
 	header = map[jose.HeaderKey]any{
 		JSONWebTokenHeaderType: JSONWebTokenTypeJWT,

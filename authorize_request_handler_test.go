@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1156,7 +1157,8 @@ func TestNewAuthorizeRequestAuthorizationDetailsFromRequestObject(t *testing.T) 
 		consts.FormParameterScope:                consts.ScopeOpenID,
 		consts.FormParameterState:                "strong-enough-state",
 		consts.FormParameterRedirectURI:          "https://foo.bar/cb",
-		consts.FormParameterAuthorizationDetails: []any{map[string]any{testRARMemberType: internal.AuthorizationDetailsTypePaymentInitiation, testRARMemberActions: []any{testRARActionInitiate}}},
+		consts.FormParameterAuthorizationDetails: json.RawMessage(`[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"amount":12345678901234567890.10}}]`),
+		consts.FormParameterClaims:               json.RawMessage(`{"id_token":{"example":{"value":12345678901234567890}}}`),
 	})
 	require.NoError(t, err)
 
@@ -1179,6 +1181,11 @@ func TestNewAuthorizeRequestAuthorizationDetailsFromRequestObject(t *testing.T) 
 	require.Len(t, details, 1)
 	assert.Equal(t, internal.AuthorizationDetailsTypePaymentInitiation, details[0].Type)
 	assert.Equal(t, []string{testRARActionInitiate}, details[0].Actions)
+
+	data, err := json.Marshal(details[0])
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `12345678901234567890.10`)
+	assert.Contains(t, ar.GetRequestForm().Get(consts.FormParameterClaims), `12345678901234567890}`)
 }
 
 func TestAuthorizeRequestFromPARRevalidatesAuthorizationDetails(t *testing.T) {

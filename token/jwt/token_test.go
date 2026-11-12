@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"strings"
 	"testing"
@@ -273,6 +274,30 @@ func TestUnsignedToken(t *testing.T) {
 			require.Equal(t, tc.expectedType, tk.Headers[0].ExtraHeaders[(JSONWebTokenHeaderType)])
 		})
 	}
+}
+
+func TestTokenUnsafeClaimsWithoutVerification(t *testing.T) {
+	t.Run("ShouldKeepRawMembers", func(t *testing.T) {
+		token := NewWithClaims(SigningMethodNone, MapClaims{"amount": json.RawMessage(`12345678901234567890.10`)})
+
+		raw, err := token.CompactSignedString(UnsafeAllowNoneSignatureType)
+		require.NoError(t, err)
+
+		parsed, err := ParseCustom(raw, func(*Token) (any, error) { return UnsafeAllowNoneSignatureType, nil }, SigningMethodNone)
+		require.NoError(t, err)
+
+		var members map[string]json.RawMessage
+
+		require.NoError(t, parsed.UnsafeClaimsWithoutVerification(&members))
+		assert.Equal(t, `12345678901234567890.10`, string(members["amount"]))
+	})
+
+	t.Run("ShouldErrorWhenNotParsed", func(t *testing.T) {
+		var members map[string]json.RawMessage
+
+		assert.EqualError(t, (&Token{}).UnsafeClaimsWithoutVerification(&members), "the token was not parsed")
+		assert.EqualError(t, (*Token)(nil).UnsafeClaimsWithoutVerification(&members), "the token was not parsed")
+	})
 }
 
 func TestJWTHeaders(t *testing.T) {

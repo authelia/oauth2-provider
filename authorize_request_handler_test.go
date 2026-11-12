@@ -1741,6 +1741,120 @@ func TestNewAuthorizeRequestErrorDescriptionDoesNotReflectParameters(t *testing.
 	}
 }
 
+func TestNewAuthorizeRequestOmittedResponseMode(t *testing.T) {
+	testCases := []struct {
+		name         string
+		responseType string
+		responseMode string
+		modes        []ResponseModeType
+		err          bool
+	}{
+		{name: "ShouldAllowWithoutRegisteredModes", responseType: consts.ResponseTypeAuthorizationCodeFlow},
+		{name: "ShouldAllowWhenQueryIsRegistered", responseType: consts.ResponseTypeAuthorizationCodeFlow, modes: []ResponseModeType{ResponseModeQuery}},
+		{name: "ShouldAllowWhenQueryIsOneOfTheRegistered", responseType: consts.ResponseTypeAuthorizationCodeFlow, modes: []ResponseModeType{ResponseModeJWT, ResponseModeQuery}},
+		{name: "ShouldRejectWhenOnlyJWTIsRegistered", responseType: consts.ResponseTypeAuthorizationCodeFlow, modes: []ResponseModeType{ResponseModeJWT}, err: true},
+		{name: "ShouldRejectWhenOnlyQueryJWTIsRegistered", responseType: consts.ResponseTypeAuthorizationCodeFlow, modes: []ResponseModeType{ResponseModeQueryJWT}, err: true},
+		{name: "ShouldRejectWhenOnlyFormPostIsRegistered", responseType: consts.ResponseTypeAuthorizationCodeFlow, modes: []ResponseModeType{ResponseModeFormPost}, err: true},
+		{name: "ShouldAllowFragmentForImplicit", responseType: consts.ResponseTypeImplicitFlowToken, modes: []ResponseModeType{ResponseModeFragment}},
+		{name: "ShouldRejectQueryForImplicit", responseType: consts.ResponseTypeImplicitFlowToken, modes: []ResponseModeType{ResponseModeQuery}, err: true},
+		{name: "ShouldAllowRequestedJWT", responseType: consts.ResponseTypeAuthorizationCodeFlow, responseMode: string(ResponseModeJWT), modes: []ResponseModeType{ResponseModeJWT}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			store := mock.NewMockStorage(ctrl)
+
+			client := &DefaultRegisteredClient{
+				DefaultClient: &DefaultClient{
+					ID:            "1234",
+					RedirectURIs:  []string{"https://foo.bar/cb"},
+					Scopes:        []string{"foo"},
+					ResponseTypes: []string{tc.responseType},
+				},
+				ResponseModes: tc.modes,
+			}
+
+			store.EXPECT().GetClient(gomock.Any(), "1234").Return(client, nil)
+
+			query := url.Values{
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterResponseType: {tc.responseType},
+				consts.FormParameterScope:        {"foo"},
+				consts.FormParameterState:        {"strong-enough-state"},
+			}
+
+			if tc.responseMode != "" {
+				query.Set(consts.FormParameterResponseMode, tc.responseMode)
+			}
+
+			config := &Config{Issuer: "https://auth.example.com", ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy}
+			config.JWTSecuredAuthorizeResponseModeStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
+
+			provider := &Fosite{Store: store, Config: config}
+
+			r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+			_, err := provider.NewAuthorizeRequest(context.Background(), r)
+
+			if tc.err {
+				assert.ErrorIs(t, err, ErrUnsupportedResponseMode)
+			} else {
+				assert.NoError(t, ErrorToDebugRFC6749Error(err))
+			}
+		})
+	}
+}
+
+func TestAuthorizeRequestFromPARRevalidatesOmittedResponseMode(t *testing.T) {
+	const requestURI = "urn:ietf:params:oauth:request_uri:responsemode"
+
+	redir, _ := url.Parse("https://foo.bar/cb")
+
+	pushed := &DefaultClient{
+		ID:            "foo",
+		RedirectURIs:  []string{"https://foo.bar/cb"},
+		Scopes:        []string{"foo"},
+		ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+	}
+
+	current := &DefaultRegisteredClient{DefaultClient: pushed, ResponseModes: []ResponseModeType{ResponseModeJWT}}
+
+	par := NewAuthorizeRequest()
+	par.Client = pushed
+	par.Session = &DefaultSession{ExpiresAt: map[TokenType]time.Time{PushedAuthorizeRequestContext: time.Now().Add(time.Hour)}}
+	par.State = "strong-enough-state"
+	par.RedirectURI = redir
+	par.ResponseTypes = []string{consts.ResponseTypeAuthorizationCodeFlow}
+	par.RequestedScope = []string{"foo"}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStorage := mock.NewMockStorage(ctrl)
+	mockStorage.EXPECT().GetClient(gomock.Any(), "foo").Return(current, nil)
+
+	mockPAR := mock.NewMockPARStorage(ctrl)
+	mockPAR.EXPECT().GetPARSession(gomock.Any(), requestURI).Return(par, nil)
+	mockPAR.EXPECT().DeletePARSession(gomock.Any(), requestURI).Return(nil)
+
+	provider := &Fosite{
+		Store:  &parStorage{MockStorage: mockStorage, MockPARStorage: mockPAR},
+		Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+	}
+
+	query := url.Values{
+		consts.FormParameterRequestURI: {requestURI},
+		consts.FormParameterClientID:   {"foo"},
+	}
+
+	r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+	_, err := provider.NewAuthorizeRequest(context.Background(), r)
+	assert.ErrorIs(t, err, ErrUnsupportedResponseMode)
+}
+
 type parStorage struct {
 	*mock.MockStorage
 	*mock.MockPARStorage

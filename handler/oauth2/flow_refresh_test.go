@@ -979,6 +979,195 @@ func TestRefreshFlow_RotatesUnboundPublicClientTokens(t *testing.T) {
 	}
 }
 
+func TestRefreshFlow_MaximumLifespan(t *testing.T) {
+	strategy := &hmacshaStrategy
+
+	testCases := []struct {
+		name     string
+		config   time.Duration
+		client   time.Duration
+		deadline time.Duration
+		expected time.Duration
+		expires  time.Duration
+	}{
+		{"ShouldExtendWithoutAMaximumLifespan", 0, 0, 0, 0, time.Hour},
+		{"ShouldRecordTheDeadlineOnTheFirstRefresh", time.Hour * 24, 0, 0, time.Hour * 24, time.Hour},
+		{"ShouldExtendWithinTheDeadline", time.Hour * 24, 0, time.Hour * 2, time.Hour * 2, time.Hour},
+		{"ShouldCapAtTheDeadline", time.Hour * 24, 0, time.Minute * 30, time.Minute * 30, time.Minute * 30},
+		{"ShouldUseTheClientMaximumLifespan", 0, time.Hour * 24, 0, time.Hour * 24, time.Hour},
+		{"ShouldNotLimitWhenTheClientOptsOut", time.Hour * 24, -1, 0, 0, time.Hour},
+	}
+
+	for _, s := range []struct {
+		name string
+		new  func() TokenRevocationStorage
+	}{
+		{"MemoryStore", func() TokenRevocationStorage { return storage.NewMemoryStore() }},
+		{"HydratingMemoryStore", func() TokenRevocationStorage { return storage.NewHydratingMemoryStore() }},
+	} {
+		for _, tc := range testCases {
+			t.Run(s.name+"/"+tc.name, func(t *testing.T) {
+				store := s.new()
+
+				client := &oauth2.DefaultRegisteredClient{
+					DefaultClient:               &oauth2.DefaultClient{ID: "foo", GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}, Scopes: []string{"foo", consts.ScopeOffline}},
+					RefreshTokenMaximumLifespan: tc.client,
+				}
+
+				handler := &RefreshTokenGrantHandler{
+					TokenRevocationStorage: store,
+					RefreshTokenStrategy:   strategy,
+					AccessTokenStrategy:    strategy,
+					Config: &oauth2.Config{
+						AccessTokenLifespan:         time.Hour,
+						RefreshTokenLifespan:        time.Hour,
+						RefreshTokenMaximumLifespan: tc.config,
+						ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+						AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+						RefreshTokenScopes:          []string{consts.ScopeOffline},
+					},
+				}
+
+				now := time.Now().UTC().Truncate(jwt.TimePrecision)
+
+				session := &oauth2.DefaultSession{Subject: "peter", ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.RefreshToken: now.Add(time.Minute * 10)}}
+				if tc.deadline != 0 {
+					session.ExpiryDeadline = now.Add(tc.deadline)
+				}
+
+				original := &oauth2.Request{
+					ID:             "req-id",
+					Client:         client,
+					RequestedAt:    now,
+					GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+					RequestedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+					Session:        session,
+					Form:           url.Values{},
+				}
+
+				refreshToken, refreshSignature, err := strategy.GenerateRefreshToken(t.Context(), nil)
+				require.NoError(t, err)
+
+				_, accessSignature, err := strategy.GenerateAccessToken(t.Context(), nil)
+				require.NoError(t, err)
+
+				require.NoError(t, store.CreateAccessTokenSession(t.Context(), accessSignature, original))
+				require.NoError(t, store.CreateRefreshTokenSession(t.Context(), refreshSignature, accessSignature, original))
+
+				requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				requester.Client = client
+				requester.Form = url.Values{consts.FormParameterRefreshToken: {refreshToken}}
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), requester)))
+
+				after := time.Now().UTC()
+
+				deadline := requester.GetSession().(oauth2.ExpiryDeadlineSession).GetExpiryDeadline()
+
+				if tc.expected == 0 {
+					assert.True(t, deadline.IsZero())
+				} else {
+					assert.WithinRange(t, deadline, now.Add(tc.expected), after.Add(tc.expected))
+				}
+
+				assert.WithinRange(t, requester.GetSession().GetExpiresAt(oauth2.RefreshToken), now.Add(tc.expires), after.Add(tc.expires))
+				assert.WithinRange(t, requester.GetSession().GetExpiresAt(oauth2.AccessToken), now.Add(tc.expires), after.Add(tc.expires))
+
+				response := oauth2.NewAccessResponse()
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), requester, response)))
+
+				rotated := strategy.RefreshTokenSignature(t.Context(), response.ToMap()[consts.AccessResponseRefreshToken].(string))
+
+				stored, err := store.GetRefreshTokenSession(t.Context(), rotated, &oauth2.DefaultSession{})
+				require.NoError(t, err)
+
+				assert.Equal(t, deadline, stored.GetSession().(oauth2.ExpiryDeadlineSession).GetExpiryDeadline())
+				assert.Equal(t, requester.GetSession().GetExpiresAt(oauth2.RefreshToken), stored.GetSession().GetExpiresAt(oauth2.RefreshToken))
+			})
+		}
+	}
+}
+
+func TestRefreshFlow_MaximumLifespanReached(t *testing.T) {
+	strategy := &hmacshaStrategy
+
+	testCases := []struct {
+		name     string
+		rotation bool
+		deadline time.Duration
+		err      bool
+	}{
+		{"ShouldRejectWithoutRotationAtTheDeadline", false, 0, true},
+		{"ShouldRejectWithoutRotationPastTheDeadline", false, -time.Minute, true},
+		{"ShouldRejectWithRotationPastTheDeadline", true, -time.Minute, true},
+		{"ShouldAllowWithoutRotationBeforeTheDeadline", false, time.Minute, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := storage.NewMemoryStore()
+
+			client := &oauth2.DefaultClient{ID: "foo", GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}, Scopes: []string{"foo", consts.ScopeOffline}}
+
+			handler := &RefreshTokenGrantHandler{
+				TokenRevocationStorage: store,
+				RefreshTokenStrategy:   strategy,
+				AccessTokenStrategy:    strategy,
+				Config: &oauth2.Config{
+					AccessTokenLifespan:         time.Hour,
+					RefreshTokenLifespan:        time.Hour,
+					RefreshTokenMaximumLifespan: time.Hour * 24,
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					RefreshTokenScopes:          []string{consts.ScopeOffline},
+					DisableRefreshTokenRotation: !tc.rotation,
+				},
+			}
+
+			now := time.Now().UTC().Truncate(jwt.TimePrecision)
+
+			original := &oauth2.Request{
+				ID:             "req-id",
+				Client:         client,
+				RequestedAt:    now,
+				GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+				RequestedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+				Session: &oauth2.DefaultSession{
+					Subject:        "peter",
+					ExpiresAt:      map[oauth2.TokenType]time.Time{oauth2.RefreshToken: now.Add(time.Hour)},
+					ExpiryDeadline: now.Add(tc.deadline),
+				},
+				Form: url.Values{},
+			}
+
+			refreshToken, refreshSignature, err := strategy.GenerateRefreshToken(t.Context(), nil)
+			require.NoError(t, err)
+
+			_, accessSignature, err := strategy.GenerateAccessToken(t.Context(), nil)
+			require.NoError(t, err)
+
+			require.NoError(t, store.CreateAccessTokenSession(t.Context(), accessSignature, original))
+			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), refreshSignature, accessSignature, original))
+
+			requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+			requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+			requester.Client = client
+			requester.Form = url.Values{consts.FormParameterRefreshToken: {refreshToken}}
+
+			err = handler.HandleTokenEndpointRequest(t.Context(), requester)
+
+			if tc.err {
+				require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+				assert.Equal(t, "The refresh token has reached the maximum lifespan of the grant.", oauth2.ErrorToRFC6749Error(err).HintField)
+			} else {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			}
+		})
+	}
+}
+
 func TestRefreshFlow_WithoutRotationRefusesARefreshTokenRevokedDuringTheRequest(t *testing.T) {
 	strategy := &hmacshaStrategy
 

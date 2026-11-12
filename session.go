@@ -5,11 +5,13 @@
 package oauth2
 
 import (
+	"context"
 	"maps"
 	"slices"
 	"time"
 
 	"authelia.com/provider/oauth2/internal/clone"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 // Session is an interface that is used to store session data between OAuth2 requests. It can be used to look up
@@ -65,6 +67,9 @@ type DefaultSession struct {
 
 	// KeyBindingGranted records that the 'bound_key' scope was granted, so this grant's ID Tokens are key bound.
 	KeyBindingGranted bool `json:"key_binding_granted,omitempty"`
+
+	// ExpiryDeadline is the latest time a token issued for the session may expire, if any.
+	ExpiryDeadline time.Time `json:"expiry_deadline,omitzero"`
 }
 
 // SetExpiresAt sets the expiration time of the token identified by key.
@@ -82,6 +87,20 @@ func (s *DefaultSession) GetExpiresAt(key TokenType) time.Time {
 	}
 
 	return s.ExpiresAt[key]
+}
+
+// SetExpiryDeadline implements ExpiryDeadlineSetterSession for DefaultSession.
+func (s *DefaultSession) SetExpiryDeadline(deadline time.Time) {
+	s.ExpiryDeadline = deadline.UTC()
+}
+
+// GetExpiryDeadline implements ExpiryDeadlineSession for DefaultSession.
+func (s *DefaultSession) GetExpiryDeadline() time.Time {
+	if s == nil {
+		return time.Time{}
+	}
+
+	return s.ExpiryDeadline
 }
 
 // GetUsername returns the username, or an empty string if it is not set.
@@ -134,6 +153,72 @@ type ExpiryDeadlineSession interface {
 	// GetExpiryDeadline returns the latest time a token issued for the session may expire, or the zero time when the
 	// session has no deadline.
 	GetExpiryDeadline() time.Time
+}
+
+// ExpiryDeadlineSetterSession is an ExpiryDeadlineSession whose deadline can be set, which a refresh token maximum
+// lifespan requires; see RecordRefreshTokenExpiryDeadline.
+type ExpiryDeadlineSetterSession interface {
+	// SetExpiryDeadline sets the latest time a token issued for the session may expire.
+	SetExpiryDeadline(deadline time.Time)
+
+	ExpiryDeadlineSession
+}
+
+// GetRefreshTokenMaximumLifespan returns the maximum lifespan of the refresh tokens of the client's grants: the
+// client's own when it is a RefreshTokenMaximumLifespanClient returning a non-zero duration, otherwise that of the
+// config. A duration of 0 seconds or less applies no limit.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc10017#section-6.3.2.3
+func GetRefreshTokenMaximumLifespan(ctx context.Context, config RefreshTokenMaximumLifespanProvider, client Client) (lifespan time.Duration) {
+	if c, ok := client.(RefreshTokenMaximumLifespanClient); ok {
+		if lifespan = c.GetRefreshTokenMaximumLifespan(); lifespan != 0 {
+			return lifespan
+		}
+	}
+
+	if config == nil {
+		return 0
+	}
+
+	return config.GetRefreshTokenMaximumLifespan(ctx)
+}
+
+// RecordRefreshTokenExpiryDeadline sets the deadline of the session to now plus the maximum lifespan
+// GetRefreshTokenMaximumLifespan returns, unless the session already has an earlier deadline. It does nothing when no
+// maximum lifespan applies or the session is not an ExpiryDeadlineSetterSession.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc10017#section-6.3.2.3
+func RecordRefreshTokenExpiryDeadline(ctx context.Context, config RefreshTokenMaximumLifespanProvider, client Client, session Session, now time.Time) {
+	lifespan := GetRefreshTokenMaximumLifespan(ctx, config, client)
+	if lifespan <= 0 {
+		return
+	}
+
+	bounded, ok := session.(ExpiryDeadlineSetterSession)
+	if !ok {
+		return
+	}
+
+	deadline := now.UTC().Add(lifespan).Truncate(jwt.TimePrecision)
+
+	if current := bounded.GetExpiryDeadline(); current.IsZero() || deadline.Before(current) {
+		bounded.SetExpiryDeadline(deadline)
+	}
+}
+
+// RefreshTokenExpiry returns the expiry of a refresh token issued at now with the given lifespan, capped to the
+// deadline of the session. A negative lifespan expires the refresh token at the deadline, or never when the session
+// has none, in which case the zero time is returned.
+func RefreshTokenExpiry(session Session, lifespan time.Duration, now time.Time) (expires time.Time) {
+	if lifespan > -1 {
+		return CapToExpiryDeadline(session, now.UTC().Add(lifespan).Truncate(jwt.TimePrecision))
+	}
+
+	if bounded, ok := session.(ExpiryDeadlineSession); ok {
+		return bounded.GetExpiryDeadline()
+	}
+
+	return time.Time{}
 }
 
 // CapToExpiryDeadline returns expires, or the deadline of the session when it is an ExpiryDeadlineSession with an

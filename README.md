@@ -76,7 +76,7 @@ finalized, so support for one may change in any release.
 | [RFC 9470: Step Up Authentication Challenge Protocol](https://datatracker.ietf.org/doc/html/rfc9470)                                            |   ✅   |            | Resource server challenges, `acr` and `auth_time` in tokens, opt-in `acr_values` and `max_age` enforcement                                         |
 | [RFC 9700: Best Current Practice for OAuth 2.0 Security](https://datatracker.ietf.org/doc/html/rfc9700)                                         |   ✅   |            | Assessed as a whole; see [Security Considerations](#security-considerations) for the application's part                                            |
 | [RFC 9701: JWT Response for Token Introspection](https://datatracker.ietf.org/doc/html/rfc9701)                                                 |   ✅   |            |                                                                                                                                                    |
-| [RFC 10017: OAuth 2.0 for Browser-Based Applications](https://datatracker.ietf.org/doc/html/rfc10017)                                           |   🟡   |            | Rotating or sender-constrained refresh tokens; a rotated refresh token is not capped to the original lifetime, and CORS is left to the application |
+| [RFC 10017: OAuth 2.0 for Browser-Based Applications](https://datatracker.ietf.org/doc/html/rfc10017)                                           |   🟡   |            | Rotating or sender-constrained refresh tokens, with an opt-in maximum grant lifespan which rotation cannot extend; CORS is left to the application |
 | [RFC 10070: Updates to JWT Client Authentication and Authorization Grants](https://datatracker.ietf.org/doc/html/rfc10070)                      |   ✅   |            | Issuer as the sole client assertion audience, with an opt-out                                                                                      |
 | [JWT Secured Authorization Response Mode (JARM)](https://openid.net/specs/oauth-v2-jarm.html)                                                   |   ✅   |            |                                                                                                                                                    |
 | [Multiple Response Type Encoding Practices](https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html)                                 |   ✅   |            | Including the `none` response type                                                                                                                 |
@@ -271,6 +271,15 @@ Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Cons
 - `DisableRefreshTokenRotation` should stay disabled
   ([Section 4.14.2](https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2)). It is ignored for a public client
   whose refresh token is not sender-constrained.
+- `RefreshTokenMaximumLifespan` limits how long the refresh tokens of a grant can be renewed, counted from the first
+  refresh token, however often they are rotated. `RefreshTokenLifespan` then acts as the time a refresh token expires
+  after if it is not used, and each rotated refresh token expires at whichever comes first.
+  [RFC 10017 Section 6.3.2.3](https://datatracker.ietf.org/doc/html/rfc10017#section-6.3.2.3) requires this for
+  browser-based applications when refresh tokens are rotated. Without it, each rotation issues a refresh token with the
+  full `RefreshTokenLifespan`, so a client which keeps refreshing keeps its grant indefinitely. A client implementing
+  `RefreshTokenMaximumLifespanClient` can set its own, or opt out with a negative duration. The limit is recorded on the
+  session, which must implement `ExpiryDeadlineSetterSession` as the default sessions do, and a grant issued without one
+  is limited from its next refresh.
 - `DPoPEnabled` and `MTLSEnabled` enable sender-constrained tokens
   ([Section 2.2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.2.1)) for clients that request them, and
   `DPoPEnforce` and `MTLSEnforce` require them from every client, which then must all support the mechanism. Resource

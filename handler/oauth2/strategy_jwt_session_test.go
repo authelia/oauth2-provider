@@ -96,6 +96,7 @@ func TestJWTSessionClone(t *testing.T) {
 					RequestedJWKThumbprint:      "requested-jkt",
 					PublicKeyJWK:                []byte(`{"kty":"EC"}`),
 					KeyBindingGranted:           true,
+					ExpiryDeadline:              time.Unix(1700003600, 0).UTC(),
 				}
 
 				clonetest.AssertDeepCopy(t, s, s.Clone())

@@ -135,6 +135,7 @@ func TestDefaultSessionClone(t *testing.T) {
 				PublicKeyJWK:                []byte(`{"kty":"EC"}`),
 				RequestedJWKThumbprint:      "requested-jkt",
 				KeyBindingGranted:           true,
+				ExpiryDeadline:              time.Unix(1700003600, 0).UTC(),
 				RequestedAt:                 now,
 			},
 			ActorToken:     map[string]any{consts.ClaimSubject: "actor"},

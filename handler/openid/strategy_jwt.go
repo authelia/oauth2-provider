@@ -57,6 +57,7 @@ type DefaultSession struct {
 	RequestedJWKThumbprint      string                         `json:"requested_jwk_thumbprint,omitempty"`
 	KeyBindingGranted           bool                           `json:"key_binding_granted,omitempty"`
 	RequestedAt                 time.Time                      `json:"requested_at"`
+	ExpiryDeadline              time.Time                      `json:"expiry_deadline,omitzero"`
 }
 
 // NewDefaultSession returns a DefaultSession with empty claims and headers, requested at the current time.
@@ -104,6 +105,20 @@ func (s *DefaultSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 		return time.Time{}
 	}
 	return s.ExpiresAt[key]
+}
+
+// SetExpiryDeadline implements oauth2.ExpiryDeadlineSetterSession for DefaultSession.
+func (s *DefaultSession) SetExpiryDeadline(deadline time.Time) {
+	s.ExpiryDeadline = deadline.UTC()
+}
+
+// GetExpiryDeadline implements oauth2.ExpiryDeadlineSession for DefaultSession.
+func (s *DefaultSession) GetExpiryDeadline() time.Time {
+	if s == nil {
+		return time.Time{}
+	}
+
+	return s.ExpiryDeadline
 }
 
 // SetRequestedAt sets when this request was originally requested, converted to UTC.

@@ -324,6 +324,19 @@ type RefreshTokenRotationClient interface {
 	Client
 }
 
+// RefreshTokenMaximumLifespanClient is a client with its own maximum lifespan for the refresh tokens of its grants; see
+// GetRefreshTokenMaximumLifespan.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc10017#section-6.3.2.3
+type RefreshTokenMaximumLifespanClient interface {
+	// GetRefreshTokenMaximumLifespan should return the time after the first refresh token of a grant is issued beyond
+	// which no refresh token of the grant may expire, a negative duration for no limit, or a duration of 0 seconds to
+	// utilize the global lifespan.
+	GetRefreshTokenMaximumLifespan() (lifespan time.Duration)
+
+	Client
+}
+
 // RevokeFlowRevokeRefreshTokensExplicitClient is a client which can be customized to only revoke Refresh Tokens
 // explicitly.
 type RevokeFlowRevokeRefreshTokensExplicitClient interface {

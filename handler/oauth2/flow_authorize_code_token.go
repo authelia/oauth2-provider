@@ -181,8 +181,14 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
 
 	rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeAuthorizationCode, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
-	if rtLifespan > -1 {
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision))
+
+	provider, _ := c.Config.(oauth2.RefreshTokenMaximumLifespanProvider)
+	now := time.Now().UTC()
+
+	oauth2.RecordRefreshTokenExpiryDeadline(ctx, provider, request.GetClient(), request.GetSession(), now)
+
+	if expires := oauth2.RefreshTokenExpiry(request.GetSession(), rtLifespan, now); !expires.IsZero() {
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, expires)
 	}
 
 	return nil

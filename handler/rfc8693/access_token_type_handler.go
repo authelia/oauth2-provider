@@ -32,8 +32,9 @@ import (
 //
 // When RFC 9396 authorization details are enabled, the access token carries the details granted to an access token or
 // refresh token 'subject_token', of the types the client may request, as oauth2.AssignAuthorizationDetails assigns
-// them for any 'authorization_details' parameter. A refresh token issued with it keeps every such granted detail. The
-// details of an 'actor_token' are never carried.
+// them for any 'authorization_details' parameter. TokenExchangeGrantHandler assigns them before it consumes the 'jti' of
+// any token, so it must be registered with this handler. A refresh token issued with it keeps every such granted
+// detail. The details of an 'actor_token' are never carried.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.1
 // See: https://www.rfc-editor.org/rfc/rfc9396#section-6
@@ -120,7 +121,6 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 		session.SetSubject(subjectTokenSession.GetSubject())
 		carryAuthenticationContext(session, sessionAuthentication(subjectTokenSession))
 		session.SetSubjectRequester(original)
-		carrySubjectAuthorizationDetails(ctx, c.Config, request, original)
 	}
 
 	return nil
@@ -221,11 +221,7 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 		return err
 	}
 
-	var grant oauth2.AuthorizationDetails
-
-	if grant, err = assignAuthorizationDetails(ctx, c.Config, request); err != nil {
-		return err
-	}
+	grant := grantedAuthorizationDetails(ctx, c.Config, request)
 
 	issueRefreshToken := c.canIssueRefreshToken(request)
 

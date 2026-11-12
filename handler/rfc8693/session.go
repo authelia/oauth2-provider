@@ -37,6 +37,15 @@ type Session interface {
 	// GetSubjectToken returns the previously stored subject token claims, or nil if none were set.
 	GetSubjectToken() map[string]any
 
+	// SetSubjectRequester stores the request the subject token was issued for, when the subject token is an access
+	// token or refresh token this server issued. It is held only for the exchange and is never persisted.
+	SetSubjectRequester(requester oauth2.Requester)
+
+	// GetSubjectRequester returns the request the subject token was issued for, or nil when the subject token is not
+	// a token this server issued and stored, such as an ID Token or a custom JWT. It carries the grant of the subject
+	// token, including its identifier, client, scopes and RFC 9396 authorization details.
+	GetSubjectRequester() oauth2.Requester
+
 	// SetClaimActor records the RFC 8693 §4.1 'act' claim describing the actor in a delegation flow. A nil act removes
 	// the claim.
 	SetClaimActor(act map[string]any)
@@ -52,6 +61,8 @@ type DefaultSession struct {
 	SubjectToken   map[string]any `json:"-"`
 	Extra          map[string]any `json:"extra,omitempty"`
 	ExpiryDeadline time.Time      `json:"expiry_deadline,omitzero"`
+
+	subjectRequester oauth2.Requester
 }
 
 // NewDefaultSession returns a *DefaultSession with the embedded OpenID Connect session and the Extra map SetClaimActor
@@ -117,6 +128,16 @@ func (s *DefaultSession) SetSubjectToken(token map[string]any) {
 // GetSubjectToken returns the claims of the 'subject_token'.
 func (s *DefaultSession) GetSubjectToken() map[string]any {
 	return s.SubjectToken
+}
+
+// SetSubjectRequester sets the request the 'subject_token' was issued for.
+func (s *DefaultSession) SetSubjectRequester(requester oauth2.Requester) {
+	s.subjectRequester = requester
+}
+
+// GetSubjectRequester returns the request the 'subject_token' was issued for.
+func (s *DefaultSession) GetSubjectRequester() oauth2.Requester {
+	return s.subjectRequester
 }
 
 // SetClaimActor records the RFC 8693 §4.1 'act' claim describing the actor in a delegation flow.

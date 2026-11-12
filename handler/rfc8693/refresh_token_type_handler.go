@@ -121,6 +121,7 @@ func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context
 		session.SetSubject(subjectTokenSession.GetSubject())
 		carryAuthenticationContext(session, sessionAuthentication(subjectTokenSession))
 		carryIDTokenSubject(session, unpacked)
+		session.SetSubjectRequester(original)
 		carrySubjectAuthorizationDetails(ctx, c.Config, request, original)
 	}
 

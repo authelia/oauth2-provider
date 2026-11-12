@@ -22,7 +22,7 @@ import (
 )
 
 func TestAccessTokenTypeHandlerCarriesTheSubjectTokenAuthorizationDetails(t *testing.T) {
-	subjectDetails := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{"status"}}}
+	subjectDetails := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagActionStatus}}}
 	actorDetails := oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{"initiate"}}}
 
 	testCases := []struct {

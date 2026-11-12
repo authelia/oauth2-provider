@@ -687,6 +687,69 @@ func TestIssueHandlerAuthorizationDetails(t *testing.T) {
 	}
 }
 
+func TestIssueHandlerAuthorizationDetailsPolicy(t *testing.T) {
+	payment := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{redeemActionInitiate}}
+	other := oauth2.AuthorizationDetail{Type: issueOtherType, Actions: []string{redeemActionRead}}
+	narrowed := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{redeemActionRead}}
+
+	testCases := []struct {
+		name      string
+		audience  string
+		requested oauth2.AuthorizationDetails
+		granted   oauth2.AuthorizationDetails
+		policyErr error
+		offered   oauth2.AuthorizationDetails
+		expected  oauth2.AuthorizationDetails
+		err       error
+	}{
+		{name: "ShouldGrantWhatThePolicyReturns", audience: redeemAudience, requested: oauth2.AuthorizationDetails{payment, other}, granted: oauth2.AuthorizationDetails{narrowed}, offered: oauth2.AuthorizationDetails{payment, other}, expected: oauth2.AuthorizationDetails{narrowed}},
+		{name: "ShouldOfferOnlyTypesTheRelationshipPermits", audience: issueAudienceTyped, requested: oauth2.AuthorizationDetails{payment, other}, granted: oauth2.AuthorizationDetails{payment}, offered: oauth2.AuthorizationDetails{payment}, expected: oauth2.AuthorizationDetails{payment}},
+		{name: "ShouldGrantNoneWhenThePolicyReturnsNil", audience: redeemAudience, requested: oauth2.AuthorizationDetails{payment}, offered: oauth2.AuthorizationDetails{payment}, expected: oauth2.AuthorizationDetails{}},
+		{name: "ShouldReturnTheErrorOfThePolicy", audience: redeemAudience, requested: oauth2.AuthorizationDetails{payment}, policyErr: oauth2.ErrInvalidAuthorizationDetails, err: oauth2.ErrInvalidAuthorizationDetails},
+		{name: "ShouldReturnServerErrorWhenThePolicyFails", audience: redeemAudience, requested: oauth2.AuthorizationDetails{payment}, policyErr: errors.New("connection refused"), err: oauth2.ErrServerError},
+		{name: "ShouldReturnServerErrorForATypeTheRelationshipDoesNotPermit", audience: issueAudienceTyped, requested: oauth2.AuthorizationDetails{payment}, granted: oauth2.AuthorizationDetails{other}, err: oauth2.ErrServerError},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, _, key := newIssueFixture(t, false)
+
+			policy := &authorizationDetailsStorage{MemoryStore: handler.Storage.(*storage.MemoryStore), granted: tc.granted, err: tc.policyErr}
+			handler.Storage = policy
+
+			request := newIssueRequest(t, newIssueSession(time.Now().Add(time.Hour)), nil)
+			request.RequestedAudience = oauth2.Arguments{tc.audience}
+			request.SetRequestedAuthorizationDetails(tc.requested)
+
+			response := oauth2.NewAccessResponse()
+
+			err := handler.HandleTokenEndpointRequest(t.Context(), request)
+			if err == nil {
+				err = handler.PopulateTokenEndpointResponse(t.Context(), request, response)
+			}
+
+			if tc.err != nil {
+				require.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, tc.offered, policy.offered)
+			assert.Equal(t, tc.expected, request.GetGrantedAuthorizationDetails())
+			assert.Equal(t, tc.expected, response.GetExtra(consts.AccessResponseAuthorizationDetails))
+
+			_, claims := parseIssued(t, response.GetAccessToken(), key)
+
+			if len(tc.expected) == 0 {
+				assert.NotContains(t, claims, consts.ClaimAuthorizationDetails)
+			} else {
+				assert.Contains(t, claims, consts.ClaimAuthorizationDetails)
+			}
+		})
+	}
+}
+
 func TestIssueHandlerCanHandleAuthorizationDetails(t *testing.T) {
 	handler, _, _ := newIssueFixture(t, false)
 
@@ -830,6 +893,20 @@ type subjectStorage struct {
 
 func (s *subjectStorage) GetIDJAGSubject(_ context.Context, _ oauth2.AccessRequester, _ *oauth2.IDJAGRelationship) (string, error) {
 	return "", s.err
+}
+
+type authorizationDetailsStorage struct {
+	*storage.MemoryStore
+
+	granted oauth2.AuthorizationDetails
+	offered oauth2.AuthorizationDetails
+	err     error
+}
+
+func (s *authorizationDetailsStorage) GetIDJAGAuthorizationDetails(_ context.Context, _ oauth2.AccessRequester, _ *oauth2.IDJAGRelationship, requested oauth2.AuthorizationDetails) (oauth2.AuthorizationDetails, error) {
+	s.offered = requested
+
+	return s.granted, s.err
 }
 
 type claimsStorage struct {

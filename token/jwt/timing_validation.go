@@ -10,9 +10,8 @@ import "errors"
 // an error of the key function as it is, so this establishes that a signature was verified only if the caller also knows
 // the key function returned a key.
 func IsTimingValidationError(err error) bool {
-	var validation *ValidationError
-
-	if !errors.As(err, &validation) || validation.Errors == 0 {
+	validation, ok := errors.AsType[*ValidationError](err)
+	if !ok || validation.Errors == 0 {
 		return false
 	}
 

@@ -35,8 +35,7 @@ func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Re
 	// Authenticate the client in the same way as at the token endpoint (Section 2.3 of [RFC6749]).
 	client, _, err := f.AuthenticateClient(ctx, r, r.PostForm)
 	if err != nil {
-		var rfcerr *RFC6749Error
-		if errors.As(err, &rfcerr) && rfcerr.ErrorField != ErrInvalidClient.ErrorField {
+		if rfcerr, ok := errors.AsType[*RFC6749Error](err); ok && rfcerr.ErrorField != ErrInvalidClient.ErrorField {
 			return request, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client could not be authenticated.").WithWrap(err).WithDebugError(err))
 		}
 

@@ -6,11 +6,10 @@ package openid
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/pkg/errors"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -176,8 +175,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 
 	tokenHint, err = v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenHintClient(request.GetClient()))
 
-	var ve *jwt.ValidationError
-	if errors.As(err, &ve) && ve.Has(jwt.ValidationErrorExpired) {
+	if ve, ok := errors.AsType[*jwt.ValidationError](err); ok && ve.Has(jwt.ValidationErrorExpired) {
 		// Expired tokens are ok
 	} else if err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding ID Token from id_token_hint parameter failed.").WithWrap(err).WithDebugError(err))

@@ -888,9 +888,7 @@ func TestMapClaims_Valid(t *testing.T) {
 
 			assert.EqualError(t, actual, tc.err)
 
-			var e *ValidationError
-
-			errors.As(actual, &e)
+			e, _ := errors.AsType[*ValidationError](actual)
 
 			require.NotNil(t, e)
 

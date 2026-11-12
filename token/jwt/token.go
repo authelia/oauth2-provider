@@ -82,9 +82,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 
 	if key, err = keyFunc(token); err != nil {
 		// keyFunc returned an error
-		var ve *ValidationError
-
-		if errors.As(err, &ve) {
+		if ve, ok := errors.AsType[*ValidationError](err); ok {
 			return token, ve
 		}
 
@@ -109,9 +107,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 	// This validation is performed to be backwards compatible
 	// with jwt-go library behavior
 	if err = claims.Valid(); err != nil {
-		var ve *ValidationError
-
-		if !errors.As(err, &ve) {
+		if _, ok := errors.AsType[*ValidationError](err); !ok {
 			err = &ValidationError{Inner: err, Errors: ValidationErrorClaimsInvalid}
 		}
 

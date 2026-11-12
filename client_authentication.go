@@ -91,9 +91,8 @@ func withClientAuthenticationChallenge(r *http.Request, err error, realm string)
 		return err
 	}
 
-	var rfc *RFC6749Error
-
-	if !errors.As(err, &rfc) || rfc.ErrorField != errInvalidClientName || rfc.CodeField != http.StatusUnauthorized {
+	rfc, ok := errors.AsType[*RFC6749Error](err)
+	if !ok || rfc.ErrorField != errInvalidClientName || rfc.CodeField != http.StatusUnauthorized {
 		return err
 	}
 

@@ -270,9 +270,9 @@ func preserveEmptyMetadataArrays(metadata *oauth2.ClientRegistrationMetadata, va
 }
 
 func isKeySourceFailure(err error) bool {
-	var verr *jwt.ValidationError
+	verr, ok := errors.AsType[*jwt.ValidationError](err)
 
-	return errors.As(err, &verr) && errors.Is(verr.Inner, oauth2.ErrServerError)
+	return ok && errors.Is(verr.Inner, oauth2.ErrServerError)
 }
 
 func errInvalidSoftwareStatement(err error) error {

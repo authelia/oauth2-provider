@@ -271,8 +271,7 @@ func (h *IssueHandler) CanHandleAuthorizationDetails(ctx context.Context, reques
 func (h *IssueHandler) claims(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship, issuer, subject string, now, expires time.Time) (claims jwt.MapClaims, err error) {
 	extra, err := h.Storage.GetIDJAGClaims(ctx, request, relationship)
 	if err != nil {
-		var rfc *oauth2.RFC6749Error
-		if errors.As(err, &rfc) {
+		if _, ok := errors.AsType[*oauth2.RFC6749Error](err); ok {
 			return nil, errorsx.WithStack(err)
 		}
 
@@ -446,8 +445,7 @@ func (h *IssueHandler) grantAuthorizationDetails(ctx context.Context, request oa
 
 	if policy, ok := h.Storage.(IssueAuthorizationDetailsStorage); ok {
 		if granted, err = policy.GetIDJAGAuthorizationDetails(ctx, request, relationship, granted); err != nil {
-			var rfc *oauth2.RFC6749Error
-			if errors.As(err, &rfc) {
+			if _, ok := errors.AsType[*oauth2.RFC6749Error](err); ok {
 				return errorsx.WithStack(err)
 			}
 
@@ -485,8 +483,7 @@ func (h *IssueHandler) subject(ctx context.Context, request oauth2.AccessRequest
 	case errors.Is(err, oauth2.ErrNotFound):
 		return "", errorsx.WithStack(oauth2.ErrAccessDenied.WithDebugf("The subject is not authorized for the audience '%s'.", relationship.Issuer))
 	case err != nil:
-		var rfc *oauth2.RFC6749Error
-		if errors.As(err, &rfc) {
+		if _, ok := errors.AsType[*oauth2.RFC6749Error](err); ok {
 			return "", errorsx.WithStack(err)
 		}
 
@@ -511,8 +508,7 @@ func (h *IssueHandler) relationship(ctx context.Context, request oauth2.AccessRe
 	case errors.Is(err, oauth2.ErrNotFound):
 		return nil, errorsx.WithStack(oauth2.ErrInvalidTarget.WithHintf("The audience '%s' is not permitted.", audiences[0]))
 	case err != nil:
-		var rfc *oauth2.RFC6749Error
-		if errors.As(err, &rfc) {
+		if _, ok := errors.AsType[*oauth2.RFC6749Error](err); ok {
 			return nil, errorsx.WithStack(err)
 		}
 

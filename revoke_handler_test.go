@@ -324,11 +324,9 @@ func TestWriteRevocationResponse(t *testing.T) {
 
 			expected := tc.expected
 
-			var rfc *RFC6749Error
-			if errors.As(tc.have, &rfc) {
-				if expected == -1 {
-					expected = rfc.CodeField
-				}
+			rfc, ok := errors.AsType[*RFC6749Error](tc.have)
+			if ok && expected == -1 {
+				expected = rfc.CodeField
 			}
 
 			assert.Equal(t, expected, rw.Code)

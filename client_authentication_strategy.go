@@ -551,13 +551,13 @@ func (s *DefaultClientAuthenticationStrategy) getClientCredentialsSecretPost(for
 }
 
 func resolveJWTErrorToRFCError(err error) (rfc error) {
-	var e *RFC6749Error
-
-	if errors.As(err, &e) {
+	if e, ok := errors.AsType[*RFC6749Error](err); ok {
 		return errorsx.WithStack(e)
 	}
 
-	if errJWTValidation := new(jwt.ValidationError); errors.As(err, &errJWTValidation) {
+	var e *RFC6749Error
+
+	if errJWTValidation, ok := errors.AsType[*jwt.ValidationError](err); ok {
 		switch {
 		case errJWTValidation.Has(jwt.ValidationErrorMalformed):
 			e = ErrInvalidClient.
@@ -593,7 +593,7 @@ func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethod
 		token = &jwt.Token{Claims: jwt.MapClaims{}}
 	}
 
-	if errJWTValidation := new(jwt.ValidationError); errors.As(inner, &errJWTValidation) {
+	if errJWTValidation, ok := errors.AsType[*jwt.ValidationError](inner); ok {
 		switch {
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderKeyIDInvalid):
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' expects client assertions to be signed with the 'kid' header value '%s' but the client assertion was signed with the 'kid' header value '%s'.", client.GetID(), strategy.GetAuthSigningKeyID(client), token.KeyID)
@@ -659,7 +659,7 @@ func fmtClientAssertionDecodeError(token *jwt.Token, client AuthenticationMethod
 		default:
 			return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that could not be validated. Error occurred trying to validate the client assertion: %s", client.GetID(), strings.TrimPrefix(errJWTValidation.Error(), "go-jose/go-jose: "))
 		}
-	} else if errJWKLookup := new(jwt.JWKLookupError); errors.As(inner, &errJWKLookup) {
+	} else if errJWKLookup, ok := errors.AsType[*jwt.JWKLookupError](inner); ok {
 		return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that could not be validated due to a key lookup error. %s.", client.GetID(), errJWKLookup.Description)
 	} else {
 		return outer.WithDebugf("OAuth 2.0 client with id '%s' provided a client assertion that could not be validated. %s.", client.GetID(), ErrorToDebugRFC6749Error(inner).Error())

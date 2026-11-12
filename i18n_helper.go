@@ -5,7 +5,8 @@
 package oauth2
 
 import (
-	"github.com/pkg/errors"
+	"errors"
+
 	"golang.org/x/text/language"
 
 	"authelia.com/provider/oauth2/i18n"
@@ -29,10 +30,9 @@ func AddLocalizerToErr(catalog i18n.MessageCatalog, err error, requester Request
 // message.
 // See - WriteIntrospectionError, for example.
 func AddLocalizerToErrWithLang(catalog i18n.MessageCatalog, lang language.Tag, err error) error {
-	var e *RFC6749Error
-	if errors.As(err, &e) {
+	if e, ok := errors.AsType[*RFC6749Error](err); ok {
 		return e.WithLocalizer(catalog, lang)
-	} else if errors.As(errorsx.Cause(err), &e) {
+	} else if e, ok = errors.AsType[*RFC6749Error](errorsx.Cause(err)); ok {
 		return e.WithLocalizer(catalog, lang)
 	}
 	return err

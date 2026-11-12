@@ -7,10 +7,10 @@ package integration_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -51,8 +51,8 @@ func tokenInfoHandler(t *testing.T, provider oauth2.Provider, session oauth2.Ses
 		_, resp, err := provider.IntrospectToken(ctx, oauth2.AccessTokenFromRequest(req), oauth2.AccessToken, session)
 		if err != nil {
 			t.Logf("Info request failed because: %+v", err)
-			var e *oauth2.RFC6749Error
-			require.True(t, errors.As(err, &e))
+			e, ok := errors.AsType[*oauth2.RFC6749Error](err)
+			require.True(t, ok)
 			http.Error(rw, e.DescriptionField, e.CodeField)
 			return
 		}

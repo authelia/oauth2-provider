@@ -206,9 +206,7 @@ func ParseAuthorizationDetails(raw string) (details AuthorizationDetails, err er
 		}
 
 		if err = json.Unmarshal(element, &details[i]); err != nil {
-			var null *authorizationDetailNullMemberError
-
-			if errors.As(err, &null) {
+			if null, ok := errors.AsType[*authorizationDetailNullMemberError](err); ok {
 				if null.element {
 					return nil, errorsx.WithStack(ErrInvalidAuthorizationDetails.WithHintf("The 'authorization_details' parameter element at index %d member '%s' must not contain null.", i, null.member).WithWrap(err).WithDebugError(err))
 				}
@@ -457,9 +455,7 @@ func ValidateAuthorizationDetails(ctx context.Context, config any, request Reque
 
 	for _, detail := range details {
 		if err = handlers[detail.Type].Validate(ctx, request, detail); err != nil {
-			var rfc *RFC6749Error
-
-			if errors.As(err, &rfc) {
+			if _, ok := errors.AsType[*RFC6749Error](err); ok {
 				return errorsx.WithStack(err)
 			}
 
@@ -550,9 +546,7 @@ func AssignAuthorizationDetails(ctx context.Context, config any, request AccessR
 		var a AuthorizationDetails
 
 		if a, err = handlers[detail.Type].Assign(ctx, request, g, r); err != nil {
-			var rfc *RFC6749Error
-
-			if errors.As(err, &rfc) {
+			if _, ok := errors.AsType[*RFC6749Error](err); ok {
 				return nil, errorsx.WithStack(err)
 			}
 

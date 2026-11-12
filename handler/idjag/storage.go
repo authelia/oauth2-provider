@@ -44,6 +44,20 @@ type IssueStorage interface {
 	GetIDJAGClaims(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship) (claims map[string]any, err error)
 }
 
+// IssueAuthorizationDetailsStorage is an optional extension of IssueStorage which applies the IdP policy to the RFC 9396
+// authorization details of each grant. Without it every requested detail of a type the relationship permits is
+// granted unchanged.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
+type IssueAuthorizationDetailsStorage interface {
+	// GetIDJAGAuthorizationDetails returns the authorization details to grant to the Resource Authorization Server of
+	// the relationship. The requested details are those of the request of a type the relationship permits, and are
+	// never nil. The IdP MAY modify, filter or omit them, and an empty result grants none. Every granted detail MUST
+	// be of a type the relationship permits, or the request answers server_error. An *oauth2.RFC6749Error, such as
+	// oauth2.ErrInvalidAuthorizationDetails, is returned to the client, and any other error answers server_error.
+	GetIDJAGAuthorizationDetails(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship, requested oauth2.AuthorizationDetails) (granted oauth2.AuthorizationDetails, err error)
+}
+
 // RedeemStorage is the storage interface for ID-JAG token redemption.
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4.1
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-3.2.2

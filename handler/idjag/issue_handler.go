@@ -199,7 +199,9 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 		}
 	}
 
-	grantAuthorizationDetails(request, relationship)
+	if err = h.grantAuthorizationDetails(ctx, request, relationship); err != nil {
+		return err
+	}
 
 	claims, err := h.claims(ctx, request, relationship, issuer, subject, now, expires)
 	if err != nil {
@@ -444,21 +446,48 @@ func authenticationSources(request oauth2.AccessRequester) (sources []*jwt.IDTok
 	return sources
 }
 
-func grantAuthorizationDetails(request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship) {
+func (h *IssueHandler) grantAuthorizationDetails(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship) (err error) {
 	requested := request.GetRequestedAuthorizationDetails()
 	if len(requested) == 0 {
-		return
+		return nil
 	}
 
 	granted := oauth2.AuthorizationDetails{}
 
 	for _, detail := range requested {
-		if relationship.AuthorizationDetailsTypes == nil || slices.Contains(relationship.AuthorizationDetailsTypes, detail.Type) {
-			granted = append(granted, detail)
+		if permitsAuthorizationDetailsType(relationship, detail.Type) {
+			granted = append(granted, detail.Clone())
+		}
+	}
+
+	if policy, ok := h.Storage.(IssueAuthorizationDetailsStorage); ok {
+		if granted, err = policy.GetIDJAGAuthorizationDetails(ctx, request, relationship, granted); err != nil {
+			var rfc *oauth2.RFC6749Error
+			if errors.As(err, &rfc) {
+				return errorsx.WithStack(err)
+			}
+
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
+
+		if granted == nil {
+			granted = oauth2.AuthorizationDetails{}
+		}
+
+		for _, detail := range granted {
+			if !permitsAuthorizationDetailsType(relationship, detail.Type) {
+				return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The authorization details policy granted the type '%s' which the relationship with '%s' does not permit.", detail.Type, relationship.Issuer))
+			}
 		}
 	}
 
 	request.SetGrantedAuthorizationDetails(granted)
+
+	return nil
+}
+
+func permitsAuthorizationDetailsType(relationship *oauth2.IDJAGRelationship, t string) bool {
+	return relationship.AuthorizationDetailsTypes == nil || slices.Contains(relationship.AuthorizationDetailsTypes, t)
 }
 
 func (h *IssueHandler) subject(ctx context.Context, request oauth2.AccessRequester, relationship *oauth2.IDJAGRelationship) (subject string, err error) {

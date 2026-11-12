@@ -156,12 +156,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	// A fallback handler to set the default response mode in cases where we can not reach the Authorize Handlers
 	// but still need the e.g. correct error response mode.
 	if request.GetResponseMode() == ResponseModeDefault {
-		if request.ResponseTypes.ExactOne(consts.ResponseTypeAuthorizationCodeFlow) || request.ResponseTypes.ExactOne(consts.ResponseTypeNone) {
-			request.SetDefaultResponseMode(ResponseModeQuery)
-		} else {
-			// If the response type is not `code` it is an implicit/hybrid (fragment) response mode.
-			request.SetDefaultResponseMode(ResponseModeFragment)
-		}
+		request.SetDefaultResponseMode(defaultResponseModeForResponseTypes(request.ResponseTypes))
 	}
 
 	// The 'state' parameter is optional, but when present it must not be guessable.
@@ -775,9 +770,22 @@ func (f *Fosite) ParseResponseMode(ctx context.Context, _ *http.Request, request
 	return errorsx.WithStack(ErrUnsupportedResponseMode.WithHint("The value of the 'response_mode' parameter is not supported.").WithDebugf("Request with unsupported response_mode '%s'.", m))
 }
 
+// defaultResponseModeForResponseTypes returns the response mode for the response types when the 'response_mode'
+// parameter is omitted: 'query' for the 'code' and 'none' response types, and 'fragment' for any other, being the
+// implicit and hybrid flows.
+//
+// See: https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#ResponseModes
+func defaultResponseModeForResponseTypes(responseTypes Arguments) ResponseModeType {
+	if responseTypes.ExactOne(consts.ResponseTypeAuthorizationCodeFlow) || responseTypes.ExactOne(consts.ResponseTypeNone) {
+		return ResponseModeQuery
+	}
+
+	return ResponseModeFragment
+}
+
 func (f *Fosite) validateResponseMode(_ context.Context, _ *http.Request, request *AuthorizeRequest) error {
 	if request.ResponseMode == ResponseModeDefault {
-		return nil
+		return validateDefaultResponseMode(request)
 	}
 
 	client, ok := request.GetClient().(ResponseModeClient)
@@ -787,6 +795,29 @@ func (f *Fosite) validateResponseMode(_ context.Context, _ *http.Request, reques
 
 	if !slices.Contains(client.GetResponseModes(), request.ResponseMode) {
 		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' requested was '%s', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", request.ResponseMode).WithDebugf("The registered OAuth 2.0 Client with id '%s' does not the 'response_mode' type '%s'.", client.GetID(), request.ResponseMode))
+	}
+
+	return nil
+}
+
+// validateDefaultResponseMode requires the response mode a request omitting the 'response_mode' parameter receives to
+// be one of the client's registered response modes, if it registered any. A client registered only for JWT Secured
+// Authorization Response Mode must therefore request it.
+//
+// See: https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.4.1
+func validateDefaultResponseMode(request *AuthorizeRequest) error {
+	client, ok := request.GetClient().(ResponseModeClient)
+	if !ok {
+		return nil
+	}
+
+	modes := client.GetResponseModes()
+	if len(modes) == 0 {
+		return nil
+	}
+
+	if mode := defaultResponseModeForResponseTypes(request.ResponseTypes); !slices.Contains(modes, mode) {
+		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' parameter was omitted, but the OAuth 2.0 Client is not registered for the default response mode '%s' of the 'response_type'.", mode).WithDebugf("The registered OAuth 2.0 Client with id '%s' does not allow the 'response_mode' type '%s'.", client.GetID(), mode))
 	}
 
 	return nil
@@ -929,7 +960,7 @@ func (f *Fosite) validateAuthorizeRequestFromPARClient(ctx context.Context, r *h
 	}
 
 	if len(request.Form.Get(consts.FormParameterResponseMode)) == 0 {
-		return nil
+		return validateDefaultResponseMode(request)
 	}
 
 	return f.validateResponseMode(ctx, r, request)

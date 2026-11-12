@@ -87,7 +87,7 @@ finalized, so support for one may change in any release.
 | [Transaction Tokens](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11)                                              |   ✅   | `draft-11` | Opt-in, including the `self_signed` and `unsigned_json` subject tokens and replacement tokens                                                      |
 | [OAuth Client ID Metadata Document](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)                      |   ✅   | `draft-03` | Opt-in through `Config.ClientIDMetadataDocumentResolver`, with a default resolver in `handler/cimd`                                                |
 | [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html)                                                      |   🟡   |            | Individual requirements such as refresh token rotation policy; not a complete profile                                                              |
-| [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html)                                                        |   🟡   |            | Individual requirements for request objects; not a complete profile                                                                                |
+| [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html)                                                        |   🟡   |            | Signed request objects, JARM and RFC 9701 responses; callers of the introspection endpoint are not restricted                                      |
 
 ### OpenID Connect 1.0
 
@@ -270,7 +270,11 @@ Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Cons
   registered in `ResponseModeParameterHandlers` when composing by other means.
   `DisableAuthorizationServerIdentification` should stay disabled. Clients that do not check it ignore it.
 - `JWTSecuredAuthorizeResponseModeStrategy` enables JARM, whose signed authorization responses carry the issuer. Only
-  clients that request a JWT response mode are affected.
+  clients that request a JWT response mode are affected. A client whose `GetResponseModes` of the `ResponseModeClient`
+  interface returns only JWT response modes must request one, as a request omitting `response_mode` is refused unless
+  the client is registered for its default response mode, which
+  [FAPI 2.0 Message Signing Section 5.4.1](https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.4.1)
+  requires.
 - `DisableRefreshTokenRotation` should stay disabled
   ([Section 4.14.2](https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2)). It is ignored for a public client
   whose refresh token is not sender-constrained.

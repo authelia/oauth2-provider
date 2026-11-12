@@ -30,7 +30,13 @@ import (
 // grant. A RefreshTokenLifespan of -1 removes the configured limit, but the refresh token still expires with the
 // 'subject_token'.
 //
+// When RFC 9396 authorization details are enabled, the access token carries the details granted to an access token or
+// refresh token 'subject_token', of the types the client may request, as oauth2.AssignAuthorizationDetails assigns
+// them for any 'authorization_details' parameter. A refresh token issued with it keeps every such granted detail. The
+// details of an 'actor_token' are never carried.
+//
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.1
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
 type AccessTokenTypeHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 
@@ -78,15 +84,15 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 	if form.Get(consts.FormParameterActorTokenType) == consts.TokenTypeRFC8693AccessToken {
 		token := form.Get(consts.FormParameterActorToken)
 
-		var actorTokenSession oauth2.Session
+		var actor oauth2.Requester
 
 		priorActor := bindingOf(request.GetSession())
 
-		if actorTokenSession, claims, err = c.validate(ctx, request, token, tokenRoleActor); err != nil {
+		if actor, claims, err = c.validate(ctx, request, token, tokenRoleActor); err != nil {
 			return err
 		}
 
-		if err = inheritTokenBinding(ctx, c.Config, request, bindingOf(actorTokenSession), tokenRoleActor, priorActor); err != nil {
+		if err = inheritTokenBinding(ctx, c.Config, request, bindingOf(actor.GetSession()), tokenRoleActor, priorActor); err != nil {
 			return err
 		}
 
@@ -96,13 +102,15 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 	if form.Get(consts.FormParameterSubjectTokenType) == consts.TokenTypeRFC8693AccessToken {
 		token := form.Get(consts.FormParameterSubjectToken)
 
-		var subjectTokenSession oauth2.Session
+		var original oauth2.Requester
 
 		priorSubject := bindingOf(request.GetSession())
 
-		if subjectTokenSession, claims, err = c.validate(ctx, request, token, tokenRoleSubject); err != nil {
+		if original, claims, err = c.validate(ctx, request, token, tokenRoleSubject); err != nil {
 			return err
 		}
+
+		subjectTokenSession := original.GetSession()
 
 		if err = inheritTokenBinding(ctx, c.Config, request, bindingOf(subjectTokenSession), tokenRoleSubject, priorSubject); err != nil {
 			return err
@@ -111,6 +119,7 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 		session.SetSubjectToken(claims)
 		session.SetSubject(subjectTokenSession.GetSubject())
 		carryAuthenticationContext(session, sessionAuthentication(subjectTokenSession))
+		carrySubjectAuthorizationDetails(ctx, c.Config, request, original)
 	}
 
 	return nil
@@ -145,6 +154,15 @@ func (c *AccessTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Conte
 	return nil
 }
 
+// CanHandleAuthorizationDetails implements oauth2.AuthorizationDetailsTokenEndpointHandler. It accepts the RFC 9396
+// 'authorization_details' parameter of a token exchange requesting an access token, which is assigned from the
+// details granted to the 'subject_token'.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+func (c *AccessTokenTypeHandler) CanHandleAuthorizationDetails(ctx context.Context, request oauth2.AccessRequester) bool {
+	return c.issues(requestedTokenTypeIdentifier(ctx, request, c.Config))
+}
+
 // CanSkipClientAuth indicates if client auth can be skipped.
 func (c *AccessTokenTypeHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return false
@@ -155,9 +173,7 @@ func (c *AccessTokenTypeHandler) CanHandleTokenEndpointRequest(ctx context.Conte
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
-func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string, role tokenRole) (s oauth2.Session, claims map[string]any, err error) {
-	var original oauth2.Requester
-
+func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string, role tokenRole) (original oauth2.Requester, claims map[string]any, err error) {
 	if session, ok := request.GetSession().(Session); !ok || session == nil {
 		return nil, nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
@@ -192,7 +208,7 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.Ac
 
 	claims[consts.ClaimAudience] = oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource())
 
-	return original.GetSession(), claims, nil
+	return original, claims, nil
 }
 
 func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
@@ -201,6 +217,12 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 	}
 
 	if err = requireActorToken(request); err != nil {
+		return err
+	}
+
+	var grant oauth2.AuthorizationDetails
+
+	if grant, err = assignAuthorizationDetails(ctx, c.Config, request); err != nil {
 		return err
 	}
 
@@ -245,7 +267,13 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 		}
 
 		if refreshSignature != "" {
-			if err = c.CreateRefreshTokenSession(ctx, refreshSignature, signature, request.Sanitize([]string{})); err != nil {
+			requester := request.Sanitize([]string{})
+
+			// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
+			requester.SetRequestedAuthorizationDetails(grant)
+			requester.SetGrantedAuthorizationDetails(grant)
+
+			if err = c.CreateRefreshTokenSession(ctx, refreshSignature, signature, requester); err != nil {
 				return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 			}
 		}
@@ -273,6 +301,10 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 	response.SetExpiresIn(c.GetExpiresIn(request, oauth2.AccessToken, atLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
 	response.SetExtra(consts.FormParameterIssuedTokenType, consts.TokenTypeRFC8693AccessToken)
+
+	if details := request.GetGrantedAuthorizationDetails(); len(details) != 0 {
+		response.SetExtra(consts.AccessResponseAuthorizationDetails, details)
+	}
 
 	return nil
 }
@@ -360,4 +392,7 @@ func (c *AccessTokenTypeHandler) issues(identifier string) bool {
 	return identifier == consts.TokenTypeRFC8693AccessToken
 }
 
-var _ oauth2.TokenEndpointHandler = (*AccessTokenTypeHandler)(nil)
+var (
+	_ oauth2.TokenEndpointHandler                     = (*AccessTokenTypeHandler)(nil)
+	_ oauth2.AuthorizationDetailsTokenEndpointHandler = (*AccessTokenTypeHandler)(nil)
+)

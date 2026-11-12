@@ -275,6 +275,13 @@ Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Cons
   the client is registered for its default response mode, which
   [FAPI 2.0 Message Signing Section 5.4.1](https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.4.1)
   requires.
+- `AuthorizationSignedResponseAlgValues` and `IntrospectionSignedResponseAlgValues` restrict the algorithms which sign
+  JARM and RFC 9701 introspection responses. By default these include the HMAC algorithms keyed by the client secret,
+  which provide none of the non-repudiation
+  [FAPI 2.0 Message Signing Section 5.2](https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.2) is
+  for. When set, only the listed algorithms are advertised and accepted at registration, a client registered with
+  another is refused a signed response, and the first listed algorithm signs for a client registered with none, or RS256
+  for introspection when it is listed.
 - `DisableRefreshTokenRotation` should stay disabled
   ([Section 4.14.2](https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2)). It is ignored for a public client
   whose refresh token is not sender-constrained.

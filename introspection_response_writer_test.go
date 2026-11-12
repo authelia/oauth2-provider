@@ -6,6 +6,10 @@ package oauth2_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -1166,6 +1170,81 @@ func TestWriteIntrospectionResponseTokenType(t *testing.T) {
 		})
 	}
 }
+
+func TestWriteIntrospectionResponseSignedResponseAlgValues(t *testing.T) {
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	keys := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+		{Key: rsaKey, KeyID: audienceTestRSA, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature},
+		{Key: ecKey, KeyID: testSignedResponseKeyIDEC, Algorithm: string(jose.ES256), Use: consts.JSONWebTokenUseSignature},
+	}}
+
+	testCases := []struct {
+		name      string
+		permitted []string
+		alg       string
+		kid       string
+		expected  string
+		refused   bool
+	}{
+		{name: "ShouldDefaultToRS256", expected: string(jose.RS256)},
+		{name: "ShouldDefaultToRS256WhenPermitted", permitted: []string{string(jose.ES256), string(jose.RS256)}, expected: string(jose.RS256)},
+		{name: "ShouldDefaultToTheFirstPermittedAlgorithm", permitted: []string{string(jose.ES256)}, expected: string(jose.ES256)},
+		{name: "ShouldUseAPermittedRegisteredAlgorithm", permitted: []string{string(jose.ES256)}, alg: string(jose.ES256), expected: string(jose.ES256)},
+		{name: "ShouldRefuseARegisteredAlgorithmNotPermitted", permitted: []string{string(jose.ES256)}, alg: string(jose.RS256), refused: true},
+		{name: "ShouldUseThePermittedAlgorithmForARegisteredKey", permitted: []string{string(jose.ES256)}, kid: testSignedResponseKeyIDEC, expected: string(jose.ES256)},
+		{name: "ShouldRefuseARegisteredKeyOfAnotherAlgorithm", permitted: []string{string(jose.ES256)}, kid: audienceTestRSA, refused: true},
+		{name: "ShouldDefaultToTheFirstPermittedAlgorithmTheStrategySupports", permitted: []string{string(jose.PS256), "", string(jose.ES256)}, expected: string(jose.ES256)},
+		{name: "ShouldRefuseAnEmptyPermittedAlgorithm", permitted: []string{""}, refused: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{
+				Issuer:                               "https://issuer.example.com",
+				IntrospectionSignedResponseAlgValues: tc.permitted,
+			}
+
+			config.IntrospectionJWTResponseStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(keys)}
+
+			provider := &Fosite{Config: config}
+
+			ar := NewAccessRequest(&DefaultSession{Subject: "user-123"})
+			ar.Client = &DefaultClient{ID: "client-id"}
+
+			rw := httptest.NewRecorder()
+
+			provider.WriteIntrospectionResponse(context.Background(), rw, &IntrospectionResponse{
+				Client:          &introspectionJWTTestClient{DefaultClient: &DefaultClient{ID: "resource-server"}, alg: tc.alg, kid: tc.kid},
+				Active:          true,
+				TokenUse:        AccessToken,
+				AccessRequester: ar,
+				JWTRequested:    true,
+			})
+
+			if tc.refused {
+				assert.Equal(t, http.StatusInternalServerError, rw.Code)
+				assert.Contains(t, rw.Body.String(), "server_error")
+
+				return
+			}
+
+			require.Equal(t, http.StatusOK, rw.Code)
+
+			signed, err := jose.ParseSignedCompact(rw.Body.String(), []jose.SignatureAlgorithm{jose.RS256, jose.ES256})
+			require.NoError(t, err)
+			require.Len(t, signed.Signatures, 1)
+
+			assert.Equal(t, tc.expected, signed.Signatures[0].Header.Algorithm)
+		})
+	}
+}
+
+const testSignedResponseKeyIDEC = "signed-response-ec"
 
 func TestWriteIntrospectionResponseTokenTypeInJWT(t *testing.T) {
 	strategy := &stubIntrospectionStrategy{token: "a.b.c"}

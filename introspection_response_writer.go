@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -110,8 +111,30 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc9701#section-4
 	// See: https://www.rfc-editor.org/rfc/rfc9701#section-6
-	if alg == "" && kid == "" && f.isIntrospectionJWTRequested(ctx, r, caller) {
+	var permitted []string
+
+	if provider, isProvider := f.Config.(SignedResponseAlgValuesProvider); isProvider {
+		permitted = provider.GetIntrospectionSignedResponseAlgValues(ctx)
+	}
+
+	if alg == "" && ((kid == "" && f.isIntrospectionJWTRequested(ctx, r, caller)) || (kid != "" && len(permitted) != 0)) {
 		alg = string(jose.RS256)
+
+		if len(permitted) != 0 && !f.isIntrospectionSignedResponseAlgSupported(ctx, permitted, alg) {
+			if alg = f.introspectionSignedResponseAlgDefault(ctx, permitted); alg == "" {
+				f.writeErrorJSON(ctx, rw, nil, errors.WithStack(ErrServerError.WithHint("The introspection response could not be signed.").WithDebugf("The first of the permitted algorithms '%s' is empty.", strings.Join(permitted, "', '"))))
+
+				return
+			}
+		}
+	}
+
+	// FAPI 2.0 Message Signing Section 5.2: only a permitted algorithm signs the response, and only a caller which is a
+	// jwt.IntrospectionClient can have the algorithm chosen for it.
+	if _, ok = caller.(jwt.IntrospectionClient); (alg != "" || kid != "") && alg != jwt.JSONWebTokenAlgNone && len(permitted) != 0 && (!ok || (alg != "" && !slices.Contains(permitted, alg))) {
+		f.writeErrorJSON(ctx, rw, nil, errors.WithStack(ErrServerError.WithHint("The introspection response could not be signed.").WithDebugf("The client with id '%s' is registered to sign introspection responses with the 'alg' '%s', which is not one of the permitted algorithms '%s'.", clientID(caller), alg, strings.Join(permitted, "', '"))))
+
+		return
 	}
 
 	response := map[string]any{jwt.ClaimActive: false}
@@ -255,7 +278,13 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 			return
 		}
 
-		if token, _, err = strategy.Encode(ctx, claims, jwt.WithHeaders(header), jwt.WithIntrospectionClient(caller)); err != nil {
+		var signer any = caller
+
+		if c, ok := caller.(jwt.IntrospectionClient); ok && alg != "" && c.GetIntrospectionSignedResponseAlg() == "" {
+			signer = &introspectionSignedResponseAlgClient{IntrospectionClient: c, alg: alg}
+		}
+
+		if token, _, err = strategy.Encode(ctx, claims, jwt.WithHeaders(header), jwt.WithIntrospectionClient(signer)); err != nil {
 			f.WriteIntrospectionError(ctx, rw, errors.WithStack(ErrServerError.WithHint("Failed to generate the response.").WithDebugf("The Introspection JWT itself could not be generated with error %+v.", err)))
 
 			return
@@ -289,4 +318,42 @@ func (f *Fosite) isIntrospectionTokenTypeEnabled(ctx context.Context, caller Cli
 	}
 
 	return f.Config != nil && f.Config.GetIntrospectionTokenTypeEnabled(ctx)
+}
+
+type introspectionSignedResponseAlgClient struct {
+	jwt.IntrospectionClient
+
+	alg string
+}
+
+func (c *introspectionSignedResponseAlgClient) GetIntrospectionSignedResponseAlg() string {
+	return c.alg
+}
+
+func (c *introspectionSignedResponseAlgClient) GetClientSecretExpiresAt() (expires time.Time) {
+	if client, ok := c.IntrospectionClient.(jwt.ExpiringClientSecretClient); ok {
+		return client.GetClientSecretExpiresAt()
+	}
+
+	return time.Time{}
+}
+
+func (f *Fosite) isIntrospectionSignedResponseAlgSupported(ctx context.Context, permitted []string, alg string) bool {
+	if !slices.Contains(permitted, alg) {
+		return false
+	}
+
+	strategy := f.Config.GetIntrospectionJWTResponseStrategy(ctx)
+
+	return strategy == nil || slices.Contains(strategy.SigningAlgValues(ctx), alg)
+}
+
+func (f *Fosite) introspectionSignedResponseAlgDefault(ctx context.Context, permitted []string) string {
+	for _, alg := range permitted {
+		if alg != "" && f.isIntrospectionSignedResponseAlgSupported(ctx, permitted, alg) {
+			return alg
+		}
+	}
+
+	return permitted[0]
 }

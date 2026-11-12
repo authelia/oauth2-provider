@@ -352,6 +352,32 @@ func TestSupportedIDTokenSigningAlgValues(t *testing.T) {
 	}
 }
 
+func TestSupportedSignedResponseAlgValuesRestricted(t *testing.T) {
+	ctx := context.Background()
+
+	config := &oauth2.Config{
+		AuthorizationSignedResponseAlgValues: []string{string(jose.ES256), string(jose.PS256)},
+		IntrospectionSignedResponseAlgValues: []string{string(jose.ES256)},
+	}
+
+	strategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+			{Key: gen.MustES256Key(), KeyID: "es256", Algorithm: string(jose.ES256), Use: consts.JSONWebTokenUseSignature},
+		}}),
+	}
+
+	config.JWTSecuredAuthorizeResponseModeStrategy = strategy
+	config.IntrospectionJWTResponseStrategy = strategy
+
+	assert.Equal(t, []string{string(jose.ES256)}, oauth2.SupportedAuthorizationSignedResponseAlgValues(ctx, config))
+	assert.Equal(t, []string{string(jose.ES256)}, oauth2.SupportedIntrospectionSignedResponseAlgValues(ctx, config))
+
+	config.AuthorizationSignedResponseAlgValues = nil
+
+	assert.Equal(t, []string{string(jose.ES256), string(jose.HS256), string(jose.HS384), string(jose.HS512)}, oauth2.SupportedAuthorizationSignedResponseAlgValues(ctx, config))
+}
+
 func TestSupportedSignedResponseAlgValues(t *testing.T) {
 	ctx := context.Background()
 

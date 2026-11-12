@@ -17,6 +17,14 @@ type Configurator interface {
 	GetJWTSecuredAuthorizeResponseModeLifespan(ctx context.Context) time.Duration
 }
 
+// SignedResponseAlgValuesProvider is optionally implemented by the Configurator to restrict the JWS algorithms which
+// may sign a response.
+type SignedResponseAlgValuesProvider interface {
+	// GetAuthorizationSignedResponseAlgValues returns the JWS algorithms which may sign a response, or nil for every
+	// algorithm.
+	GetAuthorizationSignedResponseAlgValues(ctx context.Context) (algs []string)
+}
+
 type Client interface {
 	// GetID returns the client ID.
 	GetID() (id string)

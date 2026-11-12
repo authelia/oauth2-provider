@@ -7,8 +7,12 @@ package jarm
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
+	"time"
 
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -29,7 +33,31 @@ func EncodeParameters(token, _ string, tErr error) (parameters url.Values, err e
 func Generate(ctx context.Context, config Configurator, client Client, _ any, parameters url.Values) (token, signature string, err error) {
 	headers := map[string]any{}
 
-	if alg := client.GetAuthorizationSignedResponseAlg(); len(alg) > 0 {
+	var signer any = client
+
+	alg := client.GetAuthorizationSignedResponseAlg()
+
+	if provider, ok := config.(SignedResponseAlgValuesProvider); ok {
+		if permitted := provider.GetAuthorizationSignedResponseAlgValues(ctx); len(permitted) != 0 {
+			c, ok := client.(jwt.JARMClient)
+			if !ok {
+				return "", "", fmt.Errorf("the JARM response for client '%s' must be signed with one of the permitted algorithms '%s', but the client is not a jwt.JARMClient", client.GetID(), strings.Join(permitted, "', '"))
+			}
+
+			switch {
+			case alg == "":
+				if alg = signedResponseAlgDefault(ctx, config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx), permitted); alg == "" {
+					return "", "", fmt.Errorf("the JARM response for client '%s' must be signed with one of the permitted algorithms '%s', but the first is empty", client.GetID(), strings.Join(permitted, "', '"))
+				}
+
+				signer = &signedResponseAlgClient{JARMClient: c, alg: alg}
+			case !slices.Contains(permitted, alg):
+				return "", "", fmt.Errorf("the JARM response for client '%s' would be signed with the 'alg' '%s', which is not one of the permitted algorithms '%s'", client.GetID(), alg, strings.Join(permitted, "', '"))
+			}
+		}
+	}
+
+	if len(alg) > 0 {
 		headers[jwt.JSONWebTokenHeaderAlgorithm] = alg
 	}
 
@@ -70,5 +98,37 @@ func Generate(ctx context.Context, config Configurator, client Client, _ any, pa
 		return "", "", errors.New("The JARM response modes require the JWTSecuredAuthorizeResponseModeSignerProvider to return a jwt.Strategy but it didn't.")
 	}
 
-	return strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(&jwt.Headers{Extra: headers}), jwt.WithJARMClient(client))
+	return strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(&jwt.Headers{Extra: headers}), jwt.WithJARMClient(signer))
+}
+
+type signedResponseAlgClient struct {
+	jwt.JARMClient
+
+	alg string
+}
+
+func (c *signedResponseAlgClient) GetAuthorizationSignedResponseAlg() string {
+	return c.alg
+}
+
+func (c *signedResponseAlgClient) GetClientSecretExpiresAt() (expires time.Time) {
+	if client, ok := c.JARMClient.(jwt.ExpiringClientSecretClient); ok {
+		return client.GetClientSecretExpiresAt()
+	}
+
+	return time.Time{}
+}
+
+func signedResponseAlgDefault(ctx context.Context, strategy jwt.Strategy, permitted []string) string {
+	if strategy != nil {
+		supported := strategy.SigningAlgValues(ctx)
+
+		for _, alg := range permitted {
+			if alg != "" && slices.Contains(supported, alg) {
+				return alg
+			}
+		}
+	}
+
+	return permitted[0]
 }

@@ -132,7 +132,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		for name, value := range extraClaims {
 			switch name {
 			// We do not allow these to be set through extra claims.
-			case jwt.ClaimActive, jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername, jwt.ClaimConfirmation, jwt.ClaimAuthorizationDetails, policyClaim:
+			case jwt.ClaimActive, jwt.ClaimExpirationTime, jwt.ClaimClientIdentifier, jwt.ClaimScope, jwt.ClaimIssuedAt, jwt.ClaimSubject, jwt.ClaimAudience, jwt.ClaimUsername, jwt.ClaimConfirmation, jwt.ClaimAuthorizationDetails, consts.AccessResponseRefreshTokenTimeout, consts.AccessResponseAuthorizationExpiresIn, policyClaim:
 				continue
 			default:
 				response[name] = value
@@ -140,9 +140,23 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 		}
 	}
 
-	if expires := r.GetAccessRequester().GetSession().GetExpiresAt(r.GetTokenUse()); !expires.IsZero() {
+	expires := r.GetAccessRequester().GetSession().GetExpiresAt(r.GetTokenUse())
+
+	if r.GetTokenUse() == RefreshToken {
+		expires = GetRefreshTokenEffectiveExpiry(r.GetAccessRequester().GetSession())
+	}
+
+	if !expires.IsZero() {
 		response[jwt.ClaimExpirationTime] = expires.Unix()
 	}
+
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-refresh-token-expiration-03#section-7
+	if r.GetTokenUse() == RefreshToken && !f.Config.GetDisableRefreshTokenExpirationParameters(ctx) {
+		for name, value := range GetRefreshTokenExpirationParameters(r.GetAccessRequester().GetSession(), time.Now()) {
+			response[name] = value
+		}
+	}
+
 	if r.GetAccessRequester().GetClient().GetID() != "" {
 		response[jwt.ClaimClientIdentifier] = r.GetAccessRequester().GetClient().GetID()
 	}

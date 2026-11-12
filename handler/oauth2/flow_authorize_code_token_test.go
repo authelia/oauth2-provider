@@ -1586,6 +1586,88 @@ func TestAuthorizeCode_RefreshTokenMaximumLifespan(t *testing.T) {
 	}
 }
 
+func TestAuthorizeCode_AccessTokenDeadline(t *testing.T) {
+	testCases := []struct {
+		name     string
+		maximum  time.Duration
+		deadline time.Duration
+		expires  time.Duration
+	}{
+		{"ShouldCapTheAccessTokenAtTheDeadline", time.Minute * 30, 0, time.Minute * 30},
+		{"ShouldCapTheAccessTokenAtTheApplicationDeadline", 0, time.Minute * 10, time.Minute * 10},
+		{"ShouldNotCapTheAccessTokenBeforeTheDeadline", time.Hour * 24, 0, time.Hour * 2},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := storage.NewMemoryStore()
+			strategy := &hmacshaStrategy
+
+			handler := AuthorizeExplicitGrantHandler{
+				CoreStorage:           store,
+				AuthorizeCodeStrategy: strategy,
+				AccessTokenStrategy:   strategy,
+				RefreshTokenStrategy:  strategy,
+				Config: &oauth2.Config{
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					AccessTokenLifespan:         time.Hour * 2,
+					AuthorizeCodeLifespan:       time.Minute,
+					RefreshTokenLifespan:        time.Hour,
+					RefreshTokenMaximumLifespan: tc.maximum,
+				},
+			}
+
+			client := &oauth2.DefaultClient{ID: "foo", GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken}}
+
+			code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+			require.NoError(t, err)
+
+			before := time.Now().UTC().Truncate(jwt.TimePrecision)
+
+			session := &oauth2.DefaultSession{}
+
+			if tc.deadline != 0 {
+				session.SetExpiryDeadline(time.Now().UTC().Add(tc.deadline).Truncate(jwt.TimePrecision))
+			}
+
+			require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, &oauth2.AuthorizeRequest{
+				Request: oauth2.Request{
+					Client:         client,
+					Form:           url.Values{consts.FormParameterRedirectURI: []string{"https://client.example.com/cb"}},
+					RequestedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+					GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+					Session:        session,
+					RequestedAt:    time.Now().UTC(),
+				},
+			}))
+
+			request := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client: client,
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{code},
+						consts.FormParameterRedirectURI:       []string{"https://client.example.com/cb"},
+					},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			}
+
+			require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), request))
+
+			after := time.Now().UTC()
+
+			assert.WithinRange(t, request.GetSession().GetExpiresAt(oauth2.AccessToken), before.Add(tc.expires), after.Add(tc.expires))
+
+			if deadline := request.GetSession().(oauth2.ExpiryDeadlineSession).GetExpiryDeadline(); !deadline.IsZero() {
+				assert.False(t, request.GetSession().GetExpiresAt(oauth2.AccessToken).After(deadline))
+			}
+		})
+	}
+}
+
 func TestAuthorizeCode_RefreshTokenMaximumLifespanSessionWithoutDeadline(t *testing.T) {
 	testCases := []struct {
 		name   string

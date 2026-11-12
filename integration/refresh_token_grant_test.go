@@ -223,6 +223,11 @@ func TestRefreshTokenFlow(t *testing.T) {
 				assert.Equal(t, original.RefreshToken, refreshed.RefreshToken)
 				assert.NotEqual(t, original.AccessToken, refreshed.AccessToken)
 
+				// Draft refresh token expiration Section 6.1 on the exchange and the refresh response.
+				assert.InDelta(t, 60, original.Extra(consts.AccessResponseRefreshTokenTimeout), 5)
+				assert.InDelta(t, 60, refreshed.Extra(consts.AccessResponseRefreshTokenTimeout), 5)
+				assert.Nil(t, refreshed.Extra(consts.AccessResponseAuthorizationExpiresIn))
+
 				refreshed.Expiry = refreshed.Expiry.Add(-time.Hour * 24)
 				again, err := oauthClient.TokenSource(t.Context(), refreshed).Token()
 				require.NoError(t, err)

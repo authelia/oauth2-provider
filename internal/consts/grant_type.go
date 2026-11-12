@@ -23,3 +23,11 @@ const (
 const (
 	GrantProfileIDJAG = "urn:ietf:params:oauth:grant-profile:id-jag"
 )
+
+// Refresh token expiration type identifiers.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-refresh-token-expiration-03#section-8
+const (
+	RefreshTokenExpirationTypeAuthorization = "authorization"
+	RefreshTokenExpirationTypeTokenTimeout  = "token_timeout"
+)

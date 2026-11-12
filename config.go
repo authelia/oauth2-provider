@@ -29,6 +29,14 @@ type RefreshTokenLifespanProvider interface {
 	GetRefreshTokenLifespan(ctx context.Context) (lifespan time.Duration)
 }
 
+// DisableRefreshTokenExpirationParametersProvider returns the provider for configuring whether the refresh token
+// expiration parameters are disabled.
+type DisableRefreshTokenExpirationParametersProvider interface {
+	// GetDisableRefreshTokenExpirationParameters returns true when the refresh_token_timeout and
+	// authorization_expires_in parameters, the matching introspection members and the metadata member are omitted.
+	GetDisableRefreshTokenExpirationParameters(ctx context.Context) (disable bool)
+}
+
 // AccessTokenLifespanProvider returns the provider for configuring the access token lifespan.
 type AccessTokenLifespanProvider interface {
 	// GetAccessTokenLifespan returns the access token lifespan.

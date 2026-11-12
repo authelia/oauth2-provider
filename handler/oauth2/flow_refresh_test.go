@@ -1160,7 +1160,7 @@ func TestRefreshFlow_MaximumLifespanReached(t *testing.T) {
 
 			if tc.err {
 				require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
-				assert.Equal(t, "The refresh token has reached the maximum lifespan of the grant.", oauth2.ErrorToRFC6749Error(err).HintField)
+				assert.ErrorIs(t, err, oauth2.ErrTokenExpired)
 			} else {
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 			}

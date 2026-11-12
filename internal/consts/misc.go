@@ -5,14 +5,16 @@
 package consts
 
 const (
-	AccessResponseRefreshToken         = valueRefreshToken
-	AccessResponseAccessToken          = valueAccessToken
-	AccessResponseIDToken              = valueIDToken
-	AccessResponseExpiresIn            = "expires_in"
-	AccessResponseScope                = valueScope
-	AccessResponseAuthorizationCode    = valueCode
-	AccessResponseTokenType            = "token_type"
-	AccessResponseAuthorizationDetails = valueAuthorizationDetails
+	AccessResponseRefreshToken           = valueRefreshToken
+	AccessResponseAccessToken            = valueAccessToken
+	AccessResponseIDToken                = valueIDToken
+	AccessResponseExpiresIn              = "expires_in"
+	AccessResponseRefreshTokenTimeout    = "refresh_token_timeout"
+	AccessResponseAuthorizationExpiresIn = "authorization_expires_in"
+	AccessResponseScope                  = valueScope
+	AccessResponseAuthorizationCode      = valueCode
+	AccessResponseTokenType              = "token_type"
+	AccessResponseAuthorizationDetails   = valueAuthorizationDetails
 )
 
 const (

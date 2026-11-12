@@ -153,7 +153,7 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 
 	lifespan = oauth2.GetEffectiveLifespan(request.GetClient(), gt, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
+	atLifespan := lifespan
 
 	lifespan = oauth2.GetEffectiveLifespan(request.GetClient(), gt, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 
@@ -164,6 +164,8 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 			return err
 		}
 	}
+
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, oauth2.CapToExpiryDeadline(request.GetSession(), now.Add(atLifespan).Truncate(jwt.TimePrecision)))
 
 	if expires := oauth2.RefreshTokenExpiry(request.GetSession(), lifespan, now); !expires.IsZero() {
 		request.GetSession().SetExpiresAt(oauth2.RefreshToken, expires)

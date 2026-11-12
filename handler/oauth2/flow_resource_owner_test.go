@@ -179,6 +179,82 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 	}
 }
 
+func TestResourceOwnerFlow_AccessTokenDeadline(t *testing.T) {
+	testCases := []struct {
+		name     string
+		maximum  time.Duration
+		deadline time.Duration
+		expires  time.Duration
+	}{
+		{"ShouldCapTheAccessTokenAtTheDeadline", time.Minute * 30, 0, time.Minute * 30},
+		{"ShouldCapTheAccessTokenAtTheApplicationDeadline", 0, time.Minute * 10, time.Minute * 10},
+		{"ShouldNotCapTheAccessTokenBeforeTheDeadline", time.Hour * 24, 0, time.Hour * 2},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mock.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
+			chgen := mock.NewMockAccessTokenStrategy(ctrl)
+			rtstr := mock.NewMockRefreshTokenStrategy(ctrl)
+
+			store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return("", nil)
+			chgen.EXPECT().GenerateAccessToken(gomock.Any(), gomock.Any()).Return("accesstoken.foo.bar", "at-sig", nil)
+			store.EXPECT().CreateAccessTokenSession(gomock.Any(), "at-sig", gomock.Any()).Return(nil)
+			rtstr.EXPECT().GenerateRefreshToken(gomock.Any(), gomock.Any()).Return("refreshtoken.bar.foo", "rt-sig", nil)
+			store.EXPECT().CreateRefreshTokenSession(gomock.Any(), "rt-sig", "at-sig", gomock.Any()).Return(nil)
+
+			before := time.Now().UTC().Truncate(jwt.TimePrecision)
+
+			session := &oauth2.DefaultSession{}
+
+			if tc.deadline != 0 {
+				session.SetExpiryDeadline(time.Now().UTC().Add(tc.deadline).Truncate(jwt.TimePrecision))
+			}
+
+			areq := oauth2.NewAccessRequest(session)
+			areq.Form = url.Values{consts.FormParameterUsername: {"peter"}, consts.FormParameterPassword: {"pan"}}
+			areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
+			areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeRefreshToken}}
+
+			config := &oauth2.Config{
+				AccessTokenLifespan:         time.Hour * 2,
+				RefreshTokenLifespan:        time.Hour,
+				RefreshTokenMaximumLifespan: tc.maximum,
+				ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+			}
+
+			h := ResourceOwnerPasswordCredentialsGrantHandler{
+				ResourceOwnerPasswordCredentialsGrantStorage: store,
+				HandleHelper: &HandleHelper{
+					AccessTokenStorage:  store,
+					AccessTokenStrategy: chgen,
+					Config:              config,
+				},
+				RefreshTokenStrategy: rtstr,
+				Config:               config,
+			}
+
+			require.NoError(t, h.HandleTokenEndpointRequest(t.Context(), areq))
+
+			areq.GrantScope(consts.ScopeOffline)
+
+			require.NoError(t, h.PopulateTokenEndpointResponse(t.Context(), areq, oauth2.NewAccessResponse()))
+
+			after := time.Now().UTC()
+
+			assert.WithinRange(t, areq.GetSession().GetExpiresAt(oauth2.AccessToken), before.Add(tc.expires), after.Add(tc.expires))
+
+			if deadline := areq.GetSession().(oauth2.ExpiryDeadlineSession).GetExpiryDeadline(); !deadline.IsZero() {
+				assert.False(t, areq.GetSession().GetExpiresAt(oauth2.AccessToken).After(deadline))
+			}
+		})
+	}
+}
+
 func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 	mockAT := "accesstoken.foo.bar"
 	mockRT := "refreshtoken.bar.foo"

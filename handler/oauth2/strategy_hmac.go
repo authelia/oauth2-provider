@@ -234,7 +234,7 @@ func (s *HMACCoreStrategy) ValidateRefreshToken(ctx context.Context, r oauth2.Re
 		return nil
 	}
 
-	if exp := session.GetExpiresAt(oauth2.RefreshToken); !exp.IsZero() && exp.Before(time.Now().UTC()) {
+	if exp := oauth2.GetRefreshTokenEffectiveExpiry(session); !exp.IsZero() && exp.Before(time.Now().UTC()) {
 		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Refresh Token expired at '%s'.", exp))
 	}
 

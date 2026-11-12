@@ -258,6 +258,33 @@ func TestHMACRefreshToken(t *testing.T) {
 	}
 }
 
+func TestHMACRefreshTokenExpiryDeadline(t *testing.T) {
+	strategy := &HMACCoreStrategy{
+		Enigma:    &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
+		Config:    &oauth2.Config{},
+		usePrefix: true,
+		prefix:    "authelia_%s_",
+	}
+
+	now := time.Now().UTC()
+
+	r := &oauth2.Request{
+		Client: &oauth2.DefaultClient{},
+		Session: &oauth2.DefaultSession{
+			ExpiresAt:      map[oauth2.TokenType]time.Time{oauth2.RefreshToken: now.Add(time.Hour)},
+			ExpiryDeadline: now.Add(-time.Second),
+		},
+	}
+
+	token, _, err := strategy.GenerateRefreshToken(t.Context(), r)
+	require.NoError(t, err)
+
+	err = strategy.ValidateRefreshToken(t.Context(), r, token)
+
+	require.ErrorIs(t, err, oauth2.ErrTokenExpired)
+	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "Refresh Token expired at ")
+}
+
 func TestHMACAuthorizeCode(t *testing.T) {
 	testCases := []struct {
 		name   string

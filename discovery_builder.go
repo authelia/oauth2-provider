@@ -179,6 +179,7 @@ func (f *Fosite) newOAuth2AuthorizationServerMetadata(ctx context.Context, capab
 	metadata.DraftClientIDMetadataDocumentMetadata = f.cimdMetadata(ctx)
 	metadata.DraftIdentityChainingMetadata = f.identityChainingMetadata(ctx, capabilities.grantTypes)
 	metadata.DraftIDJAGMetadata = f.idjagMetadata(ctx)
+	metadata.DraftRefreshTokenExpirationMetadata = f.refreshTokenExpirationMetadata(ctx, capabilities.grantTypes)
 
 	return metadata, nil
 }
@@ -625,6 +626,17 @@ func (f *Fosite) idjagMetadata(ctx context.Context) *DraftIDJAGMetadata {
 	}
 
 	return metadata
+}
+
+func (f *Fosite) refreshTokenExpirationMetadata(ctx context.Context, grantTypes []string) *DraftRefreshTokenExpirationMetadata {
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-refresh-token-expiration-03#section-8
+	if f.Config.GetDisableRefreshTokenExpirationParameters(ctx) || !slices.Contains(grantTypes, consts.GrantTypeRefreshToken) {
+		return nil
+	}
+
+	return &DraftRefreshTokenExpirationMetadata{
+		RefreshTokenExpirationTypesSupported: []string{consts.RefreshTokenExpirationTypeAuthorization, consts.RefreshTokenExpirationTypeTokenTimeout},
+	}
 }
 
 func validateDiscoveryIssuer(issuer string) (err error) {

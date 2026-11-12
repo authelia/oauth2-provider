@@ -1307,6 +1307,95 @@ func TestDeviceAuthorizeCodeReplayRevokesTheGrant(t *testing.T) {
 	}
 }
 
+func TestDeviceAuthorizeCode_AccessTokenDeadline(t *testing.T) {
+	testCases := []struct {
+		name     string
+		maximum  time.Duration
+		deadline time.Duration
+		expires  time.Duration
+	}{
+		{"ShouldCapTheAccessTokenAtTheDeadline", time.Minute * 30, 0, time.Minute * 30},
+		{"ShouldCapTheAccessTokenAtTheApplicationDeadline", 0, time.Minute * 10, time.Minute * 10},
+		{"ShouldNotCapTheAccessTokenBeforeTheDeadline", time.Hour * 24, 0, time.Hour * 2},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &o2hmacshaStrategy
+			store := storage.NewMemoryStore()
+
+			config := &oauth2.Config{
+				ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+				AccessTokenLifespan:         time.Hour * 2,
+				RefreshTokenLifespan:        time.Hour,
+				RefreshTokenMaximumLifespan: tc.maximum,
+			}
+
+			h := hoauth2.GenericCodeTokenEndpointHandler{
+				CodeTokenEndpointHandler: &DeviceCodeTokenHandler{
+					Strategy: strategy,
+					Storage:  store,
+					Config:   config,
+				},
+				AccessTokenStrategy:    strategy,
+				RefreshTokenStrategy:   strategy,
+				Config:                 config,
+				CoreStorage:            store,
+				TokenRevocationStorage: store,
+			}
+
+			client := &oauth2.DefaultClient{ID: "foo", GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode, consts.GrantTypeRefreshToken}}
+
+			dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+			require.NoError(t, err)
+
+			_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
+			require.NoError(t, err)
+
+			before := time.Now().UTC().Truncate(jwt.TimePrecision)
+
+			session := &oauth2.DefaultSession{}
+
+			if tc.deadline != 0 {
+				session.SetExpiryDeadline(time.Now().UTC().Add(tc.deadline).Truncate(jwt.TimePrecision))
+			}
+
+			deviceRequester := oauth2.NewDeviceAuthorizeRequest()
+			deviceRequester.Client = client
+			deviceRequester.Session = session
+			deviceRequester.RequestedAt = time.Now().UTC()
+			deviceRequester.RequestedScope = oauth2.Arguments{consts.ScopeOffline}
+			deviceRequester.GrantedScope = oauth2.Arguments{consts.ScopeOffline}
+			deviceRequester.SetDeviceCodeSignature(dSig)
+			deviceRequester.SetUserCodeSignature(uSig)
+			deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+
+			require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
+
+			requester := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+				Request: oauth2.Request{
+					Client:      client,
+					Form:        url.Values{consts.FormParameterDeviceCode: {dCode}},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			}
+
+			require.NoError(t, h.HandleTokenEndpointRequest(t.Context(), requester))
+
+			after := time.Now().UTC()
+
+			assert.WithinRange(t, requester.GetSession().GetExpiresAt(oauth2.AccessToken), before.Add(tc.expires), after.Add(tc.expires))
+
+			if deadline := requester.GetSession().(oauth2.ExpiryDeadlineSession).GetExpiryDeadline(); !deadline.IsZero() {
+				assert.False(t, requester.GetSession().GetExpiresAt(oauth2.AccessToken).After(deadline))
+			}
+		})
+	}
+}
+
 func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseKeepsSession(t *testing.T) {
 	const jkt = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
 

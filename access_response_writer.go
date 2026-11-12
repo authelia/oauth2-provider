@@ -6,9 +6,11 @@ package oauth2
 
 import (
 	"context"
+	"time"
 
 	"github.com/pkg/errors"
 
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -42,6 +44,12 @@ func (f *Fosite) NewAccessResponse(ctx context.Context, request AccessRequester)
 		}
 	}
 
+	if !f.Config.GetDisableRefreshTokenExpirationParameters(ctx) && carriesRefreshToken(request, response) {
+		for name, value := range GetRefreshTokenExpirationParameters(request.GetSession(), time.Now().UTC()) {
+			response.SetExtra(name, value)
+		}
+	}
+
 	if response.GetAccessToken() == "" || response.GetTokenType() == "" {
 		return nil, errorsx.WithStack(ErrServerError.
 			WithHint("An internal server occurred while trying to complete the request.").
@@ -50,4 +58,16 @@ func (f *Fosite) NewAccessResponse(ctx context.Context, request AccessRequester)
 	}
 
 	return response, nil
+}
+
+func carriesRefreshToken(request AccessRequester, response AccessResponder) bool {
+	if token, _ := response.GetExtra(consts.AccessResponseRefreshToken).(string); token != "" {
+		return true
+	}
+
+	if issued, _ := response.GetExtra(consts.FormParameterIssuedTokenType).(string); issued == consts.TokenTypeRFC8693RefreshToken {
+		return true
+	}
+
+	return request.GetGrantTypes().ExactOne(consts.GrantTypeRefreshToken)
 }

@@ -119,9 +119,14 @@ type Config struct {
 	// refresh token of the grant may expire, however often it is rotated. RefreshTokenLifespan then acts as the time
 	// a refresh token expires after if it is not used. RFC 10017 Section 6.3.2.3 requires this for browser-based
 	// applications when refresh tokens are rotated. Defaults to 0, which applies no limit. A client can set its own
-	// through RefreshTokenMaximumLifespanClient. A session not implementing
-	// ExpiryDeadlineSetterSession fails with server_error when a limit applies.
+	// through RefreshTokenMaximumLifespanClient. A session not implementing ExpiryDeadlineSetterSession fails with
+	// server_error when a limit applies.
 	RefreshTokenMaximumLifespan time.Duration
+
+	// DisableRefreshTokenExpirationParameters disables the refresh_token_timeout and authorization_expires_in token
+	// response parameters, the matching introspection response members and the refresh_token_expiration_types_supported
+	// metadata member of draft-ietf-oauth-refresh-token-expiration. They are enabled by default.
+	DisableRefreshTokenExpirationParameters bool
 
 	// SendDebugMessagesToClients if set to true, includes error debug messages in response payloads. Be aware that sensitive
 	// data may be exposed, depending on your implementation of Fosite. Such sensitive data might include database error
@@ -1297,6 +1302,11 @@ func (c *Config) GetVerifiableCredentialsNonceLifespan(_ context.Context) time.D
 	return c.VerifiableCredentialsNonceLifespan
 }
 
+// GetDisableRefreshTokenExpirationParameters returns true when the refresh token expiration parameters are disabled.
+func (c *Config) GetDisableRefreshTokenExpirationParameters(_ context.Context) (disable bool) {
+	return c.DisableRefreshTokenExpirationParameters
+}
+
 // GetRefreshTokenLifespan sets how long a refresh token is going to be valid. Defaults to 30 days. Set to -1 for
 // refresh tokens that never expire.
 func (c *Config) GetRefreshTokenLifespan(_ context.Context) time.Duration {
@@ -2014,6 +2024,7 @@ var (
 	_ jwt.ClientJWKSFetcherStrategyProvider                 = (*Config)(nil)
 	_ AuthorizeCodeLifespanProvider                         = (*Config)(nil)
 	_ RefreshTokenLifespanProvider                          = (*Config)(nil)
+	_ DisableRefreshTokenExpirationParametersProvider       = (*Config)(nil)
 	_ AccessTokenLifespanProvider                           = (*Config)(nil)
 	_ ScopeStrategyProvider                                 = (*Config)(nil)
 	_ AudienceStrategyProvider                              = (*Config)(nil)

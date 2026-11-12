@@ -86,6 +86,7 @@ finalized, so support for one may change in any release.
 | [JWT Authorization Grant with DPoP Binding](https://datatracker.ietf.org/doc/html/draft-parecki-oauth-jwt-dpop-grant-02)                        |   ✅   | `draft-02` | Redeeming a DPoP-bound ID-JAG                                                                                                                      |
 | [Transaction Tokens](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11)                                              |   ✅   | `draft-11` | Opt-in, including the `self_signed` and `unsigned_json` subject tokens and replacement tokens                                                      |
 | [OAuth Client ID Metadata Document](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)                      |   ✅   | `draft-03` | Opt-in through `Config.ClientIDMetadataDocumentResolver`, with a default resolver in `handler/cimd`                                                |
+| [Refresh Token and Authorization Expiration](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-refresh-token-expiration-03)                |   ✅   | `draft-03` | On by default; the authorization expiry is `RefreshTokenMaximumLifespan` or a deadline the application records                                     |
 | [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html)                                                      |   🟡   |            | Checked by `compose.ValidateFAPI2SecurityProfile`, applied by `compose.ApplyFAPI2SecurityProfile`, or enforced per client                          |
 | [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html)                                                        |   🟡   |            | Signed request objects, JARM and RFC 9701 responses; callers of the introspection endpoint are not restricted                                      |
 
@@ -140,7 +141,6 @@ Drafts adopted by the IETF OAuth Working Group or the OpenID Foundation which ar
 | [Attestation-Based Client Authentication](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-attestation-based-client-auth)      |   ❌   | `draft-12`            |                  |
 | [OAuth SPIFFE Client Authentication](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-spiffe-client-auth)                      |   ❌   | `draft-02`            |                  |
 | [OAuth 2.0 for First-Party Applications](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-first-party-apps)                    |   ❌   | `draft-04`            |                  |
-| [Refresh Token and Authorization Expiration](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-refresh-token-expiration)        |   ❌   | `draft-03`            |                  |
 | [Token Status List (TSL)](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-status-list)                                        |   ❌   | `draft-21`            |                  |
 | [SD-JWT-based Verifiable Digital Credentials (SD-JWT VC)](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-sd-jwt-vc)          |   ❌   | `draft-23`            |                  |
 | [Deferred Token Response](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-deferred-token-response)                            |   ❌   | `draft-01`            |                  |
@@ -286,7 +286,16 @@ Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Cons
   full `RefreshTokenLifespan`, so a client which keeps refreshing keeps its grant indefinitely. A client implementing
   `RefreshTokenMaximumLifespanClient` can set its own, or opt out with a negative duration. The limit is recorded on the
   session, which must implement `ExpiryDeadlineSetterSession` as the default sessions do, otherwise the request fails
-  with `server_error`, and a grant issued without one is limited from its next refresh.
+  with `server_error`, and a grant issued without one is limited from its next refresh. Token responses carry
+  `refresh_token_timeout` and `authorization_expires_in`, refresh token introspection carries the same members, and
+  authorization server metadata publishes `refresh_token_expiration_types_supported`
+  ([draft-ietf-oauth-refresh-token-expiration](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-refresh-token-expiration-03)).
+  `DisableRefreshTokenExpirationParameters` removes all three. An authorization is extended out of band by updating the
+  deadline on the persisted session and raising the stored expiry of the grant's current refresh token. With rotation,
+  updating the deadline alone only helps a client that refreshes before the old deadline. Without rotation
+  (`DisableRefreshTokenRotation`, or a client that disables it) the stored refresh token keeps its issued expiry, so its
+  stored expiry must always be raised. An application can record a deadline of its own, such as one the user chose, with
+  `ExpiryDeadlineSetterSession`.
 - `DPoPEnabled` and `MTLSEnabled` enable sender-constrained tokens
   ([Section 2.2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.2.1)) for clients that request them, and
   `DPoPEnforce` and `MTLSEnforce` require them from every client, which then must all support the mechanism. Resource

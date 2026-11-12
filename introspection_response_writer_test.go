@@ -412,6 +412,130 @@ func TestWriteIntrospectionResponseBodyExpiryMatchesTokenUse(t *testing.T) {
 	}
 }
 
+func TestWriteIntrospectionResponseBodyRefreshTokenExpiryDeadline(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+
+	provider := &Fosite{Config: new(Config)}
+
+	session := &DefaultSession{ExpiryDeadline: now.Add(10 * time.Minute)}
+	session.SetExpiresAt(RefreshToken, now.Add(time.Hour))
+
+	ires := &IntrospectionResponse{
+		Active:          true,
+		TokenUse:        RefreshToken,
+		AccessRequester: NewAccessRequest(session),
+	}
+
+	rw := httptest.NewRecorder()
+	provider.WriteIntrospectionResponse(context.Background(), rw, ires)
+
+	var params struct {
+		Exp *int64 `json:"exp"`
+	}
+
+	require.NoError(t, json.NewDecoder(rw.Body).Decode(&params))
+	require.NotNil(t, params.Exp)
+	assert.Equal(t, now.Add(10*time.Minute).Unix(), *params.Exp)
+}
+
+func TestWriteIntrospectionResponseBodyRefreshTokenExpirationMembers(t *testing.T) {
+	testCases := []struct {
+		name     string
+		tokenUse TokenUse
+		disable  bool
+		extra    map[string]any
+		timeout  bool
+		expires  bool
+	}{
+		{
+			name:     "ShouldReturnTheMembersForARefreshToken",
+			tokenUse: RefreshToken,
+			timeout:  true,
+			expires:  true,
+		},
+		{
+			name:     "ShouldNotReturnTheMembersForAnAccessToken",
+			tokenUse: AccessToken,
+		},
+		{
+			name:     "ShouldPreferTheComputedValueOverExtraClaims",
+			tokenUse: RefreshToken,
+			extra:    map[string]any{consts.AccessResponseRefreshTokenTimeout: 1, consts.AccessResponseAuthorizationExpiresIn: 1},
+			timeout:  true,
+			expires:  true,
+		},
+		{
+			name:     "ShouldNotReturnExtraClaimsForAnAccessToken",
+			tokenUse: AccessToken,
+			extra:    map[string]any{consts.AccessResponseRefreshTokenTimeout: 1, consts.AccessResponseAuthorizationExpiresIn: 1},
+		},
+		{
+			name:     "ShouldNotReturnTheMembersWhenDisabled",
+			tokenUse: RefreshToken,
+			disable:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now()
+
+			provider := &Fosite{Config: &Config{DisableRefreshTokenExpirationParameters: tc.disable}}
+
+			session := &DefaultSession{ExpiryDeadline: now.Add(2 * time.Hour), Extra: tc.extra}
+			session.SetExpiresAt(AccessToken, now.Add(time.Minute))
+			session.SetExpiresAt(RefreshToken, now.Add(time.Hour))
+
+			ires := &IntrospectionResponse{
+				Active:          true,
+				TokenUse:        tc.tokenUse,
+				AccessRequester: NewAccessRequest(session),
+			}
+
+			rw := httptest.NewRecorder()
+			provider.WriteIntrospectionResponse(context.Background(), rw, ires)
+
+			var params map[string]any
+
+			require.NoError(t, json.NewDecoder(rw.Body).Decode(&params))
+
+			if tc.timeout {
+				assert.InDelta(t, 3600, params[consts.AccessResponseRefreshTokenTimeout], 1)
+			} else {
+				assert.NotContains(t, params, consts.AccessResponseRefreshTokenTimeout)
+			}
+
+			if tc.expires {
+				assert.InDelta(t, 7200, params[consts.AccessResponseAuthorizationExpiresIn], 1)
+			} else {
+				assert.NotContains(t, params, consts.AccessResponseAuthorizationExpiresIn)
+			}
+		})
+	}
+}
+
+func TestWriteIntrospectionResponseDoesNotResetTheRefreshTokenExpiry(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	expiry := now.Add(time.Hour)
+
+	provider := &Fosite{Config: new(Config)}
+
+	session := &DefaultSession{ExpiryDeadline: now.Add(2 * time.Hour)}
+	session.SetExpiresAt(RefreshToken, expiry)
+
+	ires := &IntrospectionResponse{
+		Active:          true,
+		TokenUse:        RefreshToken,
+		AccessRequester: NewAccessRequest(session),
+	}
+
+	for range 2 {
+		provider.WriteIntrospectionResponse(context.Background(), httptest.NewRecorder(), ires)
+
+		assert.Equal(t, expiry, session.GetExpiresAt(RefreshToken))
+	}
+}
+
 func TestWriteIntrospectionResponseBodyPopulatesClaims(t *testing.T) {
 	testCases := []struct {
 		name   string

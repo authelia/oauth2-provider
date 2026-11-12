@@ -72,6 +72,30 @@ func TestExchangedTokenLifetime(t *testing.T) {
 				assert.NotEmpty(t, response.GetExtra(consts.FormParameterRefreshToken))
 			})
 
+			t.Run("ShouldNotExpireTheAccessTokenAfterTheDeadlineRecordedFromTheSubjectToken", func(t *testing.T) {
+				store := sc.newStore()
+				config, coreStrategy := newBindingExchangeConfig()
+
+				expires := time.Now().UTC().Add(20 * time.Minute).Truncate(time.Second)
+
+				request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, createSessionRefreshToken(t.Context(), coreStrategy, store, store.GetClients()["my-client"], expires), "")
+
+				refreshHandler := newLifetimeRefreshTokenHandler(config, coreStrategy, store)
+				handler := newLifetimeAccessTokenHandler(config, coreStrategy, store)
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(refreshHandler.HandleTokenEndpointRequest(t.Context(), request)))
+
+				response := oauth2.NewAccessResponse()
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), request, response)))
+
+				deadline := request.GetSession().(oauth2.ExpiryDeadlineSession).GetExpiryDeadline()
+
+				require.False(t, deadline.IsZero())
+				assert.WithinDuration(t, expires, deadline, time.Second)
+				assert.False(t, request.GetSession().GetExpiresAt(oauth2.AccessToken).After(deadline))
+			})
+
 			t.Run("ShouldCapAnExplicitRefreshTokenAtARefreshTokenSubject", func(t *testing.T) {
 				store := sc.newStore()
 				config, coreStrategy := newBindingExchangeConfig()

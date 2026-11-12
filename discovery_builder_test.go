@@ -254,6 +254,68 @@ func TestOAuth2MetadataIdentityChainingRequiresTokenExchange(t *testing.T) {
 	}
 }
 
+func TestOAuth2MetadataRefreshTokenExpirationTypesSupported(t *testing.T) {
+	testCases := []struct {
+		name     string
+		config   *oauth2.Config
+		refresh  bool
+		expected []string
+	}{
+		{
+			name:     "ShouldAdvertiseBothTypes",
+			config:   &oauth2.Config{},
+			refresh:  true,
+			expected: []string{consts.RefreshTokenExpirationTypeAuthorization, consts.RefreshTokenExpirationTypeTokenTimeout},
+		},
+		{
+			name:     "ShouldAdvertiseBothTypesWithNonExpiringRefreshTokensAndNoMaximumLifespan",
+			config:   &oauth2.Config{RefreshTokenLifespan: -1},
+			refresh:  true,
+			expected: []string{consts.RefreshTokenExpirationTypeAuthorization, consts.RefreshTokenExpirationTypeTokenTimeout},
+		},
+		{
+			name:    "ShouldOmitWhenTheParametersAreDisabled",
+			config:  &oauth2.Config{DisableRefreshTokenExpirationParameters: true},
+			refresh: true,
+		},
+		{
+			name:   "ShouldOmitWithoutTheRefreshTokenGrant",
+			config: &oauth2.Config{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.config.Issuer = "https://auth.example.com"
+			tc.config.EndpointURLs = oauth2.EndpointURLs{
+				Authorization: "https://auth.example.com/authorize",
+				Token:         "https://auth.example.com/token",
+				JWKS:          "https://auth.example.com/jwks.json",
+			}
+
+			factories := []compose.Factory{compose.OAuth2AuthorizeExplicitFactory}
+
+			if tc.refresh {
+				factories = append(factories, compose.OAuth2RefreshTokenGrantFactory)
+			}
+
+			provider := compose.Compose(tc.config, storage.NewMemoryStore(), &compose.CommonStrategy{CoreStrategy: compose.NewOAuth2HMACStrategy(tc.config)}, factories...)
+
+			metadata, err := provider.NewOAuth2AuthorizationServerMetadata(context.Background())
+			require.NoError(t, err)
+
+			if tc.expected == nil {
+				assert.Nil(t, metadata.DraftRefreshTokenExpirationMetadata)
+
+				return
+			}
+
+			require.NotNil(t, metadata.DraftRefreshTokenExpirationMetadata)
+			assert.Equal(t, tc.expected, metadata.RefreshTokenExpirationTypesSupported)
+		})
+	}
+}
+
 func TestOAuth2MetadataIDJAGSigningAlgValuesRequireRS256(t *testing.T) {
 	testCases := []struct {
 		name     string

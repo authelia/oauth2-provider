@@ -84,11 +84,12 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointReques
 	delete(request.GetRequestForm(), consts.FormParameterPassword)
 
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypePassword, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
 
 	rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypePassword, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 
 	now := time.Now().UTC()
+
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, oauth2.CapToExpiryDeadline(request.GetSession(), now.Add(atLifespan).Truncate(jwt.TimePrecision)))
 
 	if expires := oauth2.RefreshTokenExpiry(request.GetSession(), rtLifespan, now); !expires.IsZero() {
 		request.GetSession().SetExpiresAt(oauth2.RefreshToken, expires)
@@ -111,6 +112,8 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResp
 		if err = oauth2.RecordRefreshTokenExpiryDeadline(ctx, c.Config, request.GetClient(), request.GetSession(), now); err != nil {
 			return err
 		}
+
+		request.GetSession().SetExpiresAt(oauth2.AccessToken, oauth2.CapToExpiryDeadline(request.GetSession(), request.GetSession().GetExpiresAt(oauth2.AccessToken)))
 
 		rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypePassword, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 

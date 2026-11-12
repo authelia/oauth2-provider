@@ -215,7 +215,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 	claims[consts.ClaimClientIdentifier] = or.GetClient().GetID()
 	claims[consts.ClaimScope] = or.GetGrantedScopes()
 
-	if expires := or.GetSession().GetExpiresAt(oauth2.RefreshToken); !expires.IsZero() {
+	if expires := oauth2.GetRefreshTokenEffectiveExpiry(or.GetSession()); !expires.IsZero() {
 		claims[consts.ClaimExpirationTime] = expires.Unix()
 	}
 

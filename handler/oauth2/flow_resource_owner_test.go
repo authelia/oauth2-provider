@@ -420,6 +420,136 @@ func TestResourceOwnerFlowTransactional_PopulateTokenEndpointResponse(t *testing
 	}
 }
 
+func TestResourceOwnerFlow_RefreshTokenMaximumLifespanSessionWithoutDeadline(t *testing.T) {
+	testCases := []struct {
+		name   string
+		grants oauth2.Arguments
+		scopes oauth2.Arguments
+		fail   bool
+	}{
+		{"ShouldFailWhenARefreshTokenIsIssued", oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeRefreshToken}, oauth2.Arguments{consts.ScopeOffline}, true},
+		{"ShouldNotFailWithoutARefreshTokenScope", oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeRefreshToken}, nil, false},
+		{"ShouldNotFailWhenTheClientCannotRefresh", oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, oauth2.Arguments{consts.ScopeOffline}, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+
+			store := mock.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
+			chgen := mock.NewMockAccessTokenStrategy(ctrl)
+			rtstr := mock.NewMockRefreshTokenStrategy(ctrl)
+
+			store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return("", nil)
+
+			if !tc.fail {
+				chgen.EXPECT().GenerateAccessToken(gomock.Any(), gomock.Any()).Return("accesstoken.foo.bar", "at-sig", nil)
+				store.EXPECT().CreateAccessTokenSession(gomock.Any(), "at-sig", gomock.Any()).Return(nil)
+			}
+
+			areq := oauth2.NewAccessRequest(&sessionWithoutDeadline{Session: &oauth2.DefaultSession{}})
+			areq.Form = url.Values{consts.FormParameterUsername: {"peter"}, consts.FormParameterPassword: {"pan"}}
+			areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
+			areq.Client = &oauth2.DefaultClient{GrantTypes: tc.grants}
+
+			config := &oauth2.Config{
+				AccessTokenLifespan:         time.Hour,
+				RefreshTokenLifespan:        time.Hour,
+				RefreshTokenMaximumLifespan: time.Hour * 24,
+				RefreshTokenScopes:          []string{consts.ScopeOffline},
+				ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+			}
+
+			h := ResourceOwnerPasswordCredentialsGrantHandler{
+				ResourceOwnerPasswordCredentialsGrantStorage: store,
+				HandleHelper: &HandleHelper{
+					AccessTokenStorage:  store,
+					AccessTokenStrategy: chgen,
+					Config:              config,
+				},
+				RefreshTokenStrategy: rtstr,
+				Config:               config,
+			}
+
+			require.NoError(t, h.HandleTokenEndpointRequest(t.Context(), areq))
+
+			for _, scope := range tc.scopes {
+				areq.GrantScope(scope)
+			}
+
+			aresp := oauth2.NewAccessResponse()
+
+			err := h.PopulateTokenEndpointResponse(t.Context(), areq, aresp)
+
+			if tc.fail {
+				require.ErrorIs(t, err, oauth2.ErrServerError)
+			} else {
+				require.NoError(t, err)
+				assert.Nil(t, aresp.GetExtra(consts.AccessResponseRefreshToken))
+			}
+		})
+	}
+}
+
+func TestResourceOwnerFlow_RefreshTokenMaximumLifespanRecorded(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	store := mock.NewMockResourceOwnerPasswordCredentialsGrantStorage(ctrl)
+	chgen := mock.NewMockAccessTokenStrategy(ctrl)
+	rtstr := mock.NewMockRefreshTokenStrategy(ctrl)
+
+	store.EXPECT().Authenticate(gomock.Any(), "peter", "pan").Return("", nil)
+	chgen.EXPECT().GenerateAccessToken(gomock.Any(), gomock.Any()).Return("accesstoken.foo.bar", "at-sig", nil)
+	store.EXPECT().CreateAccessTokenSession(gomock.Any(), "at-sig", gomock.Any()).Return(nil)
+	rtstr.EXPECT().GenerateRefreshToken(gomock.Any(), gomock.Any()).Return("refreshtoken.bar.foo", "rt-sig", nil)
+	store.EXPECT().CreateRefreshTokenSession(gomock.Any(), "rt-sig", "at-sig", gomock.Any()).Return(nil)
+
+	session := &oauth2.DefaultSession{}
+
+	areq := oauth2.NewAccessRequest(session)
+	areq.Form = url.Values{consts.FormParameterUsername: {"peter"}, consts.FormParameterPassword: {"pan"}}
+	areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
+	areq.Client = &oauth2.DefaultClient{GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeRefreshToken}}
+
+	config := &oauth2.Config{
+		AccessTokenLifespan:         time.Hour,
+		RefreshTokenLifespan:        time.Hour * 48,
+		RefreshTokenMaximumLifespan: time.Hour * 24,
+		RefreshTokenScopes:          []string{consts.ScopeOffline},
+		ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+		AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+	}
+
+	h := ResourceOwnerPasswordCredentialsGrantHandler{
+		ResourceOwnerPasswordCredentialsGrantStorage: store,
+		HandleHelper: &HandleHelper{
+			AccessTokenStorage:  store,
+			AccessTokenStrategy: chgen,
+			Config:              config,
+		},
+		RefreshTokenStrategy: rtstr,
+		Config:               config,
+	}
+
+	require.NoError(t, h.HandleTokenEndpointRequest(t.Context(), areq))
+
+	assert.True(t, session.GetExpiryDeadline().IsZero())
+
+	areq.GrantScope(consts.ScopeOffline)
+
+	before := time.Now().UTC().Truncate(jwt.TimePrecision)
+
+	require.NoError(t, h.PopulateTokenEndpointResponse(t.Context(), areq, oauth2.NewAccessResponse()))
+
+	after := time.Now().UTC()
+
+	assert.WithinRange(t, session.GetExpiryDeadline(), before.Add(time.Hour*24), after.Add(time.Hour*24))
+	assert.Equal(t, session.GetExpiryDeadline(), session.GetExpiresAt(oauth2.RefreshToken))
+}
+
 type nonResourceOwnerSession struct {
 	expiresAt map[oauth2.TokenType]time.Time
 }

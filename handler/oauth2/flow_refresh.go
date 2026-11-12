@@ -26,6 +26,7 @@ type RefreshTokenGrantHandler struct {
 	Config                 interface {
 		oauth2.AccessTokenLifespanProvider
 		oauth2.RefreshTokenLifespanProvider
+		oauth2.RefreshTokenMaximumLifespanProvider
 		oauth2.ScopeStrategyProvider
 		oauth2.AudienceStrategyProvider
 		oauth2.ResourceStrategyProvider
@@ -194,12 +195,13 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 
 	request.SetGrantedAuthorizationDetails(request.GetRequestedAuthorizationDetails())
 
-	provider, _ := c.Config.(oauth2.RefreshTokenMaximumLifespanProvider)
 	now := time.Now().UTC()
 
 	// RFC 10017 Section 6.3.2.3: a grant issued without a deadline, such as before the maximum lifespan was set, is
 	// limited from its first refresh.
-	oauth2.RecordRefreshTokenExpiryDeadline(ctx, provider, client, request.GetSession(), now)
+	if err = oauth2.RecordRefreshTokenExpiryDeadline(ctx, c.Config, client, request.GetSession(), now); err != nil {
+		return err
+	}
 
 	// RFC 10017 Section 6.3.2.3: no token is issued once the grant's deadline has passed. An unrotated refresh token
 	// keeps the expiry it was issued with, which the deadline may precede.

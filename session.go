@@ -12,6 +12,7 @@ import (
 
 	"authelia.com/provider/oauth2/internal/clone"
 	"authelia.com/provider/oauth2/token/jwt"
+	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 // Session is an interface that is used to store session data between OAuth2 requests. It can be used to look up
@@ -185,18 +186,19 @@ func GetRefreshTokenMaximumLifespan(ctx context.Context, config RefreshTokenMaxi
 
 // RecordRefreshTokenExpiryDeadline sets the deadline of the session to now plus the maximum lifespan
 // GetRefreshTokenMaximumLifespan returns, unless the session already has an earlier deadline. It does nothing when no
-// maximum lifespan applies or the session is not an ExpiryDeadlineSetterSession.
+// maximum lifespan applies, and returns a server_error when one applies and the session is not an
+// ExpiryDeadlineSetterSession.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc10017#section-6.3.2.3
-func RecordRefreshTokenExpiryDeadline(ctx context.Context, config RefreshTokenMaximumLifespanProvider, client Client, session Session, now time.Time) {
+func RecordRefreshTokenExpiryDeadline(ctx context.Context, config RefreshTokenMaximumLifespanProvider, client Client, session Session, now time.Time) (err error) {
 	lifespan := GetRefreshTokenMaximumLifespan(ctx, config, client)
 	if lifespan <= 0 {
-		return
+		return nil
 	}
 
 	bounded, ok := session.(ExpiryDeadlineSetterSession)
 	if !ok {
-		return
+		return errorsx.WithStack(ErrServerError.WithDebug("The session does not implement ExpiryDeadlineSetterSession, which a refresh token maximum lifespan requires."))
 	}
 
 	deadline := now.UTC().Add(lifespan).Truncate(jwt.TimePrecision)
@@ -204,6 +206,8 @@ func RecordRefreshTokenExpiryDeadline(ctx context.Context, config RefreshTokenMa
 	if current := bounded.GetExpiryDeadline(); current.IsZero() || deadline.Before(current) {
 		bounded.SetExpiryDeadline(deadline)
 	}
+
+	return nil
 }
 
 // RefreshTokenExpiry returns the expiry of a refresh token issued at now with the given lifespan, capped to the

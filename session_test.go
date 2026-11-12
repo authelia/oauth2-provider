@@ -340,16 +340,45 @@ func TestRecordRefreshTokenExpiryDeadline(t *testing.T) {
 		{"ShouldRecord", config, &DefaultSession{}, now.Add(time.Hour)},
 		{"ShouldKeepAnEarlierDeadline", config, &DefaultSession{ExpiryDeadline: now.Add(time.Minute)}, now.Add(time.Minute)},
 		{"ShouldReplaceALaterDeadline", config, &DefaultSession{ExpiryDeadline: now.Add(2 * time.Hour)}, now.Add(time.Hour)},
-		{"ShouldIgnoreASessionWithoutADeadline", config, &testSessionWithoutDeadline{Session: &DefaultSession{}}, time.Time{}},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			RecordRefreshTokenExpiryDeadline(t.Context(), tc.config, &DefaultClient{}, tc.session, now)
+			require.NoError(t, RecordRefreshTokenExpiryDeadline(t.Context(), tc.config, &DefaultClient{}, tc.session, now))
 
 			if bounded, ok := tc.session.(ExpiryDeadlineSession); ok {
 				assert.Equal(t, tc.expected, bounded.GetExpiryDeadline())
 			}
+		})
+	}
+}
+
+func TestRecordRefreshTokenExpiryDeadline_FailClosed(t *testing.T) {
+	now := time.Unix(1700000000, 0).UTC()
+
+	testCases := []struct {
+		name   string
+		config *Config
+		client Client
+		err    bool
+	}{
+		{"ShouldFailWhenALifespanAppliesToASessionWithoutASetter", &Config{RefreshTokenMaximumLifespan: time.Hour * 24}, &DefaultClient{}, true},
+		{"ShouldNotFailWithoutAMaximumLifespan", &Config{}, &DefaultClient{}, false},
+		{"ShouldNotFailWhenTheClientOptsOut", &Config{RefreshTokenMaximumLifespan: time.Hour * 24}, &DefaultRegisteredClient{DefaultClient: &DefaultClient{}, RefreshTokenMaximumLifespan: -1}, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := RecordRefreshTokenExpiryDeadline(t.Context(), tc.config, tc.client, &testSessionWithoutDeadline{Session: &DefaultSession{}}, now)
+
+			if tc.err {
+				require.ErrorIs(t, err, ErrServerError)
+				assert.Equal(t, "The session does not implement ExpiryDeadlineSetterSession, which a refresh token maximum lifespan requires.", ErrorToRFC6749Error(err).DebugField)
+
+				return
+			}
+
+			require.NoError(t, err)
 		})
 	}
 }

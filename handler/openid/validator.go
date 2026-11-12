@@ -6,6 +6,7 @@ package openid
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/stringslice"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -150,7 +150,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		}
 	}
 
-	if stringslice.Has(requiredPrompt, consts.PromptTypeNone) {
+	if slices.Contains(requiredPrompt, consts.PromptTypeNone) {
 		if claims.AuthTime == nil || claims.AuthTime.IsZero() {
 			return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because because auth_time is missing from session."))
 		}
@@ -161,7 +161,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		}
 	}
 
-	if stringslice.Has(requiredPrompt, consts.PromptTypeLogin) {
+	if slices.Contains(requiredPrompt, consts.PromptTypeLogin) {
 		if claims.GetAuthTimeSafe().Before(rat) {
 			return nil, errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.GetAuthTimeSafe(), rat))
 		}
@@ -204,7 +204,7 @@ func (v *OpenIDConnectRequestValidator) validatePromptParameters(ctx context.Con
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'prompt' parameter either contains unknown, unsupported, or prohibited prompt values.").WithDebugf("The requested prompt value '%s' is not permitted, the permitted prompt values are '%s'.", strings.Join(requiredPrompt, " "), strings.Join(availablePrompts, "', '")))
 	}
 
-	if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && len(requiredPrompt) > 1 {
+	if slices.Contains(requiredPrompt, consts.PromptTypeNone) && len(requiredPrompt) > 1 {
 		// If this parameter contains none with any other value, an error is returned.
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
 	}
@@ -221,7 +221,7 @@ func (v *OpenIDConnectRequestValidator) validatePromptParameters(ctx context.Con
 		// assured.
 		// See: https://datatracker.ietf.org/doc/html/rfc8252#section-8.6
 
-		if stringslice.Has(requiredPrompt, consts.PromptTypeNone) && !v.getPublicClientIdentityChecker(ctx)(ctx, request) {
+		if slices.Contains(requiredPrompt, consts.PromptTypeNone) && !v.getPublicClientIdentityChecker(ctx)(ctx, request) {
 			return errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and the redirect uri does not assure the identity of the client, but 'prompt' type 'none' was requested."))
 		}
 	}
@@ -235,7 +235,7 @@ func (v *OpenIDConnectRequestValidator) validatePromptParameters(ctx context.Con
 
 func isWhitelisted(items []string, whiteList []string) bool {
 	for _, item := range items {
-		if !stringslice.Has(whiteList, item) {
+		if !slices.Contains(whiteList, item) {
 			return false
 		}
 	}

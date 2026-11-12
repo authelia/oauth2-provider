@@ -14,6 +14,7 @@ import (
 
 	jjson "authelia.com/provider/jose/json"
 
+	"authelia.com/provider/oauth2/internal/claimvalue"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -205,7 +206,7 @@ func (c *LogoutTokenClaims) UnmarshalJSON(data []byte) error {
 		case ClaimSessionID:
 			c.SessionID, ok = value.(string)
 		case ClaimAudience:
-			c.Audience, ok = toStringSlice(value)
+			c.Audience, ok = claimvalue.Slice[string](value)
 		case ClaimExpirationTime:
 			if c.ExpirationTime, err = toNumericDate(value); err == nil {
 				ok = true

@@ -5,7 +5,10 @@
 package jwt
 
 import (
+	"maps"
 	"time"
+
+	"authelia.com/provider/oauth2/internal/claimvalue"
 )
 
 type Claims interface {
@@ -47,34 +50,21 @@ func ToString(i any) string {
 
 // ToTime will try to convert a given input to a time.Time structure
 func ToTime(i any) time.Time {
-	if i == nil {
-		return time.Time{}
-	}
-
-	if t, ok := i.(int64); ok {
-		return time.Unix(t, 0).UTC()
-	} else if t, ok := i.(float64); ok {
-		return time.Unix(int64(t), 0).UTC()
-	} else if t, ok := i.(time.Time); ok {
+	if t, ok := i.(time.Time); ok {
 		return t
 	}
 
-	return time.Time{}
+	t, _ := claimvalue.Time(i)
+
+	return t
 }
 
 // Filter will filter out elements based on keys in a given input map na key-slice
 func Filter(elements map[string]any, keys ...string) map[string]any {
-	var keyIdx = make(map[string]bool)
-	var result = make(map[string]any)
+	result := Copy(elements)
 
 	for _, key := range keys {
-		keyIdx[key] = true
-	}
-
-	for k, e := range elements {
-		if _, ok := keyIdx[k]; !ok {
-			result[k] = e
-		}
+		delete(result, key)
 	}
 
 	return result
@@ -83,34 +73,13 @@ func Filter(elements map[string]any, keys ...string) map[string]any {
 // Copy will copy all elements in a map and return a new representational map
 func Copy(elements map[string]any) (result map[string]any) {
 	result = make(map[string]any, len(elements))
-	for k, v := range elements {
-		result[k] = v
-	}
+
+	maps.Copy(result, elements)
 
 	return result
 }
 
 // StringSliceFromMap asserts a map any value to a []string provided it has a good type.
 func StringSliceFromMap(value any) (values []string, ok bool) {
-	switch v := value.(type) {
-	case nil:
-		return nil, true
-	case []string:
-		return v, true
-	case string:
-		return []string{v}, true
-	case []any:
-		for _, item := range v {
-			switch iv := item.(type) {
-			case string:
-				values = append(values, iv)
-			default:
-				return nil, false
-			}
-		}
-
-		return values, true
-	default:
-		return nil, false
-	}
+	return claimvalue.Slice[string](value)
 }

@@ -2,7 +2,10 @@ package oauth2
 
 import (
 	"net/url"
+	"slices"
 	"strings"
+
+	"authelia.com/provider/oauth2/internal/slicesx"
 )
 
 // JoinGrantedAudienceAndResource returns the concatenation of the granted audience and resource
@@ -12,26 +15,7 @@ func JoinGrantedAudienceAndResource(audience, resource Arguments) Arguments {
 		return nil
 	}
 
-	merged := make(Arguments, 0, len(audience)+len(resource))
-	seen := make(map[string]struct{}, len(audience)+len(resource))
-
-	for _, v := range audience {
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		merged = append(merged, v)
-	}
-
-	for _, v := range resource {
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		merged = append(merged, v)
-	}
-
-	return merged
+	return slicesx.Unique(slices.Concat(audience, resource))
 }
 
 // GetResourcesParameter returns the resource identifiers from the given form parameter.

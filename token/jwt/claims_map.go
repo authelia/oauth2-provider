@@ -12,6 +12,7 @@ import (
 
 	jjson "authelia.com/provider/jose/json"
 
+	"authelia.com/provider/oauth2/internal/claimvalue"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -379,25 +380,9 @@ func (m MapClaims) toString(key string) (value string, err error) {
 }
 
 func (m MapClaims) toClaimsString(key string) (ClaimStrings, error) {
-	var cs []string
-
-	switch v := m[key].(type) {
-	case string:
-		cs = append(cs, v)
-	case []string:
-		cs = v
-	case []any:
-		for _, a := range v {
-			if vs, ok := a.(string); !ok {
-				return nil, newError(fmt.Sprintf("%s is invalid", key), ErrInvalidType)
-			} else {
-				cs = append(cs, vs)
-			}
-		}
-	case nil:
-		return nil, nil
-	default:
-		return cs, newError(fmt.Sprintf("%s is invalid", key), ErrInvalidType)
+	cs, ok := claimvalue.Slice[string](m[key])
+	if !ok {
+		return nil, newError(fmt.Sprintf("%s is invalid", key), ErrInvalidType)
 	}
 
 	return cs, nil

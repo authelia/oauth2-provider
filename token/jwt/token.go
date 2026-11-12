@@ -10,13 +10,13 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	"authelia.com/provider/jose"
 	"authelia.com/provider/jose/jwt"
 
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/stringslice"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -560,7 +560,7 @@ func validateTokenType(values []string, header map[string]any, allowEmpty bool) 
 	if raw, ok = header[consts.JSONWebTokenHeaderType]; !ok {
 		// Only allow the JWT typ to be empty explicitly. In addition if it's allowed we must assume the media type
 		// is JWT for safety so unless it's allowed we should return a validation error here.
-		if !allowEmpty || !stringslice.HasI(values, consts.JSONWebTokenTypeJWT) {
+		if !allowEmpty || !slices.ContainsFunc(values, func(value string) bool { return strings.EqualFold(value, consts.JSONWebTokenTypeJWT) }) {
 			return false
 		}
 

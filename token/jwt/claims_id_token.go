@@ -15,6 +15,7 @@ import (
 
 	jjson "authelia.com/provider/jose/json"
 
+	"authelia.com/provider/oauth2/internal/claimvalue"
 	"authelia.com/provider/oauth2/internal/clone"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -237,7 +238,7 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 		case ClaimSubject:
 			c.Subject, ok = value.(string)
 		case ClaimAudience:
-			c.Audience, ok = toStringSlice(value)
+			c.Audience, ok = claimvalue.Slice[string](value)
 		case ClaimExpirationTime:
 			if c.ExpirationTime, err = toNumericDate(value); err == nil {
 				ok = true
@@ -257,7 +258,7 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 		case ClaimAuthenticationContextClassReference:
 			c.AuthenticationContextClassReference, ok = value.(string)
 		case ClaimAuthenticationMethodsReference:
-			c.AuthenticationMethodsReferences, ok = toStringSlice(value)
+			c.AuthenticationMethodsReferences, ok = claimvalue.Slice[string](value)
 		case ClaimAuthorizedParty:
 			c.AuthorizedParty, ok = value.(string)
 		case ClaimAccessTokenHash:
@@ -488,37 +489,6 @@ func (c *IDTokenClaims) Add(key string, value any) {
 // Get will get a value from the extra field based on a given key
 func (c *IDTokenClaims) Get(key string) any {
 	return c.ToMap()[key]
-}
-
-func toStringSlice(value any) (values []string, ok bool) {
-	switch t := value.(type) {
-	case nil:
-		ok = true
-	case string:
-		ok = true
-
-		values = []string{t}
-	case []string:
-		ok = true
-
-		values = t
-	case []any:
-		ok = true
-
-	loop:
-		for _, tv := range t {
-			switch vv := tv.(type) {
-			case string:
-				values = append(values, vv)
-			default:
-				ok = false
-
-				break loop
-			}
-		}
-	}
-
-	return values, ok
 }
 
 var (

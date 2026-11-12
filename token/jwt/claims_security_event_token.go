@@ -16,6 +16,7 @@ import (
 
 	jjson "authelia.com/provider/jose/json"
 
+	"authelia.com/provider/oauth2/internal/claimvalue"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -254,7 +255,7 @@ func (c *SecurityEventTokenClaims) UnmarshalJSON(data []byte) (err error) {
 		case ClaimIssuer:
 			c.Issuer, ok = value.(string)
 		case ClaimAudience:
-			c.Audience, ok = toStringSlice(value)
+			c.Audience, ok = claimvalue.Slice[string](value)
 		case ClaimIssuedAt:
 			if c.IssuedAt, err = toNumericDate(value); err != nil {
 				ok = false

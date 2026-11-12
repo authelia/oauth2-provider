@@ -22,7 +22,6 @@ import (
 
 	"authelia.com/provider/oauth2/i18n"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/stringslice"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -288,7 +287,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 
 		requestURI := request.Form.Get(consts.FormParameterRequestURI)
 
-		if !stringslice.Has(client.GetRequestURIs(), requestURI) {
+		if !slices.Contains(client.GetRequestURIs(), requestURI) {
 			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter with value '%s' which is not whitelisted.", request.GetClient().GetID(), requestURI))
 		}
 
@@ -498,7 +497,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	// https://openid.net/specs/openid-connect-core-1_0.html#RequestObject
 	claimScope := RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
 
-	if openid && !stringslice.Has(claimScope, consts.ScopeOpenID) {
+	if openid && !slices.Contains(claimScope, consts.ScopeOpenID) {
 		claimScope = append(claimScope, consts.ScopeOpenID)
 	}
 

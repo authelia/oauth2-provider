@@ -270,7 +270,14 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 	}
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-9.1
-	if details := request.GetGrantedAuthorizationDetails(); len(details) != 0 {
+	audience, _ := mapClaims.GetAudience()
+
+	details, err := oauth2.DiscloseAuthorizationDetails(ctx, s.Config, request, oauth2.AuthorizationDetailsRecipient{Audience: audience})
+	if err != nil {
+		return "", "", err
+	}
+
+	if len(details) != 0 {
 		mapClaims[consts.ClaimAuthorizationDetails] = details
 	} else {
 		delete(mapClaims, consts.ClaimAuthorizationDetails)

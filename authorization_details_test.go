@@ -466,6 +466,51 @@ func TestAssignAuthorizationDetailsRejectsWidenedMembers(t *testing.T) {
 	}
 }
 
+func TestDiscloseAuthorizationDetails(t *testing.T) {
+	a := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}, Locations: []string{testRARLocationA}}
+	b := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}, Locations: []string{testRARLocationB}}
+	other := oauth2.AuthorizationDetail{Type: testRARTypeOther, Locations: []string{testRARLocationB}}
+
+	disclosing := []oauth2.AuthorizationDetailsTypeHandler{internal.DisclosingPaymentInitiationTypeHandler{}, otherRARTypeHandler{}}
+
+	testCases := []struct {
+		name      string
+		handlers  []oauth2.AuthorizationDetailsTypeHandler
+		granted   oauth2.AuthorizationDetails
+		recipient oauth2.AuthorizationDetailsRecipient
+		expected  oauth2.AuthorizationDetails
+		err       error
+	}{
+		{name: "ShouldReturnNilWhenNoneGranted", handlers: disclosing, recipient: oauth2.AuthorizationDetailsRecipient{Audience: []string{testRARLocationA}}},
+		{name: "ShouldDiscloseEveryDetailWithoutADisclosingHandler", handlers: newRARConfig().AuthorizationDetailsTypeHandlers, granted: oauth2.AuthorizationDetails{a, b}, recipient: oauth2.AuthorizationDetailsRecipient{Audience: []string{testRARLocationA}}, expected: oauth2.AuthorizationDetails{a, b}},
+		{name: "ShouldDiscloseByAudience", handlers: disclosing, granted: oauth2.AuthorizationDetails{a, b, other}, recipient: oauth2.AuthorizationDetailsRecipient{Audience: []string{testRARLocationA}}, expected: oauth2.AuthorizationDetails{a, other}},
+		{name: "ShouldDiscloseByClient", handlers: disclosing, granted: oauth2.AuthorizationDetails{a, other, b}, recipient: oauth2.AuthorizationDetailsRecipient{Client: &oauth2.DefaultClient{ID: testRARLocationB}}, expected: oauth2.AuthorizationDetails{b, other}},
+		{name: "ShouldDiscloseNoneToAnUnknownRecipient", handlers: disclosing[:1], granted: oauth2.AuthorizationDetails{a, b}, recipient: oauth2.AuthorizationDetailsRecipient{}},
+		{name: "ShouldReturnServerErrorWhenTheHandlerFails", handlers: []oauth2.AuthorizationDetailsTypeHandler{internal.DisclosingPaymentInitiationTypeHandler{Err: errors.New("failed")}}, granted: oauth2.AuthorizationDetails{a}, err: oauth2.ErrServerError},
+		{name: "ShouldReturnServerErrorForAnotherType", handlers: []oauth2.AuthorizationDetailsTypeHandler{mismatchedDisclosingTypeHandler{}}, granted: oauth2.AuthorizationDetails{a}, err: oauth2.ErrServerError},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := &oauth2.Request{Client: &oauth2.DefaultClient{}}
+			request.SetGrantedAuthorizationDetails(tc.granted)
+
+			actual, err := oauth2.DiscloseAuthorizationDetails(context.Background(), &oauth2.Config{AuthorizationDetailsTypeHandlers: tc.handlers}, request, tc.recipient)
+
+			if tc.err != nil {
+				assert.ErrorIs(t, err, tc.err)
+				assert.Nil(t, actual)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, actual)
+			assert.Equal(t, tc.granted, request.GetGrantedAuthorizationDetails())
+		})
+	}
+}
+
 func TestMatchAuthorizationDetails(t *testing.T) {
 	contains := func(granted, requested oauth2.AuthorizationDetail) bool {
 		for _, action := range requested.Actions {
@@ -556,4 +601,20 @@ type assigningTypeHandler struct {
 
 func (h assigningTypeHandler) Assign(context.Context, oauth2.AccessRequester, oauth2.AuthorizationDetails, oauth2.AuthorizationDetails) (oauth2.AuthorizationDetails, error) {
 	return h.assigned, nil
+}
+
+type otherRARTypeHandler struct {
+	internal.PaymentInitiationTypeHandler
+}
+
+func (otherRARTypeHandler) Type() string {
+	return testRARTypeOther
+}
+
+type mismatchedDisclosingTypeHandler struct {
+	internal.PaymentInitiationTypeHandler
+}
+
+func (mismatchedDisclosingTypeHandler) Disclose(context.Context, oauth2.Requester, oauth2.AuthorizationDetailsRecipient, oauth2.AuthorizationDetails) (oauth2.AuthorizationDetails, error) {
+	return oauth2.AuthorizationDetails{{Type: testRARTypeOther}}, nil
 }

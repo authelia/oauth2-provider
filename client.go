@@ -597,6 +597,18 @@ type MTLSClient interface {
 	Client
 }
 
+// SenderConstrainedAccessTokensClient is a client whose token requests must bind their tokens to a DPoP proof or a
+// mutual-TLS client certificate, whichever it presents; see IsSenderConstrainedAccessTokenEnforced.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+type SenderConstrainedAccessTokensClient interface {
+	// GetEnforceSenderConstrainedAccessTokens should return true if this client's token requests must bind their
+	// tokens to a DPoP proof or a mutual-TLS client certificate.
+	GetEnforceSenderConstrainedAccessTokens() (enforce bool)
+
+	Client
+}
+
 // ClientCredentialsFlowRequestedScopeImplicitClient is a client which can allow implicit scopes in the client credentials flow.
 type ClientCredentialsFlowRequestedScopeImplicitClient interface {
 	// GetClientCredentialsFlowRequestedScopeImplicit is indicative of if a client will implicitly request all scopes it

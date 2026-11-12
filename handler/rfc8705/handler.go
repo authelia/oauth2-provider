@@ -65,6 +65,8 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 		return nil
 	}
 
+	required = required || h.requiredInsteadOfDPoP(ctx, request, r)
+
 	var cert *x509.Certificate
 
 	if cert, err = oauth2.ClientCertificateFromRequest(r, h.Config.GetMTLSClientCertificateHeader(ctx)); err != nil {
@@ -125,6 +127,22 @@ func (h *Handler) rebindable(ctx context.Context, request oauth2.AccessRequester
 	}
 
 	if c, ok := client.(oauth2.MTLSStrictRefreshTokenBindingClient); ok && c.GetMTLSStrictRefreshTokenBinding() {
+		return false
+	}
+
+	return true
+}
+
+func (h *Handler) requiredInsteadOfDPoP(ctx context.Context, request oauth2.AccessRequester, r *http.Request) bool {
+	provider, _ := h.Config.(oauth2.EnforceSenderConstrainedAccessTokensProvider)
+
+	if !oauth2.IsSenderConstrainedAccessTokenEnforced(ctx, provider, request.GetClient()) {
+		return false
+	}
+
+	if c, ok := h.Config.(interface {
+		GetDPoPEnabled(ctx context.Context) bool
+	}); ok && c.GetDPoPEnabled(ctx) && len(r.Header.Values(consts.HeaderDPoP)) != 0 {
 		return false
 	}
 

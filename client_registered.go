@@ -192,6 +192,7 @@ type DefaultRegisteredClient struct {
 	RequestObjectMaximumLifetime                  time.Duration `json:"-"`
 	DisableRefreshTokenRotation                   bool          `json:"-"`
 	RefreshTokenMaximumLifespan                   time.Duration `json:"-"`
+	EnforceSenderConstrainedAccessTokens          bool          `json:"-"`
 
 	// Extra holds every unregistered client metadata parameter carried by ClientRegistrationMetadata.Extra so it can
 	// survive a registration round trip. This type only provides the storage location; converting to and from
@@ -484,6 +485,12 @@ func (c *DefaultRegisteredClient) GetRequestObjectMaximumLifetime() time.Duratio
 // GetApplicationType returns the 'application_type' client metadata value.
 func (c *DefaultRegisteredClient) GetApplicationType() (applicationType string) {
 	return c.ApplicationType
+}
+
+// GetEnforceSenderConstrainedAccessTokens returns true if this client's token requests must bind their tokens to a DPoP
+// proof or a mutual-TLS client certificate.
+func (c *DefaultRegisteredClient) GetEnforceSenderConstrainedAccessTokens() bool {
+	return c.EnforceSenderConstrainedAccessTokens
 }
 
 // GetDisableRefreshTokenRotation returns true if the refresh token grant should keep this client's refresh token rather

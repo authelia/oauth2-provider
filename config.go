@@ -1188,6 +1188,16 @@ type MTLSStrictRefreshTokenBindingProvider interface {
 	GetMTLSStrictRefreshTokenBinding(ctx context.Context) (strict bool)
 }
 
+// EnforceSenderConstrainedAccessTokensProvider returns the provider for requiring every access token to be
+// sender-constrained by either RFC 9449 DPoP or RFC 8705 Mutual-TLS.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+type EnforceSenderConstrainedAccessTokensProvider interface {
+	// GetEnforceSenderConstrainedAccessTokens returns true if every token request must bind its tokens to a DPoP
+	// proof or a mutual-TLS client certificate, whichever the client presents.
+	GetEnforceSenderConstrainedAccessTokens(ctx context.Context) (enforce bool)
+}
+
 // MTLSConfigProvider is the configuration provider for RFC 8705 Mutual-TLS.
 type MTLSConfigProvider interface {
 	// GetMTLSEnabled returns true if RFC 8705 handling is enabled.

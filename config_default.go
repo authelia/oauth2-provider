@@ -666,6 +666,13 @@ type Config struct {
 	// MTLSEnforce requires certificate-bound access tokens for all clients regardless of client metadata.
 	MTLSEnforce bool
 
+	// EnforceSenderConstrainedAccessTokens requires every token request to bind its tokens to a DPoP proof or a
+	// mutual-TLS client certificate, whichever the client presents, as FAPI 2.0 Security Profile Section 5.3.2.1
+	// requires. Unlike DPoPEnforce and MTLSEnforce, either method satisfies it, so each client may use the one it
+	// supports. DPoP is used when the request carries a DPoP proof, and otherwise the client certificate is bound. A
+	// client can be required individually through SenderConstrainedAccessTokensClient.
+	EnforceSenderConstrainedAccessTokens bool
+
 	// MTLSClientCertificateHeader is the name of the header a trusted TLS terminating proxy forwards the client
 	// certificate in, for example 'X-Forwarded-Tls-Client-Cert'. It is empty by default, which disables the header so
 	// that only a certificate from the TLS connection itself is used.
@@ -1855,6 +1862,12 @@ func (c *Config) GetMTLSEnforce(ctx context.Context) (enforce bool) {
 	return c.MTLSEnforce
 }
 
+// GetEnforceSenderConstrainedAccessTokens returns true if every token request must bind its tokens to a DPoP proof or a
+// mutual-TLS client certificate.
+func (c *Config) GetEnforceSenderConstrainedAccessTokens(_ context.Context) (enforce bool) {
+	return c.EnforceSenderConstrainedAccessTokens
+}
+
 // GetMTLSClientCertificateHeader returns the name of the header a trusted TLS terminating proxy forwards the client
 // certificate in. Empty disables the header. See the MTLSClientCertificateHeader field.
 func (c *Config) GetMTLSClientCertificateHeader(ctx context.Context) (header string) {
@@ -2088,6 +2101,7 @@ var (
 	_ DPoPStrictRefreshTokenBindingProvider                 = (*Config)(nil)
 	_ OIDCKeyBindingConfigProvider                          = (*Config)(nil)
 	_ MTLSConfigProvider                                    = (*Config)(nil)
+	_ EnforceSenderConstrainedAccessTokensProvider          = (*Config)(nil)
 	_ MTLSStrictRefreshTokenBindingProvider                 = (*Config)(nil)
 	_ RFC7591ClientRegistrationConfigProvider               = (*Config)(nil)
 	_ RFC7591ClientRegistrationPolicyProvider               = (*Config)(nil)

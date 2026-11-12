@@ -73,6 +73,7 @@ func (s *DefaultClientRegistrationStrategy) PatchClient(ctx context.Context, cli
 	replacement.RequestObjectMaximumLifetime = registered.RequestObjectMaximumLifetime
 	replacement.DisableRefreshTokenRotation = registered.DisableRefreshTokenRotation
 	replacement.RefreshTokenMaximumLifespan = registered.RefreshTokenMaximumLifespan
+	replacement.EnforceSenderConstrainedAccessTokens = registered.EnforceSenderConstrainedAccessTokens
 	replacement.TokenExchangeOwnAccessTokenRestrictTargets = registered.TokenExchangeOwnAccessTokenRestrictTargets
 	replacement.TokenExchangeOwnAccessToken = registered.TokenExchangeOwnAccessToken
 	replacement.TokenExchangeRefreshToken = registered.TokenExchangeRefreshToken

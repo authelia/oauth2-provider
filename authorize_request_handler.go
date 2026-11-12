@@ -90,8 +90,8 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	}
 
 	if !isPARRequest {
-		if parc, ok := client.(PushedAuthorizationRequestClient); ok && parc.GetRequirePushedAuthorizationRequests() {
-			return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests are required but this Authorization Request was not made as a Pushed Authorization Request.").WithDebugf("The registered OAuth 2.0 client with id '%s' is registered with a policy which requires Pushed Authorization Requests be used.", parc.GetID()))
+		if parc, ok := client.(PushedAuthorizationRequestClient); (ok && parc.GetRequirePushedAuthorizationRequests()) || IsFAPI2SecurityProfileClient(client) {
+			return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Pushed Authorization Requests are required but this Authorization Request was not made as a Pushed Authorization Request.").WithDebugf("The registered OAuth 2.0 client with id '%s' is registered with a policy which requires Pushed Authorization Requests be used.", client.GetID()))
 		}
 	}
 
@@ -336,7 +336,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 
 	strategy := f.Config.GetJWTStrategy(ctx)
 
-	token, err := strategy.Decode(ctx, assertion, jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(f.Config.GetRequestObjectSigningAlgValues(ctx))...), jwt.WithKeyAlgorithm(jwt.ToKeyAlgorithms(f.Config.GetRequestObjectEncryptionAlgValues(ctx))...), jwt.WithContentEncryption(jwt.ToContentEncryptions(f.Config.GetRequestObjectEncryptionEncValues(ctx))...), jwt.WithJARClient(client))
+	token, err := strategy.Decode(ctx, assertion, jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(fapi2SigningAlgValues(client, f.Config.GetRequestObjectSigningAlgValues(ctx)))...), jwt.WithKeyAlgorithm(jwt.ToKeyAlgorithms(f.Config.GetRequestObjectEncryptionAlgValues(ctx))...), jwt.WithContentEncryption(jwt.ToContentEncryptions(f.Config.GetRequestObjectEncryptionEncValues(ctx))...), jwt.WithJARClient(client))
 	if err != nil {
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
@@ -746,6 +746,10 @@ func (f *Fosite) validateResponseTypes(_ context.Context, _ *http.Request, reque
 		return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request response_type '%s'.", request.Form.Get(consts.FormParameterResponseType)))
 	}
 
+	if err := validateFAPI2ResponseTypes(request.GetClient(), responseTypes); err != nil {
+		return err
+	}
+
 	request.ResponseTypes = responseTypes
 
 	return nil
@@ -957,6 +961,10 @@ func (f *Fosite) validateAuthorizeRequestFromPARClient(ctx context.Context, r *h
 
 	if !found {
 		return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter.").WithDebugf("The OAuth 2.0 Client is not allowed to request response_type '%s'.", strings.Join(request.ResponseTypes, " ")))
+	}
+
+	if err = validateFAPI2ResponseTypes(client, request.ResponseTypes); err != nil {
+		return err
 	}
 
 	if len(request.Form.Get(consts.FormParameterResponseMode)) == 0 {

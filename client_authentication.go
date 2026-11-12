@@ -73,6 +73,11 @@ func (f *Fosite) AuthenticateClientWithAuthHandler(ctx context.Context, r *http.
 }
 
 func (f *Fosite) checkEndpointAuthMethod(ctx context.Context, client Client, method string, strategy EndpointClientAuthStrategy) (err error) {
+	// FAPI 2.0 Security Profile Section 5.3.2.1: private_key_jwt or mutual-TLS client authentication.
+	if IsFAPI2SecurityProfileClient(client) && !slices.Contains(FAPI2SecurityProfileClientAuthMethods, method) {
+		return errorsx.WithStack(ErrInvalidClient.WithHint(fmt.Sprintf("The client authentication method '%s' is not permitted for this client.", method)).WithDebugf("The client with id '%s' is held to the FAPI 2.0 Security Profile, which permits only the client authentication methods '%s'.", client.GetID(), strings.Join(FAPI2SecurityProfileClientAuthMethods, "', '")))
+	}
+
 	methods := configuredEndpointAuthMethods(ctx, f.Config, ClientAuthEndpoint(strategy.Name()))
 	if len(methods) == 0 || slices.Contains(methods, method) {
 		return nil

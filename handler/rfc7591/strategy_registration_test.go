@@ -169,6 +169,7 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesEveryUnregisteredF
 		DisableRefreshTokenRotation:                   true,
 		RefreshTokenMaximumLifespan:                   time.Minute,
 		EnforceSenderConstrainedAccessTokens:          true,
+		FAPI2SecurityProfile:                          true,
 	}
 
 	patched, err := strategy.PatchClient(ctx, registered, nil, &oauth2.ClientRegistrationMetadata{})

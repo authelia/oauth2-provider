@@ -1713,6 +1713,25 @@ func TestHandler_HandleAuthorizeEndpointRequestRecordsChallengeExpiry(t *testing
 	}
 }
 
+func TestHandlerFAPI2SecurityProfileClient(t *testing.T) {
+	h := &Handler{Config: &oauth2.Config{EnablePKCEPlainChallengeMethod: true, AllowPublicClientsWithoutPKCE: true}}
+
+	fapi2 := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "fapi2"}, FAPI2SecurityProfile: true}
+	other := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "other"}}
+
+	t.Run("ShouldRequirePKCE", func(t *testing.T) {
+		assert.ErrorIs(t, h.validate(t.Context(), "", "", fapi2), oauth2.ErrInvalidRequest)
+		assert.NoError(t, h.validate(t.Context(), "", "", other))
+	})
+
+	t.Run("ShouldRequireS256", func(t *testing.T) {
+		assert.ErrorIs(t, h.validate(t.Context(), testChallengeS256, consts.PKCEChallengeMethodPlain, fapi2), oauth2.ErrInvalidRequest)
+		assert.ErrorIs(t, h.validate(t.Context(), testChallengeS256, "", fapi2), oauth2.ErrInvalidRequest)
+		assert.NoError(t, h.validate(t.Context(), testChallengeS256, consts.PKCEChallengeMethodSHA256, fapi2))
+		assert.NoError(t, h.validate(t.Context(), testChallengeS256, consts.PKCEChallengeMethodPlain, other))
+	})
+}
+
 type TestPKCEClient struct {
 	*oauth2.DefaultClient
 	EnforcePKCE                bool

@@ -247,7 +247,7 @@ func (s *DefaultClientAuthenticationStrategy) newClientAssertion(ctx context.Con
 		return a, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
 	}
 
-	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion, append(clientAssertionJWEOptions(ctx, s.Config), jwt.WithClient(&EndpointClientAuthJWTClient{client: c, strategy: strategy}), jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(s.clientAssertionSigningAlgValues(ctx, strategy))...))...); err != nil {
+	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion, append(clientAssertionJWEOptions(ctx, s.Config), jwt.WithClient(&EndpointClientAuthJWTClient{client: c, strategy: strategy}), jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(fapi2SigningAlgValues(client, s.clientAssertionSigningAlgValues(ctx, strategy)))...))...); err != nil {
 		return a, resolveJWTErrorToRFCError(err)
 	}
 
@@ -471,7 +471,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 		return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' was signed with the 'alg' header value 'none' but client assertions must be signed or have a MAC applied.", client.GetID()))
 	}
 
-	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion.Assertion, append(clientAssertionJWEOptions(ctx, s.Config), jwt.WithClient(&EndpointClientAuthJWTClient{client: client, strategy: strategy}), jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(s.clientAssertionSigningAlgValues(ctx, strategy))...))...); err != nil {
+	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion.Assertion, append(clientAssertionJWEOptions(ctx, s.Config), jwt.WithClient(&EndpointClientAuthJWTClient{client: client, strategy: strategy}), jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(fapi2SigningAlgValues(client, s.clientAssertionSigningAlgValues(ctx, strategy)))...))...); err != nil {
 		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, strategy, audience, err))
 	}
 

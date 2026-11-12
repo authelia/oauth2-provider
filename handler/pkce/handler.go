@@ -116,7 +116,7 @@ func (c *Handler) getChallengeExpiresAt(ctx context.Context, request oauth2.Auth
 		}
 	}
 
-	return time.Now().UTC().Add(c.Config.GetAuthorizeCodeLifespan(ctx))
+	return time.Now().UTC().Add(oauth2.GetAuthorizeCodeLifespan(ctx, c.Config, request.GetClient()))
 }
 
 func validateChallengeSyntax(challenge, method string) (err error) {
@@ -160,6 +160,13 @@ func (c *Handler) validate(ctx context.Context, challenge, method string, client
 		}
 	default:
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Authorization was requested with a 'code_challenge_method' value the authorization server doesn't know how to handle, try 'S256' instead.").WithDebugf("Authorization was requested with 'code_challenge_method' value '%s'.", method))
+	}
+
+	// FAPI 2.0 Security Profile Section 5.3.2.2: PKCE with the S256 code challenge method.
+	if method != consts.PKCEChallengeMethodSHA256 && oauth2.IsFAPI2SecurityProfileClient(client) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.
+			WithHintf("Authorization was requested with 'code_challenge_method' value '%s', but the authorization server policy does not allow method '%s' and requires method 'S256'.", method, method).
+			WithDebugf("The client with id '%s' is held to the FAPI 2.0 Security Profile, which requires the 'S256' 'code_challenge_method'.", client.GetID()))
 	}
 
 	if pkce, ok := client.(oauth2.ProofKeyCodeExchangeClient); ok {
@@ -304,6 +311,12 @@ func (c *Handler) validateNoPKCE(ctx context.Context, parameter string, client o
 				WithHintf("Clients must include a '%s' when performing the authorize code flow, but it is missing.", parameter).
 				WithDebugf("The authorization server is configured in a way that enforces PKCE for all public client type clients and the '%s' client is using the public client type.", client.GetID()))
 		}
+	}
+
+	if oauth2.IsFAPI2SecurityProfileClient(client) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.
+			WithHintf("Clients must include a '%s' when performing the authorize code flow, but it is missing.", parameter).
+			WithDebugf("The client with id '%s' is held to the FAPI 2.0 Security Profile, which requires PKCE.", client.GetID()))
 	}
 
 	if pkce, ok := client.(oauth2.ProofKeyCodeExchangeClient); ok {

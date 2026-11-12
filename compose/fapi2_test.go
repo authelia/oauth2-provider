@@ -303,11 +303,11 @@ func TestApplyFAPI2SecurityProfile(t *testing.T) {
 	assert.True(t, config.DisableRefreshTokenRotation)
 	assert.True(t, config.EnforceSenderConstrainedAccessTokens)
 	assert.Equal(t, []string{consts.ClientAuthMethodPrivateKeyJWT}, config.TokenEndpointAuthMethods)
-	assert.Equal(t, FAPI2SecurityProfileClientAuthMethods, config.RevocationEndpointAuthMethods)
+	assert.Equal(t, oauth2.FAPI2SecurityProfileClientAuthMethods, config.RevocationEndpointAuthMethods)
 	assert.Equal(t, []string{string(jose.ES256)}, config.ClientAssertionSigningAlgValues)
-	assert.Equal(t, FAPI2SecurityProfileSigningAlgValues, config.RequestObjectSigningAlgValues)
-	assert.Equal(t, FAPI2SecurityProfileSigningAlgValues, config.DPoPAllowedJWSAlgorithms)
-	assert.Equal(t, FAPI2SecurityProfileSigningAlgValues, config.RevocationEndpointAuthSigningAlgValues)
+	assert.Equal(t, oauth2.FAPI2SecurityProfileSigningAlgValues, config.RequestObjectSigningAlgValues)
+	assert.Equal(t, oauth2.FAPI2SecurityProfileSigningAlgValues, config.DPoPAllowedJWSAlgorithms)
+	assert.Equal(t, oauth2.FAPI2SecurityProfileSigningAlgValues, config.RevocationEndpointAuthSigningAlgValues)
 	assert.Equal(t, []string{consts.ClientAuthMethodPrivateKeyJWT, consts.AuthSchemeBearer}, config.IntrospectionEndpointAuthMethods)
 	assert.Equal(t, []string{string(jose.PS256)}, config.RFC7523AssertionSigningAlgValues)
 	assert.Nil(t, config.IntrospectionEndpointAuthSigningAlgValues)
@@ -320,7 +320,7 @@ func TestApplyFAPI2SecurityProfile(t *testing.T) {
 		{"ShouldKeepAnUnsetIntrospectionList", nil, nil},
 		{"ShouldKeepABearerOnlyIntrospectionList", []string{consts.AuthSchemeBearer}, []string{consts.AuthSchemeBearer}},
 		{"ShouldKeepATokenOnlyIntrospectionList", []string{consts.AuthSchemeBearer, consts.AuthSchemeDPoP}, []string{consts.AuthSchemeBearer, consts.AuthSchemeDPoP}},
-		{"ShouldReplaceIntrospectionClientMethodsNonePermitted", []string{consts.ClientAuthMethodClientSecretBasic, consts.AuthSchemeBearer}, append(slices.Clone(FAPI2SecurityProfileClientAuthMethods), consts.AuthSchemeBearer)},
+		{"ShouldReplaceIntrospectionClientMethodsNonePermitted", []string{consts.ClientAuthMethodClientSecretBasic, consts.AuthSchemeBearer}, append(slices.Clone(oauth2.FAPI2SecurityProfileClientAuthMethods), consts.AuthSchemeBearer)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &oauth2.Config{IntrospectionEndpointAuthMethods: tc.methods}

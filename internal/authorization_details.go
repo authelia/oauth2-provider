@@ -130,3 +130,32 @@ type AuthorizationDetailsClient struct {
 func (c *AuthorizationDetailsClient) GetAuthorizationDetailsTypes() []string {
 	return c.AuthorizationDetailsTypes
 }
+
+// DisclosingPaymentInitiationTypeHandler is a test oauth2.AuthorizationDetailsTypeDisclosingHandler which discloses to a
+// recipient only the details with a location that is in the audience of the recipient or is the identifier of its
+// client.
+type DisclosingPaymentInitiationTypeHandler struct {
+	PaymentInitiationTypeHandler
+
+	Err error
+}
+
+func (h DisclosingPaymentInitiationTypeHandler) Disclose(_ context.Context, _ oauth2.Requester, recipient oauth2.AuthorizationDetailsRecipient, details oauth2.AuthorizationDetails) (disclosed oauth2.AuthorizationDetails, err error) {
+	if h.Err != nil {
+		return nil, h.Err
+	}
+
+	targets := slices.Clone(recipient.Audience)
+
+	if recipient.Client != nil {
+		targets = append(targets, recipient.Client.GetID())
+	}
+
+	for _, detail := range details {
+		if slices.ContainsFunc(detail.Locations, func(location string) bool { return slices.Contains(targets, location) }) {
+			disclosed = append(disclosed, detail)
+		}
+	}
+
+	return disclosed, nil
+}

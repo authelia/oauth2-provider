@@ -20,6 +20,8 @@ const (
 	testRARActionCancel         = "cancel"
 	testRARIdentifierEnriched   = "enriched"
 	testRARExtraSpoofed         = "spoofed"
+	testRARLocationA            = "https://a.example.com"
+	testRARLocationB            = "https://b.example.com"
 	testRARHintTypeNotAllowed   = "The OAuth 2.0 Client is not allowed to request one or more of the authorization details types."
 	testRARHintTypeNotSupported = "One or more of the authorization details types is not supported."
 )

@@ -331,6 +331,32 @@ type AuthorizationDetailsTypeHandler interface {
 	Assign(ctx context.Context, request AccessRequester, granted, requested AuthorizationDetails) (assigned AuthorizationDetails, err error)
 }
 
+// AuthorizationDetailsTypeDisclosingHandler is an AuthorizationDetailsTypeHandler which limits the details of its type
+// a resource server learns from a JWT access token or an introspection response. Without it every detail of the type
+// assigned to the token is disclosed to every resource server.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-9.1
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-9.2
+type AuthorizationDetailsTypeDisclosingHandler interface {
+	AuthorizationDetailsTypeHandler
+
+	// Disclose returns the details of this type to disclose to the recipient. The details are those of this type
+	// assigned to the token of the request, and are never empty. The result may filter or omit them, or remove members
+	// the recipient does not need, but must not carry more than the details justify. An empty result discloses none
+	// of this type. Errors answer 'server_error'.
+	Disclose(ctx context.Context, request Requester, recipient AuthorizationDetailsRecipient, details AuthorizationDetails) (disclosed AuthorizationDetails, err error)
+}
+
+// AuthorizationDetailsRecipient identifies the resource server authorization details are disclosed to.
+type AuthorizationDetailsRecipient struct {
+	// Audience is the 'aud' claim of the JWT access token the details are disclosed in, and is empty for an
+	// introspection response.
+	Audience []string
+
+	// Client is the authenticated client which made the introspection request, and is nil for a JWT access token.
+	Client Client
+}
+
 // AuthorizationDetailsClient restricts the RFC 9396 authorization details types a client may request. A nil list
 // permits every type and a non-nil empty list permits none, so stores must preserve nil versus empty.
 type AuthorizationDetailsClient interface {
@@ -547,6 +573,56 @@ func AssignAuthorizationDetails(ctx context.Context, config any, request AccessR
 	}
 
 	return assigned, nil
+}
+
+// DiscloseAuthorizationDetails returns the details assigned to the token of the request to disclose to the recipient.
+// The details of a type whose handler implements AuthorizationDetailsTypeDisclosingHandler are those it discloses, and
+// the details of any other type are disclosed unchanged.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-9.1
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-9.2
+func DiscloseAuthorizationDetails(ctx context.Context, config any, request Requester, recipient AuthorizationDetailsRecipient) (disclosed AuthorizationDetails, err error) {
+	details := request.GetGrantedAuthorizationDetails()
+	if len(details) == 0 {
+		return nil, nil
+	}
+
+	handlers := GetAuthorizationDetailsTypeHandlers(ctx, config)
+
+	var seen []string
+
+	for _, detail := range details {
+		if slices.Contains(seen, detail.Type) {
+			continue
+		}
+
+		seen = append(seen, detail.Type)
+
+		typed := filterAuthorizationDetails(details, detail.Type)
+
+		handler, ok := handlers[detail.Type].(AuthorizationDetailsTypeDisclosingHandler)
+		if !ok {
+			disclosed = append(disclosed, typed...)
+
+			continue
+		}
+
+		var d AuthorizationDetails
+
+		if d, err = handler.Disclose(ctx, request, recipient, typed); err != nil {
+			return nil, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugf("The authorization details type handler for type '%s' failed to disclose the authorization details: %s", detail.Type, err))
+		}
+
+		for _, x := range d {
+			if x.Type != detail.Type {
+				return nil, errorsx.WithStack(ErrServerError.WithDebugf("The authorization details type handler for type '%s' disclosed an authorization details object of type '%s'.", detail.Type, x.Type))
+			}
+		}
+
+		disclosed = append(disclosed, d...)
+	}
+
+	return disclosed, nil
 }
 
 // MatchAuthorizationDetails assigns each requested detail a distinct granted detail for which contains reports true,

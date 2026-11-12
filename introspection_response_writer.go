@@ -163,7 +163,14 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	}
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-9.2
-	if details := r.GetAccessRequester().GetGrantedAuthorizationDetails(); len(details) != 0 {
+	details, err := DiscloseAuthorizationDetails(ctx, f.Config, r.GetAccessRequester(), AuthorizationDetailsRecipient{Client: caller})
+	if err != nil {
+		f.WriteIntrospectionError(ctx, rw, err)
+
+		return
+	}
+
+	if len(details) != 0 {
 		response[jwt.ClaimAuthorizationDetails] = details
 	}
 

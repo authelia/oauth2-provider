@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -331,6 +332,72 @@ func TestJWTProfileAuthorizationDetailsClaim(t *testing.T) {
 			raw, err := json.Marshal(payload[consts.ClaimAuthorizationDetails])
 			require.NoError(t, err)
 			assert.JSONEq(t, `[{"type":"payment_initiation","actions":["initiate"]}]`, string(raw))
+		})
+	}
+}
+
+func TestJWTProfileAuthorizationDetailsClaimDisclosedToAudience(t *testing.T) {
+	a := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}, Locations: []string{testRARLocationA}}
+	b := oauth2.AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}, Locations: []string{testRARLocationB}}
+
+	testCases := []struct {
+		name     string
+		handler  oauth2.AuthorizationDetailsTypeHandler
+		audience []string
+		expected oauth2.AuthorizationDetails
+		err      error
+	}{
+		{name: "ShouldDiscloseToTheAudience", handler: internal.DisclosingPaymentInitiationTypeHandler{}, audience: []string{testRARLocationA}, expected: oauth2.AuthorizationDetails{a}},
+		{name: "ShouldDiscloseNoneToAnotherAudience", handler: internal.DisclosingPaymentInitiationTypeHandler{}, audience: []string{"https://c.example.com"}},
+		{name: "ShouldDiscloseEveryDetailWithoutADisclosingHandler", handler: internal.PaymentInitiationTypeHandler{}, audience: []string{testRARLocationA}, expected: oauth2.AuthorizationDetails{a, b}},
+		{name: "ShouldReturnServerErrorWhenTheHandlerFails", handler: internal.DisclosingPaymentInitiationTypeHandler{Err: errors.New("failed")}, audience: []string{testRARLocationA}, err: oauth2.ErrServerError},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{
+				EnforceJWTProfileAccessTokens:    true,
+				GlobalSecret:                     []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+				AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{tc.handler},
+			}
+
+			strategy := NewCoreStrategy(config, "authelia_%s_", &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(rsaKey)})
+
+			r := jwtValidCase(oauth2.AccessToken)
+			r.GrantedAudience = tc.audience
+			r.GrantedAuthorizationDetails = oauth2.AuthorizationDetails{a, b}
+
+			token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+			if tc.err != nil {
+				assert.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			parts := strings.Split(token, ".")
+			require.Len(t, parts, 3)
+
+			rawPayload, err := base64.RawURLEncoding.DecodeString(parts[1])
+			require.NoError(t, err)
+
+			var payload map[string]any
+			require.NoError(t, json.Unmarshal(rawPayload, &payload))
+
+			if tc.expected == nil {
+				assert.NotContains(t, payload, consts.ClaimAuthorizationDetails)
+
+				return
+			}
+
+			raw, err := json.Marshal(payload[consts.ClaimAuthorizationDetails])
+			require.NoError(t, err)
+
+			actual, err := oauth2.ParseAuthorizationDetails(string(raw))
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, actual)
+			assert.Equal(t, oauth2.AuthorizationDetails{a, b}, r.GetGrantedAuthorizationDetails())
 		})
 	}
 }

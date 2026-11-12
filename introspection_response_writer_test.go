@@ -662,6 +662,67 @@ func TestWriteIntrospectionResponseAuthorizationDetails(t *testing.T) {
 	}
 }
 
+func TestWriteIntrospectionResponseDisclosesAuthorizationDetails(t *testing.T) {
+	a := AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}, Locations: []string{testRARLocationA}}
+	b := AuthorizationDetail{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{testRARActionInitiate}, Locations: []string{testRARLocationB}}
+
+	testCases := []struct {
+		name     string
+		caller   Client
+		handler  AuthorizationDetailsTypeHandler
+		expected AuthorizationDetails
+		status   int
+	}{
+		{name: "ShouldDiscloseToTheCaller", caller: &DefaultClient{ID: testRARLocationB}, handler: internal.DisclosingPaymentInitiationTypeHandler{}, expected: AuthorizationDetails{b}, status: http.StatusOK},
+		{name: "ShouldDiscloseNoneToAnotherCaller", caller: &DefaultClient{ID: "https://c.example.com"}, handler: internal.DisclosingPaymentInitiationTypeHandler{}, status: http.StatusOK},
+		{name: "ShouldReturnEveryDetailWithoutADisclosingHandler", caller: &DefaultClient{ID: testRARLocationB}, handler: internal.PaymentInitiationTypeHandler{}, expected: AuthorizationDetails{a, b}, status: http.StatusOK},
+		{name: "ShouldAnswerServerErrorWhenTheHandlerFails", caller: &DefaultClient{ID: testRARLocationB}, handler: internal.DisclosingPaymentInitiationTypeHandler{Err: errors.New("failed")}, status: http.StatusInternalServerError},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ar := NewAccessRequest(&DefaultSession{Subject: "user-123"})
+			ar.Client = &DefaultClient{ID: "client-id"}
+			ar.GrantedAuthorizationDetails = AuthorizationDetails{a, b}
+
+			provider := &Fosite{Config: &Config{AuthorizationDetailsTypeHandlers: []AuthorizationDetailsTypeHandler{tc.handler}}}
+			rw := httptest.NewRecorder()
+
+			provider.WriteIntrospectionResponse(context.Background(), rw, &IntrospectionResponse{
+				Client:          tc.caller,
+				Active:          true,
+				TokenUse:        AccessToken,
+				AccessRequester: ar,
+			})
+
+			assert.Equal(t, tc.status, rw.Code)
+
+			params := map[string]any{}
+			require.NoError(t, json.NewDecoder(rw.Body).Decode(&params))
+
+			if tc.status != http.StatusOK {
+				assert.Equal(t, "server_error", params["error"])
+				assert.NotContains(t, params, consts.ClaimActive)
+
+				return
+			}
+
+			if tc.expected == nil {
+				assert.NotContains(t, params, consts.ClaimAuthorizationDetails)
+
+				return
+			}
+
+			raw, err := json.Marshal(params[consts.ClaimAuthorizationDetails])
+			require.NoError(t, err)
+
+			actual, err := ParseAuthorizationDetails(string(raw))
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
 func TestWriteIntrospectionResponseJWT(t *testing.T) {
 	testCases := []struct {
 		name        string

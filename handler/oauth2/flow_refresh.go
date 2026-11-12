@@ -194,16 +194,35 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 
 	request.SetGrantedAuthorizationDetails(request.GetRequestedAuthorizationDetails())
 
+	provider, _ := c.Config.(oauth2.RefreshTokenMaximumLifespanProvider)
+	now := time.Now().UTC()
+
+	// RFC 10017 Section 6.3.2.3: a grant issued without a deadline, such as before the maximum lifespan was set, is
+	// limited from its first refresh.
+	oauth2.RecordRefreshTokenExpiryDeadline(ctx, provider, client, request.GetSession(), now)
+
+	// RFC 10017 Section 6.3.2.3: no token is issued once the grant's deadline has passed. An unrotated refresh token
+	// keeps the expiry it was issued with, which the deadline may precede.
+	if bounded, ok := request.GetSession().(oauth2.ExpiryDeadlineSession); ok {
+		if deadline := bounded.GetExpiryDeadline(); !deadline.IsZero() && !deadline.After(now) {
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The refresh token has reached the maximum lifespan of the grant."))
+		}
+	}
+
 	atLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, oauth2.CapToExpiryDeadline(request.GetSession(), time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision)))
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, oauth2.CapToExpiryDeadline(request.GetSession(), now.Add(atLifespan).Truncate(jwt.TimePrecision)))
 
 	// Decided here, before the token endpoint binding handlers can bind the restored session, so the decision reflects
 	// the presented refresh token. An unrotated refresh token keeps the expiry it was issued with.
 	rotate := !oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, c.Config, request)
 
 	rtLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
-	if rtLifespan > -1 && rotate {
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, oauth2.CapToExpiryDeadline(request.GetSession(), time.Now().UTC().Add(rtLifespan).Truncate(jwt.TimePrecision)))
+	if !rotate {
+		return nil
+	}
+
+	if expires := oauth2.RefreshTokenExpiry(request.GetSession(), rtLifespan, now); !expires.IsZero() {
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, expires)
 	}
 
 	return nil

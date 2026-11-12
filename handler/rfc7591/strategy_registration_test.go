@@ -167,6 +167,7 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesEveryUnregisteredF
 		RequireRequestObjectAudienceAndLifetime:       true,
 		RequestObjectMaximumLifetime:                  time.Minute,
 		DisableRefreshTokenRotation:                   true,
+		RefreshTokenMaximumLifespan:                   time.Minute,
 	}
 
 	patched, err := strategy.PatchClient(ctx, registered, nil, &oauth2.ClientRegistrationMetadata{})

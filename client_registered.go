@@ -191,6 +191,7 @@ type DefaultRegisteredClient struct {
 	RequireRequestObjectAudienceAndLifetime       bool          `json:"-"`
 	RequestObjectMaximumLifetime                  time.Duration `json:"-"`
 	DisableRefreshTokenRotation                   bool          `json:"-"`
+	RefreshTokenMaximumLifespan                   time.Duration `json:"-"`
 
 	// Extra holds every unregistered client metadata parameter carried by ClientRegistrationMetadata.Extra so it can
 	// survive a registration round trip. This type only provides the storage location; converting to and from
@@ -489,6 +490,12 @@ func (c *DefaultRegisteredClient) GetApplicationType() (applicationType string) 
 // than issue a new one.
 func (c *DefaultRegisteredClient) GetDisableRefreshTokenRotation() bool {
 	return c.DisableRefreshTokenRotation
+}
+
+// GetRefreshTokenMaximumLifespan returns the maximum lifespan of the refresh tokens of this client's grants, a negative
+// duration for no limit, or a duration of 0 seconds to utilize the global lifespan.
+func (c *DefaultRegisteredClient) GetRefreshTokenMaximumLifespan() time.Duration {
+	return c.RefreshTokenMaximumLifespan
 }
 
 // GetPostLogoutRedirectURIs returns the 'post_logout_redirect_uris' client metadata value.

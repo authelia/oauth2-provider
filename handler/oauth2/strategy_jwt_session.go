@@ -30,11 +30,12 @@ type JWTSession struct {
 	ExpiresAt                   map[oauth2.TokenType]time.Time
 	Username                    string
 	Subject                     string
-	JWKThumbprint               string `json:",omitempty"`
-	ClientCertificateThumbprint string `json:",omitempty"`
-	RequestedJWKThumbprint      string `json:",omitempty"`
-	PublicKeyJWK                []byte `json:",omitempty"`
-	KeyBindingGranted           bool   `json:",omitempty"`
+	JWKThumbprint               string    `json:",omitempty"`
+	ClientCertificateThumbprint string    `json:",omitempty"`
+	RequestedJWKThumbprint      string    `json:",omitempty"`
+	PublicKeyJWK                []byte    `json:",omitempty"`
+	KeyBindingGranted           bool      `json:",omitempty"`
+	ExpiryDeadline              time.Time `json:",omitzero"`
 }
 
 // SetRequestedDPoPJWKThumbprint implements oauth2.DPoPBoundSession for JWTSession.
@@ -190,6 +191,20 @@ func (j *JWTSession) Clone() oauth2.Session {
 	cloned.PublicKeyJWK = slices.Clone(j.PublicKeyJWK)
 
 	return &cloned
+}
+
+// SetExpiryDeadline implements oauth2.ExpiryDeadlineSetterSession for JWTSession.
+func (j *JWTSession) SetExpiryDeadline(deadline time.Time) {
+	j.ExpiryDeadline = deadline.UTC()
+}
+
+// GetExpiryDeadline implements oauth2.ExpiryDeadlineSession for JWTSession.
+func (j *JWTSession) GetExpiryDeadline() time.Time {
+	if j == nil {
+		return time.Time{}
+	}
+
+	return j.ExpiryDeadline
 }
 
 // GetExtraClaims implements ExtraClaimsSession for JWTSession.

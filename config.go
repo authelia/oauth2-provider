@@ -151,6 +151,16 @@ type DisableRefreshTokenRotationProvider interface {
 	GetDisableRefreshTokenRotation(ctx context.Context) (disable bool)
 }
 
+// RefreshTokenMaximumLifespanProvider returns the provider for configuring the maximum lifespan of a grant's refresh
+// tokens.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc10017#section-6.3.2.3
+type RefreshTokenMaximumLifespanProvider interface {
+	// GetRefreshTokenMaximumLifespan returns the time after the first refresh token of a grant is issued beyond which
+	// no refresh token of the grant may expire, or a duration of 0 seconds or less for no limit.
+	GetRefreshTokenMaximumLifespan(ctx context.Context) (lifespan time.Duration)
+}
+
 // JWTProfileAccessTokenDefaultAudienceProvider is optionally implemented by the configuration to provide the default
 // resource indicators of a JWT profile access token.
 type JWTProfileAccessTokenDefaultAudienceProvider interface {

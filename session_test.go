@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -267,6 +268,7 @@ func TestDefaultSessionClone(t *testing.T) {
 					PublicKeyJWK:                []byte(`{"kty":"EC"}`),
 					RequestedJWKThumbprint:      "requested-jkt",
 					KeyBindingGranted:           true,
+					ExpiryDeadline:              time.Unix(1700003600, 0).UTC(),
 				}
 
 				clonetest.AssertDeepCopy(t, s, s.Clone())
@@ -299,6 +301,100 @@ func TestCapToExpiryDeadline(t *testing.T) {
 			assert.Equal(t, tc.expected, CapToExpiryDeadline(tc.session, now.Add(time.Hour)))
 		})
 	}
+}
+
+func TestGetRefreshTokenMaximumLifespan(t *testing.T) {
+	testCases := []struct {
+		name     string
+		config   RefreshTokenMaximumLifespanProvider
+		client   Client
+		expected time.Duration
+	}{
+		{"ShouldNotLimitByDefault", &Config{}, &DefaultClient{}, 0},
+		{"ShouldNotLimitWithoutConfig", nil, &DefaultClient{}, 0},
+		{"ShouldUseTheConfig", &Config{RefreshTokenMaximumLifespan: time.Hour}, &DefaultClient{}, time.Hour},
+		{"ShouldUseTheConfigWhenTheClientHasNone", &Config{RefreshTokenMaximumLifespan: time.Hour}, &DefaultRegisteredClient{DefaultClient: &DefaultClient{}}, time.Hour},
+		{"ShouldUseTheClient", &Config{RefreshTokenMaximumLifespan: time.Hour}, &DefaultRegisteredClient{DefaultClient: &DefaultClient{}, RefreshTokenMaximumLifespan: time.Minute}, time.Minute},
+		{"ShouldUseTheClientWithoutConfig", nil, &DefaultRegisteredClient{DefaultClient: &DefaultClient{}, RefreshTokenMaximumLifespan: time.Minute}, time.Minute},
+		{"ShouldNotLimitWhenTheClientOptsOut", &Config{RefreshTokenMaximumLifespan: time.Hour}, &DefaultRegisteredClient{DefaultClient: &DefaultClient{}, RefreshTokenMaximumLifespan: -1}, -1},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, GetRefreshTokenMaximumLifespan(t.Context(), tc.config, tc.client))
+		})
+	}
+}
+
+func TestRecordRefreshTokenExpiryDeadline(t *testing.T) {
+	now := time.Unix(1700000000, 0).UTC()
+	config := &Config{RefreshTokenMaximumLifespan: time.Hour}
+
+	testCases := []struct {
+		name     string
+		config   RefreshTokenMaximumLifespanProvider
+		session  Session
+		expected time.Time
+	}{
+		{"ShouldNotRecordWithoutAMaximumLifespan", &Config{}, &DefaultSession{}, time.Time{}},
+		{"ShouldRecord", config, &DefaultSession{}, now.Add(time.Hour)},
+		{"ShouldKeepAnEarlierDeadline", config, &DefaultSession{ExpiryDeadline: now.Add(time.Minute)}, now.Add(time.Minute)},
+		{"ShouldReplaceALaterDeadline", config, &DefaultSession{ExpiryDeadline: now.Add(2 * time.Hour)}, now.Add(time.Hour)},
+		{"ShouldIgnoreASessionWithoutADeadline", config, &testSessionWithoutDeadline{Session: &DefaultSession{}}, time.Time{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			RecordRefreshTokenExpiryDeadline(t.Context(), tc.config, &DefaultClient{}, tc.session, now)
+
+			if bounded, ok := tc.session.(ExpiryDeadlineSession); ok {
+				assert.Equal(t, tc.expected, bounded.GetExpiryDeadline())
+			}
+		})
+	}
+}
+
+func TestRefreshTokenExpiry(t *testing.T) {
+	now := time.Unix(1700000000, 0).UTC()
+
+	testCases := []struct {
+		name     string
+		session  Session
+		lifespan time.Duration
+		expected time.Time
+	}{
+		{"ShouldUseTheLifespan", &DefaultSession{}, time.Hour, now.Add(time.Hour)},
+		{"ShouldUseTheLifespanBeforeTheDeadline", &DefaultSession{ExpiryDeadline: now.Add(2 * time.Hour)}, time.Hour, now.Add(time.Hour)},
+		{"ShouldCapAtTheDeadline", &DefaultSession{ExpiryDeadline: now.Add(time.Minute)}, time.Hour, now.Add(time.Minute)},
+		{"ShouldNotExpireWithoutALifespanOrDeadline", &DefaultSession{}, -1, time.Time{}},
+		{"ShouldExpireAtTheDeadlineWithoutALifespan", &DefaultSession{ExpiryDeadline: now.Add(time.Minute)}, -1, now.Add(time.Minute)},
+		{"ShouldNotExpireWithoutALifespanOrDeadlineSession", &testSessionWithoutDeadline{Session: &DefaultSession{}}, -1, time.Time{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, RefreshTokenExpiry(tc.session, tc.lifespan, now))
+		})
+	}
+}
+
+func TestDefaultSessionExpiryDeadlineJSON(t *testing.T) {
+	deadline := time.Unix(1700000000, 0).UTC()
+
+	data, err := json.Marshal(&DefaultSession{})
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "expiry_deadline")
+
+	data, err = json.Marshal(&DefaultSession{ExpiryDeadline: deadline})
+	require.NoError(t, err)
+
+	session := &DefaultSession{}
+	require.NoError(t, json.Unmarshal(data, session))
+	assert.Equal(t, deadline, session.GetExpiryDeadline())
+}
+
+type testSessionWithoutDeadline struct {
+	Session
 }
 
 type testDeadlineSession struct {

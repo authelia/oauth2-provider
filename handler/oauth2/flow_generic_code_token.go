@@ -156,8 +156,13 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 
 	lifespan = oauth2.GetEffectiveLifespan(request.GetClient(), gt, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 
-	if lifespan > -1 {
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
+	provider, _ := c.Config.(oauth2.RefreshTokenMaximumLifespanProvider)
+	now := time.Now().UTC()
+
+	oauth2.RecordRefreshTokenExpiryDeadline(ctx, provider, request.GetClient(), request.GetSession(), now)
+
+	if expires := oauth2.RefreshTokenExpiry(request.GetSession(), lifespan, now); !expires.IsZero() {
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, expires)
 	}
 
 	return nil

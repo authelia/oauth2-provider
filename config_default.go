@@ -115,6 +115,13 @@ type Config struct {
 	// rfc8693.RefreshTokenRotationOverrideClient.
 	DisableRefreshTokenRotation bool
 
+	// RefreshTokenMaximumLifespan is the time after the first refresh token of a grant is issued beyond which no
+	// refresh token of the grant may expire, however often it is rotated. RefreshTokenLifespan then acts as the time
+	// a refresh token expires after if it is not used. RFC 10017 Section 6.3.2.3 requires this for browser-based
+	// applications when refresh tokens are rotated. Defaults to 0, which applies no limit. A client can set its own
+	// through RefreshTokenMaximumLifespanClient. Only a session implementing ExpiryDeadlineSetterSession is limited.
+	RefreshTokenMaximumLifespan time.Duration
+
 	// SendDebugMessagesToClients if set to true, includes error debug messages in response payloads. Be aware that sensitive
 	// data may be exposed, depending on your implementation of Fosite. Such sensitive data might include database error
 	// codes or other information. Proceed with caution!
@@ -1446,6 +1453,12 @@ func (c *Config) GetDisableRefreshTokenRotation(_ context.Context) bool {
 	return c.DisableRefreshTokenRotation
 }
 
+// GetRefreshTokenMaximumLifespan returns the maximum lifespan of a grant's refresh tokens. Defaults to 0, which applies
+// no limit.
+func (c *Config) GetRefreshTokenMaximumLifespan(_ context.Context) time.Duration {
+	return c.RefreshTokenMaximumLifespan
+}
+
 // GetPushedAuthorizeEndpointHandlers returns the handlers.
 func (c *Config) GetPushedAuthorizeEndpointHandlers(ctx context.Context) PushedAuthorizeEndpointHandlers {
 	return c.PushedAuthorizeEndpointHandlers
@@ -1995,6 +2008,7 @@ var (
 	_ RefreshTokenScopesProvider                            = (*Config)(nil)
 	_ DisableRefreshTokenValidationProvider                 = (*Config)(nil)
 	_ DisableRefreshTokenRotationProvider                   = (*Config)(nil)
+	_ RefreshTokenMaximumLifespanProvider                   = (*Config)(nil)
 	_ DiscoveryMetadataHooksProvider                        = (*Config)(nil)
 	_ DiscoveryMetadataSigningStrategyProvider              = (*Config)(nil)
 	_ JWTScopeFieldProvider                                 = (*Config)(nil)

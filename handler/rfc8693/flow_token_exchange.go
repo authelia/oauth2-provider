@@ -524,12 +524,15 @@ func validateActorChainDepth(ctx context.Context, config oauth2.RFC8693ConfigPro
 // 'requested_token_type' parameter, substituting the configured default when it is absent. Returns nil when the
 // requested type is not registered.
 func resolveRequestedTokenType(ctx context.Context, request oauth2.Requester, config oauth2.RFC8693ConfigProvider) oauth2.RFC8693TokenType {
-	id := request.GetRequestForm().Get(consts.FormParameterRequestedTokenType)
-	if id == "" {
-		id = config.GetDefaultRFC8693RequestedTokenType(ctx)
+	return config.GetRFC8693TokenTypes(ctx)[requestedTokenTypeIdentifier(ctx, request, config)]
+}
+
+func requestedTokenTypeIdentifier(ctx context.Context, request oauth2.Requester, config oauth2.RFC8693ConfigProvider) string {
+	if id := request.GetRequestForm().Get(consts.FormParameterRequestedTokenType); id != "" {
+		return id
 	}
 
-	return config.GetRFC8693TokenTypes(ctx)[id]
+	return config.GetDefaultRFC8693RequestedTokenType(ctx)
 }
 
 // IsIDJAGRequest returns true when the resolved 'requested_token_type' of the request is an Identity Assertion JWT
@@ -537,12 +540,7 @@ func resolveRequestedTokenType(ctx context.Context, request oauth2.Requester, co
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3
 func IsIDJAGRequest(ctx context.Context, request oauth2.Requester, config oauth2.RFC8693ConfigProvider) bool {
-	requested := request.GetRequestForm().Get(consts.FormParameterRequestedTokenType)
-	if requested == "" {
-		requested = config.GetDefaultRFC8693RequestedTokenType(ctx)
-	}
-
-	return IsIDJAGRequestedTokenType(requested)
+	return IsIDJAGRequestedTokenType(requestedTokenTypeIdentifier(ctx, request, config))
 }
 
 // IsIDJAGRequestedTokenType returns true when the RFC 8693 token type identifier, such as a 'requested_token_type'
@@ -575,12 +573,7 @@ func validateAuthorizationGrantTarget(request oauth2.Requester) error {
 }
 
 func isIDTokenRequest(ctx context.Context, request oauth2.Requester, config oauth2.RFC8693ConfigProvider) bool {
-	requested := request.GetRequestForm().Get(consts.FormParameterRequestedTokenType)
-	if requested == "" {
-		requested = config.GetDefaultRFC8693RequestedTokenType(ctx)
-	}
-
-	return requested == consts.TokenTypeRFC8693IDToken
+	return requestedTokenTypeIdentifier(ctx, request, config) == consts.TokenTypeRFC8693IDToken
 }
 
 // RequireSubjectToken returns an error unless a token type handler validated the 'subject_token' of the request.

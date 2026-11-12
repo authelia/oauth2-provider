@@ -30,7 +30,11 @@ import (
 // RefreshTokenLifespan applies unless the client sets its own lifespan for the token exchange grant. A value of -1
 // removes the configured limit, but the refresh token still expires with the 'subject_token'.
 //
+// When RFC 9396 authorization details are enabled, the refresh token carries the details granted to the
+// 'subject_token' of the types the client may request.
+//
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.1
+// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
 type RefreshTokenTypeHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 
@@ -78,15 +82,15 @@ func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context
 
 		token := form.Get(consts.FormParameterActorToken)
 
-		var actorTokenSession oauth2.Session
+		var actor oauth2.Requester
 
 		priorActor := bindingOf(request.GetSession())
 
-		if actorTokenSession, unpacked, err = c.validate(ctx, request, token, tokenRoleActor); err != nil {
+		if actor, unpacked, err = c.validate(ctx, request, token, tokenRoleActor); err != nil {
 			return err
 		}
 
-		if err = inheritTokenBinding(ctx, c.Config, request, bindingOf(actorTokenSession), tokenRoleActor, priorActor); err != nil {
+		if err = inheritTokenBinding(ctx, c.Config, request, bindingOf(actor.GetSession()), tokenRoleActor, priorActor); err != nil {
 			return err
 		}
 
@@ -95,17 +99,19 @@ func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context
 
 	if form.Get(consts.FormParameterSubjectTokenType) == consts.TokenTypeRFC8693RefreshToken {
 		var (
-			subjectTokenSession oauth2.Session
-			unpacked            map[string]any
+			original oauth2.Requester
+			unpacked map[string]any
 		)
 
 		token := form.Get(consts.FormParameterSubjectToken)
 
 		priorSubject := bindingOf(request.GetSession())
 
-		if subjectTokenSession, unpacked, err = c.validate(ctx, request, token, tokenRoleSubject); err != nil {
+		if original, unpacked, err = c.validate(ctx, request, token, tokenRoleSubject); err != nil {
 			return err
 		}
+
+		subjectTokenSession := original.GetSession()
 
 		if err = inheritTokenBinding(ctx, c.Config, request, bindingOf(subjectTokenSession), tokenRoleSubject, priorSubject); err != nil {
 			return err
@@ -115,6 +121,7 @@ func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context
 		session.SetSubject(subjectTokenSession.GetSubject())
 		carryAuthenticationContext(session, sessionAuthentication(subjectTokenSession))
 		carryIDTokenSubject(session, unpacked)
+		carrySubjectAuthorizationDetails(ctx, c.Config, request, original)
 	}
 
 	return nil
@@ -158,7 +165,7 @@ func (c *RefreshTokenTypeHandler) CanHandleTokenEndpointRequest(_ context.Contex
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
-func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string, role tokenRole) (s oauth2.Session, claims map[string]any, err error) {
+func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string, role tokenRole) (original oauth2.Requester, claims map[string]any, err error) {
 	if session, _ := request.GetSession().(Session); session == nil {
 		return nil, nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
@@ -219,7 +226,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 		maps.Copy(claims, authenticationContextClaims(or.GetSession()))
 	}
 
-	return or.GetSession(), claims, nil
+	return or, claims, nil
 }
 
 func (c *RefreshTokenTypeHandler) validateIDTokenGrant(ctx context.Context, request oauth2.AccessRequester, or oauth2.Requester, role tokenRole) (err error) {
@@ -426,13 +433,23 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 	}
 
+	requester := request.Sanitize([]string{})
+
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
+	if oauth2.IsAuthorizationDetailsEnabled(ctx, c.Config) {
+		grant := requestableAuthorizationDetails(ctx, c.Config, request.GetClient(), request.GetGrantedAuthorizationDetails())
+
+		requester.SetRequestedAuthorizationDetails(grant)
+		requester.SetGrantedAuthorizationDetails(grant)
+	}
+
 	create := func(ctx context.Context) (err error) {
 		if signature == "" {
 			return nil
 		}
 
 		// This exchange issues a refresh token only, so there is no paired access token signature to record.
-		if err = c.CreateRefreshTokenSession(ctx, signature, "", request.Sanitize([]string{})); err != nil {
+		if err = c.CreateRefreshTokenSession(ctx, signature, "", requester); err != nil {
 			return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 		}
 

@@ -122,7 +122,6 @@ func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context
 		carryAuthenticationContext(session, sessionAuthentication(subjectTokenSession))
 		carryIDTokenSubject(session, unpacked)
 		session.SetSubjectRequester(original)
-		carrySubjectAuthorizationDetails(ctx, c.Config, request, original)
 	}
 
 	return nil
@@ -438,7 +437,7 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
 	if oauth2.IsAuthorizationDetailsEnabled(ctx, c.Config) {
-		grant := requestableAuthorizationDetails(ctx, c.Config, request.GetClient(), request.GetGrantedAuthorizationDetails())
+		grant := grantedAuthorizationDetails(ctx, c.Config, request)
 
 		requester.SetRequestedAuthorizationDetails(grant)
 		requester.SetGrantedAuthorizationDetails(grant)

@@ -361,14 +361,22 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		return errRefreshTokenIssuance()
 	}
 
+	if act != nil {
+		session.SetClaimActor(act)
+	}
+
+	// The authorization details are assigned before any 'jti' is consumed, so a request they fail does not spend a
+	// single-use token.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+	if err = assignAuthorizationDetails(ctx, c.Config, request); err != nil {
+		return err
+	}
+
 	if !isTxnTokenRequest(ctx, request, c.Config) {
 		if err = consumeTokenJTIs(ctx, c.Config, c.Storage, request, session); err != nil {
 			return err
 		}
-	}
-
-	if act != nil {
-		session.SetClaimActor(act)
 	}
 
 	return nil

@@ -46,6 +46,8 @@ func TestAccessTokenTypeHandlerCarriesTheSubjectTokenAuthorizationDetails(t *tes
 					store := sc.newStore()
 					config, coreStrategy := newBindingExchangeConfig()
 
+					config.RFC8693TokenTypes[consts.TokenTypeRFC8693IDToken] = &DefaultTokenType{Name: consts.TokenTypeRFC8693IDToken}
+
 					if !tc.disabled {
 						config.AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
 					}
@@ -90,6 +92,7 @@ func TestAccessTokenTypeHandlerCarriesTheSubjectTokenAuthorizationDetails(t *tes
 					}
 
 					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error((&TokenExchangeGrantHandler{Config: config}).PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())))
 
 					assert.Equal(t, tc.expected, request.GetGrantedAuthorizationDetails())
 				})

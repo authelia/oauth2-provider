@@ -21,6 +21,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
+	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -163,6 +164,34 @@ func TestCustomJWTIsNotConsumedWhenTheActorIsNotIdentified(t *testing.T) {
 	require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'actor_token' does not identify the actor as it has neither a 'sub' nor a 'client_id' claim.")
 	assert.Empty(t, f.store.TokenExchangeJTIs)
+}
+
+func TestCustomJWTIsNotConsumedWhenTheAuthorizationDetailsAreRejected(t *testing.T) {
+	f := newCustomJWTConsumeFixture(t, true)
+	f.grant.Config.(*oauth2.Config).AuthorizationDetailsTypeHandlers = []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}}
+
+	form := url.Values{
+		consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+		consts.FormParameterSubjectToken:     {f.token(t, uuid.New().String())},
+		consts.FormParameterActorTokenType:   {"urn:spec:jwt"},
+		consts.FormParameterActorToken:       {f.token(t, uuid.New().String())},
+	}
+
+	request := f.request(form)
+	request.SetRequestedAuthorizationDetails(oauth2.AuthorizationDetails{{Type: internal.AuthorizationDetailsTypePaymentInitiation, Actions: []string{idjagActionStatus}}})
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.custom.HandleTokenEndpointRequest(t.Context(), request)))
+
+	err := f.grant.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())
+
+	require.ErrorIs(t, err, oauth2.ErrInvalidAuthorizationDetails)
+	assert.Empty(t, f.store.TokenExchangeJTIs)
+
+	retry := f.request(form)
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.custom.HandleTokenEndpointRequest(t.Context(), retry)))
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.grant.PopulateTokenEndpointResponse(t.Context(), retry, oauth2.NewAccessResponse())))
+	assert.Len(t, f.store.TokenExchangeJTIs, 2)
 }
 
 func TestCustomJWTPresentedInBothRolesIsMarkedOnce(t *testing.T) {

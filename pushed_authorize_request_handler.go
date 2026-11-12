@@ -128,7 +128,7 @@ func (f *Fosite) validatePushedAuthorizeRequest(ctx context.Context, request Aut
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
 func (f *Fosite) RequireRedirectURIPushedAuthorizationRequest(ctx context.Context, client Client) (require bool) {
-	if f.Config.GetRequireRedirectURIPushedAuthorizationRequests(ctx) {
+	if f.Config.GetRequireRedirectURIPushedAuthorizationRequests(ctx) || IsFAPI2SecurityProfileClient(client) {
 		return true
 	}
 

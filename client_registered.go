@@ -193,6 +193,7 @@ type DefaultRegisteredClient struct {
 	DisableRefreshTokenRotation                   bool          `json:"-"`
 	RefreshTokenMaximumLifespan                   time.Duration `json:"-"`
 	EnforceSenderConstrainedAccessTokens          bool          `json:"-"`
+	FAPI2SecurityProfile                          bool          `json:"-"`
 
 	// Extra holds every unregistered client metadata parameter carried by ClientRegistrationMetadata.Extra so it can
 	// survive a registration round trip. This type only provides the storage location; converting to and from
@@ -491,6 +492,11 @@ func (c *DefaultRegisteredClient) GetApplicationType() (applicationType string) 
 // proof or a mutual-TLS client certificate.
 func (c *DefaultRegisteredClient) GetEnforceSenderConstrainedAccessTokens() bool {
 	return c.EnforceSenderConstrainedAccessTokens
+}
+
+// GetFAPI2SecurityProfile returns true if this client is held to the FAPI 2.0 Security Profile.
+func (c *DefaultRegisteredClient) GetFAPI2SecurityProfile() bool {
+	return c.FAPI2SecurityProfile
 }
 
 // GetDisableRefreshTokenRotation returns true if the refresh token grant should keep this client's refresh token rather

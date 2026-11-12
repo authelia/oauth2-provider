@@ -68,13 +68,7 @@ func (c *PushedAuthorizeHandler) HandlePushedAuthorizeEndpointRequest(ctx contex
 		return err
 	}
 
-	var parc oauth2.PushedAuthorizationRequestClient
-
-	expiresIn := config.GetPushedAuthorizeContextLifespan(ctx)
-
-	if parc, ok = client.(oauth2.PushedAuthorizationRequestClient); ok && parc.GetPushedAuthorizeContextLifespan().Seconds() > 0 {
-		expiresIn = parc.GetPushedAuthorizeContextLifespan()
-	}
+	expiresIn := oauth2.GetPushedAuthorizeContextLifespan(ctx, config, client)
 
 	if request.GetSession() != nil {
 		request.GetSession().SetExpiresAt(oauth2.PushedAuthorizeRequestContext, time.Now().UTC().Add(expiresIn))

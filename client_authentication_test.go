@@ -456,6 +456,45 @@ func TestAuthenticateClient(t *testing.T) {
 			r: new(http.Request),
 		},
 		{
+			name: "ShouldFailWithAnRS256AssertionForAFAPI2Client",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "bar"}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT, FAPI2SecurityProfile: true}
+			},
+			form: url.Values{
+				consts.FormParameterClientAssertion: {
+					mustGenerateClientAssertion(t, jwt.MapClaims{
+						consts.ClaimSubject:        "bar",
+						consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+						consts.ClaimIssuer:         "bar",
+						consts.ClaimJWTID:          "12345",
+						consts.ClaimAudience:       "token-url",
+					}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", keyRSA),
+				},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			},
+			r:         new(http.Request),
+			errRegexp: regexp.MustCompile(`unexpected signature algorithm 'RS256'; expected \['PS256' 'ES256' 'EdDSA' 'Ed25519'\]`),
+		},
+		{
+			name: "ShouldPassWithAnES256AssertionForAFAPI2Client",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "bar"}, JSONWebKeys: jwksECDSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT, FAPI2SecurityProfile: true}
+			},
+			form: url.Values{
+				consts.FormParameterClientAssertion: {
+					mustGenerateClientAssertion(t, jwt.MapClaims{
+						consts.ClaimSubject:        "bar",
+						consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+						consts.ClaimIssuer:         "bar",
+						consts.ClaimJWTID:          "12345",
+						consts.ClaimAudience:       "token-url",
+					}, jose.ES256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", keyECDSA),
+				},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			},
+			r: new(http.Request),
+		},
+		{
 			name: "ShouldFailWithProperRSAAssertionWhenClientIdInTheRequestDoesNotMatchTheAssertion",
 			client: func(ts *httptest.Server) Client {
 				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT}

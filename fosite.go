@@ -350,7 +350,7 @@ func (f *Fosite) DisableRefreshTokenRotation(ctx context.Context, client Client)
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 func IsRefreshTokenRotationDisabled(ctx context.Context, config DisableRefreshTokenRotationProvider, client Client) (disable bool) {
-	if config != nil && config.GetDisableRefreshTokenRotation(ctx) {
+	if (config != nil && config.GetDisableRefreshTokenRotation(ctx)) || IsFAPI2SecurityProfileClient(client) {
 		return true
 	}
 
@@ -410,7 +410,7 @@ func isRefreshTokenRotationDisabledForRequest(ctx context.Context, config Disabl
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 func IsSenderConstrainedAccessTokenEnforced(ctx context.Context, config EnforceSenderConstrainedAccessTokensProvider, client Client) (enforce bool) {
-	if config != nil && config.GetEnforceSenderConstrainedAccessTokens(ctx) {
+	if (config != nil && config.GetEnforceSenderConstrainedAccessTokens(ctx)) || IsFAPI2SecurityProfileClient(client) {
 		return true
 	}
 

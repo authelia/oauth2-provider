@@ -201,6 +201,39 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 	}
 }
 
+func TestAuthorizeCode_IssueAuthorizeCodeFAPI2SecurityProfileClient(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		fapi2    bool
+		expected time.Duration
+	}{
+		{"ShouldCapTheLifespan", true, time.Minute},
+		{"ShouldUseTheConfiguredLifespan", false, 5 * time.Minute},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := AuthorizeExplicitGrantHandler{
+				CoreStorage:           storage.NewMemoryStore(),
+				AuthorizeCodeStrategy: &hmacshaStrategy,
+				Config:                &oauth2.Config{AuthorizeCodeLifespan: 5 * time.Minute},
+			}
+
+			request := &oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client:  &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "foo"}, FAPI2SecurityProfile: tc.fapi2},
+					Session: &oauth2.DefaultSession{},
+				},
+			}
+
+			before := time.Now().UTC()
+
+			require.NoError(t, handler.IssueAuthorizeCode(t.Context(), request, oauth2.NewAuthorizeResponse()))
+
+			assert.WithinRange(t, request.GetSession().GetExpiresAt(oauth2.AuthorizeCode), before.Add(tc.expected), time.Now().UTC().Add(tc.expected))
+		})
+	}
+}
+
 func parseUrl(uu string) *url.URL {
 	u, _ := url.Parse(uu)
 	return u

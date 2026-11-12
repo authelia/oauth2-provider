@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"authelia.com/provider/jose"
-
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
@@ -22,7 +20,6 @@ import (
 	"authelia.com/provider/oauth2/handler/rfc7523"
 	"authelia.com/provider/oauth2/handler/rfc8705"
 	"authelia.com/provider/oauth2/handler/rfc9449"
-	"authelia.com/provider/oauth2/internal/consts"
 )
 
 const (
@@ -30,24 +27,10 @@ const (
 	fapi2SectionAuthorizationEndpoint = "5.3.2.2"
 	fapi2SectionCryptography          = "5.4.1"
 
-	fapi2MaximumAuthorizeCodeLifespan = time.Minute
+	fapi2MaximumAuthorizeCodeLifespan = oauth2.FAPI2SecurityProfileMaximumAuthorizeCodeLifespan
 	fapi2MaximumPushedAuthorizeLife   = 10 * time.Minute
 	fapi2MinimumClockSkew             = 10 * time.Second
 	fapi2MaximumClockSkew             = time.Minute
-)
-
-var (
-	// FAPI2SecurityProfileSigningAlgValues are the JWS algorithms the FAPI 2.0 Security Profile permits: PS256, ES256,
-	// and EdDSA using the Ed25519 variant, also identified by the fully-specified Ed25519 of RFC 9864.
-	//
-	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.4.1
-	FAPI2SecurityProfileSigningAlgValues = []string{string(jose.PS256), string(jose.ES256), string(jose.EdDSA), string(jose.Ed25519)}
-
-	// FAPI2SecurityProfileClientAuthMethods are the client authentication methods the FAPI 2.0 Security Profile
-	// permits.
-	//
-	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
-	FAPI2SecurityProfileClientAuthMethods = []string{consts.ClientAuthMethodPrivateKeyJWT, consts.ClientAuthMethodTLSClientAuth, consts.ClientAuthMethodSelfSignedTLSClientAuth}
 )
 
 // ApplyFAPI2SecurityProfile sets the options of config which the FAPI 2.0 Security Profile requires of an authorization
@@ -88,20 +71,20 @@ func ApplyFAPI2SecurityProfile(config *oauth2.Config) {
 		config.DPoPClockSkew = 0
 	}
 
-	config.TokenEndpointAuthMethods = fapi2Permitted(config.TokenEndpointAuthMethods, FAPI2SecurityProfileClientAuthMethods)
-	config.RevocationEndpointAuthMethods = fapi2Permitted(config.RevocationEndpointAuthMethods, FAPI2SecurityProfileClientAuthMethods)
-	config.ClientAssertionSigningAlgValues = fapi2Permitted(config.ClientAssertionSigningAlgValues, FAPI2SecurityProfileSigningAlgValues)
-	config.RequestObjectSigningAlgValues = fapi2Permitted(config.RequestObjectSigningAlgValues, FAPI2SecurityProfileSigningAlgValues)
-	config.DPoPAllowedJWSAlgorithms = fapi2Permitted(config.DPoPAllowedJWSAlgorithms, FAPI2SecurityProfileSigningAlgValues)
-	config.RFC7523AssertionSigningAlgValues = fapi2Permitted(config.RFC7523AssertionSigningAlgValues, FAPI2SecurityProfileSigningAlgValues)
+	config.TokenEndpointAuthMethods = fapi2Permitted(config.TokenEndpointAuthMethods, oauth2.FAPI2SecurityProfileClientAuthMethods)
+	config.RevocationEndpointAuthMethods = fapi2Permitted(config.RevocationEndpointAuthMethods, oauth2.FAPI2SecurityProfileClientAuthMethods)
+	config.ClientAssertionSigningAlgValues = fapi2Permitted(config.ClientAssertionSigningAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
+	config.RequestObjectSigningAlgValues = fapi2Permitted(config.RequestObjectSigningAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
+	config.DPoPAllowedJWSAlgorithms = fapi2Permitted(config.DPoPAllowedJWSAlgorithms, oauth2.FAPI2SecurityProfileSigningAlgValues)
+	config.RFC7523AssertionSigningAlgValues = fapi2Permitted(config.RFC7523AssertionSigningAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
 	config.IntrospectionEndpointAuthMethods = fapi2PermittedIntrospectionAuthMethods(config.IntrospectionEndpointAuthMethods)
 
 	if len(config.RevocationEndpointAuthSigningAlgValues) != 0 {
-		config.RevocationEndpointAuthSigningAlgValues = fapi2Permitted(config.RevocationEndpointAuthSigningAlgValues, FAPI2SecurityProfileSigningAlgValues)
+		config.RevocationEndpointAuthSigningAlgValues = fapi2Permitted(config.RevocationEndpointAuthSigningAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
 	}
 
 	if len(config.IntrospectionEndpointAuthSigningAlgValues) != 0 {
-		config.IntrospectionEndpointAuthSigningAlgValues = fapi2Permitted(config.IntrospectionEndpointAuthSigningAlgValues, FAPI2SecurityProfileSigningAlgValues)
+		config.IntrospectionEndpointAuthSigningAlgValues = fapi2Permitted(config.IntrospectionEndpointAuthSigningAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
 	}
 }
 
@@ -140,16 +123,18 @@ func (v *fapi2Violations) general(ctx context.Context, config oauth2.Configurato
 	}
 
 	for _, e := range []oauth2.ClientAuthEndpoint{oauth2.ClientAuthEndpointToken, oauth2.ClientAuthEndpointRevocation} {
-		if methods := oauth2.SupportedEndpointAuthMethods(ctx, config, e); !fapi2Subset(methods, FAPI2SecurityProfileClientAuthMethods) {
-			v.fail(fapi2SectionGeneral, "the %s endpoint accepts the client authentication methods '%s', but only '%s' are permitted", e, strings.Join(methods, "', '"), strings.Join(FAPI2SecurityProfileClientAuthMethods, "', '"))
+		if methods := oauth2.SupportedEndpointAuthMethods(ctx, config, e); !fapi2Subset(methods, oauth2.FAPI2SecurityProfileClientAuthMethods) {
+			v.fail(fapi2SectionGeneral, "the %s endpoint accepts the client authentication methods '%s', but only '%s' are permitted", e, strings.Join(methods, "', '"), strings.Join(oauth2.FAPI2SecurityProfileClientAuthMethods, "', '"))
 		}
 	}
 
 	if len(config.GetTokenIntrospectionHandlers(ctx)) != 0 {
 		methods := slices.DeleteFunc(oauth2.SupportedEndpointAuthMethods(ctx, config, oauth2.ClientAuthEndpointIntrospection), oauth2.IsAccessTokenTypeAuthMethod)
 
-		if slices.ContainsFunc(methods, func(method string) bool { return !slices.Contains(FAPI2SecurityProfileClientAuthMethods, method) }) {
-			v.fail(fapi2SectionGeneral, "the %s endpoint accepts the client authentication methods '%s', but only '%s' are permitted", oauth2.ClientAuthEndpointIntrospection, strings.Join(methods, "', '"), strings.Join(FAPI2SecurityProfileClientAuthMethods, "', '"))
+		if slices.ContainsFunc(methods, func(method string) bool {
+			return !slices.Contains(oauth2.FAPI2SecurityProfileClientAuthMethods, method)
+		}) {
+			v.fail(fapi2SectionGeneral, "the %s endpoint accepts the client authentication methods '%s', but only '%s' are permitted", oauth2.ClientAuthEndpointIntrospection, strings.Join(methods, "', '"), strings.Join(oauth2.FAPI2SecurityProfileClientAuthMethods, "', '"))
 		}
 	}
 
@@ -203,7 +188,7 @@ func (v *fapi2Violations) senderConstrained(ctx context.Context, config oauth2.C
 		v.fail(fapi2SectionGeneral, "the DPoP clock skew must be between %s and %s, but is %s", fapi2MinimumClockSkew, fapi2MaximumClockSkew, skew)
 	}
 
-	if algs := config.GetDPoPAllowedJWSAlgorithms(ctx); !fapi2Subset(algs, FAPI2SecurityProfileSigningAlgValues) {
+	if algs := config.GetDPoPAllowedJWSAlgorithms(ctx); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
 		v.fail(fapi2SectionCryptography, "the DPoP proof algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
 	}
 }
@@ -258,20 +243,20 @@ func (v *fapi2Violations) authorizationEndpoint(ctx context.Context, config oaut
 }
 
 func (v *fapi2Violations) cryptography(ctx context.Context, config oauth2.Configurator) {
-	if algs := config.GetClientAssertionSigningAlgValues(ctx); !fapi2Subset(algs, FAPI2SecurityProfileSigningAlgValues) {
+	if algs := config.GetClientAssertionSigningAlgValues(ctx); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
 		v.fail(fapi2SectionCryptography, "the client assertion algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
 	}
 
-	if algs := oauth2.SupportedEndpointAuthSigningAlgValues(ctx, config, oauth2.ClientAuthEndpointRevocation); !fapi2Subset(algs, FAPI2SecurityProfileSigningAlgValues) {
+	if algs := oauth2.SupportedEndpointAuthSigningAlgValues(ctx, config, oauth2.ClientAuthEndpointRevocation); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
 		v.fail(fapi2SectionCryptography, "the revocation endpoint client assertion algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
 	}
 
-	if algs := config.GetRequestObjectSigningAlgValues(ctx); !fapi2Subset(algs, FAPI2SecurityProfileSigningAlgValues) {
+	if algs := config.GetRequestObjectSigningAlgValues(ctx); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
 		v.fail(fapi2SectionCryptography, "the request object algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
 	}
 
 	if len(config.GetTokenIntrospectionHandlers(ctx)) != 0 {
-		if algs := oauth2.SupportedEndpointAuthSigningAlgValues(ctx, config, oauth2.ClientAuthEndpointIntrospection); !fapi2Subset(algs, FAPI2SecurityProfileSigningAlgValues) {
+		if algs := oauth2.SupportedEndpointAuthSigningAlgValues(ctx, config, oauth2.ClientAuthEndpointIntrospection); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
 			v.fail(fapi2SectionCryptography, "the introspection endpoint client assertion algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
 		}
 	}
@@ -282,7 +267,7 @@ func (v *fapi2Violations) cryptography(ctx context.Context, config oauth2.Config
 
 	if p, ok := config.(oauth2.GrantAssertionAlgorithmsProvider); !ok {
 		v.fail(fapi2SectionCryptography, "the JWT bearer grant handler is registered, but the configuration has no JWT bearer grant assertion algorithms")
-	} else if algs := p.GetRFC7523AssertionSigningAlgValues(ctx); !fapi2Subset(algs, FAPI2SecurityProfileSigningAlgValues) {
+	} else if algs := p.GetRFC7523AssertionSigningAlgValues(ctx); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
 		v.fail(fapi2SectionCryptography, "the JWT bearer grant assertion algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
 	}
 }
@@ -295,7 +280,7 @@ func fapi2PermittedIntrospectionAuthMethods(methods []string) []string {
 
 	tokens := slices.DeleteFunc(slices.Clone(methods), func(method string) bool { return !oauth2.IsAccessTokenTypeAuthMethod(method) })
 
-	return append(fapi2Permitted(clients, FAPI2SecurityProfileClientAuthMethods), tokens...)
+	return append(fapi2Permitted(clients, oauth2.FAPI2SecurityProfileClientAuthMethods), tokens...)
 }
 
 func fapi2Permitted(values, permitted []string) []string {

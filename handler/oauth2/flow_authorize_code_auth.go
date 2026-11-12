@@ -92,7 +92,7 @@ func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, 
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	request.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(c.Config.GetAuthorizeCodeLifespan(ctx)))
+	request.GetSession().SetExpiresAt(oauth2.AuthorizeCode, time.Now().UTC().Add(oauth2.GetAuthorizeCodeLifespan(ctx, c.Config, request.GetClient())))
 
 	if err = c.CoreStorage.CreateAuthorizeCodeSession(ctx, signature, request.Sanitize(c.GetAuthorizeCodeSessionParameters(ctx))); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

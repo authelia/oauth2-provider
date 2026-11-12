@@ -86,7 +86,7 @@ finalized, so support for one may change in any release.
 | [JWT Authorization Grant with DPoP Binding](https://datatracker.ietf.org/doc/html/draft-parecki-oauth-jwt-dpop-grant-02)                        |   ✅   | `draft-02` | Redeeming a DPoP-bound ID-JAG                                                                                                                      |
 | [Transaction Tokens](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11)                                              |   ✅   | `draft-11` | Opt-in, including the `self_signed` and `unsigned_json` subject tokens and replacement tokens                                                      |
 | [OAuth Client ID Metadata Document](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)                      |   ✅   | `draft-03` | Opt-in through `Config.ClientIDMetadataDocumentResolver`, with a default resolver in `handler/cimd`                                                |
-| [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html)                                                      |   🟡   |            | Checked by `compose.ValidateFAPI2SecurityProfile` and applied by `compose.ApplyFAPI2SecurityProfile`; clients are not checked                      |
+| [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html)                                                      |   🟡   |            | Checked by `compose.ValidateFAPI2SecurityProfile`, applied by `compose.ApplyFAPI2SecurityProfile`, or enforced per client                          |
 | [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html)                                                        |   🟡   |            | Signed request objects, JARM and RFC 9701 responses; callers of the introspection endpoint are not restricted                                      |
 
 ### OpenID Connect 1.0
@@ -336,9 +336,14 @@ For the [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profi
 setting that does not meet the profile and every missing required handler. Of the authorize endpoint handlers it refuses
 only `AuthorizeImplicitGrantTypeHandler`, `OpenIDConnectImplicitHandler`, `OpenIDConnectHybridHandler` and
 `NoneResponseTypeHandler`; a custom handler is not checked, even one serving a response type other than `code`. It does
-not set `Issuer`, enable DPoP or mTLS, or check the clients, which must be confidential and use the `code` response
-type. Nor does it check the keys which sign the JWTs the server issues, such as ID Tokens and JWT access tokens: these
-must use PS256, ES256 or EdDSA, and a configuration signing with RS256 still passes.
+not set `Issuer` or enable DPoP or mTLS, and does not check the keys which sign the JWTs the server issues, such as ID
+Tokens and JWT access tokens: these must use PS256, ES256 or EdDSA, and a configuration signing with RS256 still passes.
+A client implementing `FAPI2SecurityProfileClient` is instead held to the profile at each request, whatever the options:
+it must push its authorization requests with a redirect URI, use the `code` response type, PKCE with S256,
+`private_key_jwt` or mutual-TLS client authentication, and a permitted algorithm for its client assertions and request
+objects. Its access tokens are sender-constrained, its refresh tokens are not rotated, and its authorization codes and
+pushed authorization requests are short-lived. The options that apply to every client, such as the RFC 9207 `iss`
+parameter and the DPoP proof algorithms, must still meet the profile.
 
 ## Thanks
 

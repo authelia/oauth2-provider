@@ -796,6 +796,12 @@ func (f *Fosite) validateResponseMode(_ context.Context, _ *http.Request, reques
 		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' requested was '%s', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", request.ResponseMode).WithDebugf("The registered OAuth 2.0 Client with id '%s' does not the 'response_mode' type '%s', as it's not registered to support any.", request.GetClient().GetID(), request.ResponseMode))
 	}
 
+	// FAPI 2.0 Message Signing Section 5.3.3: a client which registered no response modes may use any the server
+	// supports, which ParseResponseMode has already checked.
+	if len(client.GetResponseModes()) == 0 {
+		return nil
+	}
+
 	if !slices.Contains(client.GetResponseModes(), request.ResponseMode) {
 		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' requested was '%s', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", request.ResponseMode).WithDebugf("The registered OAuth 2.0 Client with id '%s' does not the 'response_mode' type '%s'.", client.GetID(), request.ResponseMode))
 	}

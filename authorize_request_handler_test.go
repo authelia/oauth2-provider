@@ -1758,6 +1758,9 @@ func TestNewAuthorizeRequestOmittedResponseMode(t *testing.T) {
 		{name: "ShouldAllowFragmentForImplicit", responseType: consts.ResponseTypeImplicitFlowToken, modes: []ResponseModeType{ResponseModeFragment}},
 		{name: "ShouldRejectQueryForImplicit", responseType: consts.ResponseTypeImplicitFlowToken, modes: []ResponseModeType{ResponseModeQuery}, err: true},
 		{name: "ShouldAllowRequestedJWT", responseType: consts.ResponseTypeAuthorizationCodeFlow, responseMode: string(ResponseModeJWT), modes: []ResponseModeType{ResponseModeJWT}},
+		{name: "ShouldAllowARequestedJWTWithoutRegisteredModes", responseType: consts.ResponseTypeAuthorizationCodeFlow, responseMode: string(ResponseModeJWT)},
+		{name: "ShouldAllowARequestedFormPostWithoutRegisteredModes", responseType: consts.ResponseTypeAuthorizationCodeFlow, responseMode: string(ResponseModeFormPost)},
+		{name: "ShouldRejectARequestedModeNotRegistered", responseType: consts.ResponseTypeAuthorizationCodeFlow, responseMode: string(ResponseModeFormPost), modes: []ResponseModeType{ResponseModeQuery}, err: true},
 	}
 
 	for _, tc := range testCases {

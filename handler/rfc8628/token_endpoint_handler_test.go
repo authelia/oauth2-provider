@@ -1402,6 +1402,85 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseKeepsSession(t *testin
 	}
 }
 
+func TestDeviceAuthorizeCode_RefreshTokenMaximumLifespanSessionWithoutDeadline(t *testing.T) {
+	testCases := []struct {
+		name   string
+		grants oauth2.Arguments
+		scopes oauth2.Arguments
+		fail   bool
+	}{
+		{"ShouldFailWhenARefreshTokenIsIssued", oauth2.Arguments{consts.GrantTypeOAuthDeviceCode, consts.GrantTypeRefreshToken}, oauth2.Arguments{consts.ScopeOffline}, true},
+		{"ShouldNotFailWithoutARefreshTokenScope", oauth2.Arguments{consts.GrantTypeOAuthDeviceCode, consts.GrantTypeRefreshToken}, nil, false},
+		{"ShouldNotFailWhenTheClientCannotRefresh", oauth2.Arguments{consts.GrantTypeOAuthDeviceCode}, oauth2.Arguments{consts.ScopeOffline}, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &o2hmacshaStrategy
+			store := storage.NewMemoryStore()
+
+			config := &oauth2.Config{
+				ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+				AccessTokenLifespan:         time.Minute,
+				RefreshTokenLifespan:        time.Hour,
+				RefreshTokenMaximumLifespan: time.Hour * 24,
+			}
+
+			h := hoauth2.GenericCodeTokenEndpointHandler{
+				CodeTokenEndpointHandler: &DeviceCodeTokenHandler{
+					Strategy: strategy,
+					Storage:  store,
+					Config:   config,
+				},
+				AccessTokenStrategy:    strategy,
+				RefreshTokenStrategy:   strategy,
+				Config:                 config,
+				CoreStorage:            store,
+				TokenRevocationStorage: store,
+			}
+
+			client := &oauth2.DefaultClient{ID: "foo", GrantTypes: tc.grants}
+
+			dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+			require.NoError(t, err)
+
+			_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
+			require.NoError(t, err)
+
+			deviceRequester := oauth2.NewDeviceAuthorizeRequest()
+			deviceRequester.Client = client
+			deviceRequester.Session = &deviceSessionWithoutDeadline{Session: &oauth2.DefaultSession{}}
+			deviceRequester.RequestedAt = time.Now().UTC()
+			deviceRequester.RequestedScope = tc.scopes
+			deviceRequester.GrantedScope = tc.scopes
+			deviceRequester.SetDeviceCodeSignature(dSig)
+			deviceRequester.SetUserCodeSignature(uSig)
+			deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+
+			require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
+
+			requester := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+				Request: oauth2.Request{
+					Client:      client,
+					Form:        url.Values{consts.FormParameterDeviceCode: {dCode}},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			}
+
+			err = h.HandleTokenEndpointRequest(t.Context(), requester)
+
+			if tc.fail {
+				require.ErrorIs(t, err, oauth2.ErrServerError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 var o2hmacshaStrategy = hoauth2.HMACCoreStrategy{
 	Enigma: &hmac.HMACStrategy{Config: &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}},
 	Config: &oauth2.Config{
@@ -1481,4 +1560,12 @@ func (s *invalidatedDeviceCodeStore) InvalidateDeviceCodeSession(ctx context.Con
 	}
 
 	return s.MemoryStore.InvalidateDeviceCodeSession(ctx, signature)
+}
+
+type deviceSessionWithoutDeadline struct {
+	oauth2.Session
+}
+
+func (s *deviceSessionWithoutDeadline) Clone() oauth2.Session {
+	return &deviceSessionWithoutDeadline{Session: s.Session.Clone()}
 }

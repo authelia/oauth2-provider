@@ -31,6 +31,7 @@ type ResourceOwnerPasswordCredentialsGrantHandler struct {
 		oauth2.ResourceStrategyProvider
 		oauth2.RefreshTokenScopesProvider
 		oauth2.RefreshTokenLifespanProvider
+		oauth2.RefreshTokenMaximumLifespanProvider
 		oauth2.AccessTokenLifespanProvider
 	}
 }
@@ -87,10 +88,7 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointReques
 
 	rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypePassword, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 
-	provider, _ := c.Config.(oauth2.RefreshTokenMaximumLifespanProvider)
 	now := time.Now().UTC()
-
-	oauth2.RecordRefreshTokenExpiryDeadline(ctx, provider, request.GetClient(), request.GetSession(), now)
 
 	if expires := oauth2.RefreshTokenExpiry(request.GetSession(), rtLifespan, now); !expires.IsZero() {
 		request.GetSession().SetExpiresAt(oauth2.RefreshToken, expires)
@@ -108,6 +106,18 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResp
 	var refresh, refreshSignature string
 
 	if canIssueRefreshToken(ctx, c.Config, request) {
+		now := time.Now().UTC()
+
+		if err = oauth2.RecordRefreshTokenExpiryDeadline(ctx, c.Config, request.GetClient(), request.GetSession(), now); err != nil {
+			return err
+		}
+
+		rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypePassword, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
+
+		if expires := oauth2.RefreshTokenExpiry(request.GetSession(), rtLifespan, now); !expires.IsZero() {
+			request.GetSession().SetExpiresAt(oauth2.RefreshToken, expires)
+		}
+
 		if refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}

@@ -1168,6 +1168,57 @@ func TestRefreshFlow_MaximumLifespanReached(t *testing.T) {
 	}
 }
 
+func TestRefreshFlow_MaximumLifespanSessionWithoutDeadline(t *testing.T) {
+	strategy := &hmacshaStrategy
+	store := storage.NewMemoryStore()
+
+	client := &oauth2.DefaultClient{ID: "foo", GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}, Scopes: []string{"foo", consts.ScopeOffline}}
+
+	handler := &RefreshTokenGrantHandler{
+		TokenRevocationStorage: store,
+		RefreshTokenStrategy:   strategy,
+		AccessTokenStrategy:    strategy,
+		Config: &oauth2.Config{
+			AccessTokenLifespan:         time.Hour,
+			RefreshTokenLifespan:        time.Hour,
+			RefreshTokenMaximumLifespan: time.Hour * 24,
+			ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+			AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+			RefreshTokenScopes:          []string{consts.ScopeOffline},
+		},
+	}
+
+	now := time.Now().UTC().Truncate(jwt.TimePrecision)
+
+	original := &oauth2.Request{
+		ID:             "req-id",
+		Client:         client,
+		RequestedAt:    now,
+		GrantedScope:   oauth2.Arguments{"foo", consts.ScopeOffline},
+		RequestedScope: oauth2.Arguments{"foo", consts.ScopeOffline},
+		Session:        &sessionWithoutDeadline{Session: &oauth2.DefaultSession{Subject: "peter", ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.RefreshToken: now.Add(time.Hour)}}},
+		Form:           url.Values{},
+	}
+
+	refreshToken, refreshSignature, err := strategy.GenerateRefreshToken(t.Context(), nil)
+	require.NoError(t, err)
+
+	_, accessSignature, err := strategy.GenerateAccessToken(t.Context(), nil)
+	require.NoError(t, err)
+
+	require.NoError(t, store.CreateAccessTokenSession(t.Context(), accessSignature, original))
+	require.NoError(t, store.CreateRefreshTokenSession(t.Context(), refreshSignature, accessSignature, original))
+
+	requester := oauth2.NewAccessRequest(&sessionWithoutDeadline{Session: &oauth2.DefaultSession{}})
+	requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+	requester.Client = client
+	requester.Form = url.Values{consts.FormParameterRefreshToken: {refreshToken}}
+
+	err = handler.HandleTokenEndpointRequest(t.Context(), requester)
+
+	require.ErrorIs(t, err, oauth2.ErrServerError)
+}
+
 func TestRefreshFlow_WithoutRotationRefusesARefreshTokenRevokedDuringTheRequest(t *testing.T) {
 	strategy := &hmacshaStrategy
 
@@ -2342,4 +2393,12 @@ func TestRefreshFlow_CarriesClaimsRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+type sessionWithoutDeadline struct {
+	oauth2.Session
+}
+
+func (s *sessionWithoutDeadline) Clone() oauth2.Session {
+	return &sessionWithoutDeadline{Session: s.Session.Clone()}
 }

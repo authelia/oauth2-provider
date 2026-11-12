@@ -119,7 +119,8 @@ type Config struct {
 	// refresh token of the grant may expire, however often it is rotated. RefreshTokenLifespan then acts as the time
 	// a refresh token expires after if it is not used. RFC 10017 Section 6.3.2.3 requires this for browser-based
 	// applications when refresh tokens are rotated. Defaults to 0, which applies no limit. A client can set its own
-	// through RefreshTokenMaximumLifespanClient. Only a session implementing ExpiryDeadlineSetterSession is limited.
+	// through RefreshTokenMaximumLifespanClient. A session not implementing
+	// ExpiryDeadlineSetterSession fails with server_error when a limit applies.
 	RefreshTokenMaximumLifespan time.Duration
 
 	// SendDebugMessagesToClients if set to true, includes error debug messages in response payloads. Be aware that sensitive

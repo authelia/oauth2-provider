@@ -28,6 +28,7 @@ type AuthorizeExplicitGrantHandler struct {
 		oauth2.AuthorizeCodeLifespanProvider
 		oauth2.AccessTokenLifespanProvider
 		oauth2.RefreshTokenLifespanProvider
+		oauth2.RefreshTokenMaximumLifespanProvider
 		oauth2.ScopeStrategyProvider
 		oauth2.AudienceStrategyProvider
 		oauth2.ResourceStrategyProvider

@@ -242,6 +242,7 @@ type Configurator interface {
 	RefreshTokenScopesProvider
 	AccessTokenLifespanProvider
 	RefreshTokenLifespanProvider
+	RefreshTokenMaximumLifespanProvider
 	VerifiableCredentialsNonceLifespanProvider
 	AuthorizeCodeLifespanProvider
 	TokenEntropyProvider

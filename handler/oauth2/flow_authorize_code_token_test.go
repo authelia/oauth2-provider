@@ -1586,6 +1586,78 @@ func TestAuthorizeCode_RefreshTokenMaximumLifespan(t *testing.T) {
 	}
 }
 
+func TestAuthorizeCode_RefreshTokenMaximumLifespanSessionWithoutDeadline(t *testing.T) {
+	testCases := []struct {
+		name   string
+		grants oauth2.Arguments
+		scopes oauth2.Arguments
+		fail   bool
+	}{
+		{"ShouldFailWhenARefreshTokenIsIssued", oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken}, oauth2.Arguments{"foo", consts.ScopeOffline}, true},
+		{"ShouldNotFailWithoutARefreshTokenScope", oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken}, oauth2.Arguments{"foo"}, false},
+		{"ShouldNotFailWhenTheClientCannotRefresh", oauth2.Arguments{consts.GrantTypeAuthorizationCode}, oauth2.Arguments{"foo", consts.ScopeOffline}, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := storage.NewMemoryStore()
+			strategy := &hmacshaStrategy
+
+			handler := AuthorizeExplicitGrantHandler{
+				CoreStorage:           store,
+				AuthorizeCodeStrategy: strategy,
+				AccessTokenStrategy:   strategy,
+				RefreshTokenStrategy:  strategy,
+				Config: &oauth2.Config{
+					ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+					AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+					AccessTokenLifespan:         time.Minute,
+					AuthorizeCodeLifespan:       time.Minute,
+					RefreshTokenLifespan:        time.Hour,
+					RefreshTokenMaximumLifespan: time.Hour * 24,
+				},
+			}
+
+			client := &oauth2.DefaultClient{ID: "foo", GrantTypes: tc.grants}
+
+			code, sig, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+			require.NoError(t, err)
+
+			require.NoError(t, store.CreateAuthorizeCodeSession(t.Context(), sig, &oauth2.AuthorizeRequest{
+				Request: oauth2.Request{
+					Client:         client,
+					Form:           url.Values{consts.FormParameterRedirectURI: []string{"https://client.example.com/cb"}},
+					RequestedScope: tc.scopes,
+					GrantedScope:   tc.scopes,
+					Session:        &sessionWithoutDeadline{Session: &oauth2.DefaultSession{}},
+					RequestedAt:    time.Now().UTC(),
+				},
+			}))
+
+			request := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client: client,
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: []string{code},
+						consts.FormParameterRedirectURI:       []string{"https://client.example.com/cb"},
+					},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			}
+
+			err = handler.HandleTokenEndpointRequest(t.Context(), request)
+
+			if tc.fail {
+				require.ErrorIs(t, err, oauth2.ErrServerError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestAuthorizeCode_SanitationWhiteListRetainsRedirectURI(t *testing.T) {
 	const (
 		redirectA = "https://client.example.com/a"

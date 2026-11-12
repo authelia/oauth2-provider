@@ -285,8 +285,8 @@ Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Cons
   browser-based applications when refresh tokens are rotated. Without it, each rotation issues a refresh token with the
   full `RefreshTokenLifespan`, so a client which keeps refreshing keeps its grant indefinitely. A client implementing
   `RefreshTokenMaximumLifespanClient` can set its own, or opt out with a negative duration. The limit is recorded on the
-  session, which must implement `ExpiryDeadlineSetterSession` as the default sessions do, and a grant issued without one
-  is limited from its next refresh.
+  session, which must implement `ExpiryDeadlineSetterSession` as the default sessions do, otherwise the request fails
+  with `server_error`, and a grant issued without one is limited from its next refresh.
 - `DPoPEnabled` and `MTLSEnabled` enable sender-constrained tokens
   ([Section 2.2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.2.1)) for clients that request them, and
   `DPoPEnforce` and `MTLSEnforce` require them from every client, which then must all support the mechanism. Resource

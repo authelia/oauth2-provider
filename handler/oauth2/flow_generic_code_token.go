@@ -38,6 +38,7 @@ type GenericCodeTokenEndpointHandler struct {
 	Config                 interface {
 		oauth2.AccessTokenLifespanProvider
 		oauth2.RefreshTokenLifespanProvider
+		oauth2.RefreshTokenMaximumLifespanProvider
 		oauth2.RefreshTokenScopesProvider
 		oauth2.AudienceStrategyProvider
 		oauth2.ResourceStrategyProvider
@@ -156,10 +157,13 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 
 	lifespan = oauth2.GetEffectiveLifespan(request.GetClient(), gt, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 
-	provider, _ := c.Config.(oauth2.RefreshTokenMaximumLifespanProvider)
 	now := time.Now().UTC()
 
-	oauth2.RecordRefreshTokenExpiryDeadline(ctx, provider, request.GetClient(), request.GetSession(), now)
+	if c.canIssueRefreshToken(ctx, deviceRequester) {
+		if err = oauth2.RecordRefreshTokenExpiryDeadline(ctx, c.Config, request.GetClient(), request.GetSession(), now); err != nil {
+			return err
+		}
+	}
 
 	if expires := oauth2.RefreshTokenExpiry(request.GetSession(), lifespan, now); !expires.IsZero() {
 		request.GetSession().SetExpiresAt(oauth2.RefreshToken, expires)

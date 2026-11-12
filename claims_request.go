@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"reflect"
 
+	"authelia.com/provider/oauth2/internal/claimvalue"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -188,8 +189,8 @@ func (r *ClaimRequest) Matches(value any) bool {
 }
 
 func claimValuesEqual(requested, actual any) bool {
-	if r, ok := claimNumber(requested); ok {
-		a, ok := claimNumber(actual)
+	if r, ok := claimvalue.Number[float64](requested); ok {
+		a, ok := claimvalue.Number[float64](actual)
 
 		return ok && r == a
 	}
@@ -247,33 +248,6 @@ func cloneClaimValue(value any) any {
 		return clone
 	default:
 		return value
-	}
-}
-
-func claimNumber(value any) (number float64, ok bool) {
-	switch n := value.(type) {
-	case float64:
-		return n, true
-	case float32:
-		return float64(n), true
-	case int:
-		return float64(n), true
-	case int32:
-		return float64(n), true
-	case int64:
-		return float64(n), true
-	case uint:
-		return float64(n), true
-	case uint32:
-		return float64(n), true
-	case uint64:
-		return float64(n), true
-	case json.Number:
-		f, err := n.Float64()
-
-		return f, err == nil
-	default:
-		return 0, false
 	}
 }
 

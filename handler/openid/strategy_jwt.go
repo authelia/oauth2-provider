@@ -15,7 +15,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/internal/stringslice"
+	"authelia.com/provider/oauth2/internal/slicesx"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -315,18 +315,18 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 		prompts := oauth2.RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterPrompt), " "))
 
-		if stringslice.Has(prompts, consts.PromptTypeNone) || stringslice.Has(prompts, consts.PromptTypeLogin) {
+		if slices.Contains(prompts, consts.PromptTypeNone) || slices.Contains(prompts, consts.PromptTypeLogin) {
 			if claims.AuthTime == nil || claims.AuthTime.IsZero() {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Unable to determine validity of prompt parameter because auth_time is missing in ID Token claims."))
 			}
 		}
 
-		if stringslice.Has(prompts, consts.PromptTypeNone) && !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().After(rat) {
+		if slices.Contains(prompts, consts.PromptTypeNone) && !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().After(rat) {
 			return "", errorsx.WithStack(oauth2.ErrServerError.
 				WithDebugf("Failed to generate ID Token because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), rat))
 		}
 
-		if stringslice.Has(prompts, consts.PromptTypeLogin) && !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().Before(rat) {
+		if slices.Contains(prompts, consts.PromptTypeLogin) && !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().Before(rat) {
 			return "", errorsx.WithStack(oauth2.ErrServerError.
 				WithDebugf("Failed to generate ID Token because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.GetAuthTimeSafe(), rat))
 		}
@@ -388,7 +388,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		claims.Nonce = nonce
 	}
 
-	claims.Audience = stringslice.Unique(append(claims.Audience, request.GetClient().GetID()))
+	claims.Audience = slicesx.Unique(append(claims.Audience, request.GetClient().GetID()))
 	claims.IssuedAt = jwt.Now()
 
 	// OpenID Connect Key Binding 1.0 Section 4. Applied last so the confirmation reflects the final claim set, and

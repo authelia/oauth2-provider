@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"authelia.com/provider/oauth2/internal/consts"
@@ -188,7 +189,7 @@ func (f *Fosite) validateRPInitiatedLogoutRedirectURI(ctx context.Context, reque
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The OAuth 2.0 Client does not have any registered post logout redirect URIs."))
 	}
 
-	if !StringInSlice(raw, client.GetPostLogoutRedirectURIs()) {
+	if !slices.Contains(client.GetPostLogoutRedirectURIs(), raw) {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'post_logout_redirect_uri' parameter does not match any registered post logout redirect URI."))
 	}
 

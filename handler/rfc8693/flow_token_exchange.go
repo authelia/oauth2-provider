@@ -19,6 +19,7 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal/claimvalue"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -421,7 +422,9 @@ func consumeTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, 
 			continue
 		}
 
-		markers = append(markers, marker{iss: iss, jti: jti, exp: time.Unix(toInt64(token.claims[consts.ClaimExpirationTime]), 0)})
+		exp, _ := claimvalue.Number[int64](token.claims[consts.ClaimExpirationTime])
+
+		markers = append(markers, marker{iss: iss, jti: jti, exp: time.Unix(exp, 0)})
 	}
 
 	if len(markers) == 0 {
@@ -1358,7 +1361,7 @@ func subjectTokenExpiry(request oauth2.Requester) time.Time {
 		return time.Time{}
 	}
 
-	if subject := toInt64(session.GetSubjectToken()[consts.ClaimExpirationTime]); subject > 0 {
+	if subject, _ := claimvalue.Number[int64](session.GetSubjectToken()[consts.ClaimExpirationTime]); subject > 0 {
 		return time.Unix(subject, 0).UTC()
 	}
 

@@ -7,7 +7,6 @@
 package txntoken
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/claimvalue"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -167,7 +167,7 @@ func Validate(token string, config Config) (*Claims, error) {
 func extract(mc jwt.MapClaims, trustDomain string) (*Claims, error) {
 	claims := &Claims{}
 
-	exp, ok := numericDate(mc[consts.ClaimExpirationTime])
+	exp, ok := claimvalue.Time(mc[consts.ClaimExpirationTime])
 	if !ok {
 		return nil, invalid(errors.New("the 'exp' claim is missing or not numeric"))
 	}
@@ -183,7 +183,7 @@ func extract(mc jwt.MapClaims, trustDomain string) (*Claims, error) {
 		return nil, invalid(errors.New("the 'aud' claim does not contain the trust domain"))
 	}
 
-	if claims.IssuedAt, ok = numericDate(mc[consts.ClaimIssuedAt]); !ok {
+	if claims.IssuedAt, ok = claimvalue.Time(mc[consts.ClaimIssuedAt]); !ok {
 		return nil, invalid(errors.New("the 'iat' claim is missing or not numeric"))
 	}
 
@@ -259,29 +259,6 @@ func workloadChain(value any) (chain []string, err error) {
 
 func invalid(cause error) error {
 	return fmt.Errorf("%w: %w", ErrInvalidToken, cause)
-}
-
-func numericDate(v any) (time.Time, bool) {
-	switch n := v.(type) {
-	case float64:
-		return time.Unix(int64(n), 0).UTC(), true
-	case int64:
-		return time.Unix(n, 0).UTC(), true
-	case json.Number:
-		i, err := n.Int64()
-		if err != nil {
-			f, ferr := n.Float64()
-			if ferr != nil {
-				return time.Time{}, false
-			}
-
-			return time.Unix(int64(f), 0).UTC(), true
-		}
-
-		return time.Unix(i, 0).UTC(), true
-	default:
-		return time.Time{}, false
-	}
 }
 
 func audience(v any) []string {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"authelia.com/provider/oauth2/internal/claimvalue"
 	"authelia.com/provider/oauth2/internal/clone"
 	"authelia.com/provider/oauth2/internal/consts"
 )
@@ -208,11 +209,17 @@ func (c *JWTClaims) FromMap(m map[string]any) {
 				c.Audience = aud
 			}
 		case consts.ClaimIssuedAt:
-			c.IssuedAt, _ = toTime(v, c.IssuedAt)
+			if t, ok := claimvalue.Time(v); ok {
+				c.IssuedAt = t
+			}
 		case consts.ClaimNotBefore:
-			c.NotBefore, _ = toTime(v, c.NotBefore)
+			if t, ok := claimvalue.Time(v); ok {
+				c.NotBefore = t
+			}
 		case consts.ClaimExpirationTime:
-			c.ExpiresAt, _ = toTime(v, c.ExpiresAt)
+			if t, ok := claimvalue.Time(v); ok {
+				c.ExpiresAt = t
+			}
 		case consts.ClaimScopeNonStandard:
 			switch s := v.(type) {
 			case []string:
@@ -261,48 +268,6 @@ func (c *JWTClaims) FromMap(m map[string]any) {
 			c.Extra[k] = v
 		}
 	}
-}
-
-//nolint:unparam
-func toTime(v any, def time.Time) (t time.Time, ok bool) {
-	t = def
-
-	var value int64
-
-	if value, ok = toInt64(v); ok {
-		t = time.Unix(value, 0).UTC()
-	}
-
-	return
-}
-
-func toInt64(v any) (val int64, ok bool) {
-	var err error
-
-	switch t := v.(type) {
-	case float64:
-		return int64(t), true
-	case int64:
-		return t, true
-	case int32:
-		return int64(t), true
-	case int:
-		return int64(t), true
-	case json.Number:
-		if val, err = t.Int64(); err == nil {
-			return val, true
-		}
-
-		var valf float64
-
-		if valf, err = t.Float64(); err != nil {
-			return 0, false
-		}
-
-		return int64(valf), true
-	}
-
-	return 0, false
 }
 
 func toNumericDate(v any) (date *NumericDate, err error) {

@@ -7,7 +7,6 @@ package oauth2
 import (
 	"context"
 	"slices"
-	"sort"
 	"strings"
 
 	"authelia.com/provider/oauth2/internal/consts"
@@ -389,31 +388,11 @@ func anyHandler(ctx context.Context, config Configurator, match func(h any) bool
 }
 
 func containsField(value, field string) bool {
-	for _, f := range strings.Fields(value) {
-		if f == field {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(strings.Fields(value), field)
 }
 
-func sortedUnique(values []string) (out []string) {
-	seen := map[string]struct{}{}
-
-	for _, v := range values {
-		if _, ok := seen[v]; ok {
-			continue
-		}
-
-		seen[v] = struct{}{}
-
-		out = append(out, v)
-	}
-
-	sort.Strings(out)
-
-	return out
+func sortedUnique(values []string) []string {
+	return slices.Compact(slices.Sorted(slices.Values(values)))
 }
 
 // SupportedRequestObjectSigningAlgValues returns the configured Request Object signing algorithms, excluding 'none'

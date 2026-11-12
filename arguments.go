@@ -4,6 +4,8 @@
 
 package oauth2
 
+import "slices"
+
 type Arguments []string
 
 // Matches performs an case-sensitive, out-of-order check that the items
@@ -13,12 +15,12 @@ func (r Arguments) Matches(items ...string) bool {
 		return false
 	}
 
-	found := make(map[string]bool)
+	found := make(map[string]struct{}, len(items))
 	for _, item := range items {
-		if !StringInSlice(item, r) {
+		if !slices.Contains(r, item) {
 			return false
 		}
-		found[item] = true
+		found[item] = struct{}{}
 	}
 
 	return len(found) == len(r)
@@ -34,12 +36,12 @@ func (r Arguments) MatchesFold(items ...string) bool {
 		return false
 	}
 
-	found := make(map[string]bool)
+	found := make(map[string]struct{}, len(items))
 	for _, item := range items {
-		if !StringInSliceFold(item, r) {
+		if !slices.ContainsFunc(r, equalFold(item)) {
 			return false
 		}
-		found[item] = true
+		found[item] = struct{}{}
 	}
 
 	return len(found) == len(r)
@@ -49,7 +51,7 @@ func (r Arguments) MatchesFold(items ...string) bool {
 // provided exists in arguments.
 func (r Arguments) Has(items ...string) bool {
 	for _, item := range items {
-		if !StringInSlice(item, r) {
+		if !slices.Contains(r, item) {
 			return false
 		}
 	}
@@ -61,7 +63,7 @@ func (r Arguments) Has(items ...string) bool {
 // provided exists in arguments.
 func (r Arguments) HasFold(items ...string) bool {
 	for _, item := range items {
-		if !StringInSliceFold(item, r) {
+		if !slices.ContainsFunc(r, equalFold(item)) {
 			return false
 		}
 	}
@@ -73,7 +75,7 @@ func (r Arguments) HasFold(items ...string) bool {
 // provided exists in arguments.
 func (r Arguments) HasOneOf(items ...string) bool {
 	for _, item := range items {
-		if StringInSlice(item, r) {
+		if slices.Contains(r, item) {
 			return true
 		}
 	}
@@ -85,7 +87,7 @@ func (r Arguments) HasOneOf(items ...string) bool {
 // provided exists in arguments.
 func (r Arguments) HasOneOfFold(items ...string) bool {
 	for _, item := range items {
-		if StringInSliceFold(item, r) {
+		if slices.ContainsFunc(r, equalFold(item)) {
 			return true
 		}
 	}

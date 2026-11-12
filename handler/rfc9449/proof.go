@@ -12,6 +12,7 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/claimvalue"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -101,7 +102,7 @@ func ParseProof(proof string, algorithms []jose.SignatureAlgorithm) (parsed *oau
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The DPoP proof is missing the required 'htu' claim."))
 	}
 
-	iat, ok := toFloat(claims[consts.ClaimIssuedAt])
+	iat, ok := claimvalue.Number[float64](claims[consts.ClaimIssuedAt])
 	if !ok {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The DPoP proof is missing or has an invalid 'iat' claim."))
 	}
@@ -139,16 +140,4 @@ func validateProofKeyStrength(jwk *jose.JSONWebKey) (err error) {
 	}
 
 	return nil
-}
-
-func toFloat(v any) (f float64, ok bool) {
-	switch t := v.(type) {
-	case float64:
-		return t, true
-	case json.Number:
-		n, err := t.Float64()
-		return n, err == nil
-	default:
-		return 0, false
-	}
 }

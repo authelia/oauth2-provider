@@ -17,6 +17,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/rfc8693"
+	"authelia.com/provider/oauth2/internal/claimvalue"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -383,7 +384,7 @@ func requireAuthentication(relationship *oauth2.IDJAGRelationship, claims jwt.Ma
 	satisfied := len(relationship.ACRValues) == 0 || slices.Contains(relationship.ACRValues, acr)
 
 	if relationship.MaxAge > 0 {
-		authTime, ok := authenticationTime(claims[consts.ClaimAuthenticationTime])
+		authTime, ok := claimvalue.Time(claims[consts.ClaimAuthenticationTime])
 
 		satisfied = satisfied && ok && !authTime.After(now.Add(skew)) && now.Sub(authTime) <= relationship.MaxAge
 	}
@@ -403,23 +404,6 @@ func requireAuthentication(relationship *oauth2.IDJAGRelationship, claims jwt.Ma
 	}
 
 	return errorsx.WithStack(rfc)
-}
-
-func authenticationTime(value any) (authTime time.Time, ok bool) {
-	switch v := value.(type) {
-	case int64:
-		return time.Unix(v, 0), true
-	case int:
-		return time.Unix(int64(v), 0), true
-	case float64:
-		return time.Unix(int64(v), 0), true
-	case json.Number:
-		if i, err := v.Int64(); err == nil {
-			return time.Unix(i, 0), true
-		}
-	}
-
-	return authTime, false
 }
 
 func authenticationSources(request oauth2.AccessRequester) (sources []*jwt.IDTokenClaims) {

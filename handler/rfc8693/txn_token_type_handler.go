@@ -21,6 +21,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/txntoken"
+	"authelia.com/provider/oauth2/internal/claimvalue"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -894,7 +895,8 @@ func validateSelfSignedWindow(claims map[string]any, window, skew time.Duration)
 	now := time.Now().Unix()
 	windowSeconds, skewSeconds := int64(window/time.Second), int64(skew/time.Second)
 
-	iat, exp := toInt64(claims[consts.ClaimIssuedAt]), toInt64(claims[consts.ClaimExpirationTime])
+	iat, _ := claimvalue.Number[int64](claims[consts.ClaimIssuedAt])
+	exp, _ := claimvalue.Number[int64](claims[consts.ClaimExpirationTime])
 
 	switch {
 	case iat < now-windowSeconds:

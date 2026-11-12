@@ -6,7 +6,6 @@ package rfc8693
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"maps"
 	"math"
@@ -18,6 +17,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/internal/claimvalue"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -203,7 +203,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 	claims := ftoken.Claims.ToMapClaims()
 
 	if issued, exists := claims[consts.ClaimIssuedAt]; exists {
-		if time.Unix(toInt64(issued), 0).Add(window).Before(time.Now()) {
+		if iat, _ := claimvalue.Number[int64](issued); time.Unix(iat, 0).Add(window).Before(time.Now()) {
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'iat' from token is too far in the past."))
 		}
 	}
@@ -672,42 +672,11 @@ func stripIDTokenConfirmationHeader(headers *jwt.Headers) (stripped *jwt.Headers
 }
 
 func numericDate(claim any) (date float64, ok bool) {
-	switch t := claim.(type) {
-	case float64:
-		date = t
-	case int64:
-		date = float64(t)
-	case json.Number:
-		var err error
-
-		if date, err = t.Float64(); err != nil {
-			return 0, false
-		}
-	default:
+	if date, ok = claimvalue.Number[float64](claim); !ok {
 		return 0, false
 	}
 
 	return date, !math.IsNaN(date) && !math.IsInf(date, 0)
-}
-
-func toInt64(claim any) int64 {
-	switch t := claim.(type) {
-	case float64:
-		return int64(t)
-	case int64:
-		return t
-	case json.Number:
-		v, err := t.Int64()
-		if err == nil {
-			return v
-		}
-		vf, err := t.Float64()
-		if err != nil {
-			return 0
-		}
-		return int64(vf)
-	}
-	return 0
 }
 
 func validateCustomJWTAudience(request oauth2.AccessRequester, validation *JWTValidationConfig, claims jwt.MapClaims) error {

@@ -14,19 +14,24 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 )
 
-// StringInSlice returns true if needle exists in haystack
+// StringInSlice returns true if needle exists in haystack.
+//
+// Deprecated: use slices.Contains.
 func StringInSlice(needle string, haystack []string) bool {
 	return slices.Contains(haystack, needle)
 }
 
 // StringInSliceFold returns true if needle exists in haystack (case-insensitive).
+//
+// Deprecated: use slices.ContainsFunc with strings.EqualFold.
 func StringInSliceFold(needle string, haystack []string) bool {
-	for _, b := range haystack {
-		if strings.EqualFold(b, needle) {
-			return true
-		}
+	return slices.ContainsFunc(haystack, equalFold(needle))
+}
+
+func equalFold(needle string) func(string) bool {
+	return func(value string) bool {
+		return strings.EqualFold(value, needle)
 	}
-	return false
 }
 
 // RemoveEmpty returns a new slice containing the non-empty, whitespace-trimmed entries of args. It is commonly used to

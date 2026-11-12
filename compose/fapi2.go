@@ -108,11 +108,17 @@ func ValidateFAPI2SecurityProfile(ctx context.Context, config oauth2.Configurato
 }
 
 type fapi2Violations struct {
-	errs []error
+	document string
+	errs     []error
 }
 
 func (v *fapi2Violations) fail(section, format string, args ...any) {
-	v.errs = append(v.errs, fmt.Errorf("FAPI 2.0 Security Profile Section %s: %s", section, fmt.Sprintf(format, args...)))
+	document := v.document
+	if document == "" {
+		document = "FAPI 2.0 Security Profile"
+	}
+
+	v.errs = append(v.errs, fmt.Errorf("%s Section %s: %s", document, section, fmt.Sprintf(format, args...)))
 }
 
 func (v *fapi2Violations) general(ctx context.Context, config oauth2.Configurator) {

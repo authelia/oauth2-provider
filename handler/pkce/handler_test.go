@@ -1732,6 +1732,25 @@ func TestHandlerFAPI2SecurityProfileClient(t *testing.T) {
 	})
 }
 
+func TestHandlerNativeClient(t *testing.T) {
+	native := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "native"}, ApplicationType: consts.ApplicationTypeNative}
+	web := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "web"}, ApplicationType: consts.ApplicationTypeWeb}
+
+	t.Run("ShouldRequirePKCEForAConfidentialNativeClient", func(t *testing.T) {
+		h := &Handler{Config: &oauth2.Config{}}
+
+		assert.ErrorIs(t, h.validate(t.Context(), "", "", native), oauth2.ErrInvalidRequest)
+		assert.NoError(t, h.validate(t.Context(), testChallengeS256, consts.PKCEChallengeMethodSHA256, native))
+		assert.NoError(t, h.validate(t.Context(), "", "", web))
+	})
+
+	t.Run("ShouldNotRequirePKCEForANativeClientWhenPublicClientsMayOmitIt", func(t *testing.T) {
+		h := &Handler{Config: &oauth2.Config{AllowPublicClientsWithoutPKCE: true}}
+
+		assert.NoError(t, h.validate(t.Context(), "", "", native))
+	})
+}
+
 type TestPKCEClient struct {
 	*oauth2.DefaultClient
 	EnforcePKCE                bool

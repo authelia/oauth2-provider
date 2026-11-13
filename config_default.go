@@ -172,8 +172,9 @@ type Config struct {
 	// EnforcePKCE, if set to true, requires clients to perform authorize code flows with PKCE. Defaults to false.
 	EnforcePKCE bool
 
-	// AllowPublicClientsWithoutPKCE, if set to true, permits public clients to perform the authorize code flow without
-	// PKCE, which RFC 9700 Section 2.1.1 requires of them. Defaults to false.
+	// AllowPublicClientsWithoutPKCE, if set to true, permits public clients and clients with the 'native'
+	// 'application_type' to perform the authorize code flow without PKCE, which RFC 9700 Section 2.1.1 requires of
+	// public clients and RFC 8252 Section 8.1 of native ones. Defaults to false.
 	AllowPublicClientsWithoutPKCE bool
 
 	// EnforceClaimsParameter enforces the requirements of the OpenID Connect 1.0 'claims' request parameter: a

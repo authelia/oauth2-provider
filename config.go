@@ -430,13 +430,13 @@ type RFC9470StepUpAuthenticationProvider interface {
 	GetRFC9470StepUpAuthenticationEnabled(ctx context.Context) (enabled bool)
 }
 
-// AllowPublicClientsWithoutPKCEProvider returns the provider for configuring whether public clients may perform the
-// authorize code flow without PKCE.
+// AllowPublicClientsWithoutPKCEProvider returns the provider for configuring whether public clients and native
+// application clients may perform the authorize code flow without PKCE.
 type AllowPublicClientsWithoutPKCEProvider interface {
-	// GetAllowPublicClientsWithoutPKCE returns true if public clients may perform the authorize code flow without PKCE,
-	// which does not meet RFC 9700.
+	// GetAllowPublicClientsWithoutPKCE returns true if public clients, and clients with the 'native' 'application_type',
+	// may perform the authorize code flow without PKCE, which does not meet RFC 9700 or RFC 8252.
 	//
-	// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1.1
+	// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1.1 and https://www.rfc-editor.org/rfc/rfc8252#section-8.1
 	GetAllowPublicClientsWithoutPKCE(ctx context.Context) (allow bool)
 }
 

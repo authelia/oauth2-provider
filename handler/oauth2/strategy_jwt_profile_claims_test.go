@@ -113,12 +113,35 @@ func TestJWTProfileAccessTokenAuthenticationContext(t *testing.T) {
 	authTime := time.Now().Add(-time.Hour).Truncate(time.Second)
 
 	testCases := []struct {
-		name     string
-		extra    map[string]any
-		expected string
+		name      string
+		extra     map[string]any
+		requested []string
+		client    oauth2.Client
+		expected  map[string]any
 	}{
-		{name: "ShouldIncludeTheAuthenticationContext", expected: "gold"},
-		{name: "ShouldPreferTheSessionClaims", extra: map[string]any{consts.ClaimAuthenticationContextClassReference: "silver"}, expected: "silver"},
+		{
+			name:     "ShouldOmitTheAuthenticationContextByDefault",
+			client:   &oauth2.DefaultClient{ID: "jwt-client"},
+			expected: map[string]any{},
+		},
+		{
+			name:      "ShouldIncludeTheAuthenticationContextTheRequestRequired",
+			requested: []string{consts.ClaimAuthenticationTime, consts.ClaimAuthenticationContextClassReference},
+			client:    &oauth2.DefaultClient{ID: "jwt-client"},
+			expected:  map[string]any{consts.ClaimAuthenticationTime: float64(authTime.Unix()), consts.ClaimAuthenticationContextClassReference: "gold"},
+		},
+		{
+			name:     "ShouldIncludeTheAuthenticationContextTheClientLists",
+			client:   &authenticationContextClient{DefaultClient: &oauth2.DefaultClient{ID: "jwt-client"}, claims: []string{consts.ClaimAuthenticationMethodsReference}},
+			expected: map[string]any{consts.ClaimAuthenticationMethodsReference: []any{"mfa"}},
+		},
+		{
+			name:      "ShouldPreferTheSessionClaims",
+			extra:     map[string]any{consts.ClaimAuthenticationContextClassReference: "silver"},
+			requested: []string{consts.ClaimAuthenticationContextClassReference},
+			client:    &oauth2.DefaultClient{ID: "jwt-client"},
+			expected:  map[string]any{consts.ClaimAuthenticationContextClassReference: "silver"},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -139,12 +162,13 @@ func TestJWTProfileAccessTokenAuthenticationContext(t *testing.T) {
 			session := &loginJWTSession{
 				JWTSession: &JWTSession{Subject: "alice", JWTClaims: &jwt.JWTClaims{Extra: tc.extra}},
 				login:      &jwt.IDTokenClaims{AuthTime: jwt.NewNumericDate(authTime), AuthenticationContextClassReference: "gold", AuthenticationMethodsReferences: []string{"mfa"}},
+				requested:  tc.requested,
 			}
 			session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(time.Hour))
 
 			request := oauth2.NewAccessRequest(session)
 			request.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
-			request.Client = &oauth2.DefaultClient{ID: "jwt-client"}
+			request.Client = tc.client
 
 			token, _, err := strategy.GenerateAccessToken(context.Background(), request)
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -156,10 +180,16 @@ func TestJWTProfileAccessTokenAuthenticationContext(t *testing.T) {
 
 			require.NoError(t, json.Unmarshal(payload, &claims))
 
-			// RFC 9068 Section 2.2.1.
-			assert.Equal(t, float64(authTime.Unix()), claims[consts.ClaimAuthenticationTime])
-			assert.Equal(t, tc.expected, claims[consts.ClaimAuthenticationContextClassReference])
-			assert.Equal(t, []any{"mfa"}, claims[consts.ClaimAuthenticationMethodsReference])
+			actual := map[string]any{}
+
+			for _, claim := range []string{consts.ClaimAuthenticationTime, consts.ClaimAuthenticationContextClassReference, consts.ClaimAuthenticationMethodsReference} {
+				if value, ok := claims[claim]; ok {
+					actual[claim] = value
+				}
+			}
+
+			// RFC 9068 Section 2.2.1 and RFC 9470 Section 6.1.
+			assert.Equal(t, tc.expected, actual)
 		})
 	}
 }
@@ -167,9 +197,28 @@ func TestJWTProfileAccessTokenAuthenticationContext(t *testing.T) {
 type loginJWTSession struct {
 	*JWTSession
 
-	login *jwt.IDTokenClaims
+	login     *jwt.IDTokenClaims
+	requested []string
 }
 
 func (s *loginJWTSession) IDTokenClaims() *jwt.IDTokenClaims {
 	return s.login
+}
+
+func (s *loginJWTSession) SetRequestedAuthenticationContextClaims(claims []string) {
+	s.requested = claims
+}
+
+func (s *loginJWTSession) GetRequestedAuthenticationContextClaims() []string {
+	return s.requested
+}
+
+type authenticationContextClient struct {
+	*oauth2.DefaultClient
+
+	claims []string
+}
+
+func (c *authenticationContextClient) GetAuthenticationContextClaims() []string {
+	return c.claims
 }

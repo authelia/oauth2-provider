@@ -22,16 +22,22 @@ func TestJWTProfileAccessTokenExchange(t *testing.T) {
 	for _, sc := range bindingExchangeStores() {
 		t.Run(sc.name, func(t *testing.T) {
 			testCases := []struct {
-				name  string
-				actor map[string]any
-				login bool
+				name      string
+				actor     map[string]any
+				login     bool
+				requested []string
 			}{
 				{
 					name: "ShouldIssueAJWTProfileAccessToken",
 				},
 				{
-					name:  "ShouldIssueAJWTProfileAccessTokenWithTheAuthenticationContext",
+					name:  "ShouldIssueAJWTProfileAccessTokenWithoutAnAuthenticationContextNotRequired",
 					login: true,
+				},
+				{
+					name:      "ShouldIssueAJWTProfileAccessTokenWithTheAuthenticationContextRequired",
+					login:     true,
+					requested: []string{consts.ClaimAuthenticationTime, consts.ClaimAuthenticationContextClassReference},
 				},
 				{
 					name:  "ShouldIssueAJWTProfileAccessTokenWithTheActorClaim",
@@ -64,6 +70,8 @@ func TestJWTProfileAccessTokenExchange(t *testing.T) {
 						claims.AuthenticationContextClassReference = "gold"
 						claims.AuthenticationMethodsReferences = []string{"mfa"}
 					}
+
+					subject.SetRequestedAuthenticationContextClaims(tc.requested)
 
 					request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693AccessToken, createSessionAccessToken(t.Context(), hmacStrategy, store, store.GetClients()["custom-lifespan-client"], subject), "")
 
@@ -104,15 +112,15 @@ func TestJWTProfileAccessTokenExchange(t *testing.T) {
 					}
 
 					// RFC 9068 Section 2.2.1.
-					if tc.login {
+					if tc.requested != nil {
 						assert.Equal(t, float64(authTime.Unix()), claims[consts.ClaimAuthenticationTime])
 						assert.Equal(t, "gold", claims[consts.ClaimAuthenticationContextClassReference])
-						assert.Equal(t, []any{"mfa"}, claims[consts.ClaimAuthenticationMethodsReference])
 					} else {
 						assert.NotContains(t, claims, consts.ClaimAuthenticationTime)
 						assert.NotContains(t, claims, consts.ClaimAuthenticationContextClassReference)
-						assert.NotContains(t, claims, consts.ClaimAuthenticationMethodsReference)
 					}
+
+					assert.NotContains(t, claims, consts.ClaimAuthenticationMethodsReference)
 				})
 			}
 		})

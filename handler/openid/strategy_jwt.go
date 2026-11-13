@@ -45,18 +45,19 @@ type Session interface {
 
 // DefaultSession is a session container for the id token.
 type DefaultSession struct {
-	Claims                      *jwt.IDTokenClaims             `json:"id_token_claims,omitempty"`
-	Headers                     *jwt.Headers                   `json:"headers,omitempty"`
-	ExpiresAt                   map[oauth2.TokenType]time.Time `json:"expires_at,omitempty"`
-	Username                    string                         `json:"username,omitempty"`
-	Subject                     string                         `json:"subject,omitempty"`
-	JWKThumbprint               string                         `json:"jwk_thumbprint,omitempty"`
-	ClientCertificateThumbprint string                         `json:"client_certificate_thumbprint,omitempty"`
-	PublicKeyJWK                []byte                         `json:"public_key_jwk,omitempty"`
-	RequestedJWKThumbprint      string                         `json:"requested_jwk_thumbprint,omitempty"`
-	KeyBindingGranted           bool                           `json:"key_binding_granted,omitempty"`
-	RequestedAt                 time.Time                      `json:"requested_at"`
-	ExpiryDeadline              time.Time                      `json:"expiry_deadline,omitzero"`
+	Claims                               *jwt.IDTokenClaims             `json:"id_token_claims,omitempty"`
+	Headers                              *jwt.Headers                   `json:"headers,omitempty"`
+	ExpiresAt                            map[oauth2.TokenType]time.Time `json:"expires_at,omitempty"`
+	Username                             string                         `json:"username,omitempty"`
+	Subject                              string                         `json:"subject,omitempty"`
+	JWKThumbprint                        string                         `json:"jwk_thumbprint,omitempty"`
+	ClientCertificateThumbprint          string                         `json:"client_certificate_thumbprint,omitempty"`
+	PublicKeyJWK                         []byte                         `json:"public_key_jwk,omitempty"`
+	RequestedJWKThumbprint               string                         `json:"requested_jwk_thumbprint,omitempty"`
+	KeyBindingGranted                    bool                           `json:"key_binding_granted,omitempty"`
+	RequestedAt                          time.Time                      `json:"requested_at"`
+	ExpiryDeadline                       time.Time                      `json:"expiry_deadline,omitzero"`
+	RequestedAuthenticationContextClaims []string                       `json:"requested_authentication_context_claims,omitempty"`
 }
 
 // NewDefaultSession returns a DefaultSession with empty claims and headers, requested at the current time.
@@ -81,6 +82,7 @@ func (s *DefaultSession) Clone() oauth2.Session {
 	cloned.Headers = s.Headers.Clone()
 	cloned.ExpiresAt = maps.Clone(s.ExpiresAt)
 	cloned.PublicKeyJWK = slices.Clone(s.PublicKeyJWK)
+	cloned.RequestedAuthenticationContextClaims = slices.Clone(s.RequestedAuthenticationContextClaims)
 
 	return &cloned
 }
@@ -207,6 +209,20 @@ func (s *DefaultSession) GetRequestedDPoPJWKThumbprint() (jkt string) {
 	}
 
 	return s.RequestedJWKThumbprint
+}
+
+// SetRequestedAuthenticationContextClaims implements oauth2.AuthenticationContextSession for DefaultSession.
+func (s *DefaultSession) SetRequestedAuthenticationContextClaims(claims []string) {
+	s.RequestedAuthenticationContextClaims = slices.Clone(claims)
+}
+
+// GetRequestedAuthenticationContextClaims implements oauth2.AuthenticationContextSession for DefaultSession.
+func (s *DefaultSession) GetRequestedAuthenticationContextClaims() (claims []string) {
+	if s == nil {
+		return nil
+	}
+
+	return s.RequestedAuthenticationContextClaims
 }
 
 // IDTokenHeaders returns the ID Token headers, initializing them when unset.

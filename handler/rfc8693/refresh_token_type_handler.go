@@ -119,7 +119,7 @@ func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context
 
 		session.SetSubjectToken(unpacked)
 		session.SetSubject(subjectTokenSession.GetSubject())
-		carryAuthenticationContext(session, sessionAuthentication(subjectTokenSession))
+		carryAuthenticationContext(session, sessionAuthentication(subjectTokenSession), oauth2.GetRequestedAuthenticationContextClaims(subjectTokenSession))
 		carryIDTokenSubject(session, unpacked)
 		session.SetSubjectRequester(original)
 	}

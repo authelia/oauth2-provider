@@ -28,6 +28,8 @@ func (f *Fosite) NewAuthorizeResponse(ctx context.Context, request AuthorizeRequ
 
 	request.SetSession(session)
 
+	RecordAuthenticationContextRequirements(request, session)
+
 	if f.isAuthenticationRequirementsEnforced(ctx) {
 		if err = validateAuthenticationRequirements(request, session); err != nil {
 			return nil, err

@@ -114,7 +114,7 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 		login := &jwt.IDTokenClaims{}
 		login.FromMap(unpacked)
 
-		carryAuthenticationContext(session, login)
+		carryAuthenticationContext(session, login, nil)
 	}
 
 	return nil

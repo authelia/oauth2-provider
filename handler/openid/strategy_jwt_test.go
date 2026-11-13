@@ -92,17 +92,18 @@ func TestDefaultSession_Clone(t *testing.T) {
 						Confirmation:                        map[string]any{"jwk": map[string]any{"kty": "EC"}},
 						Extra:                               map[string]any{"act": map[string]any{"sub": "bob"}},
 					},
-					Headers:                     &jwt.Headers{Extra: map[string]any{"typ": "JWT"}},
-					ExpiresAt:                   map[oauth2.TokenType]time.Time{oauth2.IDToken: now.Add(time.Hour)},
-					Username:                    "alice@example",
-					Subject:                     "alice",
-					JWKThumbprint:               "jkt",
-					ClientCertificateThumbprint: "x5t",
-					PublicKeyJWK:                []byte(`{"kty":"EC"}`),
-					RequestedJWKThumbprint:      "requested-jkt",
-					KeyBindingGranted:           true,
-					ExpiryDeadline:              time.Unix(1700003600, 0).UTC(),
-					RequestedAt:                 now,
+					Headers:                              &jwt.Headers{Extra: map[string]any{"typ": "JWT"}},
+					ExpiresAt:                            map[oauth2.TokenType]time.Time{oauth2.IDToken: now.Add(time.Hour)},
+					Username:                             "alice@example",
+					Subject:                              "alice",
+					JWKThumbprint:                        "jkt",
+					ClientCertificateThumbprint:          "x5t",
+					PublicKeyJWK:                         []byte(`{"kty":"EC"}`),
+					RequestedJWKThumbprint:               "requested-jkt",
+					KeyBindingGranted:                    true,
+					RequestedAuthenticationContextClaims: []string{"acr"},
+					ExpiryDeadline:                       time.Unix(1700003600, 0).UTC(),
+					RequestedAt:                          now,
 				}
 
 				clonetest.AssertDeepCopy(t, s, s.Clone())
@@ -744,6 +745,14 @@ func TestDefaultSession_MarshalJSON(t *testing.T) {
 				RequestedAt: time.Unix(1743845057, 1000).UTC(),
 			},
 			`{"requested_at":"2025-04-05T09:24:17.000001Z"}`,
+		},
+		{
+			"ShouldHandleRequestedAuthenticationContextClaims",
+			&DefaultSession{
+				RequestedAt:                          time.Time{},
+				RequestedAuthenticationContextClaims: []string{consts.ClaimAuthenticationContextClassReference, consts.ClaimAuthenticationTime},
+			},
+			`{"requested_at":"0001-01-01T00:00:00Z","requested_authentication_context_claims":["acr","auth_time"]}`,
 		},
 	}
 

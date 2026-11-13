@@ -6,7 +6,6 @@ package rfc8693
 
 import (
 	"maps"
-	"slices"
 	"time"
 
 	"authelia.com/provider/oauth2"
@@ -183,27 +182,12 @@ func (s *DefaultSession) SetClaimActor(act map[string]any) {
 }
 
 // GetJWTClaims implements oauth2.JWTSessionContainer. The claims of an RFC 9068 JWT access token issued for the session
-// are its subject, the 'auth_time', 'acr' and 'amr' of the authentication carried from the subject token, and its Extra
-// claims, which include the RFC 8693 Section 4.1 'act' claim. An Extra claim of the same name takes precedence.
+// are its subject and its Extra claims, which include the RFC 8693 Section 4.1 'act' claim. The 'auth_time', 'acr' and
+// 'amr' claims of the authentication carried from the subject token are added by oauth2.ApplyAuthenticationContext.
 //
-// See: https://datatracker.ietf.org/doc/html/rfc9068#section-2.2 and
-// https://datatracker.ietf.org/doc/html/rfc9068#section-2.2.1
+// See: https://datatracker.ietf.org/doc/html/rfc9068#section-2.2
 func (s *DefaultSession) GetJWTClaims() jwt.JWTClaimsContainer {
 	extra := map[string]any{}
-
-	if s.DefaultSession != nil && s.Claims != nil {
-		if s.Claims.AuthTime != nil {
-			extra[consts.ClaimAuthenticationTime] = s.Claims.AuthTime.Unix()
-		}
-
-		if s.Claims.AuthenticationContextClassReference != "" {
-			extra[consts.ClaimAuthenticationContextClassReference] = s.Claims.AuthenticationContextClassReference
-		}
-
-		if len(s.Claims.AuthenticationMethodsReferences) != 0 {
-			extra[consts.ClaimAuthenticationMethodsReference] = slices.Clone(s.Claims.AuthenticationMethodsReferences)
-		}
-	}
 
 	maps.Copy(extra, clone.Map(s.Extra))
 

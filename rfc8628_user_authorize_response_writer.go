@@ -16,6 +16,8 @@ func (f *Fosite) NewRFC8628UserAuthorizeResponse(ctx context.Context, requester 
 
 	requester.SetSession(session)
 
+	RecordAuthenticationContextRequirements(requester, session)
+
 	if f.isAuthenticationRequirementsEnforced(ctx) && requester.GetStatus() == DeviceAuthorizeStatusApproved {
 		if err = validateAuthenticationRequirements(requester, session); err != nil {
 			return nil, err

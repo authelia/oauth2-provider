@@ -1195,12 +1195,17 @@ func carryIDTokenSubject(session any, claims map[string]any) {
 }
 
 // carryAuthenticationContext replaces the 'auth_time', 'acr' and 'amr' claims of the session with those of the subject
-// token authentication, clearing them when login is nil. OpenID Connect Core 1.0 Section 12.2 requires the 'auth_time'
-// claim of a refreshed ID Token to be the original one.
+// token authentication, clearing them when login is nil, and the authentication context claims the access tokens
+// derived from it convey with requested. OpenID Connect Core 1.0 Section 12.2 requires the 'auth_time' claim of a
+// refreshed ID Token to be the original one.
 //
 // See: https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse and
 // https://datatracker.ietf.org/doc/html/rfc9068#section-2.2.1
-func carryAuthenticationContext(session any, login *jwt.IDTokenClaims) {
+func carryAuthenticationContext(session any, login *jwt.IDTokenClaims, requested []string) {
+	if target, ok := session.(oauth2.AuthenticationContextSession); ok {
+		target.SetRequestedAuthenticationContextClaims(requested)
+	}
+
 	target, ok := session.(openid.Session)
 	if !ok {
 		return

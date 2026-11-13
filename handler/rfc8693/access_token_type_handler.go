@@ -119,7 +119,7 @@ func (c *AccessTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context,
 
 		session.SetSubjectToken(claims)
 		session.SetSubject(subjectTokenSession.GetSubject())
-		carryAuthenticationContext(session, sessionAuthentication(subjectTokenSession))
+		carryAuthenticationContext(session, sessionAuthentication(subjectTokenSession), oauth2.GetRequestedAuthenticationContextClaims(subjectTokenSession))
 		session.SetSubjectRequester(original)
 	}
 

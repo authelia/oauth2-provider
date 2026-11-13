@@ -111,6 +111,7 @@ func TestRecordAuthenticationContextRequirements(t *testing.T) {
 	testCases := []struct {
 		name     string
 		form     url.Values
+		client   Client
 		prior    []string
 		expected []string
 	}{
@@ -140,6 +141,12 @@ func TestRecordAuthenticationContextRequirements(t *testing.T) {
 			expected: nil,
 		},
 		{
+			name:     "ShouldRecordTheACRForDefaultACRValues",
+			form:     url.Values{},
+			client:   &DefaultRegisteredClient{DefaultACRValues: []string{"phr"}},
+			expected: []string{consts.ClaimAuthenticationContextClassReference},
+		},
+		{
 			name:     "ShouldReplaceAPriorRecord",
 			form:     url.Values{},
 			prior:    []string{consts.ClaimAuthenticationTime},
@@ -153,6 +160,7 @@ func TestRecordAuthenticationContextRequirements(t *testing.T) {
 
 			request := NewAuthorizeRequest()
 			request.Form = tc.form
+			request.Client = tc.client
 
 			RecordAuthenticationContextRequirements(request, session)
 

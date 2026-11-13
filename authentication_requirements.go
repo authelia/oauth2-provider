@@ -24,13 +24,37 @@ func (f *Fosite) isAuthenticationRequirementsEnforced(ctx context.Context) (enfo
 	return ok && provider.GetEnforceAuthenticationRequirements(ctx)
 }
 
+// GetRequestedACRValues returns the Authentication Context Class References requested for the End-User authentication
+// of request: the 'acr_values' parameter when present, otherwise the 'default_acr_values' of a DefaultACRValuesClient
+// unless the 'claims' parameter requests the 'acr' Claim with a 'value' or 'values' member.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest and
+// https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+func GetRequestedACRValues(request Requester) (values []string) {
+	if values = strings.Fields(request.GetRequestForm().Get(consts.FormParameterAuthenticationContextClassReferenceValues)); len(values) != 0 {
+		return values
+	}
+
+	if r, ok := request.(ClaimsRequester); ok {
+		if claims := r.GetClaims(); claims != nil && (claims.IDToken[consts.ClaimAuthenticationContextClassReference].HasValues() || claims.UserInfo[consts.ClaimAuthenticationContextClassReference].HasValues()) {
+			return nil
+		}
+	}
+
+	if client, ok := request.GetClient().(DefaultACRValuesClient); ok {
+		return slices.Clone(client.GetDefaultACRValues())
+	}
+
+	return nil
+}
+
 // validateAuthenticationRequirements returns ErrUnmetAuthenticationRequirements unless the 'acr' recorded on the ID
-// Token claims of the session is one of the requested 'acr_values' and the 'auth_time' is no older than 'max_age'
-// seconds before the request. A malformed 'max_age' returns ErrInvalidRequest.
+// Token claims of the session is one of the values GetRequestedACRValues returns and the 'auth_time' is no older than
+// 'max_age' seconds before the request. A malformed 'max_age' returns ErrInvalidRequest.
 func validateAuthenticationRequirements(request Requester, session Session) (err error) {
 	form := request.GetRequestForm()
 
-	requested := strings.Fields(form.Get(consts.FormParameterAuthenticationContextClassReferenceValues))
+	requested := GetRequestedACRValues(request)
 
 	values, hasMaxAge := form[consts.FormParameterMaximumAge]
 
@@ -46,7 +70,7 @@ func validateAuthenticationRequirements(request Requester, session Session) (err
 
 	// See: https://www.rfc-editor.org/rfc/rfc9470#section-5
 	if len(requested) != 0 && (login.AuthenticationContextClassReference == "" || !slices.Contains(requested, login.AuthenticationContextClassReference)) {
-		return errorsx.WithStack(ErrUnmetAuthenticationRequirements.WithHint("The Authentication Context Class Reference requested by the 'acr_values' parameter was not met."))
+		return errorsx.WithStack(ErrUnmetAuthenticationRequirements.WithHint("The Authentication Context Class Reference requested by the 'acr_values' parameter or the 'default_acr_values' of the client was not met."))
 	}
 
 	if !hasMaxAge {

@@ -450,6 +450,17 @@ type PushedAuthorizationRequestRedirectURIClient interface {
 	Client
 }
 
+// DefaultACRValuesClient is a Client which has registered the 'default_acr_values' client metadata: the Authentication
+// Context Class References requested for its End-User authentications when a request names none.
+//
+// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+type DefaultACRValuesClient interface {
+	// GetDefaultACRValues returns the 'default_acr_values' client metadata value.
+	GetDefaultACRValues() (values []string)
+
+	Client
+}
+
 // ResponseModeClient represents a client capable of handling response_mode
 type ResponseModeClient interface {
 	// GetResponseModes returns the response modes that client is allowed to send. When it returns any, a request which

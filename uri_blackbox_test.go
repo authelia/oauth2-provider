@@ -546,6 +546,7 @@ func TestMatchRedirectURIWithClientRedirectURIsNativeAppLoopback(t *testing.T) {
 	testCases := []struct {
 		name            string
 		public          bool
+		declared        bool
 		applicationType string
 		registered      string
 		requested       string
@@ -577,12 +578,19 @@ func TestMatchRedirectURIWithClientRedirectURIsNativeAppLoopback(t *testing.T) {
 		{name: "ShouldNotMatchConfidentialNativeLoopbackDifferentPath", applicationType: consts.ApplicationTypeNative, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/other"},
 		{name: "ShouldNotMatchConfidentialNativeLocalhostHTTPS", applicationType: consts.ApplicationTypeNative, registered: "https://localhost/cb", requested: "https://localhost:51004/cb"},
 		{name: "ShouldNotMatchConfidentialWebLoopbackAnyPort", applicationType: consts.ApplicationTypeWeb, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/cb"},
-		{name: "ShouldMatchPublicWebLoopbackAnyPort", public: true, applicationType: consts.ApplicationTypeWeb, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/cb", match: true},
+		{name: "ShouldNotMatchPublicWebLoopbackAnyPort", public: true, applicationType: consts.ApplicationTypeWeb, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/cb"},
+		{name: "ShouldNotMatchPublicDefaultWebLoopbackAnyPort", public: true, declared: true, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/cb"},
+		{name: "ShouldMatchPublicNativeLoopbackAnyPort", public: true, applicationType: consts.ApplicationTypeNative, registered: "http://127.0.0.1/cb", requested: "http://127.0.0.1:51004/cb", match: true},
+		{name: "ShouldMatchPublicWebLoopbackExact", public: true, applicationType: consts.ApplicationTypeWeb, registered: "http://127.0.0.1:51004/cb", requested: "http://127.0.0.1:51004/cb", match: true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			client := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{Public: tc.public, RedirectURIs: []string{tc.registered}}, ApplicationType: tc.applicationType}
+			var client oauth2.Client = &oauth2.DefaultClient{Public: tc.public, RedirectURIs: []string{tc.registered}}
+
+			if tc.declared || tc.applicationType != "" {
+				client = &oauth2.DefaultRegisteredClient{DefaultClient: client.(*oauth2.DefaultClient), ApplicationType: tc.applicationType}
+			}
 
 			uri, err := oauth2.MatchRedirectURIWithClientRedirectURIs(tc.requested, client)
 

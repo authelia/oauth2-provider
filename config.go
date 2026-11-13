@@ -1196,6 +1196,21 @@ type MTLSStrictRefreshTokenBindingProvider interface {
 	GetMTLSStrictRefreshTokenBinding(ctx context.Context) (strict bool)
 }
 
+// SignedResponseAlgValuesProvider returns the provider for restricting the JWS algorithms which sign JWT Secured
+// Authorization Response Mode responses and RFC 9701 introspection responses, such as to the asymmetric algorithms
+// which provide the non-repudiation FAPI 2.0 Message Signing Section 5.2 is for.
+//
+// See: https://openid.net/specs/fapi-message-signing-2_0-final.html#section-5.2
+type SignedResponseAlgValuesProvider interface {
+	// GetAuthorizationSignedResponseAlgValues returns the JWS algorithms which may sign a JWT Secured Authorization
+	// Response Mode response, or nil for every algorithm the JARM strategy and the client secret support.
+	GetAuthorizationSignedResponseAlgValues(ctx context.Context) (algs []string)
+
+	// GetIntrospectionSignedResponseAlgValues returns the JWS algorithms which may sign an RFC 9701 introspection
+	// response, or nil for every algorithm the introspection JWT response strategy and the client secret support.
+	GetIntrospectionSignedResponseAlgValues(ctx context.Context) (algs []string)
+}
+
 // IntrospectionPermissionProvider returns the provider for requiring a client to be permitted to call the introspection
 // endpoint.
 //

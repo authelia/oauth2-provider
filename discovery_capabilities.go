@@ -432,21 +432,43 @@ func SupportedUserinfoSignedResponseAlgValues(ctx context.Context, config Config
 }
 
 // SupportedAuthorizationSignedResponseAlgValues returns the 'authorization_signed_response_alg' values the server can
-// produce: the JARM strategy algorithms plus the client secret HMAC algorithms, or nil when there is no JARM strategy.
+// produce: the JARM strategy algorithms plus the client secret HMAC algorithms, or nil when there is no JARM strategy,
+// restricted to those SignedResponseAlgValuesProvider permits.
 //
 // See: https://openid.net/specs/oauth-v2-jarm.html#section-4
 func SupportedAuthorizationSignedResponseAlgValues(ctx context.Context, config Configurator) []string {
-	return strategySignedResponseAlgValues(ctx, config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx), false)
+	algs := strategySignedResponseAlgValues(ctx, config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx), false)
+
+	if provider, ok := config.(SignedResponseAlgValuesProvider); ok {
+		return restrictedAlgValues(algs, provider.GetAuthorizationSignedResponseAlgValues(ctx))
+	}
+
+	return algs
 }
 
 // SupportedIntrospectionSignedResponseAlgValues returns the 'introspection_signed_response_alg' values the server can
 // produce: the JWT introspection response strategy algorithms plus the client secret HMAC algorithms, or nil when there
-// is no such strategy. 'none' is excluded because the introspection response JWT is cryptographically secured.
+// is no such strategy, restricted to those SignedResponseAlgValuesProvider permits. 'none' is excluded because the
+// introspection response JWT is cryptographically secured.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc9701#section-5
 // See: https://datatracker.ietf.org/doc/html/rfc9701#section-7
 func SupportedIntrospectionSignedResponseAlgValues(ctx context.Context, config Configurator) []string {
-	return strategySignedResponseAlgValues(ctx, config.GetIntrospectionJWTResponseStrategy(ctx), false)
+	algs := strategySignedResponseAlgValues(ctx, config.GetIntrospectionJWTResponseStrategy(ctx), false)
+
+	if provider, ok := config.(SignedResponseAlgValuesProvider); ok {
+		return restrictedAlgValues(algs, provider.GetIntrospectionSignedResponseAlgValues(ctx))
+	}
+
+	return algs
+}
+
+func restrictedAlgValues(algs, permitted []string) []string {
+	if len(permitted) == 0 {
+		return algs
+	}
+
+	return slices.DeleteFunc(algs, func(alg string) bool { return !slices.Contains(permitted, alg) })
 }
 
 // SupportedAccessTokenSignedResponseAlgValues returns the 'access_token_signed_response_alg' values the server can

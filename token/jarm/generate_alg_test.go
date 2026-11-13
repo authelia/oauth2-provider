@@ -75,6 +75,99 @@ func TestGenerateSigningAlgorithm(t *testing.T) {
 	}
 }
 
+func TestGenerateSignedResponseAlgValues(t *testing.T) {
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	keys := []jose.JSONWebKey{
+		{Key: rsaKey, KeyID: "rsa", Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature},
+		{Key: ecKey, KeyID: "ec", Algorithm: string(jose.ES256), Use: consts.JSONWebTokenUseSignature},
+	}
+
+	testCases := []struct {
+		name      string
+		permitted []string
+		alg       string
+		expected  string
+		err       string
+		plain     bool
+	}{
+		{name: "ShouldUseTheFirstPermittedAlgorithmByDefault", permitted: []string{string(jose.ES256)}, expected: string(jose.ES256)},
+		{name: "ShouldUseAPermittedRegisteredAlgorithm", permitted: []string{string(jose.ES256), string(jose.RS256)}, alg: string(jose.RS256), expected: string(jose.RS256)},
+		{name: "ShouldRefuseARegisteredAlgorithmNotPermitted", permitted: []string{string(jose.ES256)}, alg: string(jose.RS256), err: "which is not one of the permitted algorithms 'ES256'"},
+		{name: "ShouldNotRestrictWithoutPermittedAlgorithms", alg: string(jose.RS256), expected: string(jose.RS256)},
+		{name: "ShouldDefaultToTheFirstPermittedAlgorithmTheStrategySupports", permitted: []string{string(jose.PS256), "", string(jose.ES256)}, expected: string(jose.ES256)},
+		{name: "ShouldRefuseAnEmptyPermittedAlgorithm", permitted: []string{""}, err: "but the first is empty"},
+		{name: "ShouldRefuseARegisteredAlgorithmForAClientWhichIsNotAJARMClient", permitted: []string{string(jose.ES256)}, alg: string(jose.ES256), plain: true, err: "but the client is not a jwt.JARMClient"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &permittedAlgConfigurator{
+				realStrategyConfigurator: realStrategyConfigurator{
+					stubConfigurator: stubConfigurator{issuer: "https://issuer.example.com", lifespan: time.Hour},
+					signer:           &jwt.DefaultStrategy{Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: keys})},
+				},
+				permitted: tc.permitted,
+			}
+
+			var client Client = &registeredJARMClient{alg: tc.alg}
+
+			if tc.plain {
+				client = &plainJARMClient{Client: client}
+			}
+
+			token, _, err := Generate(context.Background(), config, client, nil, url.Values{"code": {"abc"}})
+
+			if tc.err != "" {
+				assert.ErrorContains(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			signed, err := jose.ParseSignedCompact(token, []jose.SignatureAlgorithm{jose.RS256, jose.ES256})
+			require.NoError(t, err)
+			require.Len(t, signed.Signatures, 1)
+
+			assert.Equal(t, tc.expected, signed.Signatures[0].Header.Algorithm)
+		})
+	}
+}
+
+func TestSignedResponseAlgClientClientSecretExpiresAt(t *testing.T) {
+	expires := time.Now().Add(-time.Hour)
+
+	assert.Equal(t, expires, (&signedResponseAlgClient{JARMClient: &expiringJARMClient{expires: expires}}).GetClientSecretExpiresAt())
+	assert.True(t, (&signedResponseAlgClient{JARMClient: &registeredJARMClient{}}).GetClientSecretExpiresAt().IsZero())
+}
+
+type plainJARMClient struct {
+	Client
+}
+
+type expiringJARMClient struct {
+	registeredJARMClient
+
+	expires time.Time
+}
+
+func (c *expiringJARMClient) GetClientSecretExpiresAt() time.Time { return c.expires }
+
+type permittedAlgConfigurator struct {
+	realStrategyConfigurator
+
+	permitted []string
+}
+
+func (c *permittedAlgConfigurator) GetAuthorizationSignedResponseAlgValues(_ context.Context) []string {
+	return c.permitted
+}
+
 type realStrategyConfigurator struct {
 	stubConfigurator
 

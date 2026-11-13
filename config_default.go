@@ -352,6 +352,20 @@ type Config struct {
 	// JWT Secured Authorization Response Mode. Defaults to 10 minutes.
 	JWTSecuredAuthorizeResponseModeLifespan time.Duration
 
+	// AuthorizationSignedResponseAlgValues restricts the JWS algorithms which may sign a JWT Secured Authorization
+	// Response Mode response, and those offered for the 'authorization_signed_response_alg' client metadata. A client
+	// registered with another algorithm is refused a signed response, and the first value signs the response of a
+	// client registered with none. Empty permits every algorithm the JARM strategy and the client secret support,
+	// including the HMAC algorithms, which provide no non-repudiation.
+	AuthorizationSignedResponseAlgValues []string
+
+	// IntrospectionSignedResponseAlgValues restricts the JWS algorithms which may sign an RFC 9701 introspection
+	// response, and those offered for the 'introspection_signed_response_alg' client metadata. A caller registered
+	// with another algorithm is answered with 'server_error', and a caller registered with none is answered with RS256
+	// when it is permitted and otherwise the first value. Empty permits every algorithm the introspection JWT response
+	// strategy and the client secret support, including the HMAC algorithms, which provide no non-repudiation.
+	IntrospectionSignedResponseAlgValues []string
+
 	// JWTSecuredAuthorizeResponseModeStrategy is the signer for JWT Secured Authorization Response Mode. Has no default.
 	JWTSecuredAuthorizeResponseModeStrategy jwt.Strategy
 
@@ -1331,6 +1345,18 @@ func (c *Config) GetJWTSecuredAuthorizeResponseModeLifespan(_ context.Context) t
 	return c.JWTSecuredAuthorizeResponseModeLifespan
 }
 
+// GetAuthorizationSignedResponseAlgValues returns the JWS algorithms which may sign a JWT Secured Authorization Response
+// Mode response, or nil for every supported algorithm.
+func (c *Config) GetAuthorizationSignedResponseAlgValues(_ context.Context) []string {
+	return c.AuthorizationSignedResponseAlgValues
+}
+
+// GetIntrospectionSignedResponseAlgValues returns the JWS algorithms which may sign an RFC 9701 introspection response,
+// or nil for every supported algorithm.
+func (c *Config) GetIntrospectionSignedResponseAlgValues(_ context.Context) []string {
+	return c.IntrospectionSignedResponseAlgValues
+}
+
 // GetBCryptCost returns the bcrypt cost factor. Defaults to 12.
 func (c *Config) GetBCryptCost(_ context.Context) int {
 	if c.HashCost == 0 {
@@ -2125,6 +2151,7 @@ var (
 	_ MTLSConfigProvider                                    = (*Config)(nil)
 	_ EnforceSenderConstrainedAccessTokensProvider          = (*Config)(nil)
 	_ IntrospectionPermissionProvider                       = (*Config)(nil)
+	_ SignedResponseAlgValuesProvider                       = (*Config)(nil)
 	_ MTLSStrictRefreshTokenBindingProvider                 = (*Config)(nil)
 	_ RFC7591ClientRegistrationConfigProvider               = (*Config)(nil)
 	_ RFC7591ClientRegistrationPolicyProvider               = (*Config)(nil)

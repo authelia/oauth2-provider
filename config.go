@@ -711,9 +711,20 @@ type RFC7591ClientRegistrationGrantTypesProvider interface {
 	GetRFC7591ClientRegistrationGrantTypes(ctx context.Context) (grantTypes []string)
 }
 
+// RFC7591AllowNativeImplicitGrantProvider returns the provider for configuring whether a client with the 'native'
+// 'application_type' may register the 'implicit' grant type.
+type RFC7591AllowNativeImplicitGrantProvider interface {
+	// GetRFC7591AllowNativeImplicitGrant returns true if client registration accepts the 'implicit' grant type for a
+	// client with the 'native' 'application_type', which RFC 8252 does not recommend.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8252#section-8.2
+	GetRFC7591AllowNativeImplicitGrant(ctx context.Context) (allow bool)
+}
+
 type RFC7591ClientRegistrationConfigProvider interface {
 	RFC7591ClientRegistrationTokenSecretProvider
 	RFC7591ClientRegistrationGrantTypesProvider
+	RFC7591AllowNativeImplicitGrantProvider
 
 	// GetRFC7591ClientRegistrationEndpointURL returns the absolute URL of the client registration endpoint. It is
 	// used to build 'registration_client_uri' values and to audience initial access tokens.

@@ -106,7 +106,9 @@ func IsLocalhost(uri *url.URL) bool {
 }
 
 // MatchRedirectURIWithClientRedirectURIs if the given uri is a registered redirect uri. Does not perform
-// uri validation. A public or native client may use a registered loopback redirect URI on any port.
+// uri validation. A native client may use a registered loopback redirect URI on any port. The client is native when it
+// is an ApplicationTypeClient whose 'application_type' is 'native', or when it is not an ApplicationTypeClient and is
+// public.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.3
 // See: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
@@ -121,7 +123,7 @@ func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL
 		}
 
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'.").WithDebugf("The 'redirect_uris' registered with OAuth 2.0 Client with id '%s' did not match 'redirect_uri' value '%s' because the only registered 'redirect_uri' is not a valid value.", client.GetID(), raw))
-	} else if redirectTo, ok := isMatchingRedirectURI(raw, client.GetRedirectURIs(), strategy, client.IsPublic() || IsNativeClient(client)); raw != "" && ok {
+	} else if redirectTo, ok := isMatchingRedirectURI(raw, client.GetRedirectURIs(), strategy, isLoopbackPortExempt(client)); raw != "" && ok {
 		// If a redirect_uri was given and the clients knows it (simple string comparison!)
 		// return it.
 		if parsed, err := url.Parse(redirectTo); err == nil && IsValidRedirectURI(parsed) {
@@ -134,11 +136,23 @@ func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL
 
 // IsMatchingRedirectURI matches a requested redirect URI against a pool of registered client URIs using the given
 // strategy. It does not apply the native app loopback port exemption, which MatchRedirectURIWithClientRedirectURIs
-// applies to public and native clients only.
+// applies to native clients only.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1
 func IsMatchingRedirectURI(needle string, haystack []string, strategy URIComparisonStrategy) (uri string, ok bool) {
 	return isMatchingRedirectURI(needle, haystack, strategy, false)
+}
+
+// isLoopbackPortExempt returns true if the client is a native application, which RFC 8252 Section 7.3 permits any port
+// on a loopback redirect URI. A client which declares no 'application_type' is taken to be native when it is public.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8252#section-7.3
+func isLoopbackPortExempt(client Client) bool {
+	if _, ok := client.(ApplicationTypeClient); ok {
+		return IsNativeClient(client)
+	}
+
+	return client.IsPublic()
 }
 
 func isMatchingRedirectURI(needle string, haystack []string, strategy URIComparisonStrategy, loopback bool) (uri string, ok bool) {

@@ -312,8 +312,8 @@ type RefreshFlowScopeClient interface {
 }
 
 // ApplicationTypeClient is a client which reports its OpenID Connect Dynamic Client Registration 1.0
-// 'application_type', being 'web' or 'native'. A 'native' client may use a loopback redirect URI on any port, whether
-// or not it is public; see MatchRedirectURIWithClientRedirectURIs.
+// 'application_type', being 'web' or 'native'. Only a 'native' client may use a loopback redirect URI on any port,
+// whether or not it is public; see MatchRedirectURIWithClientRedirectURIs.
 //
 // See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 // See: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3

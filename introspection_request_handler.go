@@ -43,6 +43,11 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		return &IntrospectionResponse{Active: false}, err
 	}
 
+	// FAPI 2.0 Message Signing Section 6.2: only a resource server may call the introspection endpoint.
+	if f.enforcesIntrospectionPermission(ctx) && !isIntrospectionPermitted(client) {
+		return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("The client is not permitted to call the introspection endpoint.").WithDebugf("The client with id '%s' is not registered as permitted to introspect tokens.", clientID(client)))
+	}
+
 	// RFC 7662 Section 2.1 makes 'token' REQUIRED, and RFC 6749 Section 3.1 treats an empty value as omitted. A request
 	// without it is not "a properly formed and authorized query" (RFC 7662 Section 2.3), so it is answered with the
 	// RFC 6749 Section 5.2 'invalid_request' error rather than an inactive introspection response.
@@ -62,6 +67,14 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		inactive := &IntrospectionResponse{Client: client, Active: false, JWTRequested: jwtRequested}
 
 		return inactive, errorsx.WithStack(&inactiveIntrospectionError{responder: inactive, error: ErrInactiveToken.WithHint("An introspection strategy indicated that the token is inactive.").WithWrap(err).WithDebugError(err)})
+	}
+
+	// RFC 7662 Sections 2.3 and 4: a client learns only about the tokens issued to it, and a resource server only about
+	// those it is an audience of.
+	if !isIntrospectionTokenVisible(client, ar) {
+		inactive := &IntrospectionResponse{Client: client, Active: false, JWTRequested: jwtRequested}
+
+		return inactive, errorsx.WithStack(&inactiveIntrospectionError{responder: inactive, error: ErrInactiveToken.WithHint("The token was neither issued to nor intended for the client making the introspection request.")})
 	}
 
 	accessTokenType := ""
@@ -85,6 +98,46 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		AccessTokenType: accessTokenType,
 		JWTRequested:    jwtRequested,
 	}, nil
+}
+
+func (f *Fosite) enforcesIntrospectionPermission(ctx context.Context) bool {
+	provider, ok := f.Config.(IntrospectionPermissionProvider)
+
+	return ok && provider.GetEnforceIntrospectionPermission(ctx)
+}
+
+func isIntrospectionPermitted(client Client) bool {
+	c, ok := client.(IntrospectionClient)
+
+	return ok && c.GetIntrospectionPermitted()
+}
+
+func isIntrospectionTokenVisible(client Client, token Requester) bool {
+	c, ok := client.(IntrospectionClient)
+	if !ok {
+		return true
+	}
+
+	if !c.GetIntrospectionPermitted() {
+		owner := token.GetClient()
+
+		return owner != nil && owner.GetID() != "" && owner.GetID() == c.GetID()
+	}
+
+	served := c.GetIntrospectionAudience()
+	if served == nil {
+		served = []string{c.GetID()}
+	}
+
+	return slices.ContainsFunc(JoinGrantedAudienceAndResource(token.GetGrantedAudience(), token.GetGrantedResource()), func(value string) bool { return slices.Contains(served, value) })
+}
+
+func clientID(client Client) string {
+	if client == nil {
+		return ""
+	}
+
+	return client.GetID()
 }
 
 type inactiveIntrospectionError struct {
@@ -179,7 +232,15 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 			return nil, err
 		}
 
-		client = ar.GetClient()
+		// The permission and audience checks apply to the caller's current registration, not the one recorded when the
+		// credential was issued. A credential issued without client authentication has no registration.
+		if client = ar.GetClient(); client != nil && client.GetID() != "" {
+			id := client.GetID()
+
+			if client, err = GetClient(ctx, f.Config, f.Store, id); err != nil {
+				return nil, errClientLookup(err, ErrRequestUnauthorized.WithHint("The client which the credential was issued to is not registered.").WithWrap(err).WithDebugf("The client with id '%s' could not be found.", id))
+			}
+		}
 	} else if f.Config.GetIntrospectionEndpointClientAuthDisabled(ctx) {
 		// ErrInvalidToken rather than ErrRequestUnauthorized, so that WriteIntrospectionError answers with the RFC 6750
 		// Section 3 'WWW-Authenticate' challenge.

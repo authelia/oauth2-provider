@@ -334,6 +334,30 @@ func IsNativeClient(client Client) (native bool) {
 	return ok && c.GetApplicationType() == consts.ApplicationTypeNative
 }
 
+// IntrospectionClient is a client which acts as a protected resource at the introspection endpoint.
+//
+// RFC 7662 Section 4 requires the authorization server to determine whether the caller may know about a token. A
+// client implementing this interface learns that a token is active only when the token was issued to it, unless
+// GetIntrospectionPermitted returns true, when it is a resource server and learns that a token is active only when the
+// token's audience or resource shares a value with GetIntrospectionAudience. A token without an audience is therefore
+// visible to no resource server. A client not implementing it may introspect any token. When
+// IntrospectionPermissionProvider requires it, only a resource server may call the introspection endpoint, as FAPI 2.0
+// Message Signing Section 6.2 requires.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7662#section-4
+// See: https://openid.net/specs/fapi-message-signing-2_0-final.html#section-6.2
+type IntrospectionClient interface {
+	// GetIntrospectionPermitted should return true if this client is a resource server, which may introspect only the
+	// tokens intended for it, or false if it may introspect only the tokens issued to it.
+	GetIntrospectionPermitted() (permitted bool)
+
+	// GetIntrospectionAudience should return the audience and resource values this client serves as a resource
+	// server, or nil to serve only its client ID.
+	GetIntrospectionAudience() (audience []string)
+
+	Client
+}
+
 // RefreshTokenRotationClient is a client which keeps its refresh token during its own refresh token grants. Rotation
 // is disabled when either this or the provider-wide option is set, except for a public client whose refresh token is
 // not sender-constrained by an enabled DPoP or mTLS binding; see IsRefreshTokenRotationDisabledForRequest.

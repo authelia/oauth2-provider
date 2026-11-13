@@ -1196,6 +1196,17 @@ type MTLSStrictRefreshTokenBindingProvider interface {
 	GetMTLSStrictRefreshTokenBinding(ctx context.Context) (strict bool)
 }
 
+// IntrospectionPermissionProvider returns the provider for requiring a client to be permitted to call the introspection
+// endpoint.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7662#section-4
+// See: https://openid.net/specs/fapi-message-signing-2_0-final.html#section-6.2
+type IntrospectionPermissionProvider interface {
+	// GetEnforceIntrospectionPermission returns true if only a client implementing IntrospectionClient whose
+	// GetIntrospectionPermitted returns true may call the introspection endpoint.
+	GetEnforceIntrospectionPermission(ctx context.Context) (enforce bool)
+}
+
 // EnforceSenderConstrainedAccessTokensProvider returns the provider for requiring every access token to be
 // sender-constrained by either RFC 9449 DPoP or RFC 8705 Mutual-TLS.
 //

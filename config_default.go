@@ -679,6 +679,11 @@ type Config struct {
 	// client can be required individually through SenderConstrainedAccessTokensClient.
 	EnforceSenderConstrainedAccessTokens bool
 
+	// EnforceIntrospectionPermission permits only a client implementing IntrospectionClient whose
+	// GetIntrospectionPermitted returns true to call the introspection endpoint, as FAPI 2.0 Message Signing Section
+	// 6.2 requires. Any other caller is refused with 'request_unauthorized'.
+	EnforceIntrospectionPermission bool
+
 	// MTLSClientCertificateHeader is the name of the header a trusted TLS terminating proxy forwards the client
 	// certificate in, for example 'X-Forwarded-Tls-Client-Cert'. It is empty by default, which disables the header so
 	// that only a certificate from the TLS connection itself is used.
@@ -1879,6 +1884,11 @@ func (c *Config) GetEnforceSenderConstrainedAccessTokens(_ context.Context) (enf
 	return c.EnforceSenderConstrainedAccessTokens
 }
 
+// GetEnforceIntrospectionPermission returns true if only a permitted client may call the introspection endpoint.
+func (c *Config) GetEnforceIntrospectionPermission(_ context.Context) (enforce bool) {
+	return c.EnforceIntrospectionPermission
+}
+
 // GetMTLSClientCertificateHeader returns the name of the header a trusted TLS terminating proxy forwards the client
 // certificate in. Empty disables the header. See the MTLSClientCertificateHeader field.
 func (c *Config) GetMTLSClientCertificateHeader(ctx context.Context) (header string) {
@@ -2114,6 +2124,7 @@ var (
 	_ OIDCKeyBindingConfigProvider                          = (*Config)(nil)
 	_ MTLSConfigProvider                                    = (*Config)(nil)
 	_ EnforceSenderConstrainedAccessTokensProvider          = (*Config)(nil)
+	_ IntrospectionPermissionProvider                       = (*Config)(nil)
 	_ MTLSStrictRefreshTokenBindingProvider                 = (*Config)(nil)
 	_ RFC7591ClientRegistrationConfigProvider               = (*Config)(nil)
 	_ RFC7591ClientRegistrationPolicyProvider               = (*Config)(nil)

@@ -60,7 +60,7 @@ finalized, so support for one may change in any release.
 | [RFC 7591: Dynamic Client Registration Protocol](https://datatracker.ietf.org/doc/html/rfc7591)                                                 |   ✅   |            | Includes policies from creation tokens                                                                                                                  |
 | [RFC 7592: Dynamic Client Registration Management Protocol](https://datatracker.ietf.org/doc/html/rfc7592)                                      |   ✅   |            |                                                                                                                                                         |
 | [RFC 7636: Proof Key for Code Exchange (PKCE)](https://datatracker.ietf.org/doc/html/rfc7636)                                                   |   ✅   |            | Per-client enforcement policy                                                                                                                           |
-| [RFC 7662: Token Introspection](https://datatracker.ietf.org/doc/html/rfc7662)                                                                  |   ✅   |            | Client authentication for the introspection endpoint                                                                                                    |
+| [RFC 7662: Token Introspection](https://datatracker.ietf.org/doc/html/rfc7662)                                                                  |   ✅   |            | Client authentication, and per client a restriction to its own tokens or, for a resource server, to its audience                                        |
 | [RFC 8252: OAuth 2.0 for Native Apps](https://datatracker.ietf.org/doc/html/rfc8252)                                                            |   🟡   |            | Any loopback port for public clients and those whose `application_type` is `native`; private-use URI schemes are only checked at registration           |
 | [RFC 8414: Authorization Server Metadata](https://datatracker.ietf.org/doc/html/rfc8414)                                                        |   ✅   |            | Built from the registered handlers and configuration, with optional signed metadata                                                                     |
 | [RFC 8628: Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)                                                           |   ✅   |            |                                                                                                                                                         |
@@ -337,6 +337,16 @@ Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Cons
   default, in line with the risk assessment
   [Section 4.14.2](https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2) asks for. An empty list issues a
   refresh token for every authorization code and device code grant.
+- A client implementing `IntrospectionClient` is restricted at the introspection endpoint, so it learns only about the
+  tokens it may know about ([RFC 7662 Section 4](https://datatracker.ietf.org/doc/html/rfc7662#section-4)). When its
+  `GetIntrospectionPermitted` returns false it learns only about the tokens issued to it. When it returns true the
+  client is a resource server, and learns only about the tokens whose audience or resource includes one of the values
+  `GetIntrospectionAudience` returns, or its client ID when that is nil, so a token without an audience is visible to no
+  resource server. Any other token is reported as inactive. A client not implementing it may introspect any token.
+  `EnforceIntrospectionPermission` refuses every caller except a resource server with `request_unauthorized`, as
+  [FAPI 2.0 Message Signing Section 6.2](https://openid.net/specs/fapi-message-signing-2_0-final.html#section-6.2)
+  requires. With a bearer credential, these checks use the caller's current registration rather than the one recorded
+  with the credential.
 - `AuthorizeCodeLifespan` should be kept short, as an authorization code only has to survive a single redirect.
 
 For the [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html),

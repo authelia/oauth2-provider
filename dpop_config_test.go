@@ -21,6 +21,7 @@ func TestConfigDPoPDefaults(t *testing.T) {
 	assert.Equal(t, time.Second*10, c.GetDPoPClockSkew(ctx))
 	assert.Equal(t, time.Second*10, c.GetDPoPProofLifespan(ctx))
 	assert.Equal(t, time.Hour, c.GetDPoPNonceLifespan(ctx))
+	assert.False(t, c.GetDPoPNonceStateless(ctx))
 	assert.Equal(t, time.Second*20, c.GetDPoPProofLifespan(ctx)+c.GetDPoPClockSkew(ctx))
 
 	var _ DPoPConfigProvider = c

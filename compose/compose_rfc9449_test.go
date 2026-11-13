@@ -62,6 +62,16 @@ func TestDPoPFactoryPanicsWithoutUsableStrategy(t *testing.T) {
 	assert.Nil(t, config.DPoPStrategy)
 }
 
+func TestDPoPTokenFactoryStatelessNonceSecret(t *testing.T) {
+	assert.PanicsWithValue(t, "oauth2: DPoPFactory requires Config.GlobalSecret to be at least 32 bytes when Config.DPoPNonceStateless is enabled, as the stateless nonce key is derived from it", func() {
+		DPoPTokenFactory(&oauth2.Config{DPoPNonceStateless: true, GlobalSecret: make([]byte, 31)}, storage.NewMemoryStore(), nil)
+	})
+
+	assert.NotPanics(t, func() {
+		DPoPTokenFactory(&oauth2.Config{DPoPNonceStateless: true, GlobalSecret: make([]byte, 32)}, storage.NewMemoryStore(), nil)
+	})
+}
+
 func TestDPoPJKTIsBoundBeforeTheAuthorizationCodeSessionIsPersisted(t *testing.T) {
 	const jkt = "kM1FTfCFVzO9tGKBVBEAWCVoWZ2WcOK1EbSPxNjQfSw"
 

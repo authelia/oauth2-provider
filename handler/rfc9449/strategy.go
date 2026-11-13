@@ -22,6 +22,9 @@ type StrategyConfig interface {
 	GetDPoPClockSkew(ctx context.Context) (skew time.Duration)
 	GetDPoPProofLifespan(ctx context.Context) (lifespan time.Duration)
 	GetDPoPNonceLifespan(ctx context.Context) (lifespan time.Duration)
+	GetDPoPNonceStateless(ctx context.Context) (stateless bool)
+	GetGlobalSecret(ctx context.Context) (secret []byte, err error)
+	GetRotatedGlobalSecrets(ctx context.Context) (secrets [][]byte, err error)
 }
 
 // DefaultStrategy is the default oauth2.DPoPStrategy implementation.
@@ -129,8 +132,15 @@ func matchesAlternate(expected string, alternates []string) bool {
 	return false
 }
 
-// NewDPoPNonce generates a random DPoP nonce and stores it with the configured nonce lifespan.
+// NewDPoPNonce generates a DPoP nonce valid for the configured nonce lifespan. A stateless nonce carries the time at
+// the server and is authenticated with a key derived from the global secret, otherwise a random nonce is stored.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9449#section-8, https://www.rfc-editor.org/rfc/rfc9449#section-11.1
 func (s *DefaultStrategy) NewDPoPNonce(ctx context.Context) (nonce string, err error) {
+	if s.Config.GetDPoPNonceStateless(ctx) {
+		return s.newStatelessNonce(ctx, time.Now())
+	}
+
 	b := make([]byte, 32)
 
 	if _, err = rand.Read(b); err != nil {
@@ -146,8 +156,14 @@ func (s *DefaultStrategy) NewDPoPNonce(ctx context.Context) (nonce string, err e
 	return nonce, nil
 }
 
-// ValidateDPoPNonce returns oauth2.ErrUseDPoPNonce unless the storage reports the nonce as valid.
+// ValidateDPoPNonce returns oauth2.ErrUseDPoPNonce unless the nonce is valid. A stateless nonce must be authenticated
+// by the global secret or a rotated global secret and be no older than the nonce lifespan, otherwise the storage must
+// report the nonce as valid.
 func (s *DefaultStrategy) ValidateDPoPNonce(ctx context.Context, nonce string) (err error) {
+	if s.Config.GetDPoPNonceStateless(ctx) {
+		return s.validateStatelessNonce(ctx, nonce, time.Now())
+	}
+
 	var valid bool
 
 	if valid, err = s.Store.IsDPoPNonceValid(ctx, nonce); err != nil {

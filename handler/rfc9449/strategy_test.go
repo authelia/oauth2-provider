@@ -486,10 +486,13 @@ func newTestStrategy() (*DefaultStrategy, *storage.MemoryStore) {
 }
 
 type testStrategyConfig struct {
-	algs     []string
-	skew     time.Duration
-	lifespan time.Duration
-	nonceExp time.Duration
+	algs      []string
+	skew      time.Duration
+	lifespan  time.Duration
+	nonceExp  time.Duration
+	stateless bool
+	secret    []byte
+	rotated   [][]byte
 }
 
 func (c *testStrategyConfig) GetDPoPAllowedJWSAlgorithms(context.Context) []string { return c.algs }
@@ -499,5 +502,13 @@ func (c *testStrategyConfig) GetDPoPClockSkew(context.Context) time.Duration { r
 func (c *testStrategyConfig) GetDPoPProofLifespan(context.Context) time.Duration { return c.lifespan }
 
 func (c *testStrategyConfig) GetDPoPNonceLifespan(context.Context) time.Duration { return c.nonceExp }
+
+func (c *testStrategyConfig) GetDPoPNonceStateless(context.Context) bool { return c.stateless }
+
+func (c *testStrategyConfig) GetGlobalSecret(context.Context) ([]byte, error) { return c.secret, nil }
+
+func (c *testStrategyConfig) GetRotatedGlobalSecrets(context.Context) ([][]byte, error) {
+	return c.rotated, nil
+}
 
 var _ = jose.ES256

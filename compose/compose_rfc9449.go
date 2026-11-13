@@ -5,6 +5,8 @@
 package compose
 
 import (
+	"fmt"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/rfc9449"
 )
@@ -35,6 +37,10 @@ func DPoPTokenFactory(config oauth2.Configurator, storage any, strategy any) any
 		}
 
 		c.DPoPStrategy = rfc9449.NewDefaultStrategy(c, store)
+	}
+
+	if c.DPoPNonceStateless && len(c.GlobalSecret) < rfc9449.StatelessNonceSecretMinLength {
+		panic(fmt.Sprintf("oauth2: DPoPFactory requires Config.GlobalSecret to be at least %d bytes when Config.DPoPNonceStateless is enabled, as the stateless nonce key is derived from it", rfc9449.StatelessNonceSecretMinLength))
 	}
 
 	return &rfc9449.Handler{

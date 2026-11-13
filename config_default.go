@@ -668,6 +668,13 @@ type Config struct {
 	// DPoPNonceLifespan is the lifespan of issued DPoP server nonces. Defaults to one hour.
 	DPoPNonceLifespan time.Duration
 
+	// DPoPNonceStateless issues DPoP server nonces that carry the time at the server and are authenticated with a key
+	// derived from GlobalSecret, so they are validated without storage. Proofs verify against RotatedGlobalSecrets too.
+	// Every server must share GlobalSecret. Defaults to false, which stores each nonce.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9449#section-11.1
+	DPoPNonceStateless bool
+
 	// DPoPStrategy is the configured DPoP strategy.
 	DPoPStrategy DPoPStrategy
 
@@ -1884,6 +1891,11 @@ func (c *Config) GetDPoPNonceLifespan(ctx context.Context) (lifespan time.Durati
 	}
 
 	return c.DPoPNonceLifespan
+}
+
+// GetDPoPNonceStateless returns true if DPoP server nonces are stateless.
+func (c *Config) GetDPoPNonceStateless(ctx context.Context) (stateless bool) {
+	return c.DPoPNonceStateless
 }
 
 // GetDPoPStrategy returns the configured DPoP strategy.

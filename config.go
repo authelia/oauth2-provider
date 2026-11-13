@@ -1085,6 +1085,10 @@ type DPoPConfigProvider interface {
 	// GetDPoPNonceLifespan returns the lifespan of issued DPoP server nonces.
 	GetDPoPNonceLifespan(ctx context.Context) (lifespan time.Duration)
 
+	// GetDPoPNonceStateless returns true if DPoP server nonces carry the time at the server and are authenticated with
+	// a key derived from the global secret rather than stored.
+	GetDPoPNonceStateless(ctx context.Context) (stateless bool)
+
 	// GetDPoPStrategy returns the configured DPoP strategy, or nil when DPoP is not wired.
 	GetDPoPStrategy(ctx context.Context) (strategy DPoPStrategy)
 }

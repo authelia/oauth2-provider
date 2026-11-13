@@ -80,6 +80,125 @@ func TestWriteBearerAuthorizationChallenge(t *testing.T) {
 	}
 }
 
+func TestWriteBearerAuthorizationChallengeMultipleAuthorizationHeaders(t *testing.T) {
+	f := &Fosite{Config: &Config{DPoPEnabled: true, DPoPAllowedJWSAlgorithms: []string{"ES256"}}}
+
+	r := httptest.NewRequest(http.MethodGet, "https://rs.example.com/resource", nil)
+	r.Header.Add("Authorization", "Bearer abc")
+	r.Header.Add("Authorization", "DPoP abc")
+
+	rw := httptest.NewRecorder()
+
+	rfc := f.WriteBearerAuthorizationChallenge(context.Background(), rw, r, errorsx.WithStack(ErrInvalidRequest.WithDescription("x")))
+
+	assert.Equal(t, http.StatusBadRequest, rfc.CodeField)
+
+	assert.Equal(t, `Bearer error="invalid_request", error_description="x", DPoP error="invalid_request", error_description="x", algs="ES256"`, rw.Header().Get("WWW-Authenticate"))
+}
+
+func TestBearerAuthorizationChallenge(t *testing.T) {
+	testCases := []struct {
+		name     string
+		dpop     bool
+		realm    string
+		err      error
+		schemes  []string
+		expected string
+	}{
+		{
+			name:     "ShouldCarryRealmWithoutCredential",
+			dpop:     true,
+			realm:    "example",
+			err:      ErrInvalidToken,
+			expected: `Bearer realm="example", DPoP realm="example", algs="ES256"`,
+		},
+		{
+			name:     "ShouldCarryRealmBeforeErrorOnBearer",
+			dpop:     true,
+			realm:    "example",
+			err:      ErrInvalidToken.WithDescription("x"),
+			schemes:  []string{"Bearer"},
+			expected: `Bearer realm="example", error="invalid_token", error_description="x", DPoP realm="example", algs="ES256"`,
+		},
+		{
+			name:     "ShouldCarryRealmBeforeErrorOnDPoP",
+			dpop:     true,
+			realm:    "example",
+			err:      ErrInvalidDPoPProof.WithDescription("x"),
+			schemes:  []string{"dpop"},
+			expected: `Bearer realm="example", DPoP realm="example", error="invalid_dpop_proof", error_description="x", algs="ES256"`,
+		},
+		{
+			name:     "ShouldCarryRealmOnNonceChallenge",
+			dpop:     true,
+			realm:    "example",
+			err:      ErrUseDPoPNonce.WithDescription("x"),
+			expected: `DPoP realm="example", error="use_dpop_nonce", error_description="x", algs="ES256"`,
+		},
+		{
+			name:     "ShouldCarryRealmWhenDPoPDisabled",
+			realm:    "example",
+			err:      ErrInvalidToken.WithDescription("x"),
+			schemes:  []string{"Bearer"},
+			expected: `Bearer realm="example", error="invalid_token", error_description="x"`,
+		},
+		{
+			name:     "ShouldOmitEmptyRealm",
+			err:      ErrInvalidToken,
+			expected: `Bearer`,
+		},
+		{
+			name:     "ShouldQuoteRealm",
+			realm:    "a \"b\" \\ c\r\n",
+			err:      ErrInvalidToken,
+			expected: `Bearer realm="a \"b\" \\ c"`,
+		},
+		{
+			name:     "ShouldDeliverErrorOnBothWhenSchemesDiffer",
+			dpop:     true,
+			err:      ErrInvalidRequest.WithDescription("x"),
+			schemes:  []string{"Bearer", "DPoP"},
+			expected: `Bearer error="invalid_request", error_description="x", DPoP error="invalid_request", error_description="x", algs="ES256"`,
+		},
+		{
+			name:     "ShouldTreatRepeatedSchemeAsEstablished",
+			dpop:     true,
+			err:      ErrInvalidDPoPProof.WithDescription("x"),
+			schemes:  []string{"DPoP", "dpop"},
+			expected: `Bearer, DPoP error="invalid_dpop_proof", error_description="x", algs="ES256"`,
+		},
+		{
+			name:     "ShouldDeliverErrorOnBothWhenManySchemesDiffer",
+			dpop:     true,
+			err:      ErrInvalidRequest.WithDescription("x"),
+			schemes:  []string{"Basic", "basic", "Bearer", "DPoP", "Other"},
+			expected: `Bearer error="invalid_request", error_description="x", DPoP error="invalid_request", error_description="x", algs="ES256"`,
+		},
+		{
+			name:     "ShouldIgnoreEmptySchemes",
+			dpop:     true,
+			err:      ErrInvalidToken,
+			schemes:  []string{"", ""},
+			expected: `Bearer, DPoP algs="ES256"`,
+		},
+		{
+			name:     "ShouldAnswerOtherSchemesOnBearer",
+			dpop:     true,
+			err:      ErrInvalidToken.WithDescription("x"),
+			schemes:  []string{"Basic"},
+			expected: `Bearer error="invalid_token", error_description="x", DPoP algs="ES256"`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{DPoPEnabled: tc.dpop, DPoPAllowedJWSAlgorithms: []string{"ES256"}}
+
+			assert.Equal(t, tc.expected, BearerAuthorizationChallenge(context.Background(), config, tc.realm, errorsx.WithStack(tc.err), tc.schemes...))
+		})
+	}
+}
+
 func TestWriteBearerAuthorizationChallengeIncludesScope(t *testing.T) {
 	ctx := context.Background()
 	config := &Config{DPoPAllowedJWSAlgorithms: []string{"ES256"}}

@@ -152,6 +152,17 @@ type Provider interface {
 	// See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 	WriteIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, response IntrospectionResponder)
 
+	// WriteBearerAuthorizationChallenge sets the 'WWW-Authenticate' challenge, and the 'DPoP-Nonce' header for a nonce
+	// challenge, for an endpoint acting as an OAuth 2.0 protected resource, and returns the error with its status
+	// corrected for that context. The caller writes the response body.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://www.rfc-editor.org/rfc/rfc6750#section-3
+	// * https://www.rfc-editor.org/rfc/rfc9449#section-7.1
+	// * https://www.rfc-editor.org/rfc/rfc9449#section-7.2
+	// * https://www.rfc-editor.org/rfc/rfc9470#section-3
+	WriteBearerAuthorizationChallenge(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) (rfc *RFC6749Error)
+
 	// WriteSSFConfiguration writes the Transmitter Configuration Metadata.
 	//
 	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-7.2.3

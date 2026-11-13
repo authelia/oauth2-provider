@@ -116,15 +116,7 @@ func clientAuthenticationBasicChallenge(realm string) string {
 		realm = defaultClientAuthenticationRealm
 	}
 
-	realm = strings.Map(func(c rune) rune {
-		if (c < 0x20 && c != '\t') || c == 0x7f {
-			return -1
-		}
-
-		return c
-	}, realm)
-
-	return `Basic realm="` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(realm) + `"`
+	return "Basic realm=" + challengeQuotedString(realm)
 }
 
 const defaultClientAuthenticationRealm = "oauth2"

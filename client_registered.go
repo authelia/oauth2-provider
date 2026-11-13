@@ -378,6 +378,11 @@ func (c *DefaultRegisteredClient) GetRevocationEndpointAuthSigningAlg() string {
 	return c.RevocationEndpointAuthSigningAlg
 }
 
+// GetDefaultACRValues returns the 'default_acr_values' client metadata value.
+func (c *DefaultRegisteredClient) GetDefaultACRValues() []string {
+	return c.DefaultACRValues
+}
+
 // GetResponseModes returns the response modes the client is allowed to use.
 func (c *DefaultRegisteredClient) GetResponseModes() []ResponseModeType {
 	return c.ResponseModes
@@ -673,6 +678,7 @@ func (c *DefaultRegisteredClient) GetTokenExchangeRefreshTokenRotation() (rotate
 
 var (
 	_ Client                                      = (*DefaultRegisteredClient)(nil)
+	_ DefaultACRValuesClient                      = (*DefaultRegisteredClient)(nil)
 	_ RotatedClientSecretsClient                  = (*DefaultRegisteredClient)(nil)
 	_ SoftwareStatementClient                     = (*DefaultRegisteredClient)(nil)
 	_ JSONWebKeysClient                           = (*DefaultRegisteredClient)(nil)

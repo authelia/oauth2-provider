@@ -11,6 +11,31 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+const (
+	// ACRMinimum is the 'acr' value of an End-User authentication which did not meet the requirements of ISO/IEC 29115
+	// level 1.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#IDToken
+	ACRMinimum = "0"
+
+	// ACRPhishingResistant is the 'acr' value of a phishing-resistant End-User authentication.
+	//
+	// See: https://openid.net/specs/openid-connect-eap-acr-values-1_0.html#section-2
+	ACRPhishingResistant = "phr"
+
+	// ACRPhishingResistantHardware is the 'acr' value of a phishing-resistant End-User authentication whose
+	// authentication secret is held in a hardware-protected device or component.
+	//
+	// See: https://openid.net/specs/openid-connect-eap-acr-values-1_0.html#section-2
+	ACRPhishingResistantHardware = "phrh"
+
+	// AMRProofOfPossession is the 'amr' value of an End-User authentication by proof-of-possession of a key, which may
+	// be hardware-secured or software-secured.
+	//
+	// See: https://openid.net/specs/openid-connect-eap-acr-values-1_0.html#section-3
+	AMRProofOfPossession = "pop"
+)
+
 // AuthenticationContextSession is a Session which records the authentication context claims the authorization request
 // required, so every access token derived from the authorization response conveys them: 'acr' when it carried
 // 'acr_values', and 'auth_time' when it carried 'max_age'.
@@ -38,8 +63,9 @@ type AuthenticationContextClaimsClient interface {
 	Client
 }
 
-// RecordAuthenticationContextRequirements records on session the authentication context claims the 'acr_values' and
-// 'max_age' parameters of request require access tokens to convey, replacing any recorded before.
+// RecordAuthenticationContextRequirements records on session the authentication context claims request requires access
+// tokens to convey, replacing any recorded before: 'acr' when GetRequestedACRValues returns any values, and 'auth_time'
+// when it has the 'max_age' parameter.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9470#section-5
 func RecordAuthenticationContextRequirements(request Requester, session Session) {
@@ -52,7 +78,7 @@ func RecordAuthenticationContextRequirements(request Requester, session Session)
 
 	form := request.GetRequestForm()
 
-	if form.Get(consts.FormParameterAuthenticationContextClassReferenceValues) != "" {
+	if len(GetRequestedACRValues(request)) != 0 {
 		claims = append(claims, consts.ClaimAuthenticationContextClassReference)
 	}
 

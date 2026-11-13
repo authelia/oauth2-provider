@@ -213,6 +213,8 @@ func TestNewAuthorizeResponseEnforcesAuthenticationRequirements(t *testing.T) {
 		name     string
 		enforce  bool
 		form     url.Values
+		defaults []string
+		claims   *ClaimsRequest
 		session  Session
 		expected error
 	}{
@@ -229,6 +231,14 @@ func TestNewAuthorizeResponseEnforcesAuthenticationRequirements(t *testing.T) {
 		{name: "ShouldFailWhenMaxAgeIsNegative", enforce: true, form: url.Values{"max_age": {"-1"}}, session: newACRValuesSession("", now), expected: ErrInvalidRequest},
 		{name: "ShouldFailWhenOnlyMaxAgeIsMet", enforce: true, form: url.Values{"acr_values": {"gold"}, "max_age": {"300"}}, session: newACRValuesSession("bronze", now), expected: ErrUnmetAuthenticationRequirements},
 		{name: "ShouldPassWhenBothAreMet", enforce: true, form: url.Values{"acr_values": {"gold"}, "max_age": {"300"}}, session: newACRValuesSession("gold", now)},
+		{name: "ShouldPassWhenADefaultValueIsMet", enforce: true, defaults: []string{"gold", "silver"}, session: newACRValuesSession("silver", time.Time{})},
+		{name: "ShouldFailWhenNoDefaultValueIsMet", enforce: true, defaults: []string{"gold", "silver"}, session: newACRValuesSession("bronze", time.Time{}), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldPassWhenTheDefaultsAreNotEnforced", defaults: []string{"gold"}, session: newACRValuesSession("bronze", time.Time{})},
+		{name: "ShouldPreferTheRequestedValuesOverTheDefaults", enforce: true, form: url.Values{"acr_values": {"bronze"}}, defaults: []string{"gold"}, session: newACRValuesSession("bronze", time.Time{})},
+		{name: "ShouldIgnoreTheDefaultsWhenTheIDTokenACRClaimIsRequestedWithValues", enforce: true, defaults: []string{"gold"}, claims: &ClaimsRequest{IDToken: map[string]*ClaimRequest{"acr": {Values: []any{"bronze"}}}}, session: newACRValuesSession("bronze", time.Time{})},
+		{name: "ShouldIgnoreTheDefaultsWhenTheUserInfoACRClaimIsRequestedWithAValue", enforce: true, defaults: []string{"gold"}, claims: &ClaimsRequest{UserInfo: map[string]*ClaimRequest{"acr": {Value: "bronze"}}}, session: newACRValuesSession("bronze", time.Time{})},
+		{name: "ShouldApplyTheDefaultsWhenTheACRClaimIsRequestedWithoutValues", enforce: true, defaults: []string{"gold"}, claims: &ClaimsRequest{IDToken: map[string]*ClaimRequest{"acr": nil}, UserInfo: map[string]*ClaimRequest{"acr": {Essential: true}}}, session: newACRValuesSession("bronze", time.Time{}), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldApplyTheDefaultsWhenOtherClaimsAreRequested", enforce: true, defaults: []string{"gold"}, claims: &ClaimsRequest{IDToken: map[string]*ClaimRequest{"email": nil}}, session: newACRValuesSession("bronze", time.Time{}), expected: ErrUnmetAuthenticationRequirements},
 	}
 
 	for _, tc := range testCases {
@@ -240,6 +250,8 @@ func TestNewAuthorizeResponseEnforcesAuthenticationRequirements(t *testing.T) {
 			request := NewAuthorizeRequest()
 			request.RequestedAt = now
 			request.ResponseTypes = Arguments{consts.ResponseTypeAuthorizationCodeFlow}
+			request.Client = &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "foo"}, DefaultACRValues: tc.defaults}
+			request.SetClaims(tc.claims)
 
 			for key, values := range tc.form {
 				request.Form[key] = values

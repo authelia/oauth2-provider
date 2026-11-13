@@ -295,6 +295,8 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 	jwtClient := jwt.NewIDTokenClient(request.GetClient())
 
+	var acr string
+
 	// OpenID Connect Core 1.0 Section 12.2: an ID Token issued for a refresh carries the auth_time of the original
 	// authentication, so the authentication request parameters are not evaluated again. The grant type is read from
 	// the token request itself, as the request form of a stored authorization or device request is supplied by the
@@ -346,10 +348,11 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 				WithDebugf("Failed to generate ID Token because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.GetAuthTimeSafe(), rat))
 		}
 
-		// If acr_values was requested but no acr value was provided in the ID token, fall back to level 0 which means least
-		// confidence in authentication.
-		if request.GetRequestForm().Get(consts.FormParameterAuthenticationContextClassReferenceValues) != "" && claims.AuthenticationContextClassReference == "" {
-			claims.AuthenticationContextClassReference = "0"
+		// OpenID Connect Core 1.0 Section 2: an ID Token for an authentication which was requested Authentication Context
+		// Class References but recorded none carries the 'acr' value of the least confidence. It is set on the issued
+		// token only, so the session does not record an authentication context the End-User did not perform.
+		if claims.AuthenticationContextClassReference == "" && len(oauth2.GetRequestedACRValues(request)) != 0 {
+			acr = oauth2.ACRMinimum
 		}
 
 		if tokenHintString := request.GetRequestForm().Get(consts.FormParameterIDTokenHint); tokenHintString != "" {
@@ -411,7 +414,13 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		return "", err
 	}
 
-	token, _, err = h.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))
+	mapClaims := claims.ToMapClaims()
+
+	if acr != "" {
+		mapClaims[consts.ClaimAuthenticationContextClassReference] = acr
+	}
+
+	token, _, err = h.Encode(ctx, mapClaims, jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))
 
 	return token, err
 }

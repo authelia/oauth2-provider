@@ -716,6 +716,68 @@ func TestJWTStrategy_GenerateIDTokenRefreshNonce(t *testing.T) {
 	}
 }
 
+func TestJWTStrategy_GenerateIDTokenMinimumACR(t *testing.T) {
+	config := &oauth2.Config{
+		MinParameterEntropy: oauth2.MinParameterEntropy,
+	}
+
+	strategy := &DefaultStrategy{
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+		},
+		Config: config,
+	}
+
+	testCases := []struct {
+		name     string
+		acr      string
+		form     url.Values
+		defaults []string
+		claims   *oauth2.ClaimsRequest
+		expected any
+	}{
+		{name: "ShouldOmitWhenNotRequested", expected: nil},
+		{name: "ShouldSetMinimumWhenRequestedValuesAreNotRecorded", form: url.Values{consts.FormParameterAuthenticationContextClassReferenceValues: {oauth2.ACRPhishingResistant}}, expected: oauth2.ACRMinimum},
+		{name: "ShouldSetMinimumWhenDefaultValuesAreNotRecorded", defaults: []string{oauth2.ACRPhishingResistant}, expected: oauth2.ACRMinimum},
+		{name: "ShouldOmitWhenTheACRClaimIsRequestedWithValues", defaults: []string{oauth2.ACRPhishingResistant}, claims: &oauth2.ClaimsRequest{IDToken: map[string]*oauth2.ClaimRequest{consts.ClaimAuthenticationContextClassReference: {Values: []any{oauth2.ACRPhishingResistantHardware}}}}, expected: nil},
+		{name: "ShouldSetMinimumWhenTheACRClaimIsRequestedWithoutValues", defaults: []string{oauth2.ACRPhishingResistant}, claims: &oauth2.ClaimsRequest{IDToken: map[string]*oauth2.ClaimRequest{consts.ClaimAuthenticationContextClassReference: nil}}, expected: oauth2.ACRMinimum},
+		{name: "ShouldKeepTheRecordedValue", acr: oauth2.ACRPhishingResistantHardware, defaults: []string{oauth2.ACRPhishingResistant}, expected: oauth2.ACRPhishingResistantHardware},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			session := &DefaultSession{
+				Claims: &jwt.IDTokenClaims{
+					Subject:                             testSubjectPeter,
+					AuthenticationContextClassReference: tc.acr,
+				},
+				Headers: &jwt.Headers{},
+			}
+
+			requester := oauth2.NewAuthorizeRequest()
+			requester.Session = session
+			requester.Client = &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "foo"}, DefaultACRValues: tc.defaults}
+			requester.SetClaims(tc.claims)
+
+			for key, values := range tc.form {
+				requester.Form[key] = values
+			}
+
+			token, err := strategy.GenerateIDToken(t.Context(), time.Duration(0), requester)
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			decoded, err := jwt.Parse(token, func(token *jwt.Token) (any, error) {
+				return key.PublicKey, nil
+			})
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected, decoded.Claims.ToMapClaims()[consts.ClaimAuthenticationContextClassReference])
+			assert.Equal(t, tc.acr, session.Claims.AuthenticationContextClassReference)
+		})
+	}
+}
+
 func TestDefaultSession_MarshalJSON(t *testing.T) {
 	testCases := []struct {
 		name     string

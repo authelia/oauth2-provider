@@ -100,6 +100,7 @@ finalized, so support for one may change in any release.
 | [OpenID Connect RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)                                                   |   ✅   |            |                                                                                                                                     |
 | [OpenID Connect Back-Channel Logout 1.0](https://openid.net/specs/openid-connect-backchannel-1_0.html)                                                   |   ✅   |            |                                                                                                                                     |
 | [OpenID Connect Core Error Code `unmet_authentication_requirements`](https://openid.net/specs/openid-connect-unmet-authentication-requirements-1_0.html) |   ✅   |            |                                                                                                                                     |
+| [OpenID Connect Extended Authentication Profile (EAP) ACR Values 1.0](https://openid.net/specs/openid-connect-eap-acr-values-1_0.html)                   |   ✅   |            | The application asserts `phr`, `phrh` and `pop`; constants are provided                                                             |
 | [OpenID Connect Key Binding 1.0](https://openid.net/specs/openid-connect-key-binding-1_0.html)                                                           |   ✅   | `draft-03` |                                                                                                                                     |
 | [OpenID Connect UserInfo Verifiable Credentials](https://openid.net/specs/openid-connect-userinfo-vc-1_0.html)                                           |   🟡   | `draft-00` | Issuing the `c_nonce` under draft-suffixed names; the Credential Endpoint is left to the application                                |
 
@@ -165,7 +166,6 @@ Drafts adopted by the IETF OAuth Working Group or the OpenID Foundation which ar
 | [OpenID Connect Session Management 1.0](https://openid.net/specs/openid-connect-session-1_0.html)                                                              |   ❌   |       |                                                                             |
 | [Initiating User Registration via OpenID Connect 1.0](https://openid.net/specs/openid-connect-prompt-create-1_0.html)                                          |   ❌   |       |                                                                             |
 | [OpenID Connect Relying Party Metadata Choices 1.0](https://openid.net/specs/openid-connect-rp-metadata-choices-1_0-final.html)                                |   ❌   |       |                                                                             |
-| [OpenID Connect Extended Authentication Profile (EAP) ACR Values 1.0](https://openid.net/specs/openid-connect-eap-acr-values-1_0.html)                         |   ❌   |       |                                                                             |
 | [OpenID Connect for Identity Assurance 1.0](https://openid.net/specs/openid-connect-4-identity-assurance-1_0-final.html)                                       |   ❌   |       |                                                                             |
 | [OpenID Federation 1.0](https://openid.net/specs/openid-federation-1_0.html)                                                                                   |   ❌   |       |                                                                             |
 | [OpenID Federation 1.1](https://openid.net/specs/openid-federation-1_1.html)                                                                                   |   ❌   |       |                                                                             |
@@ -316,6 +316,15 @@ Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Cons
 - `DPoPStrictRefreshTokenBinding` and `MTLSStrictRefreshTokenBinding` keep a confidential client's refresh token bound
   to the key or certificate it was issued for, rather than re-binding it on refresh. The client cannot then change its
   key without a new grant. Public clients are always strictly bound.
+- `EnforceAuthenticationRequirements` refuses an authorization, or the approval of a device authorization, unless the
+  user's authentication meets the requested `max_age` and Authentication Context Class References: the `acr_values`
+  parameter or, when a request names none, the client's registered `default_acr_values`. Without it they are only
+  requested, and the client must check the `acr` claim it receives. An attacker can alter or remove the requested
+  classes in an unsigned request
+  ([EAP ACR Values 1.0 Section 4](https://openid.net/specs/openid-connect-eap-acr-values-1_0.html#section-4)), including
+  by adding an `acr` claim request with its own values, which replaces the defaults. A client which depends on a class
+  should send signed or pushed requests. The application decides which class an authentication meets, such as `phr` for
+  a phishing-resistant method.
 - `RequirePushedAuthorizationRequests` requires PAR, so the client sends the authorization request, including the
   redirect URI, directly to the authorization server, which authenticates a confidential client
   ([Section 4.1.3](https://datatracker.ietf.org/doc/html/rfc9700#section-4.1.3)). A public client pushes its request

@@ -88,7 +88,7 @@ finalized, so support for one may change in any release.
 | [OAuth Client ID Metadata Document](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)                      |   ✅   | `draft-03` | Opt-in through `Config.ClientIDMetadataDocumentResolver`, with a default resolver in `handler/cimd`                                                     |
 | [Refresh Token and Authorization Expiration](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-refresh-token-expiration-03)                |   ✅   | `draft-03` | On by default; the authorization expiry is `RefreshTokenMaximumLifespan` or a deadline the application records                                          |
 | [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html)                                                      |   🟡   |            | Checked by `compose.ValidateFAPI2SecurityProfile`, applied by `compose.ApplyFAPI2SecurityProfile`, or enforced per client                               |
-| [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html)                                                        |   🟡   |            | Signed request objects, JARM and RFC 9701 responses; callers of the introspection endpoint are not restricted                                           |
+| [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html)                                                        |   ✅   |            | Applied by `compose.ApplyFAPI2MessageSigning` and checked by `compose.ValidateFAPI2MessageSigning`, per part                                            |
 
 ### OpenID Connect 1.0
 
@@ -370,6 +370,12 @@ it must push its authorization requests with a redirect URI, use the `code` resp
 objects. Its access tokens are sender-constrained, its refresh tokens are not rotated, and its authorization codes and
 pushed authorization requests are short-lived. The options that apply to every client, such as the RFC 9207 `iss`
 parameter and the DPoP proof algorithms, must still meet the profile.
+
+For [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html),
+`compose.ApplyFAPI2MessageSigning` sets the options each selected part requires, being signed authorization requests,
+signed authorization responses and signed introspection responses, and `compose.ValidateFAPI2MessageSigning` checks them
+once the provider is composed. A client is required to use JARM by registering only JWT response modes, and a resource
+server is permitted to introspect through `IntrospectionClient`.
 
 ## Thanks
 

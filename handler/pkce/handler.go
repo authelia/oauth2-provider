@@ -299,8 +299,8 @@ func (c *Handler) validateNoPKCE(ctx context.Context, parameter string, client o
 			WithDebug("The authorization server is configured in a way that enforces PKCE for all clients."))
 	}
 
-	// Public clients MUST use PKCE.
-	// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1.1
+	// Public clients MUST use PKCE, and native clients SHOULD be rejected without it whether or not they authenticate.
+	// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1.1 and https://www.rfc-editor.org/rfc/rfc8252#section-8.1
 	if !c.Config.GetAllowPublicClientsWithoutPKCE(ctx) {
 		if client == nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The client for the request wasn't properly loaded."))
@@ -310,6 +310,12 @@ func (c *Handler) validateNoPKCE(ctx context.Context, parameter string, client o
 			return errorsx.WithStack(oauth2.ErrInvalidRequest.
 				WithHintf("Clients must include a '%s' when performing the authorize code flow, but it is missing.", parameter).
 				WithDebugf("The authorization server is configured in a way that enforces PKCE for all public client type clients and the '%s' client is using the public client type.", client.GetID()))
+		}
+
+		if oauth2.IsNativeClient(client) {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.
+				WithHintf("Clients must include a '%s' when performing the authorize code flow, but it is missing.", parameter).
+				WithDebugf("The authorization server is configured in a way that enforces PKCE for all native application clients and the '%s' client has the 'native' application type.", client.GetID()))
 		}
 	}
 

@@ -857,6 +857,79 @@ func TestLocalValidatorGrantTypePolicy(t *testing.T) {
 	}
 }
 
+func TestLocalValidatorNativeImplicitGrant(t *testing.T) {
+	native := func(grantTypes, responseTypes []string) *oauth2.ClientRegistrationMetadata {
+		return &oauth2.ClientRegistrationMetadata{
+			ApplicationType: "native",
+			RedirectURIs:    []string{"com.example.app:/cb"},
+			GrantTypes:      grantTypes,
+			ResponseTypes:   responseTypes,
+		}
+	}
+
+	rejected := "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'implicit' grant type is not permitted for a client with the 'native' 'application_type'."
+
+	testCases := []struct {
+		name     string
+		allow    bool
+		metadata *oauth2.ClientRegistrationMetadata
+		expected string
+	}{
+		{
+			name:     "ShouldAcceptTheAuthorizationCodeGrant",
+			metadata: native([]string{"authorization_code"}, []string{"code"}),
+		},
+		{
+			name:     "ShouldAcceptTheDefaultGrant",
+			metadata: native(nil, nil),
+		},
+		{
+			name:     "ShouldRejectTheImplicitGrant",
+			metadata: native([]string{"implicit"}, []string{"id_token"}),
+			expected: rejected,
+		},
+		{
+			name:     "ShouldRejectAHybridFlow",
+			metadata: native([]string{"authorization_code", "implicit"}, []string{"code id_token"}),
+			expected: rejected,
+		},
+		{
+			name:     "ShouldAcceptTheImplicitGrantWhenAllowed",
+			allow:    true,
+			metadata: native([]string{"implicit"}, []string{"id_token"}),
+		},
+		{
+			name: "ShouldAcceptTheImplicitGrantForAWebClient",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:  []string{"https://example.com/cb"},
+				GrantTypes:    []string{"implicit"},
+				ResponseTypes: []string{"id_token"},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validator := NewLocalValidator(withTestCapabilities(&oauth2.Config{
+				ScopeStrategy:                   oauth2.ExactScopeStrategy,
+				AudienceStrategy:                oauth2.DefaultAudienceStrategy,
+				RFC7591AllowNativeImplicitGrant: tc.allow,
+			}))
+
+			err := validator.ValidateClientRegistrationMetadata(t.Context(), nil, tc.metadata)
+
+			if tc.expected == "" {
+				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			require.Error(t, err)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
+		})
+	}
+}
+
 func TestLocalValidatorAuthorizationGrantProfiles(t *testing.T) {
 	const hint = "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'urn:ietf:params:oauth:grant-profile:id-jag' authorization grant profile requires the 'urn:ietf:params:oauth:grant-type:token-exchange' and 'urn:ietf:params:oauth:grant-type:jwt-bearer' grant types to be present in 'grant_types'."
 

@@ -752,6 +752,10 @@ type Config struct {
 	// rfc7591.SectorIdentifierValidator in a configured list to accept it.
 	RFC7591ClientRegistrationValidators []ClientRegistrationValidator
 
+	// RFC7591AllowNativeImplicitGrant permits client registration to accept the 'implicit' grant type for a client
+	// with the 'native' 'application_type', which RFC 8252 Section 8.2 does not recommend. Defaults to false.
+	RFC7591AllowNativeImplicitGrant bool
+
 	// RFC7591ClientRegistrationEndpointAudiences are the audiences a client creation token may carry. The token must
 	// carry at least one of them. Empty means the configured registration endpoint URL is expected, falling back to
 	// the request URL.
@@ -1970,6 +1974,12 @@ func (c *Config) GetRFC7591ClientRegistrationEndpointAuthStrategy(ctx context.Co
 // GetRFC7591ClientRegistrationValidators returns the validators run in order against submitted metadata.
 func (c *Config) GetRFC7591ClientRegistrationValidators(ctx context.Context) (validators []ClientRegistrationValidator) {
 	return c.RFC7591ClientRegistrationValidators
+}
+
+// GetRFC7591AllowNativeImplicitGrant returns whether client registration accepts the 'implicit' grant type for a client
+// with the 'native' 'application_type'.
+func (c *Config) GetRFC7591AllowNativeImplicitGrant(ctx context.Context) (allow bool) {
+	return c.RFC7591AllowNativeImplicitGrant
 }
 
 // GetRFC7591ClientRegistrationEndpointAudiences returns the audiences a client creation token may carry. Empty means

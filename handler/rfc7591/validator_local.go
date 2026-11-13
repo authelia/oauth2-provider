@@ -90,6 +90,10 @@ func (v *LocalValidator) ValidateClientRegistrationMetadata(ctx context.Context,
 		return err
 	}
 
+	if err = validateNativeImplicitGrant(ctx, v.config, metadata); err != nil {
+		return err
+	}
+
 	if err = validateAuthorizationGrantProfiles(metadata); err != nil {
 		return err
 	}
@@ -486,6 +490,24 @@ func validateJSONWebKeys(metadata *oauth2.ClientRegistrationMetadata) (err error
 	}
 
 	return nil
+}
+
+// validateNativeImplicitGrant rejects the 'implicit' grant type for a client with the 'native' 'application_type'
+// unless oauth2.RFC7591AllowNativeImplicitGrantProvider permits it. The implicit flow cannot be protected by PKCE, so
+// RFC 8252 Section 8.2 does not recommend it for native applications. Every response type other than 'code' and
+// 'none' requires the 'implicit' grant, so the hybrid flows are rejected with it.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8252#section-8.2
+func validateNativeImplicitGrant(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	if metadata.ApplicationType != consts.ApplicationTypeNative || !slices.Contains(metadata.GrantTypes, consts.GrantTypeImplicit) {
+		return nil
+	}
+
+	if config.GetRFC7591AllowNativeImplicitGrant(ctx) {
+		return nil
+	}
+
+	return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' grant type is not permitted for a client with the '%s' '%s'.", consts.GrantTypeImplicit, consts.ApplicationTypeNative, consts.ClientMetadataApplicationType))
 }
 
 // validateGrantResponseTypeCoherence checks that the declared 'grant_types' and 'response_types' are mutually

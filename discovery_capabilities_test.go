@@ -31,13 +31,7 @@ func TestSupportedResponseTypesComposeAllEnabled(t *testing.T) {
 
 	assert.Equal(t, []string{
 		"code",
-		"code id_token",
-		"code id_token token",
-		"code token",
-		"id_token",
-		"id_token token",
 		"none",
-		"token",
 	}, oauth2.SupportedResponseTypes(context.Background(), config))
 }
 
@@ -48,7 +42,6 @@ func TestSupportedGrantTypesComposeAllEnabled(t *testing.T) {
 	assert.Equal(t, []string{
 		consts.GrantTypeAuthorizationCode,
 		consts.GrantTypeClientCredentials,
-		consts.GrantTypeImplicit,
 		consts.GrantTypeRefreshToken,
 		consts.GrantTypeOAuthDeviceCode,
 		consts.GrantTypeOAuthJWTBearer,

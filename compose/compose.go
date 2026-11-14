@@ -106,10 +106,14 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 }
 
 // ComposeAllEnabled returns a oauth2 instance with all OAuth2 and OpenID Connect handlers enabled, except the resource
-// owner password credentials grant, which must not be used. Compose OAuth2ResourceOwnerPasswordCredentialsFactory
-// explicitly with Compose to enable it.
+// owner password credentials grant, which must not be used, and the implicit and hybrid flows, which return tokens in
+// the authorization response and should not be used. Compose OAuth2ResourceOwnerPasswordCredentialsFactory,
+// OAuth2AuthorizeImplicitFactory, OpenIDConnectImplicitFactory or OpenIDConnectHybridFactory explicitly with Compose to
+// enable them.
 //
-// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.4
+// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.4, https://www.rfc-editor.org/rfc/rfc9700#section-2.1.2,
+// https://www.rfc-editor.org/rfc/rfc10017#section-7.2 and
+// https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-10.1
 func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provider {
 	keyGetter := func(context.Context) (any, error) {
 		return key, nil
@@ -129,7 +133,6 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 			Strategy:                   strategy,
 		},
 		OAuth2AuthorizeExplicitFactory,
-		OAuth2AuthorizeImplicitFactory,
 		OAuth2AuthorizeNoneFactory,
 		OAuth2ClientCredentialsGrantFactory,
 		OAuth2RefreshTokenGrantFactory,
@@ -148,8 +151,6 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		RFC8693ActorTokenValidationFactory,
 
 		OpenIDConnectExplicitFactory,
-		OpenIDConnectImplicitFactory,
-		OpenIDConnectHybridFactory,
 		OpenIDConnectRefreshFactory,
 		OpenIDConnectDeviceAuthorizeFactory,
 

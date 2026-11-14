@@ -18,7 +18,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -26,7 +25,7 @@ import (
 
 // RFC 9126 Section 2.1.
 func TestPushedAuthorizeRequestRejectsWhatTheAuthorizationEndpointWould(t *testing.T) {
-	f := compose.ComposeAllEnabled(&oauth2.Config{
+	f := composeAllEnabledWithImplicit(&oauth2.Config{
 		GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
 		EnforcePKCE:                           true,

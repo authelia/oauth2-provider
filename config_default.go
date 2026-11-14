@@ -383,6 +383,11 @@ type Config struct {
 	// jwt.DefaultJWEPBES2CountMaximum. The JOSE implementation rejects values above 1,000,000 regardless.
 	JWEPBES2CountMaximum int
 
+	// EnableRSA15KeyManagement permits the 'RSA1_5' JWE key management algorithm, which is open to Bleichenbacher
+	// padding oracle attacks. RFC 8725 Section 3.2 and FAPI 1.0 Advanced Section 8.6.1 exclude it. When false it is not
+	// advertised, accepted at registration, used for encryption, or accepted for decryption. Defaults to false.
+	EnableRSA15KeyManagement bool
+
 	// EnforceJWTProfileAccessTokens forces the issuer to return JWT Profile Access Tokens to all clients.
 	EnforceJWTProfileAccessTokens bool
 
@@ -1378,6 +1383,11 @@ func (c *Config) GetBCryptCost(_ context.Context) int {
 	return c.HashCost
 }
 
+// GetEnableRSA15KeyManagement returns true if the 'RSA1_5' JWE key management algorithm is permitted.
+func (c *Config) GetEnableRSA15KeyManagement(_ context.Context) bool {
+	return c.EnableRSA15KeyManagement
+}
+
 // GetJWEPBES2CountMinimum returns JWEPBES2CountMinimum if positive. Defaults to jwt.DefaultJWEPBES2CountMinimum.
 func (c *Config) GetJWEPBES2CountMinimum(_ context.Context) int {
 	if c.JWEPBES2CountMinimum <= 0 {
@@ -1767,7 +1777,7 @@ func (c *Config) GetClientAssertionSigningAlgValues(ctx context.Context) (algs [
 
 // GetClientAssertionEncryptionAlgValues returns the JWE 'alg' values accepted for an encrypted client assertion.
 func (c *Config) GetClientAssertionEncryptionAlgValues(ctx context.Context) (algs []string) {
-	return algorithmsOrDefault(c.ClientAssertionEncryptionAlgValues, jwt.EncryptionKeyAlgorithms)
+	return keyAlgorithmsOrDefault(ctx, c, c.ClientAssertionEncryptionAlgValues)
 }
 
 // GetClientAssertionEncryptionEncValues returns the JWE 'enc' values accepted for an encrypted client assertion.
@@ -1786,7 +1796,7 @@ func (c *Config) GetRequestObjectSigningAlgValues(ctx context.Context) (algs []s
 // See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
 func (c *Config) GetRequestObjectEncryptionAlgValues(ctx context.Context) (algs []string) {
 	if len(c.RequestObjectEncryptionAlgValues) != 0 {
-		return c.RequestObjectEncryptionAlgValues
+		return jwt.FilterKeyAlgorithms(ctx, c, c.RequestObjectEncryptionAlgValues)
 	}
 
 	var decryption []string
@@ -1795,7 +1805,7 @@ func (c *Config) GetRequestObjectEncryptionAlgValues(ctx context.Context) (algs 
 		decryption = strategy.DecryptionAlgValues(ctx)
 	}
 
-	for _, alg := range jwt.EncryptionKeyAlgorithms {
+	for _, alg := range jwt.GetEncryptionKeyAlgorithms(ctx, c) {
 		if jwt.IsEncryptedJWTClientSecretAlg(alg) || slices.Contains(decryption, string(alg)) {
 			algs = append(algs, string(alg))
 		}
@@ -1827,12 +1837,20 @@ func (c *Config) GetRFC7591TrustedIssuerSigningAlgValues(ctx context.Context) (a
 
 // GetResponseEncryptionAlgValues returns the JWE 'alg' values supported for the given response.
 func (c *Config) GetResponseEncryptionAlgValues(ctx context.Context, target ResponseEncryptionTarget) (algs []string) {
-	return algorithmsOrDefault(c.ResponseEncryptionAlgValues[target], jwt.EncryptionKeyAlgorithms)
+	return keyAlgorithmsOrDefault(ctx, c, c.ResponseEncryptionAlgValues[target])
 }
 
 // GetResponseEncryptionEncValues returns the JWE 'enc' values supported for the given response.
 func (c *Config) GetResponseEncryptionEncValues(ctx context.Context, target ResponseEncryptionTarget) (encs []string) {
 	return algorithmsOrDefault(c.ResponseEncryptionEncValues[target], jwt.ContentEncryptionAlgorithms)
+}
+
+func keyAlgorithmsOrDefault(ctx context.Context, c *Config, configured []string) []string {
+	if len(configured) != 0 {
+		return jwt.FilterKeyAlgorithms(ctx, c, configured)
+	}
+
+	return algorithmStrings(jwt.GetEncryptionKeyAlgorithms(ctx, c))
 }
 
 func algorithmsOrDefault[T ~string](configured []string, defaults []T) []string {
@@ -2081,6 +2099,7 @@ func (c *Config) GetRFC7591ClientRegistrationScopes(ctx context.Context) (scopes
 
 var (
 	_ jwt.ClientJWKSFetcherStrategyProvider                 = (*Config)(nil)
+	_ jwt.EnableRSA15KeyManagementProvider                  = (*Config)(nil)
 	_ AuthorizeCodeLifespanProvider                         = (*Config)(nil)
 	_ RefreshTokenLifespanProvider                          = (*Config)(nil)
 	_ DisableRefreshTokenExpirationParametersProvider       = (*Config)(nil)

@@ -492,6 +492,52 @@ func TestLocalValidatorCapabilities(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldRejectIDTokenEncryptionAlgRSA15ByDefault",
+			metadata: func(metadata *oauth2.ClientRegistrationMetadata) {
+				metadata.IDTokenEncryptedResponseAlg = string(jose.RSA1_5)
+			},
+			err: "The 'id_token_encrypted_response_alg' value 'RSA1_5' is not supported by this authorization server.",
+		},
+		{
+			name: "ShouldRejectConfiguredUserinfoEncryptionAlgRSA15ByDefault",
+			setup: func(config *oauth2.Config) {
+				config.ResponseEncryptionAlgValues = map[oauth2.ResponseEncryptionTarget][]string{oauth2.ResponseEncryptionTargetUserInfo: {string(jose.RSA1_5), string(jose.RSA_OAEP_256)}}
+			},
+			metadata: func(metadata *oauth2.ClientRegistrationMetadata) {
+				metadata.UserinfoEncryptedResponseAlg = string(jose.RSA1_5)
+			},
+			err: "The 'userinfo_encrypted_response_alg' value 'RSA1_5' is not supported by this authorization server.",
+		},
+		{
+			name: "ShouldRejectConfiguredRequestObjectEncryptionAlgRSA15ByDefault",
+			setup: func(config *oauth2.Config) {
+				config.RequestObjectEncryptionAlgValues = []string{string(jose.RSA1_5), string(jose.RSA_OAEP_256)}
+			},
+			metadata: func(metadata *oauth2.ClientRegistrationMetadata) {
+				metadata.RequestObjectEncryptionAlg = string(jose.RSA1_5)
+			},
+			err: "The 'request_object_encryption_alg' value 'RSA1_5' is not supported by this authorization server.",
+		},
+		{
+			name: "ShouldAcceptIDTokenEncryptionAlgRSA15WhenEnabled",
+			setup: func(config *oauth2.Config) {
+				config.EnableRSA15KeyManagement = true
+			},
+			metadata: func(metadata *oauth2.ClientRegistrationMetadata) {
+				metadata.IDTokenEncryptedResponseAlg = string(jose.RSA1_5)
+			},
+		},
+		{
+			name: "ShouldAcceptConfiguredRequestObjectEncryptionAlgRSA15WhenEnabled",
+			setup: func(config *oauth2.Config) {
+				config.EnableRSA15KeyManagement = true
+				config.RequestObjectEncryptionAlgValues = []string{string(jose.RSA1_5), string(jose.RSA_OAEP_256)}
+			},
+			metadata: func(metadata *oauth2.ClientRegistrationMetadata) {
+				metadata.RequestObjectEncryptionAlg = string(jose.RSA1_5)
+			},
+		},
+		{
 			name: "ShouldRejectIDTokenEncryptionEncNotAdvertised",
 			setup: func(config *oauth2.Config) {
 				config.ResponseEncryptionEncValues = map[oauth2.ResponseEncryptionTarget][]string{oauth2.ResponseEncryptionTargetIDToken: {"A256GCM"}}

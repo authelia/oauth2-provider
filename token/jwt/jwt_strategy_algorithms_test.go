@@ -47,7 +47,7 @@ func TestSupportedAlgorithmsAreCovered(t *testing.T) {
 	})
 
 	t.Run("ShouldPinKeyAlgorithms", func(t *testing.T) {
-		assert.ElementsMatch(t, []jose.KeyAlgorithm{jose.RSA1_5, jose.RSA_OAEP, jose.RSA_OAEP_256, jose.A128KW, jose.A192KW, jose.A256KW, jose.DIRECT, jose.ECDH_ES, jose.ECDH_ES_A128KW, jose.ECDH_ES_A192KW, jose.ECDH_ES_A256KW, jose.A128GCMKW, jose.A192GCMKW, jose.A256GCMKW, jose.PBES2_HS256_A128KW, jose.PBES2_HS384_A192KW, jose.PBES2_HS512_A256KW}, EncryptionKeyAlgorithms)
+		assert.ElementsMatch(t, []jose.KeyAlgorithm{jose.RSA_OAEP, jose.RSA_OAEP_256, jose.A128KW, jose.A192KW, jose.A256KW, jose.DIRECT, jose.ECDH_ES, jose.ECDH_ES_A128KW, jose.ECDH_ES_A192KW, jose.ECDH_ES_A256KW, jose.A128GCMKW, jose.A192GCMKW, jose.A256GCMKW, jose.PBES2_HS256_A128KW, jose.PBES2_HS384_A192KW, jose.PBES2_HS512_A256KW}, EncryptionKeyAlgorithms)
 	})
 
 	t.Run("ShouldPinContentEncryptionAlgorithms", func(t *testing.T) {
@@ -65,7 +65,7 @@ func TestSupportedAlgorithmsAreCovered(t *testing.T) {
 			assert.Equal(t, strings.HasPrefix(string(alg), "HS"), IsSignedJWTClientSecretAlg(alg), "%s", alg)
 		}
 
-		for _, alg := range EncryptionKeyAlgorithms {
+		for _, alg := range allEncryptionKeyAlgorithms() {
 			asymmetric := strings.HasPrefix(string(alg), "RSA") || strings.HasPrefix(string(alg), "ECDH")
 
 			assert.Equal(t, !asymmetric, IsEncryptedJWTClientSecretAlg(alg), "%s", alg)
@@ -501,10 +501,10 @@ func newAlgorithmFixtures() (f *algorithmFixtures, err error) {
 	var issuer *jose.JSONWebKeySet
 
 	issuer, f.clientKeys = f.keySets(f.keys)
-	f.strategy = &DefaultStrategy{Config: &testConfig{}, Issuer: NewDefaultIssuerUnverifiedFromJWKS(issuer)}
+	f.strategy = &DefaultStrategy{Config: &rsa15TestConfig{}, Issuer: NewDefaultIssuerUnverifiedFromJWKS(issuer)}
 
 	issuer, f.otherClientKeys = f.keySets(f.other)
-	f.otherStrategy = &DefaultStrategy{Config: &testConfig{}, Issuer: NewDefaultIssuerUnverifiedFromJWKS(issuer)}
+	f.otherStrategy = &DefaultStrategy{Config: &rsa15TestConfig{}, Issuer: NewDefaultIssuerUnverifiedFromJWKS(issuer)}
 
 	return f, nil
 }
@@ -549,7 +549,7 @@ func (f *algorithmFixtures) keySets(keys *algorithmKeys) (issuer, client *jose.J
 		}
 	}
 
-	for _, alg := range EncryptionKeyAlgorithms {
+	for _, alg := range allEncryptionKeyAlgorithms() {
 		switch {
 		case IsEncryptedJWTClientSecretAlg(alg):
 		case strings.HasPrefix(string(alg), "RSA"):
@@ -632,7 +632,7 @@ func (f *algorithmFixtures) verificationKey(alg jose.SignatureAlgorithm) any {
 }
 
 func (f *algorithmFixtures) encryptionCases() (cases []encryptionCase) {
-	for _, alg := range EncryptionKeyAlgorithms {
+	for _, alg := range allEncryptionKeyAlgorithms() {
 		switch {
 		case IsEncryptedJWTClientSecretAlg(alg):
 			cases = append(cases, encryptionCase{name: string(alg), alg: alg})

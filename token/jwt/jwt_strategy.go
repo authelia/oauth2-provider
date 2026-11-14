@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"authelia.com/provider/jose"
 	"authelia.com/provider/jose/jwt"
@@ -69,6 +70,49 @@ type JWEPBES2CountProvider interface {
 
 	// GetJWEPBES2CountMaximum returns the largest accepted 'p2c' header value.
 	GetJWEPBES2CountMaximum(ctx context.Context) (count int)
+}
+
+// EnableRSA15KeyManagementProvider is optionally implemented by a StrategyConfig to permit the 'RSA1_5' JWE key
+// management algorithm. RSAES-PKCS1-v1_5 is open to Bleichenbacher padding oracle attacks, so it is neither used for
+// encryption nor accepted for decryption unless enabled. FAPI 1.0 Advanced Section 8.6.1 forbids it.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.2
+// See: https://datatracker.ietf.org/doc/html/rfc7518#section-8.3
+type EnableRSA15KeyManagementProvider interface {
+	// GetEnableRSA15KeyManagement returns true if the 'RSA1_5' JWE key management algorithm is permitted.
+	GetEnableRSA15KeyManagement(ctx context.Context) (enable bool)
+}
+
+// IsKeyAlgorithmPermitted returns false for the 'RSA1_5' JWE key management algorithm unless the config implements
+// EnableRSA15KeyManagementProvider and enables it, and true for every other value.
+func IsKeyAlgorithmPermitted(ctx context.Context, config any, alg string) (permitted bool) {
+	if alg != string(jose.RSA1_5) {
+		return true
+	}
+
+	provider, ok := config.(EnableRSA15KeyManagementProvider)
+
+	return ok && provider.GetEnableRSA15KeyManagement(ctx)
+}
+
+// GetEncryptionKeyAlgorithms returns EncryptionKeyAlgorithms, preceded by 'RSA1_5' when the config permits it.
+func GetEncryptionKeyAlgorithms(ctx context.Context, config any) (algs []jose.KeyAlgorithm) {
+	if IsKeyAlgorithmPermitted(ctx, config, string(jose.RSA1_5)) {
+		return append([]jose.KeyAlgorithm{jose.RSA1_5}, EncryptionKeyAlgorithms...)
+	}
+
+	return slices.Clone(EncryptionKeyAlgorithms)
+}
+
+// FilterKeyAlgorithms returns the values of algs that IsKeyAlgorithmPermitted permits.
+func FilterKeyAlgorithms[T ~string](ctx context.Context, config any, algs []T) (out []T) {
+	for _, alg := range algs {
+		if IsKeyAlgorithmPermitted(ctx, config, string(alg)) {
+			out = append(out, alg)
+		}
+	}
+
+	return out
 }
 
 type JWKSFetcherStrategy interface {
@@ -174,6 +218,10 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 		return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client configuration. %w", err))
 	}
 
+	if !IsKeyAlgorithmPermitted(ctx, j.Config, alg) || !IsKeyAlgorithmPermitted(ctx, j.Config, keyEnc.Algorithm) {
+		return "", "", errorsx.WithStack(fmt.Errorf("failed to encrypt the JWT: the JWE key management algorithm '%s' is not permitted", jose.RSA1_5))
+	}
+
 	return EncodeNestedCompactEncrypted(ctx, claims, o.headers, o.headersJWE, keySig, keyEnc, jose.ContentEncryption(enc))
 }
 
@@ -189,7 +237,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 
 	o := &StrategyOpts{
 		sigAlgorithm:      SignatureAlgorithms,
-		keyAlgorithm:      EncryptionKeyAlgorithms,
+		keyAlgorithm:      GetEncryptionKeyAlgorithms(ctx, j.Config),
 		contentEncryption: ContentEncryptionAlgorithms,
 	}
 
@@ -203,7 +251,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 		key *jose.JSONWebKey
 	)
 
-	if jwe, err = jose.ParseEncryptedCompact(tokenStringEnc, o.keyAlgorithm, o.contentEncryption); err != nil {
+	if jwe, err = jose.ParseEncryptedCompact(tokenStringEnc, FilterKeyAlgorithms(ctx, j.Config, o.keyAlgorithm), o.contentEncryption); err != nil {
 		return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorMalformed, Inner: err})
 	}
 
@@ -248,7 +296,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts ...StrategyOpt) (token *Token, err error) {
 	o := &StrategyOpts{
 		sigAlgorithm:      SignatureAlgorithms,
-		keyAlgorithm:      EncryptionKeyAlgorithms,
+		keyAlgorithm:      GetEncryptionKeyAlgorithms(ctx, j.Config),
 		contentEncryption: ContentEncryptionAlgorithms,
 		jwsKeyFunc:        nil,
 		jweKeyFunc:        nil,
@@ -353,7 +401,7 @@ func (j *DefaultStrategy) Validate(ctx context.Context, token *Token, opts ...St
 
 	o := &StrategyOpts{
 		sigAlgorithm:      SignatureAlgorithms,
-		keyAlgorithm:      EncryptionKeyAlgorithms,
+		keyAlgorithm:      GetEncryptionKeyAlgorithms(ctx, j.Config),
 		contentEncryption: ContentEncryptionAlgorithms,
 		jwsKeyFunc:        nil,
 		jweKeyFunc:        nil,

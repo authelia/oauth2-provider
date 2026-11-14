@@ -811,6 +811,44 @@ func TestOpenIDMetadataComposeAllEnabled(t *testing.T) {
 	assertGolden(t, filepath.Join("testdata", "discovery", "openid_all_enabled.json"), metadata)
 }
 
+func TestOpenIDMetadataRSA15KeyManagement(t *testing.T) {
+	members := []string{
+		consts.DiscoveryIDTokenEncryptionAlgValuesSupported,
+		consts.DiscoveryUserinfoEncryptionAlgValuesSupported,
+		consts.DiscoveryIntrospectionEncryptionAlgValuesSupported,
+		consts.DiscoveryAuthorizationEncryptionAlgValuesSupported,
+	}
+
+	metadata := func(t *testing.T, enabled bool) map[string]any {
+		config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
+		config.EnableRSA15KeyManagement = enabled
+
+		provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), gen.MustRSAKey())
+
+		value, err := provider.NewOpenIDConnectProviderMetadata(context.Background())
+		require.NoError(t, err)
+
+		return marshalMembers(t, value)
+	}
+
+	t.Run("ShouldNotAdvertiseRSA15ByDefault", func(t *testing.T) {
+		actual := metadata(t, false)
+
+		for _, member := range members {
+			require.Contains(t, actual, member)
+			assert.NotContains(t, actual[member], string(jose.RSA1_5), member)
+		}
+	})
+
+	t.Run("ShouldAdvertiseRSA15WhenEnabled", func(t *testing.T) {
+		actual := metadata(t, true)
+
+		for _, member := range members {
+			assert.Contains(t, actual[member], string(jose.RSA1_5), member)
+		}
+	})
+}
+
 func TestOpenIDMetadataMutualTLSAliases(t *testing.T) {
 	config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
 	advertised := config.EndpointURLs.MutualTLSAliases

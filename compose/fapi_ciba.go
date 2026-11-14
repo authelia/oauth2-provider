@@ -160,10 +160,6 @@ func (v *fapi2Violations) cibaAuthorizationServer(ctx context.Context, config oa
 		v.fail(fapiCIBASectionAuthorizationServer, "the 'acr' claim must be returned in the ID Token when requested, but the OpenID Connect CIBA handler is not registered")
 	}
 
-	if lifetime := config.GetCIBASignedRequestMaximumLifetime(ctx); lifetime > fapiCIBAMaximumSignedRequestLifetime {
-		v.fail(fapiCIBASectionAuthorizationServer, "a signed authentication request must have a lifetime of at most %s, but CIBASignedRequestMaximumLifetime is %s", fapiCIBAMaximumSignedRequestLifetime, lifetime)
-	}
-
 	if config.GetDisableClientAssertionIssuerAudience(ctx) {
 		v.fail(fapiCIBASectionAuthorizationServer, "the issuer must be the sole client assertion audience, but DisableClientAssertionIssuerAudience is set")
 	}

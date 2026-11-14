@@ -235,6 +235,20 @@ the responsibility of the application that uses it:
   expects refresh tokens issued without `offline_access` to be revoked at logout, and those issued with it normally to
   be kept. [RFC 10017 Section 6.3.2.3](https://datatracker.ietf.org/doc/html/rfc10017#section-6.3.2.3) likewise
   recommends ending the refresh tokens of browser-based clients with the session.
+- **Protect client secrets against brute force**
+  ([RFC 6749 Section 2.3.1](https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1),
+  [OAuth 2.1 Section 2.4.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-2.4.1)): the
+  authorization server must protect every endpoint which accepts a client secret against brute force attacks, and the
+  library does not limit the rate of attempts. A secret is accepted with `client_secret_basic`, `client_secret_post` or
+  `client_secret_jwt` at the endpoints served by `NewAccessRequest`, `NewIntrospectionRequest`, `NewRevocationRequest`,
+  `NewPushedAuthorizeRequest` and `NewRFC862DeviceAuthorizeRequest`, each of which fails with `invalid_client` when
+  client authentication fails, except that `NewAccessRequest` returns `invalid_request` for a grant type no handler
+  supports, even when client authentication fails. Hashing secrets with `BCryptClientSecret` slows each guess but does
+  not limit how many are made, so limit the failed attempts per client ID and per source address at these endpoints, for
+  example by delaying or refusing further requests and raising an alert. Do not lock a client out entirely on failures
+  alone, as anyone who knows its client ID could then deny it service. The verification page where a user enters an
+  [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628#section-5.1) user code before
+  `NewRFC8628UserAuthorizeRequest` needs the same protection, as a user code is short enough to be guessed without it.
 
 [RFC 10017: OAuth 2.0 for Browser-Based Applications](https://datatracker.ietf.org/doc/html/rfc10017) and
 [RFC 8252: OAuth 2.0 for Native Apps](https://datatracker.ietf.org/doc/html/rfc8252) add the following:

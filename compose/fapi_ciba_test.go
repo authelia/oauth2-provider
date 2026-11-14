@@ -182,6 +182,7 @@ func TestApplyFAPICIBAProfileRemovesRSA15(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			config := &oauth2.Config{
+				EnableRSA15KeyManagement:           true,
 				ClientAssertionEncryptionAlgValues: tc.configured,
 				RequestObjectEncryptionAlgValues:   tc.configured,
 				ResponseEncryptionAlgValues:        map[oauth2.ResponseEncryptionTarget][]string{},
@@ -192,6 +193,8 @@ func TestApplyFAPICIBAProfileRemovesRSA15(t *testing.T) {
 			}
 
 			ApplyFAPICIBAProfile(config)
+
+			assert.False(t, config.EnableRSA15KeyManagement)
 
 			effective := map[string][]string{
 				"client_assertion": config.GetClientAssertionEncryptionAlgValues(ctx),
@@ -340,25 +343,33 @@ func TestValidateFAPICIBAProfile(t *testing.T) {
 		{
 			name: "ShouldRejectRSA15ClientAssertionDecryption",
 			modify: func(config *oauth2.Config) {
+				config.EnableRSA15KeyManagement = true
 				config.ClientAssertionEncryptionAlgValues = []string{string(jose.RSA_OAEP_256), string(jose.RSA1_5)}
 			},
 			expected: []string{"FAPI-CIBA Profile Section 5.11: the RSA1_5 algorithm must not be used, but the client assertion encryption algorithms are 'RSA-OAEP-256', 'RSA1_5'"},
 		},
 		{
-			name:     "ShouldRejectRSA15RequestObjectDecryption",
-			modify:   func(config *oauth2.Config) { config.RequestObjectEncryptionAlgValues = []string{string(jose.RSA1_5)} },
+			name: "ShouldRejectRSA15RequestObjectDecryption",
+			modify: func(config *oauth2.Config) {
+				config.EnableRSA15KeyManagement = true
+				config.RequestObjectEncryptionAlgValues = []string{string(jose.RSA1_5)}
+			},
 			expected: []string{"FAPI-CIBA Profile Section 5.11: the RSA1_5 algorithm must not be used, but the request object encryption algorithms are 'RSA1_5'"},
 		},
 		{
 			name: "ShouldRejectRSA15ResponseEncryption",
 			modify: func(config *oauth2.Config) {
+				config.EnableRSA15KeyManagement = true
 				config.ResponseEncryptionAlgValues = map[oauth2.ResponseEncryptionTarget][]string{oauth2.ResponseEncryptionTargetIDToken: {string(jose.RSA1_5)}}
 			},
 			expected: []string{"FAPI-CIBA Profile Section 5.11: the RSA1_5 algorithm must not be used, but the id_token response encryption algorithms are 'RSA1_5'"},
 		},
 		{
-			name:     "ShouldRejectRSA15ResponseEncryptionByDefault",
-			modify:   func(config *oauth2.Config) { config.ResponseEncryptionAlgValues = nil },
+			name: "ShouldRejectRSA15ResponseEncryptionByDefault",
+			modify: func(config *oauth2.Config) {
+				config.EnableRSA15KeyManagement = true
+				config.ResponseEncryptionAlgValues = nil
+			},
 			expected: []string{"FAPI-CIBA Profile Section 5.11: the RSA1_5 algorithm must not be used, but the userinfo response encryption algorithms are"},
 		},
 		{

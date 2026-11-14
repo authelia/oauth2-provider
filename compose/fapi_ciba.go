@@ -17,7 +17,6 @@ import (
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/handler/rfc7523"
 	"authelia.com/provider/oauth2/internal/consts"
-	"authelia.com/provider/oauth2/token/jwt"
 )
 
 const (
@@ -34,9 +33,9 @@ const (
 // authorization context, bounds a signed authentication request to a lifetime of at most 60 minutes, requires the
 // issuer as the sole client assertion audience at the backchannel authentication endpoint, permits only the PS256 and
 // ES256 JWS algorithms for signed authentication requests, client assertions, request objects, DPoP proofs, JWT bearer
-// grant assertions, and signed authorization and introspection responses, and removes the RSA1_5 JWE algorithm from
-// every response encryption, client assertion decryption and request object decryption algorithm list. A value
-// already within the profile is kept.
+// grant assertions, and signed authorization and introspection responses, and disables EnableRSA15KeyManagement and
+// removes the RSA1_5 JWE algorithm from every response encryption, client assertion decryption and request object
+// decryption algorithm list. A value already within the profile is kept.
 //
 // It does not register handlers or require 'request_context', which the profile leaves optional, or restrict the keys
 // which sign the ID Tokens, UserInfo responses and JWT access tokens the server issues, which must use PS256 or ES256,
@@ -80,37 +79,13 @@ func ApplyFAPICIBAProfile(config *oauth2.Config) {
 		config.IntrospectionEndpointAuthSigningAlgValues = fapi2Permitted(config.IntrospectionEndpointAuthSigningAlgValues, oauth2.FAPICIBASigningAlgValues)
 	}
 
-	ctx := context.Background()
+	config.EnableRSA15KeyManagement = false
 
-	fapiCIBAWithoutRSA15(&config.ClientAssertionEncryptionAlgValues, func() []string { return config.GetClientAssertionEncryptionAlgValues(ctx) })
-	fapiCIBAWithoutRSA15(&config.RequestObjectEncryptionAlgValues, func() []string { return config.GetRequestObjectEncryptionAlgValues(ctx) })
+	config.ClientAssertionEncryptionAlgValues = fapiCIBAWithoutRSA15(config.ClientAssertionEncryptionAlgValues)
+	config.RequestObjectEncryptionAlgValues = fapiCIBAWithoutRSA15(config.RequestObjectEncryptionAlgValues)
 
-	for _, target := range fapiCIBAResponseEncryptionTargets {
-		algs := config.ResponseEncryptionAlgValues[target]
-
-		fapiCIBAWithoutRSA15(&algs, func() []string {
-			if len(algs) != 0 {
-				return algs
-			}
-
-			defaults := make([]string, len(jwt.EncryptionKeyAlgorithms))
-
-			for i, alg := range jwt.EncryptionKeyAlgorithms {
-				defaults[i] = string(alg)
-			}
-
-			return defaults
-		})
-
-		if len(algs) == 0 {
-			continue
-		}
-
-		if config.ResponseEncryptionAlgValues == nil {
-			config.ResponseEncryptionAlgValues = map[oauth2.ResponseEncryptionTarget][]string{}
-		}
-
-		config.ResponseEncryptionAlgValues[target] = algs
+	for target, algs := range config.ResponseEncryptionAlgValues {
+		config.ResponseEncryptionAlgValues[target] = fapiCIBAWithoutRSA15(algs)
 	}
 }
 
@@ -239,19 +214,11 @@ var fapiCIBAResponseEncryptionTargets = []oauth2.ResponseEncryptionTarget{
 	oauth2.ResponseEncryptionTargetAccessToken,
 }
 
-func fapiCIBAWithoutRSA15(configured *[]string, effective func() []string) {
-	isRSA15 := func(alg string) bool { return alg == string(jose.RSA1_5) }
-
-	if !slices.ContainsFunc(effective(), isRSA15) {
-		return
+// fapiCIBAWithoutRSA15 removes RSA1_5 from a configured list, returning nil so the defaults apply when nothing remains.
+func fapiCIBAWithoutRSA15(algs []string) []string {
+	if algs = slices.DeleteFunc(slices.Clone(algs), func(alg string) bool { return alg == string(jose.RSA1_5) }); len(algs) == 0 {
+		return nil
 	}
 
-	kept := slices.DeleteFunc(slices.Clone(*configured), isRSA15)
-
-	if len(kept) == 0 {
-		*configured = nil
-		kept = slices.DeleteFunc(slices.Clone(effective()), isRSA15)
-	}
-
-	*configured = kept
+	return algs
 }

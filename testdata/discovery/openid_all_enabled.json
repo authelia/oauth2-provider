@@ -113,7 +113,6 @@
   ],
   "introspection_signing_alg_values_supported": ["HS256", "HS384", "HS512", "RS256"],
   "introspection_encryption_alg_values_supported": [
-    "RSA1_5",
     "RSA-OAEP",
     "RSA-OAEP-256",
     "A128KW",
@@ -141,7 +140,6 @@
   ],
   "authorization_signing_alg_values_supported": ["HS256", "HS384", "HS512", "RS256"],
   "authorization_encryption_alg_values_supported": [
-    "RSA1_5",
     "RSA-OAEP",
     "RSA-OAEP-256",
     "A128KW",
@@ -177,7 +175,6 @@
   "subject_types_supported": ["public"],
   "id_token_signing_alg_values_supported": ["HS256", "HS384", "HS512", "RS256"],
   "id_token_encryption_alg_values_supported": [
-    "RSA1_5",
     "RSA-OAEP",
     "RSA-OAEP-256",
     "A128KW",
@@ -205,7 +202,6 @@
   ],
   "userinfo_signing_alg_values_supported": ["ES256", "HS256", "HS384", "HS512", "none"],
   "userinfo_encryption_alg_values_supported": [
-    "RSA1_5",
     "RSA-OAEP",
     "RSA-OAEP-256",
     "A128KW",

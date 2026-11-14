@@ -42,9 +42,24 @@ func IsRedirectURISecure(ctx context.Context, uri *url.URL) bool {
 	return !(uri.Scheme == consts.SchemeHTTP && !IsLocalhost(uri))
 }
 
+// IsRedirectURISecureForClient reports whether the given URI is acceptable as a redirect target for the client. It
+// applies IsRedirectURISecure and additionally permits the 'http' scheme only for a native client using loopback
+// interface redirection. A client is native when it is an ApplicationTypeClient whose 'application_type' is 'native',
+// or when it is not an ApplicationTypeClient and is public.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.6
+// See: https://www.rfc-editor.org/rfc/rfc8252#section-7.3
+func IsRedirectURISecureForClient(ctx context.Context, client Client, uri *url.URL) (secure bool) {
+	if !IsRedirectURISecure(ctx, uri) {
+		return false
+	}
+
+	return uri.Scheme != consts.SchemeHTTP || (client != nil && isNativeLoopbackClient(client))
+}
+
 // ValidateRedirectURISecurity returns an invalid_request error when the redirect URI fails the configured
-// RedirectSecureChecker, or IsRedirectURISecure when none is configured. The check applies to every client, unless the
-// client is public and AllowInsecureRedirectURIForPublicClients is enabled.
+// RedirectSecureChecker, or IsRedirectURISecureForClient when none is configured. The check applies to every client,
+// unless the client is public and AllowInsecureRedirectURIForPublicClients is enabled.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9700#section-2.6
 func ValidateRedirectURISecurity(ctx context.Context, config RedirectURISecurityProvider, client Client, uri *url.URL) (err error) {
@@ -52,13 +67,16 @@ func ValidateRedirectURISecurity(ctx context.Context, config RedirectURISecurity
 		return nil
 	}
 
-	checker := config.GetRedirectSecureChecker(ctx)
-	if checker == nil {
-		checker = IsRedirectURISecure
+	var secure bool
+
+	if checker := config.GetRedirectSecureChecker(ctx); checker != nil {
+		secure = checker(ctx, uri)
+	} else {
+		secure = IsRedirectURISecureForClient(ctx, client, uri)
 	}
 
-	if !checker(ctx, uri) {
-		return errorsx.WithStack(ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/."))
+	if !secure {
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("Redirect URL is using an insecure protocol, http is only allowed for native clients using a loopback redirect URI, for example: http://127.0.0.1:8080/callback."))
 	}
 
 	return nil
@@ -123,7 +141,7 @@ func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL
 		}
 
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'.").WithDebugf("The 'redirect_uris' registered with OAuth 2.0 Client with id '%s' did not match 'redirect_uri' value '%s' because the only registered 'redirect_uri' is not a valid value.", client.GetID(), raw))
-	} else if redirectTo, ok := isMatchingRedirectURI(raw, client.GetRedirectURIs(), strategy, isLoopbackPortExempt(client)); raw != "" && ok {
+	} else if redirectTo, ok := isMatchingRedirectURI(raw, client.GetRedirectURIs(), strategy, isNativeLoopbackClient(client)); raw != "" && ok {
 		// If a redirect_uri was given and the clients knows it (simple string comparison!)
 		// return it.
 		if parsed, err := url.Parse(redirectTo); err == nil && IsValidRedirectURI(parsed) {
@@ -143,11 +161,7 @@ func IsMatchingRedirectURI(needle string, haystack []string, strategy URICompari
 	return isMatchingRedirectURI(needle, haystack, strategy, false)
 }
 
-// isLoopbackPortExempt returns true if the client is a native application, which RFC 8252 Section 7.3 permits any port
-// on a loopback redirect URI. A client which declares no 'application_type' is taken to be native when it is public.
-//
-// See: https://www.rfc-editor.org/rfc/rfc8252#section-7.3
-func isLoopbackPortExempt(client Client) bool {
+func isNativeLoopbackClient(client Client) bool {
 	if _, ok := client.(ApplicationTypeClient); ok {
 		return IsNativeClient(client)
 	}

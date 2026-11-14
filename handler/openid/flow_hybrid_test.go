@@ -423,7 +423,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
 			expectedField: "invalid_request",
-			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/.",
+			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for native clients using a loopback redirect URI, for example: http://127.0.0.1:8080/callback.",
 			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
 				assert.Empty(t, response.GetParameters().Get(consts.AccessResponseAuthorizationCode))
 			},
@@ -452,7 +452,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
 			expectedField: "invalid_request",
-			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/.",
+			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for native clients using a loopback redirect URI, for example: http://127.0.0.1:8080/callback.",
 			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
 				assert.Empty(t, response.GetParameters().Get(consts.AccessResponseAuthorizationCode))
 			},

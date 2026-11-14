@@ -64,7 +64,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 				},
 				RedirectURI: parseUrl("http://asdf.com/cb"),
 			},
-			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/.",
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for native clients using a loopback redirect URI, for example: http://127.0.0.1:8080/callback.",
 		},
 		{
 			name: "ShouldFailAudienceMismatch",
@@ -102,7 +102,25 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 				State:       "superstate",
 				RedirectURI: parseUrl("http://asdf.de/cb"),
 			},
-			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/.",
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for native clients using a loopback redirect URI, for example: http://127.0.0.1:8080/callback.",
+		},
+		{
+			name: "ShouldFailRedirectURIHTTPLocalhostConfidential",
+			areq: &oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request: oauth2.Request{
+					Client: &oauth2.DefaultClient{
+						ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+						RedirectURIs:  []string{"http://localhost/cb"},
+					},
+					Session: &oauth2.DefaultSession{
+						ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)},
+					},
+					RequestedAt: time.Now().UTC(),
+				},
+				RedirectURI: parseUrl("http://localhost/cb"),
+			},
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for native clients using a loopback redirect URI, for example: http://127.0.0.1:8080/callback.",
 		},
 		{
 			name: "ShouldPass",

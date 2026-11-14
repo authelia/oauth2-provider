@@ -11,6 +11,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 func TestIsMatchingNativeAppLoopbackURI(t *testing.T) {
@@ -90,25 +92,44 @@ func TestIsMatchingNativeAppLoopbackURI(t *testing.T) {
 
 func TestValidateRedirectURISecurity(t *testing.T) {
 	strict := func(_ context.Context, uri *url.URL) bool { return IsRedirectURISecureStrict(uri) }
+	permissive := func(_ context.Context, uri *url.URL) bool { return true }
 
 	testCases := []struct {
-		name    string
-		uri     string
-		public  bool
-		allow   bool
-		checker func(context.Context, *url.URL) bool
-		err     bool
+		name            string
+		uri             string
+		public          bool
+		applicationType string
+		allow           bool
+		nilClient       bool
+		checker         func(context.Context, *url.URL) bool
+		err             bool
 	}{
 		{name: "ShouldAllowHTTPSConfidential", uri: "https://client.example.com/cb"},
 		{name: "ShouldAllowHTTPSPublic", uri: "https://client.example.com/cb", public: true},
-		{name: "ShouldAllowLoopbackConfidential", uri: "http://127.0.0.1:8080/cb"},
+		{name: "ShouldAllowHTTPSLocalhostConfidential", uri: "https://localhost:8443/cb"},
+		{name: "ShouldAllowHTTPSConfidentialWeb", uri: "https://client.example.com/cb", applicationType: consts.ApplicationTypeWeb},
+		{name: "ShouldAllowCustomSchemeConfidential", uri: "com.example.app:/cb"},
+		{name: "ShouldRejectLoopbackConfidential", uri: "http://127.0.0.1:8080/cb", err: true},
+		{name: "ShouldRejectLocalhostConfidential", uri: "http://localhost:8080/cb", err: true},
+		{name: "ShouldRejectLocalhostConfidentialWeb", uri: "http://localhost/cb", applicationType: consts.ApplicationTypeWeb, err: true},
+		{name: "ShouldRejectLocalhostPublicWeb", uri: "http://localhost/cb", public: true, applicationType: consts.ApplicationTypeWeb, err: true},
+		{name: "ShouldRejectLocalhostConfidentialNoApplicationType", uri: "http://localhost/cb", applicationType: "unset", err: true},
+		{name: "ShouldRejectLoopbackNilClient", uri: "http://127.0.0.1:8080/cb", nilClient: true, err: true},
 		{name: "ShouldAllowLoopbackPublic", uri: "http://127.0.0.1:8080/cb", public: true},
+		{name: "ShouldAllowLoopbackConfidentialNative", uri: "http://127.0.0.1:8080/cb", applicationType: consts.ApplicationTypeNative},
+		{name: "ShouldAllowIPv6LoopbackPublicNative", uri: "http://[::1]:8080/cb", public: true, applicationType: consts.ApplicationTypeNative},
+		{name: "ShouldAllowLocalhostConfidentialNative", uri: "http://localhost:8080/cb", applicationType: consts.ApplicationTypeNative},
 		{name: "ShouldRejectHTTPConfidential", uri: "http://client.example.com/cb", err: true},
 		{name: "ShouldRejectHTTPPublic", uri: "http://client.example.com/cb", public: true, err: true},
+		{name: "ShouldRejectHTTPConfidentialNative", uri: "http://client.example.com/cb", applicationType: consts.ApplicationTypeNative, err: true},
 		{name: "ShouldRejectHTTPConfidentialWhenPublicClientsAllowed", uri: "http://client.example.com/cb", allow: true, err: true},
 		{name: "ShouldAllowHTTPPublicWhenPublicClientsAllowed", uri: "http://client.example.com/cb", public: true, allow: true},
+		{name: "ShouldAllowLocalhostPublicWebWhenPublicClientsAllowed", uri: "http://localhost/cb", public: true, applicationType: consts.ApplicationTypeWeb, allow: true},
 		{name: "ShouldRejectCustomSchemeWithStrictChecker", uri: "com.example.app:/cb", public: true, checker: strict, err: true},
 		{name: "ShouldAllowCustomSchemeWithStrictCheckerWhenPublicClientsAllowed", uri: "com.example.app:/cb", public: true, allow: true, checker: strict},
+		{name: "ShouldAllowLocalhostConfidentialWithStrictChecker", uri: "http://localhost/cb", checker: strict},
+		{name: "ShouldAllowLocalhostConfidentialWebWithIsRedirectURISecureChecker", uri: "http://localhost/cb", applicationType: consts.ApplicationTypeWeb, checker: IsRedirectURISecure},
+		{name: "ShouldAllowHTTPConfidentialWithPermissiveChecker", uri: "http://client.example.com/cb", checker: permissive},
 		{name: "ShouldAllowNoRedirectURI"},
 	}
 
@@ -122,10 +143,22 @@ func TestValidateRedirectURISecurity(t *testing.T) {
 				uri = MustParseURI(t, tc.uri)
 			}
 
-			err := ValidateRedirectURISecurity(t.Context(), config, &DefaultClient{ID: "client", Public: tc.public}, uri)
+			var client Client = &DefaultClient{ID: "client", Public: tc.public}
+
+			switch {
+			case tc.nilClient:
+				client = nil
+			case tc.applicationType == "unset":
+				client = &DefaultRegisteredClient{DefaultClient: client.(*DefaultClient)}
+			case tc.applicationType != "":
+				client = &DefaultRegisteredClient{DefaultClient: client.(*DefaultClient), ApplicationType: tc.applicationType}
+			}
+
+			err := ValidateRedirectURISecurity(t.Context(), config, client, uri)
 
 			if tc.err {
-				assert.ErrorIs(t, err, ErrInvalidRequest)
+				require.ErrorIs(t, err, ErrInvalidRequest)
+				assert.Equal(t, "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for native clients using a loopback redirect URI, for example: http://127.0.0.1:8080/callback.", ErrorToRFC6749Error(err).GetDescription())
 			} else {
 				assert.NoError(t, err)
 			}

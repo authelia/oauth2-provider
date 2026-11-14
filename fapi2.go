@@ -41,6 +41,12 @@ var (
 	//
 	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 	FAPI2SecurityProfileClientAuthMethods = []string{consts.ClientAuthMethodPrivateKeyJWT, consts.ClientAuthMethodTLSClientAuth, consts.ClientAuthMethodSelfSignedTLSClientAuth}
+
+	// FAPICIBASigningAlgValues are the JWS algorithms the FAPI-CIBA profile permits clients and authorization servers
+	// to use: PS256 and ES256.
+	//
+	// See: https://openid.net/specs/fapi-ciba.html#section-5.10
+	FAPICIBASigningAlgValues = []string{string(jose.PS256), string(jose.ES256)}
 )
 
 // FAPI2SecurityProfileClient is a client held to the FAPI 2.0 Security Profile at every request it makes, whatever the

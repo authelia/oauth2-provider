@@ -437,3 +437,24 @@ func fmtValidateJWTError(token *jwt.Token, client jwt.Client, inner error) (err 
 		return oauth2.ErrRequestUnauthorized.WithDebugf("Token %scould not be validated. %s", clientText, oauth2.ErrorToDebugRFC6749Error(inner).Error())
 	}
 }
+
+// IsOpaqueCIBAAuthRequestID reports whether the token has the format of an opaque CIBA 'auth_req_id' issued by the HMAC
+// strategy.
+func (s *JWTProfileCoreStrategy) IsOpaqueCIBAAuthRequestID(ctx context.Context, id string) bool {
+	return s.HMACCoreStrategy.IsOpaqueCIBAAuthRequestID(ctx, id)
+}
+
+// CIBAAuthRequestIDSignature returns the CIBA 'auth_req_id' signature from the HMAC strategy.
+func (s *JWTProfileCoreStrategy) CIBAAuthRequestIDSignature(ctx context.Context, id string) (signature string, err error) {
+	return s.HMACCoreStrategy.CIBAAuthRequestIDSignature(ctx, id)
+}
+
+// GenerateCIBAAuthRequestID generates a CIBA 'auth_req_id' with the HMAC strategy.
+func (s *JWTProfileCoreStrategy) GenerateCIBAAuthRequestID(ctx context.Context) (id string, signature string, err error) {
+	return s.HMACCoreStrategy.GenerateCIBAAuthRequestID(ctx)
+}
+
+// ValidateCIBAAuthRequestID validates a CIBA 'auth_req_id' with the HMAC strategy.
+func (s *JWTProfileCoreStrategy) ValidateCIBAAuthRequestID(ctx context.Context, request oauth2.Requester, id string) (err error) {
+	return s.HMACCoreStrategy.ValidateCIBAAuthRequestID(ctx, request, id)
+}

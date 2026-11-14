@@ -110,6 +110,10 @@ func (v *LocalValidator) ValidateClientRegistrationMetadata(ctx context.Context,
 		return err
 	}
 
+	if err = validateCIBA(ctx, v.config, metadata); err != nil {
+		return err
+	}
+
 	return validateCapabilities(ctx, v.config, metadata)
 }
 

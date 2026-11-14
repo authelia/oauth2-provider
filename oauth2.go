@@ -29,6 +29,9 @@ const (
 	DeviceCode              TokenType = consts.CodeDevice
 	UserCode                TokenType = consts.CodeUser
 
+	// CIBAAuthRequestID represents the CIBA auth_req_id.
+	CIBAAuthRequestID TokenType = consts.FormParameterAuthReqID
+
 	// PushedAuthorizeRequestContext represents the PAR context object
 	PushedAuthorizeRequestContext TokenType = "par_context"
 
@@ -43,6 +46,7 @@ const (
 	GrantTypeJWTBearer         GrantType = consts.GrantTypeOAuthJWTBearer
 	GrantTypeDeviceCode        GrantType = consts.GrantTypeOAuthDeviceCode
 	GrantTypeTokenExchange     GrantType = consts.GrantTypeOAuthTokenExchange
+	GrantTypeCIBA              GrantType = consts.GrantTypeOpenIDCIBA
 
 	// BearerAccessToken is the standard OAuth 2.0 Token type.
 	BearerAccessToken string = "bearer"
@@ -218,6 +222,58 @@ type Provider interface {
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.3
 	NewRFC8628UserAuthorizeResponse(ctx context.Context, request DeviceAuthorizeRequester, session Session) (responder DeviceUserAuthorizeResponder, err error)
+
+	// NewBackChannelAuthenticationRequest parses and validates an OpenID Connect CIBA authentication request at the
+	// backchannel authentication endpoint. The session is set on the returned requester.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.1
+	NewBackChannelAuthenticationRequest(ctx context.Context, r *http.Request, session Session) (requester BackChannelAuthenticationRequester, err error)
+
+	// NewBackChannelAuthenticationResponse runs the backchannel authentication endpoint handlers, which issue and
+	// persist the 'auth_req_id'. The application must resolve the end-user and set the session subject first.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.3
+	NewBackChannelAuthenticationResponse(ctx context.Context, request BackChannelAuthenticationRequester) (response BackChannelAuthenticationResponder, err error)
+
+	// WriteBackChannelAuthenticationResponse writes the successful authentication request acknowledgement.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.3
+	WriteBackChannelAuthenticationResponse(ctx context.Context, rw http.ResponseWriter, request BackChannelAuthenticationRequester, response BackChannelAuthenticationResponder)
+
+	// WriteBackChannelAuthenticationError writes an authentication error response: 401 with the client authentication
+	// challenge for invalid_client, 403 for access_denied, and the status of the error otherwise.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.13
+	WriteBackChannelAuthenticationError(ctx context.Context, rw http.ResponseWriter, request BackChannelAuthenticationRequester, err error)
+
+	// NewBackChannelAuthenticationDecisionRequest loads the pending CIBA authentication request with the given request
+	// ID so the application can show it to the end user. It errors when the request is unknown, decided or expired; an
+	// expired request is returned with the error, for ExpireBackChannelAuthentication.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.8
+	NewBackChannelAuthenticationDecisionRequest(ctx context.Context, requestID string, session Session) (request BackChannelAuthenticationRequester, err error)
+
+	// ApproveBackChannelAuthentication records the end user's approval of the CIBA authentication request. The session
+	// replaces the stored session and must carry the subject set when the request was made.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.8
+	ApproveBackChannelAuthentication(ctx context.Context, request BackChannelAuthenticationRequester, session Session) (result *BackChannelAuthenticationDecisionResult, err error)
+
+	// DenyBackChannelAuthentication records the end user's denial of the CIBA authentication request.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.8
+	DenyBackChannelAuthentication(ctx context.Context, request BackChannelAuthenticationRequester) (result *BackChannelAuthenticationDecisionResult, err error)
+
+	// FailBackChannelAuthentication records that the CIBA authentication request failed for the given cause.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.12
+	FailBackChannelAuthentication(ctx context.Context, request BackChannelAuthenticationRequester, cause string) (result *BackChannelAuthenticationDecisionResult, err error)
+
+	// ExpireBackChannelAuthentication sends the 'expired_token' push error notification for an expired CIBA
+	// authentication request of a push client.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.12
+	ExpireBackChannelAuthentication(ctx context.Context, request BackChannelAuthenticationRequester) (result *BackChannelAuthenticationDecisionResult, err error)
 
 	// NewRFC7591ClientRegistrationRequest validates the request and produces a ClientRegistrationRequester.
 	//
@@ -692,6 +748,32 @@ type PushedAuthorizeResponder interface {
 
 	// ToMap converts the response to a map.
 	ToMap() (values map[string]any)
+}
+
+// BackChannelAuthenticationResponder is the OpenID Connect CIBA authentication request acknowledgement.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.3
+type BackChannelAuthenticationResponder interface {
+	// GetAuthRequestID returns the 'auth_req_id'.
+	GetAuthRequestID() (id string)
+
+	// SetAuthRequestID sets the 'auth_req_id'.
+	SetAuthRequestID(id string)
+
+	// GetExpiresIn returns the lifetime of the 'auth_req_id' in seconds.
+	GetExpiresIn() (seconds int64)
+
+	// SetExpiresIn sets the lifetime of the 'auth_req_id' in seconds.
+	SetExpiresIn(seconds int64)
+
+	// GetInterval returns the minimum polling interval in seconds, or 0 when it is omitted.
+	GetInterval() (seconds int64)
+
+	// SetInterval sets the minimum polling interval in seconds. 0 omits the member.
+	SetInterval(seconds int64)
+
+	// ToMap returns the response members.
+	ToMap() (data map[string]any)
 }
 
 type DeviceAuthorizeResponder interface {

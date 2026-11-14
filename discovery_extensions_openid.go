@@ -95,6 +95,12 @@ type OpenIDConnectCIBAMetadata struct {
 	BackChannelAuthenticationEndpoint                         string   `json:"backchannel_authentication_endpoint,omitempty"`
 	BackChannelAuthenticationRequestSigningAlgValuesSupported []string `json:"backchannel_authentication_request_signing_alg_values_supported,omitempty"`
 	BackChannelUserCodeParameterSupported                     bool     `json:"backchannel_user_code_parameter_supported,omitempty"`
+
+	// BackChannelEndpointLoginHintTokenTypesSupported lists the 'login_hint_token' types the backchannel
+	// authentication endpoint accepts.
+	//
+	// See: https://openid.net/specs/fapi-ciba.html#section-4.3
+	BackChannelEndpointLoginHintTokenTypesSupported []string `json:"backchannel_endpoint_login_hint_token_types_supported,omitempty"`
 }
 
 // OpenIDGrantManagementMetadata is the OpenID Grant Management for OAuth 2.0 ID1 metadata.

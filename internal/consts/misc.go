@@ -26,3 +26,12 @@ const (
 	DeviceCodeResponseVerificationURIComplete = "verification_uri_complete"
 	DeviceCodeResponseInterval                = "interval"
 )
+
+// CIBA token delivery modes.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#section-4
+const (
+	CIBAModePoll = "poll"
+	CIBAModePing = "ping"
+	CIBAModePush = "push"
+)

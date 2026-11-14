@@ -31,16 +31,43 @@ func JWTBearerGrantAudiences(ctx context.Context, config JWTAssertionAudienceCon
 	)
 }
 
-// clientAssertionLegacyAudiences returns the client assertion 'aud' values RFC 7523 and RFC 9126 permitted before
-// RFC 10070, accepted only when DisableClientAssertionIssuerAudience is set.
-func clientAssertionLegacyAudiences(ctx context.Context, config JWTAssertionAudienceConfig) (audiences []string) {
-	urls := config.GetEndpointURLs(ctx)
+// ClientAssertionAudienceEndpointProvider is optionally implemented by an EndpointClientAuthStrategy to name the
+// endpoint whose URL and RFC 8705 mutual TLS alias may be the 'aud' of a client assertion presented there when
+// DisableClientAssertionIssuerAudience is set. A strategy which does not implement it uses the endpoint of its name.
+type ClientAssertionAudienceEndpointProvider interface {
+	GetClientAssertionAudienceEndpoint() (endpoint EndpointName)
+}
 
+// clientAssertionAudienceEndpoint returns the endpoint a client assertion is presented to, or an empty value when it is
+// not known.
+func clientAssertionAudienceEndpoint(strategy EndpointClientAuthStrategy) (endpoint EndpointName) {
+	if p, ok := strategy.(ClientAssertionAudienceEndpointProvider); ok {
+		return p.GetClientAssertionAudienceEndpoint()
+	}
+
+	switch ClientAuthEndpoint(strategy.Name()) {
+	case ClientAuthEndpointToken:
+		return EndpointToken
+	case ClientAuthEndpointRevocation:
+		return EndpointRevocation
+	case ClientAuthEndpointIntrospection:
+		return EndpointIntrospection
+	case ClientAuthEndpointBackChannelAuthentication:
+		return EndpointBackChannelAuthentication
+	default:
+		return ""
+	}
+}
+
+// clientAssertionLegacyAudiences returns the client assertion 'aud' values accepted when
+// DisableClientAssertionIssuerAudience is set: the issuer identifier, and the URL and RFC 8705 mutual TLS alias of the
+// endpoint the assertion is presented to.
+//
+// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
+func clientAssertionLegacyAudiences(ctx context.Context, config JWTAssertionAudienceConfig, endpoint EndpointName) (audiences []string) {
 	return jwtAssertionAudiences(
 		[]string{config.GetIssuer(ctx)},
-		urls.URLs(EndpointToken),
-		urls.URLs(EndpointPushedAuthorizationRequest),
-		config.GetAllowedJWTAssertionAudiences(ctx),
+		config.GetEndpointURLs(ctx).URLs(endpoint),
 	)
 }
 

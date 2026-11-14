@@ -17,8 +17,8 @@ import (
 )
 
 // NewHMACCoreStrategy creates a new HMACCoreStrategy with the potential to include the prefix format. The prefix must
-// include a single '%s' for the purpose of adding the token part (ac, dc, at, rt, and cr; for the Authorize Code,
-// Device Code, Access Token, Refresh Token, and Client Registration Token; respectively).
+// include a single '%s' for the purpose of adding the token part (ac, dc, ar, at, rt, and cr; for the Authorize Code,
+// Device Code, CIBA Auth Request ID, Access Token, Refresh Token, and Client Registration Token; respectively).
 //
 // A HMACCoreStrategy must be constructed with this function: a struct literal leaves the client registration token
 // strategy nil, and GenerateClientRegistrationToken and ValidateClientRegistrationToken then return an error.
@@ -374,6 +374,77 @@ func (s *HMACCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, r oaut
 	return nil
 }
 
+// IsOpaqueCIBAAuthRequestID implements ciba.AuthRequestIDStrategy.
+func (s *HMACCoreStrategy) IsOpaqueCIBAAuthRequestID(ctx context.Context, id string) bool {
+	return s.usePrefix && s.hasPrefix(id, tokenPrefixPartCIBAAuthRequestID)
+}
+
+// CIBAAuthRequestIDSignature implements ciba.AuthRequestIDStrategy.
+func (s *HMACCoreStrategy) CIBAAuthRequestIDSignature(ctx context.Context, id string) (signature string, err error) {
+	if !s.usePrefix || s.IsOpaqueCIBAAuthRequestID(ctx, id) {
+		return s.Enigma.Signature(s.trimPrefix(id, tokenPrefixPartCIBAAuthRequestID)), nil
+	}
+
+	return "", errorsx.WithStack(oauth2.ErrInvalidTokenFormat.WithHint("Provided Token does not appear to be an Authentication Request ID."))
+}
+
+// GenerateCIBAAuthRequestID implements ciba.AuthRequestIDStrategy. The value is the Enigma token, which is base64url
+// encoded and holds at least 160 bits of entropy, so it only uses the characters A-Z, a-z, 0-9, '.', '-' and '_'.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#successful_authentication_request_acknowledgement
+func (s *HMACCoreStrategy) GenerateCIBAAuthRequestID(ctx context.Context) (id string, signature string, err error) {
+	if id, signature, err = s.Enigma.Generate(ctx); err != nil {
+		return "", "", err
+	}
+
+	id = s.prependPrefix(id, tokenPrefixPartCIBAAuthRequestID)
+
+	// The prefix template is shared and unrestricted, but an auth_req_id is limited to these characters.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#successful_authentication_request_acknowledgement
+	for _, r := range id {
+		if !isCIBAAuthRequestIDRune(r) {
+			return "", "", errorsx.WithStack(fmt.Errorf("oauth2: the token prefix produces an auth_req_id containing the character %q, but only A-Z, a-z, 0-9, '.', '-' and '_' are permitted", r))
+		}
+	}
+
+	return id, signature, nil
+}
+
+// ValidateCIBAAuthRequestID implements ciba.AuthRequestIDStrategy. Without an expiry on the session the lifespan from
+// the CIBA configuration applies, or defaultCIBAAuthRequestLifespan when the configuration has none.
+func (s *HMACCoreStrategy) ValidateCIBAAuthRequestID(ctx context.Context, r oauth2.Requester, id string) (err error) {
+	if s.usePrefix && !s.IsOpaqueCIBAAuthRequestID(ctx, id) {
+		return errorsx.WithStack(oauth2.ErrInvalidTokenFormat.WithHint("Provided Token does not appear to be an Authentication Request ID."))
+	}
+
+	if err = s.Enigma.Validate(ctx, s.trimPrefix(id, tokenPrefixPartCIBAAuthRequestID)); err != nil {
+		return err
+	}
+
+	var exp = r.GetSession().GetExpiresAt(oauth2.CIBAAuthRequestID)
+
+	if exp.IsZero() {
+		lifespan := defaultCIBAAuthRequestLifespan
+
+		if config, ok := s.Config.(cibaAuthRequestLifespanProvider); ok {
+			lifespan = config.GetCIBAAuthRequestLifespan(ctx)
+		}
+
+		if r.GetRequestedAt().Add(lifespan).Before(time.Now().UTC()) {
+			return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("Authentication Request ID expired at '%s'.", r.GetRequestedAt().Add(lifespan)))
+		}
+
+		return nil
+	}
+
+	if exp.Before(time.Now().UTC()) {
+		return errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHintf("Authentication Request ID expired at '%s'.", exp))
+	}
+
+	return nil
+}
+
 func (s *HMACCoreStrategy) hasPrefix(tokenString, part string) (has bool) {
 	if !s.usePrefix {
 		return false
@@ -411,6 +482,7 @@ const (
 	tokenPrefixPartAccessToken             = "at"
 	tokenPrefixPartRefreshToken            = "rt"
 	tokenPrefixPartDeviceCode              = "dc"
+	tokenPrefixPartCIBAAuthRequestID       = "ar"
 	tokenPrefixPartClientRegistrationToken = "cr"
 )
 
@@ -433,6 +505,18 @@ type HMACCoreStrategyConfigurator interface {
 	oauth2.HMACHashingProvider
 	oauth2.RFC8628DeviceAuthorizeConfigProvider
 	oauth2.RFC7591ClientRegistrationTokenSecretProvider
+}
+
+// defaultCIBAAuthRequestLifespan applies when the configuration does not provide GetCIBAAuthRequestLifespan, which is
+// deliberately not part of HMACCoreStrategyConfigurator so that existing implementers keep compiling.
+const defaultCIBAAuthRequestLifespan = 5 * time.Minute
+
+func isCIBAAuthRequestIDRune(r rune) bool {
+	return r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '-' || r == '_'
+}
+
+type cibaAuthRequestLifespanProvider interface {
+	GetCIBAAuthRequestLifespan(ctx context.Context) (lifespan time.Duration)
 }
 
 const rfc8628UserCodeCharset = "BCDFGHJKLMNPQRSTVWXZ"

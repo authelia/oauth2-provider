@@ -57,6 +57,12 @@ const (
 	FormParameterDeviceCode                                = valueDeviceCode
 	FormParameterUserCode                                  = valueUserCode
 	FormParameterDPoPJKT                                   = "dpop_jkt"
+	FormParameterAuthReqID                                 = "auth_req_id"
+	FormParameterClientNotificationToken                   = "client_notification_token"
+	FormParameterBindingMessage                            = "binding_message"
+	FormParameterRequestedExpiry                           = "requested_expiry"
+	FormParameterLoginHint                                 = "login_hint"
+	FormParameterLoginHintToken                            = "login_hint_token" //nolint:gosec // This is a parameter name, not a credential.
 	FormParameterRequestContext                            = "request_context"
 	FormParameterRequestDetails                            = "request_details"
 )

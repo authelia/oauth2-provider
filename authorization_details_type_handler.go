@@ -56,6 +56,13 @@ type DefaultAuthorizationDetailsTypeHandler struct {
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-9
 	LimitDisclosure bool
+
+	// UniqueAuthorizationContext declares that every detail of the type identifies a unique authorization context,
+	// such as a single transaction, which exempts a CIBA authentication request carrying one from a required
+	// 'binding_message'. Set it only when the Required fields make each detail unique.
+	//
+	// See: https://openid.net/specs/fapi-ciba.html#section-4.1.1
+	UniqueAuthorizationContext bool
 }
 
 // Type implements AuthorizationDetailsTypeHandler.
@@ -80,6 +87,11 @@ func (h *DefaultAuthorizationDetailsTypeHandler) Validate(ctx context.Context, r
 	}
 
 	return nil
+}
+
+// IsUniqueAuthorizationContext implements AuthorizationDetailsTypeUniqueContextHandler.
+func (h *DefaultAuthorizationDetailsTypeHandler) IsUniqueAuthorizationContext(_ context.Context, _ Requester, _ AuthorizationDetail) (unique bool) {
+	return h.UniqueAuthorizationContext
 }
 
 // Assign implements AuthorizationDetailsTypeHandler.
@@ -243,6 +255,7 @@ func containsAuthorizationDetail(granted, requested AuthorizationDetail) bool {
 }
 
 var (
-	_ AuthorizationDetailsTypeHandler           = (*DefaultAuthorizationDetailsTypeHandler)(nil)
-	_ AuthorizationDetailsTypeDisclosingHandler = (*DefaultAuthorizationDetailsTypeHandler)(nil)
+	_ AuthorizationDetailsTypeHandler              = (*DefaultAuthorizationDetailsTypeHandler)(nil)
+	_ AuthorizationDetailsTypeDisclosingHandler    = (*DefaultAuthorizationDetailsTypeHandler)(nil)
+	_ AuthorizationDetailsTypeUniqueContextHandler = (*DefaultAuthorizationDetailsTypeHandler)(nil)
 )

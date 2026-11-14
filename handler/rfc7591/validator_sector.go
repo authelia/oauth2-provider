@@ -94,6 +94,31 @@ func (v *SectorIdentifierValidator) ValidateClientRegistrationMetadata(ctx conte
 		}
 	}
 
+	return validateCIBASectorDocument(metadata, redirectURIs)
+}
+
+// validateCIBASectorDocument requires the sector identifier document of a pairwise CIBA client to list the 'jwks_uri'
+// for the poll and ping modes, or the 'backchannel_client_notification_endpoint' for the push mode.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.4
+func validateCIBASectorDocument(metadata *oauth2.ClientRegistrationMetadata, document []string) (err error) {
+	if metadata.SubjectType != consts.SubjectTypePairwise {
+		return nil
+	}
+
+	name, value := consts.ClientMetadataJSONWebKeysURI, metadata.JSONWebKeysURI
+
+	switch metadata.BackChannelTokenDeliveryMode {
+	case "":
+		return nil
+	case consts.CIBAModePush:
+		name, value = consts.ClientMetadataBackChannelClientNotificationEndpoint, metadata.BackChannelClientNotificationEndpoint
+	}
+
+	if value != "" && !slices.Contains(document, value) {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' document does not contain the '%s' value '%s'.", consts.ClientMetadataSectorIdentifierURI, name, value))
+	}
+
 	return nil
 }
 

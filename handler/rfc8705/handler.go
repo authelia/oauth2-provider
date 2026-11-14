@@ -52,7 +52,19 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 	// An existing binding makes a certificate mandatory regardless of policy. For a public client this is what
 	// enforces Section 4: a refresh token issued under a bound session may only be redeemed by the holder of that
 	// certificate.
-	required := h.required(ctx, request) || bound != ""
+	required := h.required(ctx, request.GetClient()) || bound != ""
+
+	// An internally issued request presents no certificate, so the certificate recorded on the session when the grant
+	// was requested is the binding.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#section-5
+	if oauth2.IsInternalIssuance(ctx) {
+		if required && bound == "" {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The request requires a certificate-bound access token but no mutual-TLS client certificate was recorded for the grant."))
+		}
+
+		return nil
+	}
 
 	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
 	if r == nil {
@@ -65,7 +77,7 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 		return nil
 	}
 
-	required = required || h.requiredInsteadOfDPoP(ctx, request, r)
+	required = required || h.requiredInsteadOfDPoP(ctx, request.GetClient(), r)
 
 	var cert *x509.Certificate
 
@@ -133,10 +145,10 @@ func (h *Handler) rebindable(ctx context.Context, request oauth2.AccessRequester
 	return true
 }
 
-func (h *Handler) requiredInsteadOfDPoP(ctx context.Context, request oauth2.AccessRequester, r *http.Request) bool {
+func (h *Handler) requiredInsteadOfDPoP(ctx context.Context, client oauth2.Client, r *http.Request) bool {
 	provider, _ := h.Config.(oauth2.EnforceSenderConstrainedAccessTokensProvider)
 
-	if !oauth2.IsSenderConstrainedAccessTokenEnforced(ctx, provider, request.GetClient()) {
+	if !oauth2.IsSenderConstrainedAccessTokenEnforced(ctx, provider, client) {
 		return false
 	}
 
@@ -149,13 +161,13 @@ func (h *Handler) requiredInsteadOfDPoP(ctx context.Context, request oauth2.Acce
 	return true
 }
 
-func (h *Handler) required(ctx context.Context, request oauth2.AccessRequester) bool {
+func (h *Handler) required(ctx context.Context, client oauth2.Client) bool {
 	if h.Config.GetMTLSEnforce(ctx) {
 		return true
 	}
 
-	if client, ok := request.GetClient().(oauth2.MTLSClient); ok {
-		return client.GetEnableTLSClientAuthBoundAccessTokens()
+	if c, ok := client.(oauth2.MTLSClient); ok {
+		return c.GetEnableTLSClientAuthBoundAccessTokens()
 	}
 
 	return false

@@ -201,6 +201,11 @@ type EndpointURLs struct {
 	DeviceAuthorization        string
 	EndSession                 string
 
+	// BackChannelAuthentication is the OpenID Connect CIBA backchannel authentication endpoint URL.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#section-4
+	BackChannelAuthentication string
+
 	// Registration is the RFC 7591 client registration endpoint URL.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc7591#section-3
@@ -222,6 +227,7 @@ const (
 	EndpointUserInfo                   EndpointName = "userinfo"
 	EndpointRegistration               EndpointName = "registration"
 	EndpointEndSession                 EndpointName = "end_session"
+	EndpointBackChannelAuthentication  EndpointName = "backchannel_authentication"
 )
 
 // URLs returns the URL of the endpoint followed by its RFC 8705 mutual TLS alias, omitting empty values, or nil for
@@ -248,6 +254,8 @@ func (u EndpointURLs) URLs(name EndpointName) (urls []string) {
 		url, alias = u.Registration, u.MutualTLSAliases.Registration
 	case EndpointEndSession:
 		url, alias = u.EndSession, u.MutualTLSAliases.EndSession
+	case EndpointBackChannelAuthentication:
+		url, alias = u.BackChannelAuthentication, u.MutualTLSAliases.BackChannelAuthentication
 	}
 
 	for _, value := range []string{url, alias} {
@@ -578,14 +586,15 @@ type FormPostResponseProvider interface {
 // authentication assertions.
 type AllowedJWTAssertionAudiencesProvider interface {
 	// GetAllowedJWTAssertionAudiences returns the audiences accepted for an RFC 7523 JWT authorization grant in
-	// addition to the issuer identifier and the token endpoint URL. They are accepted for a JWT client authentication
-	// assertion only when GetDisableClientAssertionIssuerAudience returns true.
+	// addition to the issuer identifier and the token endpoint URL. They are never accepted for a JWT client
+	// authentication assertion.
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
 	GetAllowedJWTAssertionAudiences(ctx context.Context) (audiences []string)
 
-	// GetDisableClientAssertionIssuerAudience returns true when a JWT client authentication assertion is not required
-	// to carry the issuer identifier as the sole value of its 'aud' claim. The authorization grant is unaffected.
+	// GetDisableClientAssertionIssuerAudience returns true when a JWT client authentication assertion may carry, as
+	// the sole value of its 'aud' claim, either the issuer identifier or the URL or RFC 8705 mutual TLS alias of the
+	// endpoint it is presented to. The authorization grant is unaffected.
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
 	// See: https://www.rfc-editor.org/rfc/rfc10070#section-5
@@ -654,6 +663,27 @@ type RFC8628DeviceAuthorizeEndpointBindingHandlersProvider interface {
 	GetRFC8628DeviceAuthorizeEndpointBindingHandlers(ctx context.Context) (handlers RFC8628DeviceAuthorizeEndpointBindingHandlers)
 }
 
+// BackChannelAuthenticationEndpointBindingHandlersProvider returns the provider for configuring the CIBA backchannel
+// authentication endpoint binding handlers.
+type BackChannelAuthenticationEndpointBindingHandlersProvider interface {
+	// GetBackChannelAuthenticationEndpointBindingHandlers returns the backchannel authentication endpoint binding
+	// handlers.
+	GetBackChannelAuthenticationEndpointBindingHandlers(ctx context.Context) (handlers BackChannelAuthenticationEndpointBindingHandlers)
+}
+
+// BackChannelAuthenticationEndpointHandlersProvider returns the provider for configuring the CIBA backchannel
+// authentication endpoint handlers.
+type BackChannelAuthenticationEndpointHandlersProvider interface {
+	// GetBackChannelAuthenticationEndpointHandlers returns the backchannel authentication endpoint handlers.
+	GetBackChannelAuthenticationEndpointHandlers(ctx context.Context) (handlers BackChannelAuthenticationEndpointHandlers)
+}
+
+// BackChannelAuthenticationDecisionHandlersProvider returns the provider for configuring the CIBA decision handlers.
+type BackChannelAuthenticationDecisionHandlersProvider interface {
+	// GetBackChannelAuthenticationDecisionHandlers returns the backchannel authentication decision handlers.
+	GetBackChannelAuthenticationDecisionHandlers(ctx context.Context) (handlers BackChannelAuthenticationDecisionHandlers)
+}
+
 // TokenIntrospectionHandlersProvider returns the provider for configuring the token introspection handlers.
 type TokenIntrospectionHandlersProvider interface {
 	// GetTokenIntrospectionHandlers returns the token introspection handlers.
@@ -686,6 +716,79 @@ type RFC8628DeviceAuthorizeConfigProvider interface {
 	// GetRFC8628TokenPollingInterval returns the minimum interval the device should wait between polling the token
 	// endpoint, returned to the device as the 'interval' value.
 	GetRFC8628TokenPollingInterval(ctx context.Context) (interval time.Duration)
+}
+
+// CIBAConfigProvider returns the provider for configuring OpenID Connect Client-Initiated Backchannel Authentication.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html
+type CIBAConfigProvider interface {
+	// GetCIBATokenDeliveryModes returns the supported token delivery modes. Defaults to poll, ping and push.
+	GetCIBATokenDeliveryModes(ctx context.Context) (modes []string)
+
+	// GetCIBAAuthRequestLifespan returns the default authentication request lifespan. Defaults to 5 minutes.
+	GetCIBAAuthRequestLifespan(ctx context.Context) (lifespan time.Duration)
+
+	// GetCIBARequestedExpiryMinimum returns the minimum accepted 'requested_expiry'. Defaults to 30 seconds.
+	GetCIBARequestedExpiryMinimum(ctx context.Context) (minimum time.Duration)
+
+	// GetCIBARequestedExpiryMaximum returns the maximum accepted 'requested_expiry'. Defaults to 30 minutes.
+	GetCIBARequestedExpiryMaximum(ctx context.Context) (maximum time.Duration)
+
+	// GetCIBAPollingInterval returns the minimum polling interval. Defaults to 5 seconds.
+	GetCIBAPollingInterval(ctx context.Context) (interval time.Duration)
+
+	// GetCIBALongPollingTimeout returns how long the token endpoint holds a poll open. Defaults to 0 (disabled) and
+	// is capped at 30 seconds.
+	GetCIBALongPollingTimeout(ctx context.Context) (timeout time.Duration)
+
+	// GetCIBASlowDownLimit returns the number of 'slow_down' responses after which the request is denied. Defaults
+	// to 0 (disabled).
+	GetCIBASlowDownLimit(ctx context.Context) (limit int)
+
+	// GetCIBAUserCodeSupported returns true if the 'user_code' parameter is supported. Defaults to false.
+	GetCIBAUserCodeSupported(ctx context.Context) (supported bool)
+
+	// GetCIBARequestSigningAlgValues returns the JWS algorithms accepted for a signed authentication request.
+	// Defaults to the asymmetric algorithms of GetRequestObjectSigningAlgValues.
+	GetCIBARequestSigningAlgValues(ctx context.Context) (algs []string)
+
+	// GetCIBARequireOpenIDScope returns true if the 'openid' scope is required. Defaults to true.
+	GetCIBARequireOpenIDScope(ctx context.Context) (require bool)
+
+	// GetCIBAIDTokenHintMaximumAge returns how long past its expiry an 'id_token_hint' is accepted. Defaults to
+	// 24 hours.
+	GetCIBAIDTokenHintMaximumAge(ctx context.Context) (age time.Duration)
+
+	// GetCIBARequireBindingMessage returns true if the 'binding_message' parameter is required, unless the request
+	// carries an authorization detail which its AuthorizationDetailsTypeUniqueContextHandler reports identifies a
+	// unique authorization context. Defaults to false.
+	GetCIBARequireBindingMessage(ctx context.Context) (require bool)
+
+	// GetCIBAMaximumBindingMessageLength returns the maximum 'binding_message' length. Defaults to 64.
+	GetCIBAMaximumBindingMessageLength(ctx context.Context) (length int)
+
+	// GetCIBARequireRequestContext returns true if the 'request_context' parameter is required. Defaults to false.
+	GetCIBARequireRequestContext(ctx context.Context) (require bool)
+
+	// GetCIBASignedRequestMaximumLifetime returns the maximum lifetime between the 'nbf' and 'exp' claims of a signed
+	// authentication request. Defaults to the Request Object maximum lifetime, or 60 minutes when that is disabled.
+	GetCIBASignedRequestMaximumLifetime(ctx context.Context) (lifetime time.Duration)
+
+	// GetCIBARequireSingleAudienceAssertion returns true if a client assertion at the backchannel authentication
+	// endpoint must have the issuer as its sole 'aud' value, even when DisableClientAssertionIssuerAudience is set.
+	// Defaults to false.
+	GetCIBARequireSingleAudienceAssertion(ctx context.Context) (require bool)
+
+	// GetCIBALoginHintTokenTypes returns the 'login_hint_token' types the backchannel authentication endpoint accepts.
+	GetCIBALoginHintTokenTypes(ctx context.Context) (types []string)
+}
+
+// BackChannelNotifierProvider returns the provider for configuring the notifier of OpenID Connect CIBA ping and push
+// notifications.
+type BackChannelNotifierProvider interface {
+	// GetBackChannelNotifier returns the BackChannelNotifier. Defaults to an HTTPBackChannelNotifier with a guarded
+	// HTTP client.
+	GetBackChannelNotifier(ctx context.Context) (notifier BackChannelNotifier)
 }
 
 // RFC7591ClientRegistrationTokenSecretProvider returns the provider for configuring the secret client registration

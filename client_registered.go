@@ -135,6 +135,16 @@ type DefaultRegisteredClient struct {
 	BackChannelLogoutURI             string   `json:"backchannel_logout_uri"`
 	BackChannelLogoutSessionRequired bool     `json:"backchannel_logout_session_required"`
 
+	// OpenID Connect CIBA Core 1.0 client metadata.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.4
+
+	BackChannelTokenDeliveryMode               string   `json:"backchannel_token_delivery_mode"`
+	BackChannelClientNotificationEndpoint      string   `json:"backchannel_client_notification_endpoint"`
+	BackChannelAuthenticationRequestSigningAlg string   `json:"backchannel_authentication_request_signing_alg"`
+	BackChannelUserCodeParameter               bool     `json:"backchannel_user_code_parameter"`
+	BackChannelEndpointLoginHintTokenTypes     []string `json:"backchannel_endpoint_login_hint_token_types"`
+
 	// RFC 8705 Section 2.1.2 (Mutual-TLS Client Authentication) client metadata. A client registering the
 	// 'tls_client_auth' method registers exactly one of these subject values. The
 	// 'tls_client_certificate_bound_access_tokens' value of Section 3.4 is carried by the embedded DefaultClient.
@@ -199,6 +209,16 @@ type DefaultRegisteredClient struct {
 	// survive a registration round trip. This type only provides the storage location; converting to and from
 	// ClientRegistrationMetadata.Extra is not this type's responsibility.
 	Extra map[string]any `json:"-"`
+}
+
+// GetSectorIdentifierURI returns the 'sector_identifier_uri' client metadata value.
+func (c *DefaultRegisteredClient) GetSectorIdentifierURI() (uri string) {
+	return c.SectorIdentifierURI
+}
+
+// GetSubjectType returns the 'subject_type' client metadata value.
+func (c *DefaultRegisteredClient) GetSubjectType() (subjectType string) {
+	return c.SubjectType
 }
 
 // GetJSONWebKeysURI returns the 'jwks_uri' client metadata value.
@@ -531,6 +551,31 @@ func (c *DefaultRegisteredClient) GetBackChannelLogoutSessionRequired() (require
 	return c.BackChannelLogoutSessionRequired
 }
 
+// GetBackChannelTokenDeliveryMode returns the 'backchannel_token_delivery_mode' client metadata value.
+func (c *DefaultRegisteredClient) GetBackChannelTokenDeliveryMode() (mode string) {
+	return c.BackChannelTokenDeliveryMode
+}
+
+// GetBackChannelClientNotificationEndpoint returns the 'backchannel_client_notification_endpoint' client metadata value.
+func (c *DefaultRegisteredClient) GetBackChannelClientNotificationEndpoint() (endpoint string) {
+	return c.BackChannelClientNotificationEndpoint
+}
+
+// GetBackChannelAuthenticationRequestSigningAlg returns the 'backchannel_authentication_request_signing_alg' client metadata value.
+func (c *DefaultRegisteredClient) GetBackChannelAuthenticationRequestSigningAlg() (alg string) {
+	return c.BackChannelAuthenticationRequestSigningAlg
+}
+
+// GetBackChannelUserCodeParameter returns the 'backchannel_user_code_parameter' client metadata value.
+func (c *DefaultRegisteredClient) GetBackChannelUserCodeParameter() (supported bool) {
+	return c.BackChannelUserCodeParameter
+}
+
+// GetBackChannelEndpointLoginHintTokenTypes returns the 'backchannel_endpoint_login_hint_token_types' client metadata value.
+func (c *DefaultRegisteredClient) GetBackChannelEndpointLoginHintTokenTypes() (types []string) {
+	return c.BackChannelEndpointLoginHintTokenTypes
+}
+
 // GetTLSClientAuthSubjectDN returns the 'tls_client_auth_subject_dn' client metadata value.
 func (c *DefaultRegisteredClient) GetTLSClientAuthSubjectDN() (dn string) {
 	return c.TLSClientAuthSubjectDN
@@ -682,6 +727,8 @@ var (
 	_ RotatedClientSecretsClient                  = (*DefaultRegisteredClient)(nil)
 	_ SoftwareStatementClient                     = (*DefaultRegisteredClient)(nil)
 	_ JSONWebKeysClient                           = (*DefaultRegisteredClient)(nil)
+	_ SectorIdentifierClient                      = (*DefaultRegisteredClient)(nil)
+	_ SubjectTypeClient                           = (*DefaultRegisteredClient)(nil)
 	_ JARClient                                   = (*DefaultRegisteredClient)(nil)
 	_ IDTokenClient                               = (*DefaultRegisteredClient)(nil)
 	_ UserInfoClient                              = (*DefaultRegisteredClient)(nil)
@@ -698,6 +745,8 @@ var (
 	_ RefreshTokenRotationClient                  = (*DefaultRegisteredClient)(nil)
 	_ RPInitiatedLogoutClient                     = (*DefaultRegisteredClient)(nil)
 	_ BackChannelLogoutClient                     = (*DefaultRegisteredClient)(nil)
+	_ CIBAClient                                  = (*DefaultRegisteredClient)(nil)
+	_ CIBALoginHintTokenTypesClient               = (*DefaultRegisteredClient)(nil)
 	_ TLSClientAuthClient                         = (*DefaultRegisteredClient)(nil)
 	_ MTLSClient                                  = (*DefaultRegisteredClient)(nil)
 	_ AuthorizationDetailsClient                  = (*DefaultRegisteredClient)(nil)

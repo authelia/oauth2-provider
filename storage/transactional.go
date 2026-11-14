@@ -6,6 +6,8 @@ package storage
 
 import (
 	"context"
+
+	"authelia.com/provider/oauth2/internal/transaction"
 )
 
 // Transactional represents a storage provider that has support for transactions should implement this interface to ensure atomicity for certain flows
@@ -46,6 +48,17 @@ func MaybeBeginTx(ctx context.Context, storage any) (context.Context, error) {
 	} else {
 		return ctx, nil
 	}
+}
+
+// JoinOrBeginTx begins a transaction unless ctx already carries one begun by JoinOrBeginTx, in which case it returns
+// ctx unchanged and owned=false; the caller commits or rolls back only when owned is true. A transaction begun by
+// MaybeBeginTx is not joined. When the storage does not implement Transactional, ctx is returned with owned=true.
+//
+// The joinable marker outlives the transaction: an owner MUST drop txCtx after it commits or rolls back, as a context
+// derived from it would otherwise join a transaction that has ended. The marker is not tied to a storage instance, so
+// a ctx carrying one joins for any storage. owned is false whenever err is non-nil.
+func JoinOrBeginTx(ctx context.Context, storage any) (txCtx context.Context, owned bool, err error) {
+	return transaction.JoinOrBegin(ctx, storage)
 }
 
 // MaybeCommitTx is a helper function that can be used to commit a transaction if the supplied storage

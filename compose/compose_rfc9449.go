@@ -23,6 +23,8 @@ func DPoPAuthorizeFactory(config oauth2.Configurator, storage any, strategy any)
 }
 
 // DPoPTokenFactory creates the RFC 9449 DPoP token endpoint handler and, when necessary, the default DPoP strategy.
+// The handler is also the OpenID Connect CIBA backchannel authentication endpoint binding handler, which records the
+// key of a DPoP proof or the 'dpop_jkt' parameter on the authentication request.
 //
 // It is dispatched in the token binding phase, which runs after every grant handler has restored its session and
 // populated the response, so its position in the factory list does not matter, EXCEPT relative to

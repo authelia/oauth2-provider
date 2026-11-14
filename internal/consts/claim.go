@@ -37,6 +37,8 @@ const (
 	ClaimUsername                            = "username"
 	ClaimTokenIntrospection                  = "token_introspection"
 	ClaimAccessTokenHash                     = "at_hash"
+	ClaimCIBAAuthReqID                       = "urn:openid:params:jwt:claim:auth_req_id"
+	ClaimRefreshTokenHash                    = "urn:openid:params:jwt:claim:rt_hash" //nolint:gosec // This is a claim name, not a credential.
 	ClaimCodeHash                            = "c_hash"
 	ClaimStateHash                           = "s_hash"
 	ClaimNonce                               = valueNonce

@@ -59,7 +59,19 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 	}
 
 	// An existing binding makes a proof mandatory regardless of policy.
-	required := h.required(ctx, request) || bound != ""
+	required := h.required(ctx, request.GetClient()) || bound != ""
+
+	// An internally issued request presents no proof, so the key recorded on the session when the grant was
+	// requested is the binding.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#section-5
+	if oauth2.IsInternalIssuance(ctx) {
+		if required && (session == nil || session.GetDPoPJWKThumbprint() == "") {
+			return errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The request requires a DPoP bound access token but no DPoP key was recorded for the grant."))
+		}
+
+		return nil
+	}
 
 	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
 	if r == nil {
@@ -149,13 +161,13 @@ func (h *Handler) rebindable(ctx context.Context, request oauth2.AccessRequester
 	return true
 }
 
-func (h *Handler) required(ctx context.Context, request oauth2.AccessRequester) bool {
+func (h *Handler) required(ctx context.Context, client oauth2.Client) bool {
 	if h.Config.GetDPoPEnforce(ctx) {
 		return true
 	}
 
-	if client, ok := request.GetClient().(oauth2.DPoPClient); ok {
-		return client.GetEnableDPoPBoundAccessTokens()
+	if c, ok := client.(oauth2.DPoPClient); ok {
+		return c.GetEnableDPoPBoundAccessTokens()
 	}
 
 	return false

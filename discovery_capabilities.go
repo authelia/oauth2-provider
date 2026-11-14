@@ -133,6 +133,10 @@ const (
 	ClientAuthEndpointToken         ClientAuthEndpoint = "token"
 	ClientAuthEndpointRevocation    ClientAuthEndpoint = "revocation"
 	ClientAuthEndpointIntrospection ClientAuthEndpoint = "introspection"
+
+	// ClientAuthEndpointBackChannelAuthentication is the OpenID Connect CIBA backchannel authentication endpoint,
+	// which authenticates clients as the token endpoint does.
+	ClientAuthEndpointBackChannelAuthentication ClientAuthEndpoint = "backchannel_authentication"
 )
 
 // SupportedTokenEndpointAuthMethods returns the configured token endpoint client authentication methods, otherwise the
@@ -209,7 +213,7 @@ func SupportedEndpointAuthSigningAlgValues(ctx context.Context, config EndpointA
 
 func configuredEndpointAuthMethods(ctx context.Context, config ClientAuthMethodsProvider, endpoint ClientAuthEndpoint) []string {
 	switch endpoint {
-	case ClientAuthEndpointToken:
+	case ClientAuthEndpointToken, ClientAuthEndpointBackChannelAuthentication:
 		return config.GetTokenEndpointAuthMethods(ctx)
 	case ClientAuthEndpointRevocation:
 		return config.GetRevocationEndpointAuthMethods(ctx)

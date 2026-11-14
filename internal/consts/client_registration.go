@@ -109,6 +109,17 @@ const (
 	ClientMetadataAuthorizationGrantProfilesSupported = "authorization_grant_profiles_supported"
 )
 
+// OpenID Connect CIBA Core 1.0 client metadata parameters.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.4
+const (
+	ClientMetadataBackChannelTokenDeliveryMode               = "backchannel_token_delivery_mode"
+	ClientMetadataBackChannelClientNotificationEndpoint      = "backchannel_client_notification_endpoint"
+	ClientMetadataBackChannelAuthenticationRequestSigningAlg = "backchannel_authentication_request_signing_alg"
+	ClientMetadataBackChannelUserCodeParameter               = "backchannel_user_code_parameter"
+	ClientMetadataBackChannelEndpointLoginHintTokenTypes     = "backchannel_endpoint_login_hint_token_types"
+)
+
 // ClientRegistrationPolicyInternalKey is the fixed session extra claim key under which a client management token
 // carries the registration policy it inherited, regardless of the configured claim name.
 const (

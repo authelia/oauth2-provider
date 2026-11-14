@@ -345,6 +345,19 @@ type AuthorizationDetailsTypeDisclosingHandler interface {
 	Disclose(ctx context.Context, request Requester, recipient AuthorizationDetailsRecipient, details AuthorizationDetails) (disclosed AuthorizationDetails, err error)
 }
 
+// AuthorizationDetailsTypeUniqueContextHandler is an AuthorizationDetailsTypeHandler whose details can identify a unique
+// authorization context, such as a single payment, which the end user can match to an authentication request without
+// a 'binding_message'. Without it no detail of the type exempts a request from a required 'binding_message'.
+//
+// See: https://openid.net/specs/fapi-ciba.html#section-4.1.1
+type AuthorizationDetailsTypeUniqueContextHandler interface {
+	AuthorizationDetailsTypeHandler
+
+	// IsUniqueAuthorizationContext reports whether the detail identifies a unique authorization context. The detail
+	// has passed Validate.
+	IsUniqueAuthorizationContext(ctx context.Context, request Requester, detail AuthorizationDetail) (unique bool)
+}
+
 // AuthorizationDetailsRecipient identifies the resource server authorization details are disclosed to.
 type AuthorizationDetailsRecipient struct {
 	// Audience is the 'aud' claim of the JWT access token the details are disclosed in, and is empty for an

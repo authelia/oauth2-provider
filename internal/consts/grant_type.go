@@ -15,6 +15,7 @@ const (
 	GrantTypeOAuthJWTDPoP                     = "urn:ietf:params:oauth:grant-type:jwt-dpop"       //nolint:gosec
 	GrantTypeOAuthDeviceCode                  = "urn:ietf:params:oauth:grant-type:device_code"    //nolint:gosec
 	GrantTypeOAuthTokenExchange               = "urn:ietf:params:oauth:grant-type:token-exchange" //nolint:gosec
+	GrantTypeOpenIDCIBA                       = "urn:openid:params:grant-type:ciba"
 )
 
 // Authorization grant profile identifiers.

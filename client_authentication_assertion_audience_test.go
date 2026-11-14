@@ -30,6 +30,11 @@ const (
 	audienceTestTokenURL = "https://as.example.com/token" //nolint:gosec
 	audienceTestMTLSURL  = "https://mtls.as.example.com/token"
 	audienceTestPARURL   = "https://as.example.com/par"
+	audienceTestRevURL   = "https://as.example.com/revoke"
+	audienceTestIntURL   = "https://as.example.com/introspect"
+	audienceTestDevURL   = "https://as.example.com/device"
+	audienceTestCIBAURL  = "https://as.example.com/ciba"
+	audienceTestCIBAMTLS = "https://mtls.as.example.com/ciba"
 	audienceTestListed   = "https://legacy.example.com"
 	audienceTestOther    = "https://other.example.com"
 	audienceTestSecret   = "0123456789abcdef0123456789abcdef"
@@ -39,11 +44,13 @@ const (
 
 	audienceTestPAR           = "par"
 	audienceTestDevice        = "device"
+	audienceTestBackChannel   = string(ClientAuthEndpointBackChannelAuthentication)
 	audienceTestRevocation    = string(ClientAuthEndpointRevocation)
 	audienceTestIntrospection = string(ClientAuthEndpointIntrospection)
 
 	audienceTestErrInvalid  = "invalid audience"
 	audienceTestErrSole     = "sole audience value"
+	audienceTestErrSingle   = "must carry exactly one of"
 	audienceTestErrNoIssuer = "no issuer identifier configured"
 )
 
@@ -99,11 +106,33 @@ func TestClientAssertionAudience(t *testing.T) {
 		{name: "ShouldAcceptTheIssuerWhenDisabled", disable: true, aud: audienceTestIssuer},
 		{name: "ShouldAcceptTheTokenEndpointURLWhenDisabled", disable: true, aud: audienceTestTokenURL},
 		{name: "ShouldAcceptTheMutualTLSTokenEndpointAliasWhenDisabled", disable: true, aud: audienceTestMTLSURL},
-		{name: "ShouldAcceptThePushedAuthorizationRequestEndpointURLWhenDisabled", disable: true, aud: audienceTestPARURL},
-		{name: "ShouldAcceptAConfiguredAudienceWhenDisabled", disable: true, aud: audienceTestListed},
-		{name: "ShouldAcceptMultipleAudiencesWhenDisabled", disable: true, aud: []string{audienceTestOther, audienceTestTokenURL}},
+		{name: "ShouldRejectThePushedAuthorizationRequestEndpointURLAtTheTokenEndpointWhenDisabled", disable: true, aud: audienceTestPARURL, err: audienceTestErrInvalid},
+		{name: "ShouldRejectAConfiguredAudienceWhenDisabled", disable: true, aud: audienceTestListed, err: audienceTestErrInvalid},
+		{name: "ShouldRejectMultipleAudiencesWhenDisabled", disable: true, aud: []string{audienceTestOther, audienceTestTokenURL}, err: audienceTestErrSingle},
+		{name: "ShouldRejectTheIssuerAlongsideTheTokenEndpointURLWhenDisabled", disable: true, aud: []string{audienceTestIssuer, audienceTestTokenURL}, err: audienceTestErrSingle},
+		{name: "ShouldRejectTheTokenEndpointURLRepeatedWhenDisabled", disable: true, aud: []string{audienceTestTokenURL, audienceTestTokenURL}, err: audienceTestErrSingle},
 		{name: "ShouldRejectAnUnknownAudienceWhenDisabled", disable: true, aud: audienceTestOther, err: audienceTestErrInvalid},
-		{name: "ShouldAcceptTheTokenEndpointURLAtThePushedAuthorizationRequestEndpointWhenDisabled", disable: true, endpoint: audienceTestPAR, aud: audienceTestTokenURL},
+		{name: "ShouldAcceptTheIssuerAtThePushedAuthorizationRequestEndpointWhenDisabled", disable: true, endpoint: audienceTestPAR, aud: audienceTestIssuer},
+		{name: "ShouldAcceptThePushedAuthorizationRequestEndpointURLAtThatEndpointWhenDisabled", disable: true, endpoint: audienceTestPAR, aud: audienceTestPARURL},
+		{name: "ShouldRejectTheTokenEndpointURLAtThePushedAuthorizationRequestEndpointWhenDisabled", disable: true, endpoint: audienceTestPAR, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldRejectMultipleAudiencesAtThePushedAuthorizationRequestEndpointWhenDisabled", disable: true, endpoint: audienceTestPAR, aud: []string{audienceTestIssuer, audienceTestPARURL}, err: audienceTestErrSingle},
+		{name: "ShouldAcceptTheIssuerAtTheRevocationEndpointWhenDisabled", disable: true, endpoint: audienceTestRevocation, aud: audienceTestIssuer},
+		{name: "ShouldAcceptTheRevocationEndpointURLAtThatEndpointWhenDisabled", disable: true, endpoint: audienceTestRevocation, aud: audienceTestRevURL},
+		{name: "ShouldRejectTheTokenEndpointURLAtTheRevocationEndpointWhenDisabled", disable: true, endpoint: audienceTestRevocation, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldAcceptTheIssuerAtTheIntrospectionEndpointWhenDisabled", disable: true, endpoint: audienceTestIntrospection, aud: audienceTestIssuer},
+		{name: "ShouldAcceptTheIntrospectionEndpointURLAtThatEndpointWhenDisabled", disable: true, endpoint: audienceTestIntrospection, aud: audienceTestIntURL},
+		{name: "ShouldRejectTheTokenEndpointURLAtTheIntrospectionEndpointWhenDisabled", disable: true, endpoint: audienceTestIntrospection, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldAcceptTheIssuerAtTheDeviceAuthorizationEndpointWhenDisabled", disable: true, endpoint: audienceTestDevice, aud: audienceTestIssuer},
+		{name: "ShouldAcceptTheDeviceAuthorizationEndpointURLAtThatEndpointWhenDisabled", disable: true, endpoint: audienceTestDevice, aud: audienceTestDevURL},
+		{name: "ShouldRejectTheTokenEndpointURLAtTheDeviceAuthorizationEndpointWhenDisabled", disable: true, endpoint: audienceTestDevice, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{
+			name:     "ShouldAcceptOnlyTheIssuerAtAnEndpointWithoutAURLWhenDisabled",
+			disable:  true,
+			endpoint: audienceTestRevocation,
+			config:   func(config *Config) { config.EndpointURLs.Revocation = "" },
+			aud:      audienceTestRevURL,
+			err:      audienceTestErrInvalid,
+		},
 		{
 			name:    "ShouldAcceptTheTokenEndpointURLWhenDisabledWithoutAnIssuer",
 			disable: true,
@@ -165,6 +194,52 @@ func TestClientAssertionAudience(t *testing.T) {
 	}
 }
 
+func TestClientAssertionAudienceBackChannelEndpoint(t *testing.T) {
+	testCases := []struct {
+		name     string
+		disable  bool
+		endpoint string
+		aud      any
+		err      string
+	}{
+		{name: "ShouldAcceptTheBackChannelEndpointURL", disable: true, endpoint: audienceTestBackChannel, aud: audienceTestCIBAURL},
+		{name: "ShouldAcceptTheBackChannelEndpointMutualTLSAlias", disable: true, endpoint: audienceTestBackChannel, aud: audienceTestCIBAMTLS},
+		{name: "ShouldRejectTheTokenEndpointURL", disable: true, endpoint: audienceTestBackChannel, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldRejectMultipleAudiences", disable: true, endpoint: audienceTestBackChannel, aud: []string{audienceTestIssuer, audienceTestCIBAURL}, err: audienceTestErrSingle},
+		{name: "ShouldAcceptTheIssuer", disable: true, endpoint: audienceTestBackChannel, aud: audienceTestIssuer},
+		{name: "ShouldAcceptTheIssuerWhenEnforced", endpoint: audienceTestBackChannel, aud: audienceTestIssuer},
+		{name: "ShouldRejectTheBackChannelEndpointURLWhenEnforced", endpoint: audienceTestBackChannel, aud: audienceTestCIBAURL, err: audienceTestErrInvalid},
+		{name: "ShouldRejectAnUnknownAudience", disable: true, endpoint: audienceTestBackChannel, aud: audienceTestOther, err: audienceTestErrInvalid},
+		{name: "ShouldRejectTheBackChannelEndpointURLAtTheTokenEndpoint", disable: true, aud: audienceTestCIBAURL, err: audienceTestErrInvalid},
+		{name: "ShouldRejectTheBackChannelEndpointMutualTLSAliasAtTheTokenEndpoint", disable: true, aud: audienceTestCIBAMTLS, err: audienceTestErrInvalid},
+	}
+
+	key := gen.MustRSAKey()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config, provider := newAudienceTestProvider(key)
+			config.DisableClientAssertionIssuerAudience = tc.disable
+
+			form := url.Values{
+				consts.FormParameterClientAssertion:     {newAudienceTestAssertion(t, key, "", "", tc.aud)},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			}
+
+			err := authenticateAudienceTestClient(t, config, provider, tc.endpoint, form)
+
+			if tc.err == "" {
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			require.ErrorIs(t, err, ErrInvalidClient)
+			assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), tc.err)
+		})
+	}
+}
+
 func TestClientAssertionAudienceDefaultsToEnforced(t *testing.T) {
 	config := &Config{}
 
@@ -178,7 +253,11 @@ func newAudienceTestProvider(key *rsa.PrivateKey) (config *Config, provider *Fos
 		EndpointURLs: EndpointURLs{
 			Token:                      audienceTestTokenURL,
 			PushedAuthorizationRequest: audienceTestPARURL,
-			MutualTLSAliases:           RFC8705MutualTLSEndpointAliases{Token: audienceTestMTLSURL},
+			Revocation:                 audienceTestRevURL,
+			Introspection:              audienceTestIntURL,
+			DeviceAuthorization:        audienceTestDevURL,
+			BackChannelAuthentication:  audienceTestCIBAURL,
+			MutualTLSAliases:           RFC8705MutualTLSEndpointAliases{Token: audienceTestMTLSURL, BackChannelAuthentication: audienceTestCIBAMTLS},
 		},
 		AllowedJWTAssertionAudiences: []string{audienceTestListed},
 	}
@@ -249,8 +328,10 @@ func authenticateAudienceTestClient(t *testing.T, config *Config, provider *Fosi
 		_, _, err = provider.AuthenticateClientWithAuthHandler(ctx, new(http.Request), form, config.GetIntrospectionEndpointClientAuthStrategy(ctx))
 	case audienceTestPAR:
 		_, err = provider.NewPushedAuthorizeRequest(ctx, newAudienceTestFormRequest(audienceTestPARURL, form))
+	case audienceTestBackChannel:
+		_, _, err = provider.AuthenticateClientWithAuthHandler(ctx, new(http.Request), form, &BackChannelAuthenticationEndpointClientAuthStrategy{})
 	case audienceTestDevice:
-		_, err = provider.NewRFC862DeviceAuthorizeRequest(ctx, newAudienceTestFormRequest("https://as.example.com/device", form))
+		_, err = provider.NewRFC862DeviceAuthorizeRequest(ctx, newAudienceTestFormRequest(audienceTestDevURL, form))
 	default:
 		_, _, err = provider.AuthenticateClientWithAuthHandler(ctx, new(http.Request), form, config.GetTokenEndpointClientAuthStrategy(ctx))
 	}

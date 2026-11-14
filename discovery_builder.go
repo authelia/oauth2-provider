@@ -61,6 +61,10 @@ type idjagRedeemMarker interface {
 	IsIDJAGRedeemHandler()
 }
 
+type cibaEndpointMarker interface {
+	IsCIBAEndpointHandler()
+}
+
 // NewOAuth2AuthorizationServerMetadata builds the OAuth 2.0 Authorization Server Metadata document from the registered
 // handlers and the Configurator. An extension whose feature is disabled is omitted. It returns an error when the
 // 'issuer' member is missing or is not an https URL without a query or fragment, when the 'response_types_supported'
@@ -264,6 +268,7 @@ func (f *Fosite) newOpenIDConnectProviderMetadata(ctx context.Context) (metadata
 	metadata.OpenIDConnectRPInitiatedLogoutMetadata = rpInitiatedLogoutMetadata(urls)
 	metadata.OpenIDConnectBackChannelLogoutMetadata = f.backChannelLogoutMetadata(ctx)
 	metadata.OpenIDConnectPromptCreateMetadata = f.promptCreateMetadata(ctx)
+	metadata.OpenIDConnectCIBAMetadata = f.cibaMetadata(ctx, urls)
 	metadata.RFC8705MutualTLSMetadata = f.rfc8705Metadata(ctx, urls, openIDConnectAdvertisedEndpoints(metadata))
 
 	return metadata, nil
@@ -359,6 +364,34 @@ func (f *Fosite) promptCreateMetadata(ctx context.Context) *OpenIDConnectPromptC
 
 	return &OpenIDConnectPromptCreateMetadata{
 		PromptValuesSupported: prompts,
+	}
+}
+
+// cibaMetadata advertises the OpenID Connect CIBA backchannel authentication endpoint when the ciba.EndpointHandler is
+// registered. An empty 'backchannel_authentication_request_signing_alg_values_supported' is omitted, which means
+// signed authentication requests are not supported.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.4
+// See: https://openid.net/specs/fapi-ciba.html#section-4.3
+func (f *Fosite) cibaMetadata(ctx context.Context, urls EndpointURLs) *OpenIDConnectCIBAMetadata {
+	if urls.BackChannelAuthentication == "" {
+		return nil
+	}
+
+	if !slices.ContainsFunc(f.Config.GetBackChannelAuthenticationEndpointHandlers(ctx), func(h BackChannelAuthenticationEndpointHandler) bool {
+		_, ok := h.(cibaEndpointMarker)
+
+		return ok
+	}) {
+		return nil
+	}
+
+	return &OpenIDConnectCIBAMetadata{
+		BackChannelTokenDeliveryModesSupported:                    slices.Clone(f.Config.GetCIBATokenDeliveryModes(ctx)),
+		BackChannelAuthenticationEndpoint:                         urls.BackChannelAuthentication,
+		BackChannelAuthenticationRequestSigningAlgValuesSupported: slices.Clone(f.Config.GetCIBARequestSigningAlgValues(ctx)),
+		BackChannelUserCodeParameterSupported:                     f.Config.GetCIBAUserCodeSupported(ctx),
+		BackChannelEndpointLoginHintTokenTypesSupported:           slices.Clone(f.Config.GetCIBALoginHintTokenTypes(ctx)),
 	}
 }
 

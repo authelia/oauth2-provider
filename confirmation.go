@@ -186,10 +186,12 @@ func confirmationClaim(claims map[string]any) map[string]any {
 
 // idTokenConfirmationGrants are the grant types that may produce a key-bound ID Token. OpenID Connect Key Binding 1.0
 // Section 1.4 defines key binding for the Authorization Code Flow and the Device Authorization Flow, and Section 5
-// extends it to a refresh of either; support for other flows is out of scope of that specification.
+// extends it to a refresh of either. The OpenID Connect CIBA grant is included as an extension: its key is the DPoP
+// proof verified at the backchannel authentication endpoint.
 var idTokenConfirmationGrants = []string{
 	consts.GrantTypeAuthorizationCode,
 	consts.GrantTypeOAuthDeviceCode,
+	consts.GrantTypeOpenIDCIBA,
 	consts.GrantTypeRefreshToken,
 }
 

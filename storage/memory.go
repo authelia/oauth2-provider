@@ -155,6 +155,9 @@ type MemoryStore struct {
 	DeviceCodes              map[string]oauth2.Requester
 	UserCodes                map[string]oauth2.Requester
 	InvalidatedDeviceCodes   map[string]bool
+	CIBASessions             map[string]oauth2.BackChannelAuthenticationRequester
+	CIBARequestIDs           map[string]string
+	InvalidatedCIBASessions  map[string]bool
 	PKCES                    map[string]oauth2.Requester
 	PKCEChallenges           map[ClientValueMarker]time.Time
 	OpenIDConnectNonces      map[ClientValueMarker]time.Time
@@ -188,6 +191,7 @@ type MemoryStore struct {
 	clientRegistrationTokensMutex sync.RWMutex
 	refreshTokensMutex            sync.RWMutex
 	deviceCodesMutex              sync.RWMutex
+	cibaSessionsMutex             sync.RWMutex
 	pkcesMutex                    sync.RWMutex
 	usersMutex                    sync.RWMutex
 	jtisMutex                     sync.RWMutex
@@ -227,6 +231,9 @@ func NewMemoryStore() *MemoryStore {
 		DeviceCodes:              make(map[string]oauth2.Requester),
 		UserCodes:                make(map[string]oauth2.Requester),
 		InvalidatedDeviceCodes:   make(map[string]bool),
+		CIBASessions:             make(map[string]oauth2.BackChannelAuthenticationRequester),
+		CIBARequestIDs:           make(map[string]string),
+		InvalidatedCIBASessions:  make(map[string]bool),
 		PKCES:                    make(map[string]oauth2.Requester),
 		PKCEChallenges:           make(map[ClientValueMarker]time.Time),
 		OpenIDConnectNonces:      make(map[ClientValueMarker]time.Time),
@@ -1445,6 +1452,144 @@ func (s *MemoryStore) InvalidateDeviceCodeSession(_ context.Context, signature s
 	}
 
 	s.InvalidatedDeviceCodes[signature] = true
+
+	return nil
+}
+
+// cloneCIBARequest returns a copy of the request which shares no CIBA state with it, so that neither the caller nor a
+// reader can alter the stored request by mutating its own. The session is shared, as for every other session type;
+// see HydratingMemoryStore for a store which decouples it. A requester which is not a
+// *oauth2.BackChannelAuthenticationRequest is returned as is.
+func cloneCIBARequest(request oauth2.BackChannelAuthenticationRequester) oauth2.BackChannelAuthenticationRequester {
+	req, ok := request.(*oauth2.BackChannelAuthenticationRequest)
+	if !ok {
+		return request
+	}
+
+	clone := *req
+	clone.IDTokenHintClaims = maps.Clone(req.IDTokenHintClaims)
+	clone.RequestContext = slices.Clone(req.RequestContext)
+
+	return &clone
+}
+
+// CreateCIBASession stores a copy of the request against the 'auth_req_id' signature and indexes it by request ID.
+func (s *MemoryStore) CreateCIBASession(_ context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) error {
+	s.cibaSessionsMutex.Lock()
+	defer s.cibaSessionsMutex.Unlock()
+
+	if s.CIBASessions == nil {
+		s.CIBASessions = make(map[string]oauth2.BackChannelAuthenticationRequester)
+	}
+
+	if s.CIBARequestIDs == nil {
+		s.CIBARequestIDs = make(map[string]string)
+	}
+
+	s.CIBASessions[signature] = cloneCIBARequest(request)
+	s.CIBARequestIDs[request.GetID()] = signature
+
+	return nil
+}
+
+// GetCIBASession returns a copy of the request stored against the 'auth_req_id' signature, or oauth2.ErrNotFound when
+// no request is stored. When the signature has been invalidated it returns the request alongside
+// oauth2.ErrInvalidatedCIBASession.
+func (s *MemoryStore) GetCIBASession(_ context.Context, signature string, _ oauth2.Session) (oauth2.BackChannelAuthenticationRequester, error) {
+	s.cibaSessionsMutex.RLock()
+	defer s.cibaSessionsMutex.RUnlock()
+
+	return s.getCIBASession(signature)
+}
+
+// GetCIBASessionByRequestID returns the request with the given request ID, with the same errors as GetCIBASession.
+func (s *MemoryStore) GetCIBASessionByRequestID(_ context.Context, requestID string, _ oauth2.Session) (oauth2.BackChannelAuthenticationRequester, error) {
+	s.cibaSessionsMutex.RLock()
+	defer s.cibaSessionsMutex.RUnlock()
+
+	signature, ok := s.CIBARequestIDs[requestID]
+	if !ok {
+		return nil, oauth2.ErrNotFound
+	}
+
+	return s.getCIBASession(signature)
+}
+
+func (s *MemoryStore) getCIBASession(signature string) (oauth2.BackChannelAuthenticationRequester, error) {
+	rel, ok := s.CIBASessions[signature]
+	if !ok {
+		return nil, oauth2.ErrNotFound
+	}
+
+	if s.InvalidatedCIBASessions[signature] {
+		return cloneCIBARequest(rel), oauth2.ErrInvalidatedCIBASession
+	}
+
+	return cloneCIBARequest(rel), nil
+}
+
+// UpdateCIBASession writes the polling state of the request, its last poll time, polling interval and slow down count,
+// onto the request stored against the 'auth_req_id' signature. It never alters the stored status, failure cause or
+// session. It does nothing when no request is stored.
+func (s *MemoryStore) UpdateCIBASession(_ context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) error {
+	s.cibaSessionsMutex.Lock()
+	defer s.cibaSessionsMutex.Unlock()
+
+	stored, exists := s.CIBASessions[signature]
+	if !exists {
+		return nil
+	}
+
+	updated := cloneCIBARequest(stored)
+
+	updated.SetLastPolled(request.GetLastPolled())
+	updated.SetPollingInterval(request.GetPollingInterval())
+	updated.SetSlowDownCount(request.GetSlowDownCount())
+
+	s.CIBASessions[signature] = updated
+
+	return nil
+}
+
+// DecideCIBASession implements ciba.Storage. An invalidated request is decided.
+func (s *MemoryStore) DecideCIBASession(_ context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) error {
+	s.cibaSessionsMutex.Lock()
+	defer s.cibaSessionsMutex.Unlock()
+
+	stored, ok := s.CIBASessions[signature]
+	if !ok {
+		return oauth2.ErrNotFound
+	}
+
+	if stored.GetStatus() != oauth2.CIBAStatusPending || s.InvalidatedCIBASessions[signature] {
+		return oauth2.ErrCIBADecided
+	}
+
+	s.CIBASessions[signature] = cloneCIBARequest(request)
+	s.CIBARequestIDs[request.GetID()] = signature
+
+	return nil
+}
+
+// InvalidateCIBASession marks the 'auth_req_id' signature as invalidated. It returns oauth2.ErrNotFound when no request
+// is stored for the signature, and oauth2.ErrInvalidatedCIBASession when it is already invalidated.
+func (s *MemoryStore) InvalidateCIBASession(_ context.Context, signature string) error {
+	s.cibaSessionsMutex.Lock()
+	defer s.cibaSessionsMutex.Unlock()
+
+	if _, ok := s.CIBASessions[signature]; !ok {
+		return oauth2.ErrNotFound
+	}
+
+	if s.InvalidatedCIBASessions[signature] {
+		return oauth2.ErrInvalidatedCIBASession
+	}
+
+	if s.InvalidatedCIBASessions == nil {
+		s.InvalidatedCIBASessions = make(map[string]bool)
+	}
+
+	s.InvalidatedCIBASessions[signature] = true
 
 	return nil
 }

@@ -34,6 +34,10 @@ const (
 
 	// CIBAStatusFailed marks a request which failed after it was accepted, such as a failed ping or push notification.
 	CIBAStatusFailed
+
+	// CIBAStatusExpired marks a push request which expired before the end user decided it, recorded by
+	// ExpireBackChannelAuthentication. The client receives 'expired_token'.
+	CIBAStatusExpired
 )
 
 // CIBAHintKind identifies which hint parameter of the authentication request identifies the end user.

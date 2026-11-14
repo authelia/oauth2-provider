@@ -28,7 +28,7 @@ type DecisionHandler struct {
 // is oauth2.ErrInvalidRequest.
 func (h *DecisionHandler) HandleBackChannelAuthenticationDecision(ctx context.Context, request oauth2.BackChannelAuthenticationRequester, _ *oauth2.BackChannelAuthenticationDecisionResult) (err error) {
 	switch request.GetStatus() {
-	case oauth2.CIBAStatusApproved, oauth2.CIBAStatusDenied, oauth2.CIBAStatusFailed:
+	case oauth2.CIBAStatusApproved, oauth2.CIBAStatusDenied, oauth2.CIBAStatusFailed, oauth2.CIBAStatusExpired:
 	default:
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The backchannel authentication request has not been decided."))
 	}

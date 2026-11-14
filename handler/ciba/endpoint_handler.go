@@ -26,7 +26,7 @@ type EndpointHandler struct {
 }
 
 // HandleBackChannelAuthenticationEndpointRequest generates the 'auth_req_id', records its signature, expiry, status and
-// polling interval on the request, stores the request and populates the response. The 'interval' member is returned to
+// polling interval on the request, stores the request without its 'user_code' and populates the response. The 'interval' member is returned to
 // poll and ping clients only.
 func (h *EndpointHandler) HandleBackChannelAuthenticationEndpointRequest(ctx context.Context, request oauth2.BackChannelAuthenticationRequester, response oauth2.BackChannelAuthenticationResponder) (err error) {
 	var id, signature string
@@ -57,7 +57,7 @@ func (h *EndpointHandler) HandleBackChannelAuthenticationEndpointRequest(ctx con
 
 	request.GetSession().SetExpiresAt(oauth2.CIBAAuthRequestID, time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
 
-	if err = h.Storage.CreateCIBASession(ctx, signature, request); err != nil {
+	if err = h.Storage.CreateCIBASession(ctx, signature, withoutUserCode(request)); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -71,6 +71,22 @@ func (h *EndpointHandler) HandleBackChannelAuthenticationEndpointRequest(ctx con
 	}
 
 	return nil
+}
+
+// withoutUserCode returns a copy of request without the 'user_code', which the application verified before the request
+// is stored and which is a credential of the end user, so it is never persisted.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.1
+func withoutUserCode(request oauth2.BackChannelAuthenticationRequester) oauth2.BackChannelAuthenticationRequester {
+	req, ok := request.(*oauth2.BackChannelAuthenticationRequest)
+	if !ok || req.UserCode == "" {
+		return request
+	}
+
+	stored := *req
+	stored.UserCode = ""
+
+	return &stored
 }
 
 func ceilSeconds(d time.Duration) time.Duration {

@@ -107,6 +107,10 @@ func (f *Fosite) NewBackChannelAuthenticationDecisionRequest(ctx context.Context
 //   - A push approval without a configured BackChannelNotifier is ErrServerError and records nothing.
 //   - A request another decision has already decided, such as a concurrent approval which won, is ErrInvalidRequest
 //     ("already decided") and sends nothing.
+//   - When the commit of the approval fails with an error other than ErrSerializationFailure, the approval may have
+//     persisted. If it did, the failure cannot be recorded; the client is still sent 'transaction_failed', and the
+//     result, with the Status CIBAStatusFailed, is returned with ErrServerError wrapping the commit error, as the
+//     stored request may remain approved with no tokens delivered.
 //   - When ctx carries an enclosing transaction begun with storage.JoinOrBeginTx, a failure is returned as the error
 //     for the caller to roll back, and nothing is sent. On success the token notification, or the ping notification of
 //     a ping request, is set as the Notification of the result but not delivered: the caller MUST deliver it through its BackChannelNotifier after it commits, and
@@ -305,7 +309,7 @@ func (f *Fosite) runBackChannelAuthenticationDecisionHandlers(ctx context.Contex
 }
 
 // notifyBackChannelAuthenticationDecision sends the ping notification of a ping client, or the push error notification
-// of a denied or failed push client, once the decision is recorded. A failure to build or deliver it is recorded on
+// of a denied, failed or expired push client, once the decision is recorded. A failure to build or deliver it is recorded on
 // the result and never reverts the decision. When deliver is false the notification is only built and set on the
 // result.
 //
@@ -323,6 +327,8 @@ func (f *Fosite) notifyBackChannelAuthenticationDecision(ctx context.Context, re
 			f.notifyBackChannelPushError(ctx, request, result, ErrAccessDenied, deliver)
 		case CIBAStatusFailed:
 			f.notifyBackChannelPushError(ctx, request, result, ErrTransactionFailed, deliver)
+		case CIBAStatusExpired:
+			f.notifyBackChannelPushError(ctx, request, result, ErrDeviceExpiredToken, deliver)
 		}
 	}
 }

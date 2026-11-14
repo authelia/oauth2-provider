@@ -37,12 +37,12 @@ func NewBackChannelPushTokenNotification(client Client, request BackChannelAuthe
 	return newBackChannelNotification(client, request, authReqID, consts.CIBAModePush, members)
 }
 
-// ExpireBackChannelAuthentication sends the 'expired_token' push error notification for an expired authentication
-// request of a push client, such as from a sweep of expired requests. It records nothing, so each call on the same
-// request sends the notification again; a sweep must track the requests it has notified. It returns ErrInvalidRequest
-// for a request of another token delivery mode, a decided request, or an unexpired request. A request is decided when
-// either the given request or the one in storage is; the two are not compared atomically, so a decision recorded
-// concurrently can still be followed by the notification.
+// ExpireBackChannelAuthentication records an expired authentication request of a push client as expired and sends it
+// the 'expired_token' push error notification, such as from a sweep of expired requests. The expiry is recorded the
+// way a decision is, only while the stored request is pending, so of an expiry and a concurrent decision exactly one
+// is recorded and notified; the other returns ErrInvalidRequest ("already decided") and sends nothing. It returns
+// ErrInvalidRequest for a request of another token delivery mode, a decided request, or an unexpired request. A
+// notification within an enclosing transaction is left to the caller to deliver, as for DenyBackChannelAuthentication.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.12
 func (f *Fosite) ExpireBackChannelAuthentication(ctx context.Context, request BackChannelAuthenticationRequester) (result *BackChannelAuthenticationDecisionResult, err error) {
@@ -61,42 +61,7 @@ func (f *Fosite) ExpireBackChannelAuthentication(ctx context.Context, request Ba
 		return nil, err
 	}
 
-	// A copy loaded before a decision was recorded is still pending, so the stored request is checked.
-	if err = f.checkBackChannelAuthenticationStillPending(ctx, request); err != nil {
-		return nil, err
-	}
-
-	result = &BackChannelAuthenticationDecisionResult{Status: request.GetStatus()}
-
-	f.notifyBackChannelPushError(ctx, request, result, ErrDeviceExpiredToken, true)
-
-	return result, nil
-}
-
-// checkBackChannelAuthenticationStillPending returns ErrInvalidRequest when the stored request with the ID of request
-// is decided.
-func (f *Fosite) checkBackChannelAuthenticationStillPending(ctx context.Context, request BackChannelAuthenticationRequester) (err error) {
-	storage, ok := f.Store.(CIBADecisionStorage)
-	if !ok {
-		return errorsx.WithStack(ErrServerError.WithDebug("The storage does not implement CIBADecisionStorage."))
-	}
-
-	stored, err := storage.GetCIBASessionByRequestID(ctx, request.GetID(), request.GetSession().Clone())
-
-	switch {
-	case errors.Is(err, ErrInvalidatedCIBASession):
-		return errorsx.WithStack(errBackChannelAuthenticationDecided.WithWrap(err).WithDebugError(err))
-	case errors.Is(err, ErrNotFound):
-		return errorsx.WithStack(err)
-	case err != nil:
-		return errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugError(err))
-	case stored == nil:
-		return errorsx.WithStack(ErrNotFound)
-	case stored.GetStatus() != CIBAStatusPending:
-		return errorsx.WithStack(errBackChannelAuthenticationDecided)
-	}
-
-	return nil
+	return f.decideBackChannelAuthentication(ctx, request, CIBAStatusExpired, "")
 }
 
 // approveBackChannelAuthenticationPush records the approval of a push request, issues its tokens and invalidates it in
@@ -136,8 +101,7 @@ func (f *Fosite) approveBackChannelAuthenticationPush(ctx context.Context, reque
 		if response, err = f.issueBackChannelPushAccessResponse(txCtx, request); err == nil && owned {
 			committing = true
 
-			// A failed commit ends the transaction without telling whether it persisted, so it is not rolled back.
-			// Recording the failure then succeeds only if the approval did not persist; otherwise it is already decided.
+			// A failed commit ends the transaction, so it is not rolled back; see failBackChannelAuthenticationPushCommit.
 			err = transaction.Commit(txCtx, f.Store)
 		}
 	}
@@ -158,10 +122,12 @@ func (f *Fosite) approveBackChannelAuthenticationPush(ctx context.Context, reque
 			return result, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugf("The approval of the backchannel authentication request could not be rolled back because the storage does not implement storage.Transactional: %s", backChannelIssuanceFailureCause(err)))
 		}
 
-		if !committing {
-			if rollbackErr := transaction.Rollback(txCtx, f.Store); rollbackErr != nil {
-				err = errors.Join(err, rollbackErr)
-			}
+		if committing {
+			return f.failBackChannelAuthenticationPushCommit(ctx, request, restored, err)
+		}
+
+		if rollbackErr := transaction.Rollback(txCtx, f.Store); rollbackErr != nil {
+			err = errors.Join(err, rollbackErr)
 		}
 
 		return f.failBackChannelAuthenticationPush(ctx, request, restored, err)
@@ -191,6 +157,27 @@ func (f *Fosite) failBackChannelAuthenticationPush(ctx context.Context, request 
 	f.notifyBackChannelPushError(ctx, request, result, ErrTransactionFailed, true)
 
 	return result, nil
+}
+
+// failBackChannelAuthenticationPushCommit handles a failed commit of a push approval. A commit which failed with
+// ErrSerializationFailure persisted nothing, so it is handled as any issuance failure is, and a request a competing
+// decision has decided sends nothing. Any other failed commit may have persisted the approval, which rejects recording
+// the failure as already decided: the client is then still sent 'transaction_failed', as its tokens are never
+// delivered, and the result is returned with ErrServerError, as the stored request may remain approved.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.12
+func (f *Fosite) failBackChannelAuthenticationPushCommit(ctx context.Context, request BackChannelAuthenticationRequester, restored Session, commitErr error) (result *BackChannelAuthenticationDecisionResult, err error) {
+	result, err = f.failBackChannelAuthenticationPush(ctx, request, restored, commitErr)
+
+	if err == nil || errors.Is(commitErr, ErrSerializationFailure) || !errors.Is(err, ErrCIBADecided) {
+		return result, err
+	}
+
+	result = &BackChannelAuthenticationDecisionResult{Status: CIBAStatusFailed, IssuanceError: commitErr}
+
+	f.notifyBackChannelPushError(ctx, request, result, ErrTransactionFailed, true)
+
+	return result, errorsx.WithStack(ErrServerError.WithWrap(commitErr).WithDebugf("The commit of the approval of the backchannel authentication request failed and may have persisted it, so it could not be recorded as failed: %s", backChannelIssuanceFailureCause(commitErr)))
 }
 
 // notifyBackChannelPushError builds the push error notification for the request and, when deliver is true, sends it.

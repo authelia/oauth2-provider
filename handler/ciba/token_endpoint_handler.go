@@ -186,6 +186,8 @@ func (c *TokenHandler) evaluate(ctx context.Context, request oauth2.AccessReques
 		return nil, false, errorsx.WithStack(oauth2.ErrAccessDenied.WithHint("The end-user denied the authentication request."))
 	case oauth2.CIBAStatusFailed:
 		return nil, false, errorsx.WithStack(oauth2.ErrTransactionFailed.WithDebug(stored.GetFailureCause()))
+	case oauth2.CIBAStatusExpired:
+		return nil, false, errorsx.WithStack(oauth2.ErrDeviceExpiredToken.WithHint("The authentication request expired before the end-user decided it."))
 	default:
 		if internal {
 			return nil, false, errorsx.WithStack(oauth2.ErrServerError.WithDebug("The backchannel authentication request issued internally has not been approved."))

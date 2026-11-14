@@ -22,6 +22,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/handler/ciba"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
@@ -734,7 +735,7 @@ func TestPushDenyFailExpireBodies(t *testing.T) {
 
 				return provider.ExpireBackChannelAuthentication(t.Context(), request)
 			},
-			status:   oauth2.CIBAStatusPending,
+			status:   oauth2.CIBAStatusExpired,
 			expected: "expired_token",
 		},
 	}
@@ -1050,6 +1051,172 @@ func TestPushSweepExpiresALoadedRequest(t *testing.T) {
 			assert.Equal(t, authReqID, body[consts.FormParameterAuthReqID])
 			assert.Equal(t, "expired_token", body[consts.FormParameterError])
 			assert.Equal(t, cibaPushTestToken, notifier.notifications[0].BearerToken)
+		})
+	}
+}
+
+// cibaPushCompetingDecisionHandler records a competing denial of the request in storage before the expiry is recorded,
+// as a decision which passed validation before the request expired would.
+type cibaPushCompetingDecisionHandler struct {
+	store     ciba.Storage
+	competing oauth2.BackChannelAuthenticationRequester
+}
+
+func (h *cibaPushCompetingDecisionHandler) HandleBackChannelAuthenticationDecision(ctx context.Context, request oauth2.BackChannelAuthenticationRequester, _ *oauth2.BackChannelAuthenticationDecisionResult) (err error) {
+	if request.GetStatus() != oauth2.CIBAStatusExpired {
+		return nil
+	}
+
+	h.competing.SetStatus(oauth2.CIBAStatusDenied)
+
+	return h.store.DecideCIBASession(ctx, h.competing.GetAuthRequestIDSignature(), h.competing)
+}
+
+func TestExpireBackChannelAuthenticationRacesADecision(t *testing.T) {
+	t.Run("ShouldNotNotifyWhenADecisionIsRecordedFirst", func(t *testing.T) {
+		for _, sc := range cibaPushTestStores {
+			t.Run(sc.name, func(t *testing.T) {
+				store, memory := sc.new()
+				notifier := &recordingBackChannelNotifier{}
+				provider := newCIBAPushTestProvider(t, store, memory, notifier)
+
+				newCIBAPushTestRequest(t, provider, oauth2.Arguments{consts.ScopeOpenID})
+
+				competing := loadCIBAPushTestRequest(t, provider, nil)
+
+				// The MemoryStore returns the stored session itself, so each copy is given its own.
+				request := loadCIBAPushTestRequest(t, provider, nil)
+				request.SetSession(request.GetSession().Clone())
+				request.GetSession().SetExpiresAt(oauth2.CIBAAuthRequestID, time.Now().Add(-time.Second))
+
+				config := provider.Config.(*oauth2.Config)
+				config.BackChannelAuthenticationDecisionHandlers = append(oauth2.BackChannelAuthenticationDecisionHandlers{
+					&cibaPushCompetingDecisionHandler{store: store.(ciba.Storage), competing: competing},
+				}, config.BackChannelAuthenticationDecisionHandlers...)
+
+				result, err := provider.ExpireBackChannelAuthentication(t.Context(), request)
+				assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+				assert.Nil(t, result)
+				assert.Empty(t, notifier.notifications)
+
+				stored, err := store.(ciba.Storage).GetCIBASessionByRequestID(t.Context(), cibaPushTestRequestID, openid.NewDefaultSession())
+				require.NoError(t, err)
+				assert.Equal(t, oauth2.CIBAStatusDenied, stored.GetStatus())
+			})
+		}
+	})
+
+	t.Run("ShouldRejectADecisionAfterTheExpiryIsRecorded", func(t *testing.T) {
+		for _, sc := range cibaPushTestStores {
+			t.Run(sc.name, func(t *testing.T) {
+				store, memory := sc.new()
+				notifier := &recordingBackChannelNotifier{}
+				provider := newCIBAPushTestProvider(t, store, memory, notifier)
+
+				newCIBAPushTestRequest(t, provider, oauth2.Arguments{consts.ScopeOpenID})
+
+				// The decision was loaded and validated while the request was unexpired.
+				// The MemoryStore returns the stored session itself, so each copy is given its own.
+				deciding := loadCIBAPushTestRequest(t, provider, nil)
+				deciding.SetSession(deciding.GetSession().Clone())
+				deciding.GetSession().SetExpiresAt(oauth2.CIBAAuthRequestID, time.Now().Add(time.Minute))
+
+				expiring := loadCIBAPushTestRequest(t, provider, nil)
+				expiring.SetSession(expiring.GetSession().Clone())
+				expiring.GetSession().SetExpiresAt(oauth2.CIBAAuthRequestID, time.Now().Add(-time.Second))
+
+				result, err := provider.ExpireBackChannelAuthentication(t.Context(), expiring)
+				require.NoError(t, err)
+				assert.Equal(t, oauth2.CIBAStatusExpired, result.Status)
+				require.Len(t, notifier.notifications, 1)
+
+				result, err = provider.DenyBackChannelAuthentication(t.Context(), deciding)
+				assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+				assert.Nil(t, result)
+				assert.Len(t, notifier.notifications, 1)
+
+				stored, err := store.(ciba.Storage).GetCIBASessionByRequestID(t.Context(), cibaPushTestRequestID, openid.NewDefaultSession())
+				require.NoError(t, err)
+				assert.Equal(t, oauth2.CIBAStatusExpired, stored.GetStatus())
+
+				// A repeated sweep with a stale pending copy sends nothing more.
+				expiring.SetStatus(oauth2.CIBAStatusPending)
+
+				_, err = provider.ExpireBackChannelAuthentication(t.Context(), expiring)
+				assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+				assert.Len(t, notifier.notifications, 1)
+			})
+		}
+	})
+}
+
+func TestPushApproveCommitFailure(t *testing.T) {
+	scopes := oauth2.Arguments{consts.ScopeOpenID, consts.ScopeOffline}
+
+	testCases := []struct {
+		name   string
+		commit error
+		notify bool
+		err    error
+	}{
+		// The memory stores write at once, so the approval persists whatever the commit returns.
+		{name: "ShouldSendTransactionFailedWhenTheApprovalMayHavePersisted", commit: errors.New("connection lost"), notify: true, err: oauth2.ErrServerError},
+		{name: "ShouldSendNothingWhenACompetingDecisionWon", commit: oauth2.ErrSerializationFailure, err: oauth2.ErrInvalidRequest},
+	}
+
+	stores := []struct {
+		name string
+		new  func(tx *mock.MockTransactional) (any, *storage.MemoryStore)
+	}{
+		{"MemoryStore", func(tx *mock.MockTransactional) (any, *storage.MemoryStore) {
+			s := storage.NewMemoryStore()
+
+			return &cibaPushJoinedMemoryStore{MemoryStore: s, MockTransactional: tx}, s
+		}},
+		{"HydratingMemoryStore", func(tx *mock.MockTransactional) (any, *storage.MemoryStore) {
+			s := storage.NewHydratingMemoryStore()
+
+			return &cibaPushJoinedHydratingStore{HydratingMemoryStore: s, MockTransactional: tx}, s.MemoryStore
+		}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, sc := range stores {
+				t.Run(sc.name, func(t *testing.T) {
+					ctrl := gomock.NewController(t)
+
+					tx := mock.NewMockTransactional(ctrl)
+					tx.EXPECT().BeginTX(gomock.Any()).DoAndReturn(func(ctx context.Context) (context.Context, error) { return ctx, nil }).Times(1)
+					tx.EXPECT().Commit(gomock.Any()).Return(tc.commit).Times(1)
+					tx.EXPECT().Rollback(gomock.Any()).Times(0)
+
+					store, memory := sc.new(tx)
+					notifier := &recordingBackChannelNotifier{}
+					provider := newCIBAPushTestProvider(t, store, memory, notifier)
+
+					authReqID := newCIBAPushTestRequest(t, provider, scopes)
+
+					result, err := provider.ApproveBackChannelAuthentication(t.Context(), loadCIBAPushTestRequest(t, provider, scopes), newCIBAPushTestApproval())
+					assert.ErrorIs(t, err, tc.err)
+
+					if !tc.notify {
+						assert.Nil(t, result)
+						assert.Empty(t, notifier.notifications)
+
+						return
+					}
+
+					require.NotNil(t, result)
+					assert.Equal(t, oauth2.CIBAStatusFailed, result.Status)
+					assert.ErrorIs(t, result.IssuanceError, tc.commit)
+					require.Len(t, notifier.notifications, 1)
+
+					body := decodeCIBAPushTestBody(t, notifier.notifications[0])
+					assert.Equal(t, authReqID, body[consts.FormParameterAuthReqID])
+					assert.Equal(t, "transaction_failed", body[consts.FormParameterError])
+				})
+			}
 		})
 	}
 }

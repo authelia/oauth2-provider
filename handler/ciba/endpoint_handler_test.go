@@ -86,6 +86,7 @@ func TestNewBackChannelAuthenticationResponse(t *testing.T) {
 					request.DeliveryMode = tc.mode
 					request.RequestedExpiry = tc.requested
 					request.ClientNotificationToken = "tok"
+					request.UserCode = "1234"
 					request.Client = &oauth2.DefaultClient{ID: "client"}
 					request.Session = &oauth2.DefaultSession{Subject: tc.subject}
 
@@ -103,6 +104,7 @@ func TestNewBackChannelAuthenticationResponse(t *testing.T) {
 					require.NoError(t, err)
 
 					assert.NotEmpty(t, response.GetAuthRequestID())
+					assert.Equal(t, "1234", request.UserCode)
 					assert.Equal(t, tc.expiresIn, response.GetExpiresIn())
 					assert.Equal(t, tc.interval, response.GetInterval())
 
@@ -123,6 +125,7 @@ func TestNewBackChannelAuthenticationResponse(t *testing.T) {
 						assert.Equal(t, signature, got.GetAuthRequestIDSignature())
 						assert.Equal(t, 5*time.Second, got.GetPollingInterval())
 						assert.Equal(t, "tok", oauth2.GetClientNotificationToken(got))
+						assert.Empty(t, got.GetUserCode())
 
 						if tc.rawID {
 							assert.Equal(t, response.GetAuthRequestID(), oauth2.GetAuthRequestID(got))

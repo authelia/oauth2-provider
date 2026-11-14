@@ -95,31 +95,11 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 
 	// RFC 9126 Section 2.1: the pushed request is validated as an authorization request would be, except for the steps
 	// which need the user's session.
-	if err = f.validatePushedAuthorizeRequest(ctx, frequest); err != nil {
+	if err = f.validateAuthorizeRequest(ctx, frequest); err != nil {
 		return frequest, err
 	}
 
 	return frequest, nil
-}
-
-func (f *Fosite) validatePushedAuthorizeRequest(ctx context.Context, request AuthorizeRequester) (err error) {
-	for _, h := range f.Config.GetAuthorizeEndpointBindingHandlers(ctx) {
-		if v, ok := h.(AuthorizeRequestValidator); ok {
-			if err = v.ValidateAuthorizeRequest(ctx, request); err != nil {
-				return err
-			}
-		}
-	}
-
-	for _, h := range f.Config.GetAuthorizeEndpointHandlers(ctx) {
-		if v, ok := h.(AuthorizeRequestValidator); ok {
-			if err = v.ValidateAuthorizeRequest(ctx, request); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }
 
 // RequireRedirectURIPushedAuthorizationRequest determines if the 'redirect_uri' parameter is required in a Pushed

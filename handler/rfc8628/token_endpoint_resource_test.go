@@ -109,7 +109,7 @@ func TestDeviceCodeTokenRequestResourceAndAudience(t *testing.T) {
 			grant := oauth2.NewDeviceAuthorizeRequest()
 			grant.Client = client
 			grant.Session = &oauth2.DefaultSession{}
-			grant.RequestedAt = time.Now().UTC()
+			grant.RequestedAt = time.Now().UTC().Add(-time.Minute)
 			grant.RequestedAudience = oauth2.Arguments{audienceA, audienceB, never}
 			grant.RequestedResource = oauth2.Arguments{resourceA, resourceB, never}
 			grant.GrantAudience(audienceA)

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,6 +52,7 @@ func TestDeviceFlowWithAuthorizationDetails(t *testing.T) {
 			config := &oauth2.Config{
 				AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}},
 				RFC8628UserVerificationURL:       "https://www.authelia.com/device",
+				RFC8628TokenPollingInterval:      time.Nanosecond,
 			}
 
 			f := compose.Compose(config, s, hmacStrategy,

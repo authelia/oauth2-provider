@@ -87,6 +87,7 @@ finalized, so support for one may change in any release.
 | [Transaction Tokens](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11)                                              |   ✅   | `draft-11` | Opt-in, including the `self_signed` and `unsigned_json` subject tokens and replacement tokens                                                                                               |
 | [OAuth Client ID Metadata Document](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)                      |   ✅   | `draft-03` | Opt-in through `Config.ClientIDMetadataDocumentResolver`, with a default resolver in `handler/cimd`                                                                                         |
 | [Refresh Token and Authorization Expiration](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-refresh-token-expiration-03)                |   ✅   | `draft-03` | On by default; the authorization expiry is `RefreshTokenMaximumLifespan` or a deadline the application records                                                                              |
+| [The OAuth 2.1 Authorization Framework](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17)                                         |   🟡   | `draft-17` | Checked by `compose.ValidateOAuth21Profile` and applied by `compose.ApplyOAuth21Profile`; clients are not checked                                                                           |
 | [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html)                                                      |   🟡   |            | Checked by `compose.ValidateFAPI2SecurityProfile`, applied by `compose.ApplyFAPI2SecurityProfile`, or enforced per client                                                                   |
 | [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html)                                                        |   ✅   |            | Applied by `compose.ApplyFAPI2MessageSigning` and checked by `compose.ValidateFAPI2MessageSigning`, per part                                                                                |
 
@@ -143,7 +144,6 @@ Drafts adopted by the IETF OAuth Working Group or the OpenID Foundation which ar
 
 | Specification                                                                                                                        | Status | Draft                 | Notes            |
 | ------------------------------------------------------------------------------------------------------------------------------------ | :----: | --------------------- | ---------------- |
-| [The OAuth 2.1 Authorization Framework](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1)                                 |   ❌   | `draft-17`            |                  |
 | [Updates to OAuth 2.0 Security Best Current Practice](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics-update) |   ❌   | `draft-03`            |                  |
 | [JSON Web Token Best Current Practices](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc8725bis)                           |   ❌   | `draft-10`            | Updates RFC 8725 |
 | [Attestation-Based Client Authentication](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-attestation-based-client-auth)      |   ❌   | `draft-12`            |                  |
@@ -391,6 +391,19 @@ For [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0
 signed authorization responses and signed introspection responses, and `compose.ValidateFAPI2MessageSigning` checks them
 once the provider is composed. A client is required to use JARM by registering only JWT response modes, and a resource
 server is permitted to introspect through `IntrospectionClient`.
+
+For [The OAuth 2.1 Authorization Framework](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17),
+`compose.ApplyOAuth21Profile` sets the options above that it requires on an `oauth2.Config`, and
+`compose.ValidateOAuth21Profile` checks any `oauth2.Configurator` once the provider is composed, returning every setting
+that does not meet it and every missing required handler. It refuses the resource owner password credentials grant and
+the authorize endpoint handlers which can issue an access token in the authorization response:
+`AuthorizeImplicitGrantTypeHandler`, `OpenIDConnectImplicitHandler`, and `OpenIDConnectHybridHandler`, which serves
+`code token` and `code id_token token` as well as `code id_token`. It requires PKCE with S256 from every client, the RFC
+9207 `iss` parameter, an authorization code lifetime of at most 10 minutes, `client_secret_post` wherever another client
+secret method is accepted at the token endpoint, and a `RefreshTokenMaximumLifespan`, which
+`compose.ApplyOAuth21Profile` sets to `RefreshTokenLifespan` when unset, so a rotated refresh token never outlives the
+first. It does not set `Issuer`, and does not check the clients, such as their redirect URI comparison strategy or their
+own lifespans, or a custom `RedirectSecureChecker`.
 
 ## Thanks
 

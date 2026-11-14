@@ -574,6 +574,20 @@ type IntrospectionTokenTypeClient interface {
 	Client
 }
 
+// TokenRequestRedirectURIOptionalClient is a client which decides whether its authorization code token requests may
+// omit the 'redirect_uri' parameter as OAuth 2.1 does. When implemented it overrides
+// TokenRequestRedirectURIOptionalProvider. The parameter stays required for a code issued without a verified PKCE
+// 'code_challenge' or with the 'openid' scope.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-10.2
+type TokenRequestRedirectURIOptionalClient interface {
+	// GetTokenRequestRedirectURIOptional returns true if this client's token requests may omit the 'redirect_uri'
+	// parameter.
+	GetTokenRequestRedirectURIOptional() (optional bool)
+
+	Client
+}
+
 // DPoPClient represents a client that can advertise the 'dpop_bound_access_tokens' metadata value per RFC 9449.
 type DPoPClient interface {
 	// GetEnableDPoPBoundAccessTokens returns the 'dpop_bound_access_tokens' client metadata value. When true, DPoP is

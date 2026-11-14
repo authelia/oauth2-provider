@@ -199,7 +199,7 @@ func TestSectorDocumentMustListCIBAURIs(t *testing.T) {
 	httpClient.RetryMax = 0
 	httpClient.HTTPClient = server.Client()
 
-	validator := NewSectorIdentifierValidator(&oauth2.Config{HTTPClient: httpClient})
+	validator := NewSectorIdentifierValidator(&oauth2.Config{HTTPClient: httpClient, DisableSpecialUseAddressGuard: true})
 
 	testCases := []struct {
 		name     string

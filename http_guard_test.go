@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -76,6 +77,44 @@ func TestSpecialUseAddressGuardControl(t *testing.T) {
 			default:
 				WithSpecialUseAddressGuardAllowLoopback(netip.MustParseAddr(tc.server))(guard)
 			}
+
+			err := guard.control("tcp", tc.address, nil)
+
+			if tc.allowed {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorIs(t, err, ErrSpecialUseAddress)
+			}
+		})
+	}
+}
+
+func TestSpecialUseAddressGuardAllowedNetworks(t *testing.T) {
+	testCases := []struct {
+		name     string
+		networks []*net.IPNet
+		address  string
+		allowed  bool
+	}{
+		{"ShouldRefuseLoopbackWithoutNetworks", nil, "127.0.0.1:443", false},
+		{"ShouldPermitLoopbackInNetwork", mustParseNetworks("127.0.0.0/8"), "127.0.0.5:443", true},
+		{"ShouldPermitMappedLoopbackInNetwork", mustParseNetworks("127.0.0.0/8"), "[::ffff:127.0.0.1]:443", true},
+		{"ShouldPermitIPv6LoopbackInNetwork", mustParseNetworks("::1/128"), "[::1]:443", true},
+		{"ShouldPermitPrivateInNetwork", mustParseNetworks("10.0.0.0/8"), "10.1.2.3:443", true},
+		{"ShouldPermitIPv4NetworkWithSixteenByteAddress", []*net.IPNet{{IP: net.ParseIP("10.0.0.0"), Mask: net.CIDRMask(8, 32)}}, "10.1.2.3:443", true},
+		{"ShouldPermitMappedNetwork", []*net.IPNet{{IP: net.ParseIP("10.0.0.0"), Mask: net.CIDRMask(104, 128)}}, "10.1.2.3:443", true},
+		{"ShouldPermitZonedLinkLocalInNetwork", mustParseNetworks("fe80::/10"), "[fe80::1%eth0]:443", true},
+		{"ShouldRefuseLoopbackOutsideNetwork", mustParseNetworks("10.0.0.0/8"), "127.0.0.1:443", false},
+		{"ShouldRefuseIPv6LoopbackOutsideIPv4Network", mustParseNetworks("127.0.0.0/8"), "[::1]:443", false},
+		{"ShouldIgnoreNilAndInvalidNetworks", []*net.IPNet{nil, {}}, "127.0.0.1:443", false},
+		{"ShouldPermitPublicRegardless", mustParseNetworks("10.0.0.0/8"), "8.8.8.8:443", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			guard := &specialUseAddressGuard{}
+
+			WithSpecialUseAddressGuardAllowedNetworks(tc.networks...)(guard)
 
 			err := guard.control("tcp", tc.address, nil)
 

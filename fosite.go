@@ -293,7 +293,9 @@ type Configurator interface {
 	RotatedGlobalSecretsProvider
 	GlobalSecretProvider
 	JWKSFetcherStrategyProvider
+	ClientJWKSFetcherStrategyProvider
 	HTTPClientProvider
+	SpecialUseAddressGuardProvider
 	ScopeStrategyProvider
 	AudienceStrategyProvider
 	MinParameterEntropyProvider

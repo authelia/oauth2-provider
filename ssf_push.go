@@ -139,34 +139,19 @@ func (f *Fosite) PushSecurityEventToken(ctx context.Context, client Client, deli
 		return SSFPushResult{Outcome: SSFPushRejected, Err: err}
 	}
 
-	base := config.HTTPClient
+	var httpClient *retryablehttp.Client
 
-	if base == nil {
-		base = f.Config.GetHTTPClient(ctx)
+	if httpClient, err = f.ssfPushHTTPClient(ctx, config); err != nil {
+		return SSFPushResult{Outcome: SSFPushRejected, Err: errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugError(err))}
 	}
-
-	httpClient := backChannelLogoutHTTPClient(base)
-
-	// The caller owns retries, and a log hook would see the secret request.
-	httpClient.RetryMax = 0
-	httpClient.RequestLogHook = nil
-	httpClient.ResponseLogHook = nil
-	httpClient.CheckRetry = func(context.Context, *http.Response, error) (bool, error) { return false, nil }
 
 	ctx, cancel := context.WithTimeout(ctx, FetchTimeout)
 	defer cancel()
 
 	var request *retryablehttp.Request
 
-	if request, err = retryablehttp.NewRequestWithContext(ctx, http.MethodPost, delivery.EndpointURL, strings.NewReader(token)); err != nil {
+	if request, err = newSSFPushRequest(ctx, delivery, token); err != nil {
 		return ssfPushRefused("Failed to create the push request.")
-	}
-
-	request.Header.Set(consts.HeaderContentType, ssfContentTypeSecurityEventToken)
-	request.Header.Set("Accept", ssfMediaTypeJSON)
-
-	if delivery.AuthorizationHeader != "" {
-		request.Header.Set(consts.HeaderAuthorization, delivery.AuthorizationHeader)
 	}
 
 	var response *http.Response
@@ -205,6 +190,43 @@ func (f *Fosite) PushSecurityEventToken(ctx context.Context, client Client, deli
 	}
 
 	return result
+}
+
+func newSSFPushRequest(ctx context.Context, delivery SSFDelivery, token string) (request *retryablehttp.Request, err error) {
+	if request, err = retryablehttp.NewRequestWithContext(ctx, http.MethodPost, delivery.EndpointURL, strings.NewReader(token)); err != nil {
+		return nil, err
+	}
+
+	request.Header.Set(consts.HeaderContentType, ssfContentTypeSecurityEventToken)
+	request.Header.Set("Accept", ssfMediaTypeJSON)
+
+	if delivery.AuthorizationHeader != "" {
+		request.Header.Set(consts.HeaderAuthorization, delivery.AuthorizationHeader)
+	}
+
+	return request, nil
+}
+
+func (f *Fosite) ssfPushHTTPClient(ctx context.Context, config *SSFConfig) (client *retryablehttp.Client, err error) {
+	base := config.HTTPClient
+
+	if base == nil {
+		base = f.Config.GetHTTPClient(ctx)
+	}
+
+	if base, err = SpecialUseAddressGuardHTTPClient(ctx, f.Config, base); err != nil {
+		return nil, err
+	}
+
+	client = backChannelLogoutHTTPClient(base)
+
+	// The caller owns retries, and a log hook would see the secret request.
+	client.RetryMax = 0
+	client.RequestLogHook = nil
+	client.ResponseLogHook = nil
+	client.CheckRetry = func(context.Context, *http.Response, error) (bool, error) { return false, nil }
+
+	return client, nil
 }
 
 func ssfPushRefused(hint string) (result SSFPushResult) {

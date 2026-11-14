@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -21,7 +22,10 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-const defaultJWKSFetcherStrategyCachePrefix = "authelia.com/provider/oauth2.DefaultJWKSFetcherStrategy:"
+const (
+	defaultJWKSFetcherStrategyCachePrefix        = "authelia.com/provider/oauth2.DefaultJWKSFetcherStrategy:"
+	defaultJWKSFetcherStrategyGuardedCachePrefix = "authelia.com/provider/oauth2.DefaultJWKSFetcherStrategy:guarded:"
+)
 
 // DefaultJWKSFetcherStrategy is a default implementation of the jwt.JWKSFetcherStrategy interface.
 type DefaultJWKSFetcherStrategy struct {
@@ -104,7 +108,16 @@ func JWKSFetcherWithHTTPClientSource(clientSourceFunc func(ctx context.Context) 
 // the strategy to fetch the key from the remote, except that a cached location is refreshed at most once per refresh
 // interval. If forceRefresh is false, the strategy may use a caching strategy to fetch the key.
 func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location string, ignoreCache bool) (*jose.JSONWebKeySet, error) {
+	return s.resolve(ctx, location, ignoreCache, nil)
+}
+
+func (s *DefaultJWKSFetcherStrategy) resolve(ctx context.Context, location string, ignoreCache bool, guarded *guardedJWKSFetcherStrategy) (*jose.JSONWebKeySet, error) {
 	cacheKey := defaultJWKSFetcherStrategyCachePrefix + location
+
+	if guarded != nil {
+		cacheKey = defaultJWKSFetcherStrategyGuardedCachePrefix + allowedNetworksKey(guarded.allowed) + ":" + location
+	}
+
 	key, ok := s.cache.Get(cacheKey)
 
 	// A forced refresh follows a key identifier missing from the cached set, which the presenter of an unverified token
@@ -122,6 +135,12 @@ func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 		hc := s.client
 		if s.clientSourceFunc != nil {
 			hc = s.clientSourceFunc(ctx)
+		}
+
+		if guarded != nil {
+			if hc, err = guardedHTTPClient(hc, guarded.allowed); err != nil {
+				return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to fetch JSON Web Keys from location '%s'. Check for typos or other network issues.", location).WithWrap(err).WithDebugError(err))
+			}
 		}
 
 		fetch, cancel := context.WithTimeout(ctx, FetchTimeout)
@@ -153,6 +172,33 @@ func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 	}
 
 	return key, nil
+}
+
+// SpecialUseAddressGuardJWKSFetcherStrategy returns the strategy to fetch a 'jwks_uri' supplied by a client or another
+// party that is not trusted: strategy when the special-use address guard is disabled or strategy is not a
+// *DefaultJWKSFetcherStrategy, as a custom strategy must guard itself, otherwise a strategy which fetches with the HTTP client of strategy guarded by
+// GuardHTTPClient and caches separately from it.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc8725bis-10#section-3.10
+func SpecialUseAddressGuardJWKSFetcherStrategy(ctx context.Context, config any, strategy jwt.JWKSFetcherStrategy) jwt.JWKSFetcherStrategy {
+	if !SpecialUseAddressGuardEnabled(ctx, config) {
+		return strategy
+	}
+
+	if s, ok := strategy.(*DefaultJWKSFetcherStrategy); ok {
+		return &guardedJWKSFetcherStrategy{strategy: s, allowed: allowedNetworkPrefixes(SpecialUseAddressGuardAllowedNetworks(ctx, config))}
+	}
+
+	return strategy
+}
+
+type guardedJWKSFetcherStrategy struct {
+	strategy *DefaultJWKSFetcherStrategy
+	allowed  []netip.Prefix
+}
+
+func (s *guardedJWKSFetcherStrategy) Resolve(ctx context.Context, location string, ignoreCache bool) (*jose.JSONWebKeySet, error) {
+	return s.strategy.resolve(ctx, location, ignoreCache, s)
 }
 
 func (s *DefaultJWKSFetcherStrategy) claimRefresh(location string) bool {

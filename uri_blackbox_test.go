@@ -604,6 +604,114 @@ func TestMatchRedirectURIWithClientRedirectURIsNativeAppLoopback(t *testing.T) {
 	}
 }
 
+func TestGetRedirectURIAuthorizationResponseParameter(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     string
+		expected string
+	}{
+		{name: "ShouldNotFindWithoutQuery", have: "https://client.example.com/cb"},
+		{name: "ShouldNotFindBenignQuery", have: "https://client.example.com/cb?foo=bar"},
+		{name: "ShouldNotFindDifferentCase", have: "https://client.example.com/cb?State=x&ISS=y&Code=z"},
+		{name: "ShouldNotFindPrefixedName", have: "https://client.example.com/cb?state_hint=x&codes=y"},
+		{name: "ShouldNotFindNameInValue", have: "https://client.example.com/cb?foo=state"},
+		{name: "ShouldFindCode", have: "https://client.example.com/cb?code=x", expected: consts.FormParameterAuthorizationCode},
+		{name: "ShouldFindState", have: "https://client.example.com/cb?foo=bar&state=x", expected: consts.FormParameterState},
+		{name: "ShouldFindIssuer", have: "https://client.example.com/cb?iss=x", expected: consts.FormParameterIssuer},
+		{name: "ShouldFindError", have: "https://client.example.com/cb?error=x", expected: consts.FormParameterError},
+		{name: "ShouldFindErrorDescription", have: "https://client.example.com/cb?error_description=x", expected: consts.FormParameterErrorDescription},
+		{name: "ShouldFindErrorURI", have: "https://client.example.com/cb?error_uri=x", expected: consts.FormParameterErrorURI},
+		{name: "ShouldFindAccessToken", have: "https://client.example.com/cb?access_token=x", expected: consts.FormParameterAccessToken},
+		{name: "ShouldFindTokenType", have: "https://client.example.com/cb?token_type=x", expected: consts.AccessResponseTokenType},
+		{name: "ShouldFindExpiresIn", have: "https://client.example.com/cb?expires_in=x", expected: consts.AccessResponseExpiresIn},
+		{name: "ShouldFindScope", have: "https://client.example.com/cb?scope=x", expected: consts.FormParameterScope},
+		{name: "ShouldFindIDToken", have: "https://client.example.com/cb?id_token=x", expected: consts.AccessResponseIDToken},
+		{name: "ShouldFindResponse", have: "https://client.example.com/cb?response=x", expected: consts.FormParameterResponse},
+		{name: "ShouldFindSessionState", have: "https://client.example.com/cb?session_state=x", expected: consts.FormParameterSessionState},
+		{name: "ShouldFindWithoutValue", have: "https://client.example.com/cb?state", expected: consts.FormParameterState},
+		{name: "ShouldFindPercentEncodedName", have: "https://client.example.com/cb?st%61te=x", expected: consts.FormParameterState},
+		{name: "ShouldFindAfterUndecodableName", have: "https://client.example.com/cb?%zz=x&iss=y", expected: consts.FormParameterIssuer},
+		{name: "ShouldFindNativeScheme", have: "com.example.app:/cb?code=x", expected: consts.FormParameterAuthorizationCode},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			uri, err := url.Parse(tc.have)
+			require.NoError(t, err)
+
+			name, found := oauth2.GetRedirectURIAuthorizationResponseParameter(uri)
+
+			assert.Equal(t, tc.expected != "", found)
+			assert.Equal(t, tc.expected, name)
+		})
+	}
+}
+
+func TestGetRedirectURIAuthorizationResponseParameterNil(t *testing.T) {
+	name, found := oauth2.GetRedirectURIAuthorizationResponseParameter(nil)
+
+	assert.False(t, found)
+	assert.Empty(t, name)
+}
+
+func TestMatchRedirectURIWithClientRedirectURIsAuthorizationResponseParameters(t *testing.T) {
+	testCases := []struct {
+		name       string
+		registered []string
+		requested  string
+		expected   string
+		error      string
+	}{
+		{
+			name:       "ShouldMatchBenignQuery",
+			registered: []string{"https://client.example.com/cb?foo=bar"},
+			requested:  "https://client.example.com/cb?foo=bar",
+			expected:   "https://client.example.com/cb?foo=bar",
+		},
+		{
+			name:       "ShouldRejectState",
+			registered: []string{"https://client.example.com/cb?state=reg"},
+			requested:  "https://client.example.com/cb?state=reg",
+			error:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter must not include the 'state' query parameter as it is defined for use in the authorization response. The 'redirect_uri' value 'https://client.example.com/cb?state=reg' registered with OAuth 2.0 Client with id 'client' includes the authorization response parameter 'state'.",
+		},
+		{
+			name:       "ShouldRejectIssuerAmongOthers",
+			registered: []string{"https://client.example.com/other", "https://client.example.com/cb?foo=bar&iss=reg"},
+			requested:  "https://client.example.com/cb?foo=bar&iss=reg",
+			error:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter must not include the 'iss' query parameter as it is defined for use in the authorization response. The 'redirect_uri' value 'https://client.example.com/cb?foo=bar&iss=reg' registered with OAuth 2.0 Client with id 'client' includes the authorization response parameter 'iss'.",
+		},
+		{
+			name:       "ShouldRejectOmittedSingleRegistered",
+			registered: []string{"https://client.example.com/cb?code=reg"},
+			requested:  "",
+			error:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter must not include the 'code' query parameter as it is defined for use in the authorization response. The 'redirect_uri' value 'https://client.example.com/cb?code=reg' registered with OAuth 2.0 Client with id 'client' includes the authorization response parameter 'code'.",
+		},
+		{
+			name:       "ShouldMatchDifferentCase",
+			registered: []string{"https://client.example.com/cb?State=reg"},
+			requested:  "https://client.example.com/cb?State=reg",
+			expected:   "https://client.example.com/cb?State=reg",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &oauth2.DefaultClient{ID: "client", RedirectURIs: tc.registered}
+
+			uri, err := oauth2.MatchRedirectURIWithClientRedirectURIs(tc.requested, client)
+
+			if tc.error == "" {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				assert.Equal(t, tc.expected, uri.String())
+			} else {
+				assert.Nil(t, uri)
+				assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.error)
+			}
+		})
+	}
+}
+
 func TestIsNativeClient(t *testing.T) {
 	testCases := []struct {
 		name     string

@@ -1858,6 +1858,167 @@ func TestAuthorizeRequestFromPARRevalidatesOmittedResponseMode(t *testing.T) {
 	assert.ErrorIs(t, err, ErrUnsupportedResponseMode)
 }
 
+func TestNewAuthorizeRequestRedirectURIAuthorizationResponseParameter(t *testing.T) {
+	testCases := []struct {
+		name       string
+		registered string
+		requested  string
+	}{
+		{name: "ShouldRejectState", registered: "https://foo.bar/cb?state=reg", requested: "https://foo.bar/cb?state=reg"},
+		{name: "ShouldRejectIssuer", registered: "https://foo.bar/cb?iss=reg", requested: "https://foo.bar/cb?iss=reg"},
+		{name: "ShouldRejectCode", registered: "https://foo.bar/cb?foo=bar&code=reg", requested: "https://foo.bar/cb?foo=bar&code=reg"},
+		{name: "ShouldRejectOmittedSingleRegistered", registered: "https://foo.bar/cb?state=reg", requested: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			store := mock.NewMockStorage(ctrl)
+
+			client := &DefaultClient{
+				ID:            "1234",
+				RedirectURIs:  []string{tc.registered},
+				Scopes:        []string{"foo"},
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+			}
+
+			store.EXPECT().GetClient(gomock.Any(), "1234").Return(client, nil)
+
+			query := url.Values{
+				consts.FormParameterClientID:     []string{"1234"},
+				consts.FormParameterResponseType: []string{consts.ResponseTypeAuthorizationCodeFlow},
+				consts.FormParameterScope:        []string{"foo"},
+				consts.FormParameterState:        []string{"strong-enough-state"},
+			}
+
+			if tc.requested != "" {
+				query.Set(consts.FormParameterRedirectURI, tc.requested)
+			}
+
+			provider := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy}}
+
+			r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+			requester, err := provider.NewAuthorizeRequest(context.Background(), r)
+			require.ErrorIs(t, err, ErrInvalidRequest)
+			assert.False(t, requester.IsRedirectURIValid())
+
+			rw := httptest.NewRecorder()
+
+			provider.WriteAuthorizeError(context.Background(), rw, requester, err)
+
+			assert.Equal(t, http.StatusBadRequest, rw.Code)
+			assert.Empty(t, rw.Header().Get(consts.HeaderLocation))
+			assert.Equal(t, consts.ContentTypeApplicationJSON, rw.Header().Get(consts.HeaderContentType))
+		})
+	}
+}
+
+func TestNewAuthorizeRequestRedirectURIBenignQuery(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	store := mock.NewMockStorage(ctrl)
+
+	client := &DefaultClient{
+		ID:            "1234",
+		RedirectURIs:  []string{"https://foo.bar/cb?foo=bar"},
+		Scopes:        []string{"foo"},
+		ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+	}
+
+	store.EXPECT().GetClient(gomock.Any(), "1234").Return(client, nil)
+
+	query := url.Values{
+		consts.FormParameterClientID:     []string{"1234"},
+		consts.FormParameterRedirectURI:  []string{"https://foo.bar/cb?foo=bar"},
+		consts.FormParameterResponseType: []string{consts.ResponseTypeAuthorizationCodeFlow},
+		consts.FormParameterScope:        []string{"foo"},
+		consts.FormParameterState:        []string{"strong-enough-state"},
+	}
+
+	provider := &Fosite{Store: store, Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy}}
+
+	r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+	requester, err := provider.NewAuthorizeRequest(context.Background(), r)
+	require.NoError(t, ErrorToDebugRFC6749Error(err))
+	assert.True(t, requester.IsRedirectURIValid())
+
+	response := NewAuthorizeResponse()
+	response.AddParameter(consts.FormParameterAuthorizationCode, "code-value")
+	response.AddParameter(consts.FormParameterState, "strong-enough-state")
+
+	rw := httptest.NewRecorder()
+
+	provider.WriteAuthorizeResponse(context.Background(), rw, requester, response)
+
+	require.Equal(t, http.StatusSeeOther, rw.Code)
+
+	location, err := url.Parse(rw.Header().Get(consts.HeaderLocation))
+	require.NoError(t, err)
+
+	assert.Equal(t, "https", location.Scheme)
+	assert.Equal(t, "foo.bar", location.Host)
+	assert.Equal(t, "/cb", location.Path)
+	assert.Equal(t, url.Values{
+		"foo":                                 {"bar"},
+		consts.FormParameterAuthorizationCode: {"code-value"},
+		consts.FormParameterState:             {"strong-enough-state"},
+	}, location.Query())
+}
+
+func TestAuthorizeRequestFromPARRejectsRedirectURIAuthorizationResponseParameter(t *testing.T) {
+	const requestURI = "urn:ietf:params:oauth:request_uri:redirecturi"
+
+	redir, _ := url.Parse("https://foo.bar/cb?state=reg")
+
+	client := &DefaultClient{
+		ID:            "foo",
+		RedirectURIs:  []string{"https://foo.bar/cb?state=reg"},
+		Scopes:        []string{"foo"},
+		ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+	}
+
+	par := NewAuthorizeRequest()
+	par.Client = client
+	par.Session = &DefaultSession{ExpiresAt: map[TokenType]time.Time{PushedAuthorizeRequestContext: time.Now().Add(time.Hour)}}
+	par.State = "strong-enough-state"
+	par.RedirectURI = redir
+	par.ResponseTypes = []string{consts.ResponseTypeAuthorizationCodeFlow}
+	par.RequestedScope = []string{"foo"}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStorage := mock.NewMockStorage(ctrl)
+	mockStorage.EXPECT().GetClient(gomock.Any(), "foo").Return(client, nil)
+
+	mockPAR := mock.NewMockPARStorage(ctrl)
+	mockPAR.EXPECT().GetPARSession(gomock.Any(), requestURI).Return(par, nil)
+	mockPAR.EXPECT().DeletePARSession(gomock.Any(), requestURI).Return(nil).AnyTimes()
+
+	provider := &Fosite{
+		Store:  &parStorage{MockStorage: mockStorage, MockPARStorage: mockPAR},
+		Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+	}
+
+	query := url.Values{
+		consts.FormParameterRequestURI: {requestURI},
+		consts.FormParameterClientID:   {"foo"},
+	}
+
+	r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+	requester, err := provider.NewAuthorizeRequest(context.Background(), r)
+	require.ErrorIs(t, err, ErrInvalidRequest)
+
+	rw := httptest.NewRecorder()
+
+	provider.WriteAuthorizeError(context.Background(), rw, requester, err)
+
+	assert.Equal(t, http.StatusBadRequest, rw.Code)
+	assert.Empty(t, rw.Header().Get(consts.HeaderLocation))
+}
+
 type parStorage struct {
 	*mock.MockStorage
 	*mock.MockPARStorage

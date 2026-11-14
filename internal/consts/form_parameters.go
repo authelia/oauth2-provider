@@ -36,6 +36,8 @@ const (
 	FormParameterError                                     = "error"
 	FormParameterErrorHint                                 = "error_hint"
 	FormParameterErrorDescription                          = "error_description"
+	FormParameterErrorURI                                  = "error_uri"
+	FormParameterSessionState                              = "session_state"
 	FormParameterUsername                                  = "username"
 	FormParameterPassword                                  = valuePassword
 	FormParameterAccessToken                               = valueAccessToken

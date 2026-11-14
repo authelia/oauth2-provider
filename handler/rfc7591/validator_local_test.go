@@ -54,6 +54,34 @@ func TestLocalValidator(t *testing.T) {
 			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://example.com/cb#frag' must not contain a fragment component.",
 		},
 		{
+			name: "ShouldRejectRedirectURIWithStateQueryParameter",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://example.com/cb?state=reg"},
+			},
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://example.com/cb?state=reg' must not include the 'state' query parameter as it is defined for use in the authorization response.",
+		},
+		{
+			name: "ShouldRejectRedirectURIWithIssuerQueryParameter",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://example.com/cb", "https://example.com/cb?foo=bar&iss=reg"},
+			},
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'https://example.com/cb?foo=bar&iss=reg' must not include the 'iss' query parameter as it is defined for use in the authorization response.",
+		},
+		{
+			name: "ShouldRejectNativeRedirectURIWithCodeQueryParameter",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				ApplicationType: consts.ApplicationTypeNative,
+				RedirectURIs:    []string{"http://127.0.0.1/cb?code=reg"},
+			},
+			expected: "The value of one or more redirection URIs is invalid. The 'redirect_uris' value 'http://127.0.0.1/cb?code=reg' must not include the 'code' query parameter as it is defined for use in the authorization response.",
+		},
+		{
+			name: "ShouldAcceptRedirectURIWithBenignQuery",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs: []string{"https://example.com/cb?foo=bar&State=x"},
+			},
+		},
+		{
 			name: "ShouldRejectRelativeRedirectURI",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				RedirectURIs: []string{"/cb"},

@@ -509,10 +509,11 @@ func newOIDCKeyBindingProvider(t *testing.T, oidcKeyBindingEnabled bool) (provid
 	}
 
 	config := &oauth2.Config{
-		GlobalSecret:               []byte("oidckb-integration-test-secret-32-bytes"),
-		DPoPEnabled:                true,
-		OIDCKeyBindingEnabled:      oidcKeyBindingEnabled,
-		RFC8628UserVerificationURL: "https://www.authelia.com/device",
+		GlobalSecret:                []byte("oidckb-integration-test-secret-32-bytes"),
+		DPoPEnabled:                 true,
+		OIDCKeyBindingEnabled:       oidcKeyBindingEnabled,
+		RFC8628UserVerificationURL:  "https://www.authelia.com/device",
+		RFC8628TokenPollingInterval: time.Nanosecond,
 	}
 
 	keyGetter := func(context.Context) (any, error) { return idTokenKey, nil }

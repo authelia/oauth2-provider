@@ -61,6 +61,7 @@ func TestDeviceCodeTokenHandlerRejectsApprovalOwnedByAnotherDeviceCode(t *testin
 				session.SetExpiresAt(oauth2.UserCode, time.Now().UTC().Add(time.Hour))
 
 				r := oauth2.NewDeviceAuthorizeRequest()
+				r.RequestedAt = time.Now().UTC().Add(-time.Minute)
 				r.Client = client
 				r.SetSession(session)
 				r.SetDeviceCodeSignature(sig)

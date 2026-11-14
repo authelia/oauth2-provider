@@ -85,6 +85,14 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request 
 		requestedAt = time.Now()
 	}
 
+	// The client waits the interval before each request, the first included, so the device authorization request time
+	// stands in for a poll that has not happened yet.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
+	if last.IsZero() {
+		last = deviceAuthReq.GetRequestedAt()
+	}
+
 	if last.Add(interval).After(requestedAt) {
 		_ = c.UpdateLastChecked(ctx, request, deviceAuthReq)
 		return code, signature, deviceAuthReq, errorsx.WithStack(

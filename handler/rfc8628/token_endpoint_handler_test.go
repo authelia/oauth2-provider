@@ -90,6 +90,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseHMAC(t *testing.T) {
 			setup: func(t *testing.T, requester *oauth2.AccessRequest, config *oauth2.Config) {
 				dar := oauth2.NewDeviceAuthorizeRequest()
 				dar.Merge(requester)
+				dar.RequestedAt = time.Now().UTC().Add(-time.Minute)
 				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 				require.NoError(t, err)
 				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
@@ -129,6 +130,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseHMAC(t *testing.T) {
 
 				dar := oauth2.NewDeviceAuthorizeRequest()
 				dar.Merge(requester)
+				dar.RequestedAt = time.Now().UTC().Add(-time.Minute)
 				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 				require.NoError(t, err)
 				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
@@ -168,6 +170,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseHMAC(t *testing.T) {
 
 				dar := oauth2.NewDeviceAuthorizeRequest()
 				dar.Merge(requester)
+				dar.RequestedAt = time.Now().UTC().Add(-time.Minute)
 				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 				require.NoError(t, err)
 				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
@@ -205,6 +208,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseHMAC(t *testing.T) {
 			setup: func(t *testing.T, requester *oauth2.AccessRequest, config *oauth2.Config) {
 				deviceRequester := oauth2.NewDeviceAuthorizeRequest()
 				deviceRequester.Merge(requester)
+				deviceRequester.RequestedAt = time.Now().UTC().Add(-time.Minute)
 				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 				require.NoError(t, err)
 				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
@@ -399,7 +403,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 					Client:         &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeOAuthDeviceCode}},
 					Session:        &oauth2.DefaultSession{},
 					RequestedScope: oauth2.Arguments{"a", "b"},
-					RequestedAt:    time.Now().UTC(),
+					RequestedAt:    time.Now().UTC().Add(-time.Minute),
 				},
 			},
 			name: "ShouldPass",
@@ -430,6 +434,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			setup: func(t *testing.T, requester *oauth2.AccessRequest, _ *oauth2.DeviceAuthorizeRequest) {
 				device := oauth2.NewDeviceAuthorizeRequest()
+				device.RequestedAt = time.Now().UTC().Add(-time.Minute)
 				device.SetSession(openid.NewDefaultSession())
 				device.GetSession().SetExpiresAt(oauth2.UserCode, time.Now().Add(time.Hour).UTC())
 				device.GetSession().SetExpiresAt(oauth2.DeviceCode, time.Now().Add(time.Hour).UTC())
@@ -461,6 +466,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			setup: func(t *testing.T, requester *oauth2.AccessRequest, _ *oauth2.DeviceAuthorizeRequest) {
 				device := oauth2.NewDeviceAuthorizeRequest()
+				device.RequestedAt = time.Now().UTC().Add(-time.Minute)
 				device.SetSession(openid.NewDefaultSession())
 				device.GetSession().SetExpiresAt(oauth2.UserCode, time.Now().Add(time.Hour).UTC())
 				device.GetSession().SetExpiresAt(oauth2.DeviceCode, time.Now().Add(time.Hour).UTC())
@@ -497,6 +503,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			setup: func(t *testing.T, requester *oauth2.AccessRequest, deviceRequester *oauth2.DeviceAuthorizeRequest) {
 				deviceRequester = oauth2.NewDeviceAuthorizeRequest()
+				deviceRequester.RequestedAt = time.Now().UTC().Add(-time.Minute)
 				deviceRequester.SetSession(openid.NewDefaultSession())
 				deviceRequester.GetSession().SetExpiresAt(oauth2.UserCode, expiredAt)
 				deviceRequester.GetSession().SetExpiresAt(oauth2.DeviceCode, expiredAt)
@@ -529,6 +536,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			setup: func(t *testing.T, requester *oauth2.AccessRequest, _ *oauth2.DeviceAuthorizeRequest) {
 				device := oauth2.NewDeviceAuthorizeRequest()
+				device.RequestedAt = time.Now().UTC().Add(-time.Minute)
 				device.SetSession(openid.NewDefaultSession())
 				device.GetSession().SetExpiresAt(oauth2.UserCode, expiredAt)
 				device.GetSession().SetExpiresAt(oauth2.DeviceCode, expiredAt)
@@ -562,6 +570,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 			},
 			setup: func(t *testing.T, requester *oauth2.AccessRequest, _ *oauth2.DeviceAuthorizeRequest) {
 				device := oauth2.NewDeviceAuthorizeRequest()
+				device.RequestedAt = time.Now().UTC().Add(-time.Minute)
 				device.SetSession(openid.NewDefaultSession())
 				device.GetSession().SetExpiresAt(oauth2.UserCode, expiredAt)
 				device.GetSession().SetExpiresAt(oauth2.DeviceCode, expiredAt)
@@ -619,7 +628,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 			},
 			GrantedScope: oauth2.Arguments{consts.ScopeOffline},
 			Session:      &oauth2.DefaultSession{},
-			RequestedAt:  time.Now().UTC(),
+			RequestedAt:  time.Now().UTC().Add(-time.Minute),
 		},
 		Status: oauth2.DeviceAuthorizeStatusApproved,
 	}
@@ -946,6 +955,7 @@ func TestDeviceAuthorizeCodeConcurrentReplayIsRefusedWithInvalidGrantNotServerEr
 
 	deviceRequester := oauth2.NewDeviceAuthorizeRequest()
 	deviceRequester.Merge(requester)
+	deviceRequester.RequestedAt = time.Now().UTC().Add(-time.Minute)
 
 	dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 	require.NoError(t, err)
@@ -1023,6 +1033,7 @@ func TestDeviceAuthorizeCodeSerializationFailure(t *testing.T) {
 
 				deviceRequester := oauth2.NewDeviceAuthorizeRequest()
 				deviceRequester.Merge(requester)
+				deviceRequester.RequestedAt = time.Now().UTC().Add(-time.Minute)
 				deviceRequester.SetID("req-id")
 
 				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
@@ -1150,6 +1161,7 @@ func TestDeviceAuthorizeCodeConcurrentPollIsAnsweredWithSlowDownNotServerError(t
 
 	deviceRequester := oauth2.NewDeviceAuthorizeRequest()
 	deviceRequester.Merge(requester)
+	deviceRequester.RequestedAt = time.Now().UTC().Add(-2 * time.Minute)
 
 	dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 	require.NoError(t, err)
@@ -1174,6 +1186,78 @@ func TestDeviceAuthorizeCodeConcurrentPollIsAnsweredWithSlowDownNotServerError(t
 	require.Error(t, err)
 
 	assert.Equal(t, oauth2.ErrSlowDown.ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
+}
+
+func TestDeviceAuthorizeCodeFirstPollWaitsForTheInterval(t *testing.T) {
+	testCases := []struct {
+		name        string
+		requestedAt time.Duration
+		expected    *oauth2.RFC6749Error
+	}{
+		{"ShouldSlowDownAFirstPollWithinTheInterval", -time.Second, oauth2.ErrSlowDown},
+		{"ShouldAnswerPendingAFirstPollAfterTheInterval", -2 * time.Minute, oauth2.ErrAuthorizationPending},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &o2hmacshaStrategy
+			store := storage.NewMemoryStore()
+
+			config := &oauth2.Config{
+				ScopeStrategy:               oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:            oauth2.DefaultAudienceStrategy,
+				RFC8628TokenPollingInterval: time.Minute,
+			}
+
+			h := hoauth2.GenericCodeTokenEndpointHandler{
+				CodeTokenEndpointHandler: &DeviceCodeTokenHandler{
+					Strategy: strategy,
+					Storage:  store,
+					Config:   config,
+				},
+				AccessTokenStrategy:    strategy,
+				RefreshTokenStrategy:   strategy,
+				Config:                 config,
+				CoreStorage:            store,
+				TokenRevocationStorage: store,
+			}
+
+			requester := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+				Request: oauth2.Request{
+					Client: &oauth2.DefaultClient{
+						GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode},
+					},
+					Form:        url.Values{},
+					Session:     &oauth2.DefaultSession{},
+					RequestedAt: time.Now().UTC(),
+				},
+			}
+
+			deviceRequester := oauth2.NewDeviceAuthorizeRequest()
+			deviceRequester.Merge(requester)
+			deviceRequester.RequestedAt = time.Now().UTC().Add(tc.requestedAt)
+
+			dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+			require.NoError(t, err)
+
+			_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
+			require.NoError(t, err)
+
+			deviceRequester.SetDeviceCodeSignature(dSig)
+			deviceRequester.SetUserCodeSignature(uSig)
+			deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusNew)
+
+			require.NoError(t, store.CreateDeviceCodeSession(t.Context(), dSig, deviceRequester))
+
+			requester.Form.Add(consts.FormParameterDeviceCode, dCode)
+
+			err = h.HandleTokenEndpointRequest(t.Context(), requester)
+			require.Error(t, err)
+
+			assert.Equal(t, tc.expected.ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
+		})
+	}
 }
 
 func TestDeviceAuthorizeCodeReplayRevokesTheGrant(t *testing.T) {
@@ -1229,6 +1313,7 @@ func TestDeviceAuthorizeCodeReplayRevokesTheGrant(t *testing.T) {
 
 			deviceRequester := oauth2.NewDeviceAuthorizeRequest()
 			deviceRequester.Merge(requester)
+			deviceRequester.RequestedAt = time.Now().UTC().Add(-time.Minute)
 			deviceRequester.SetID("device-req")
 
 			dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
@@ -1372,7 +1457,7 @@ func TestDeviceAuthorizeCode_AccessTokenDeadline(t *testing.T) {
 			deviceRequester := oauth2.NewDeviceAuthorizeRequest()
 			deviceRequester.Client = client
 			deviceRequester.Session = session
-			deviceRequester.RequestedAt = time.Now().UTC()
+			deviceRequester.RequestedAt = time.Now().UTC().Add(-time.Minute)
 			deviceRequester.RequestedScope = oauth2.Arguments{consts.ScopeOffline}
 			deviceRequester.GrantedScope = oauth2.Arguments{consts.ScopeOffline}
 			deviceRequester.SetDeviceCodeSignature(dSig)
@@ -1458,7 +1543,7 @@ func TestDeviceAuthorizeCode_PopulateTokenEndpointResponseKeepsSession(t *testin
 			deviceRequester := oauth2.NewDeviceAuthorizeRequest()
 			deviceRequester.Client = client
 			deviceRequester.Session = tc.session()
-			deviceRequester.RequestedAt = time.Now().UTC()
+			deviceRequester.RequestedAt = time.Now().UTC().Add(-time.Minute)
 			deviceRequester.SetDeviceCodeSignature(dSig)
 			deviceRequester.SetUserCodeSignature(uSig)
 			deviceRequester.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
@@ -1548,7 +1633,7 @@ func TestDeviceAuthorizeCode_RefreshTokenMaximumLifespanSessionWithoutDeadline(t
 			deviceRequester := oauth2.NewDeviceAuthorizeRequest()
 			deviceRequester.Client = client
 			deviceRequester.Session = &deviceSessionWithoutDeadline{Session: &oauth2.DefaultSession{}}
-			deviceRequester.RequestedAt = time.Now().UTC()
+			deviceRequester.RequestedAt = time.Now().UTC().Add(-time.Minute)
 			deviceRequester.RequestedScope = tc.scopes
 			deviceRequester.GrantedScope = tc.scopes
 			deviceRequester.SetDeviceCodeSignature(dSig)

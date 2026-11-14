@@ -5,13 +5,18 @@
 package oauth2
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/netip"
+	"runtime"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
+	"weak"
 
 	"github.com/hashicorp/go-retryablehttp"
 )
@@ -83,6 +88,7 @@ func IsSpecialUseAddress(addr netip.Addr) (special bool) {
 
 type specialUseAddressGuard struct {
 	loopback netip.Addr
+	allowed  []netip.Prefix
 }
 
 // SpecialUseAddressGuardOption configures NewSpecialUseAddressGuardedHTTPClient.
@@ -99,6 +105,44 @@ func WithSpecialUseAddressGuardAllowLoopback(server netip.Addr) SpecialUseAddres
 			guard.loopback = server
 		}
 	}
+}
+
+// WithSpecialUseAddressGuardAllowedNetworks permits connections to an address within any of the given networks, even
+// when it is a special-use address. A nil or invalid network is ignored.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc8725bis-10#section-3.10
+func WithSpecialUseAddressGuardAllowedNetworks(networks ...*net.IPNet) SpecialUseAddressGuardOption {
+	return func(guard *specialUseAddressGuard) {
+		guard.allowed = append(guard.allowed, allowedNetworkPrefixes(networks)...)
+	}
+}
+
+func allowedNetworkPrefixes(networks []*net.IPNet) (prefixes []netip.Prefix) {
+	for _, network := range networks {
+		if network == nil {
+			continue
+		}
+
+		addr, ok := netip.AddrFromSlice(network.IP)
+		if !ok {
+			continue
+		}
+
+		ones, bits := network.Mask.Size()
+		if bits == 0 {
+			continue
+		}
+
+		if addr = addr.Unmap(); addr.Is4() && bits == net.IPv6len*8 {
+			ones -= 96
+		}
+
+		if prefix, err := addr.Prefix(ones); err == nil {
+			prefixes = append(prefixes, prefix)
+		}
+	}
+
+	return prefixes
 }
 
 // NewSpecialUseAddressGuardedHTTPClient returns an HTTP client which refuses to connect to a special-use address. The
@@ -149,10 +193,20 @@ func (g *specialUseAddressGuard) control(network, address string, _ syscall.RawC
 		return fmt.Errorf("%w: '%s' could not be parsed", ErrSpecialUseAddress, address)
 	}
 
-	addr := ap.Addr().Unmap()
+	return g.check(ap.Addr())
+}
+
+func (g *specialUseAddressGuard) check(addr netip.Addr) (err error) {
+	addr = addr.Unmap()
 
 	if g.loopback.IsValid() && addr.WithZone("") == g.loopback {
 		return nil
+	}
+
+	for _, prefix := range g.allowed {
+		if prefix.Contains(addr.WithZone("")) {
+			return nil
+		}
 	}
 
 	if IsSpecialUseAddress(addr) {
@@ -160,4 +214,254 @@ func (g *specialUseAddressGuard) control(network, address string, _ syscall.RawC
 	}
 
 	return nil
+}
+
+func (g *specialUseAddressGuard) checkConn(conn net.Conn) (err error) {
+	if err = g.control("", conn.RemoteAddr().String(), nil); err != nil {
+		_ = conn.Close()
+	}
+
+	return err
+}
+
+type dialContextFunc func(ctx context.Context, network, address string) (net.Conn, error)
+
+func (g *specialUseAddressGuard) dialContext(dial dialContextFunc) dialContextFunc {
+	return func(ctx context.Context, network, address string) (conn net.Conn, err error) {
+		var host, service string
+
+		if host, service, err = net.SplitHostPort(address); err != nil {
+			return nil, fmt.Errorf("%w: '%s' could not be parsed", ErrSpecialUseAddress, address)
+		}
+
+		var port int
+
+		if port, err = net.DefaultResolver.LookupPort(ctx, network, service); err != nil {
+			return nil, err
+		}
+
+		ipNetwork := "ip"
+
+		switch network {
+		case "tcp4", "udp4":
+			ipNetwork = "ip4"
+		case "tcp6", "udp6":
+			ipNetwork = "ip6"
+		}
+
+		var addrs []netip.Addr
+
+		if addrs, err = net.DefaultResolver.LookupNetIP(ctx, ipNetwork, host); err != nil {
+			return nil, err
+		}
+
+		for _, addr := range addrs {
+			if err = g.check(addr); err != nil {
+				return nil, err
+			}
+		}
+
+		var errs []error
+
+		for _, addr := range addrs {
+			if conn, err = dial(ctx, network, netip.AddrPortFrom(addr, uint16(port)).String()); err != nil { //nolint:gosec
+				errs = append(errs, err)
+
+				continue
+			}
+
+			if err = g.checkConn(conn); err != nil {
+				return nil, err
+			}
+
+			return conn, nil
+		}
+
+		if len(errs) == 0 {
+			return nil, fmt.Errorf("the host '%s' did not resolve to an address", host)
+		}
+
+		return nil, errors.Join(errs...)
+	}
+}
+
+func (g *specialUseAddressGuard) dialTLSContext(dial dialContextFunc) dialContextFunc {
+	return func(ctx context.Context, network, address string) (conn net.Conn, err error) {
+		if conn, err = dial(ctx, network, address); err != nil {
+			return nil, err
+		}
+
+		if err = g.checkConn(conn); err != nil {
+			return nil, err
+		}
+
+		return conn, nil
+	}
+}
+
+// GuardHTTPClient returns a copy of base whose transport refuses to connect to a special-use address. A host name is
+// resolved and every address it resolves to is checked before the transport's own dial function is called with each
+// address in turn, and the remote address of the established connection is checked again before any request is sent,
+// as is the connection returned by a custom TLS dial function. The proxy of the transport is ignored. The transport
+// must be a *http.Transport, or nil for http.DefaultTransport. Neither base nor its transport is mutated.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc8725bis-10#section-3.10
+func GuardHTTPClient(base *retryablehttp.Client, opts ...SpecialUseAddressGuardOption) (client *retryablehttp.Client, err error) {
+	if base == nil {
+		return nil, fmt.Errorf("%w: the HTTP client is nil", ErrSpecialUseAddress)
+	}
+
+	guard := &specialUseAddressGuard{}
+
+	for _, opt := range opts {
+		opt(guard)
+	}
+
+	inner := &http.Client{}
+
+	if base.HTTPClient != nil {
+		copied := *base.HTTPClient
+		inner = &copied
+	}
+
+	rt := inner.Transport
+
+	if rt == nil {
+		rt = http.DefaultTransport
+	}
+
+	transport, ok := rt.(*http.Transport)
+	if !ok {
+		return nil, fmt.Errorf("%w: the transport of type '%T' cannot be guarded", ErrSpecialUseAddress, rt)
+	}
+
+	transport = transport.Clone()
+	transport.Proxy = nil
+
+	dial := transport.DialContext
+
+	switch {
+	case dial != nil:
+	case transport.Dial != nil: //nolint:staticcheck
+		legacy := transport.Dial //nolint:staticcheck
+		dial = func(_ context.Context, network, address string) (net.Conn, error) { return legacy(network, address) }
+	default:
+		dial = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	}
+
+	transport.Dial = nil //nolint:staticcheck
+	transport.DialContext = guard.dialContext(dial)
+
+	switch {
+	case transport.DialTLSContext != nil:
+		transport.DialTLSContext = guard.dialTLSContext(transport.DialTLSContext)
+	case transport.DialTLS != nil: //nolint:staticcheck
+		legacy := transport.DialTLS //nolint:staticcheck
+		transport.DialTLSContext = guard.dialTLSContext(func(_ context.Context, network, address string) (net.Conn, error) { return legacy(network, address) })
+	}
+
+	transport.DialTLS = nil //nolint:staticcheck
+	inner.Transport = transport
+
+	return &retryablehttp.Client{
+		HTTPClient:      inner,
+		Logger:          base.Logger,
+		RetryWaitMin:    base.RetryWaitMin,
+		RetryWaitMax:    base.RetryWaitMax,
+		RetryMax:        base.RetryMax,
+		RequestLogHook:  base.RequestLogHook,
+		ResponseLogHook: base.ResponseLogHook,
+		CheckRetry:      base.CheckRetry,
+		Backoff:         base.Backoff,
+		ErrorHandler:    base.ErrorHandler,
+		PrepareRetry:    base.PrepareRetry,
+	}, nil
+}
+
+// SpecialUseAddressGuardProvider returns the provider for disabling the special-use address guard.
+type SpecialUseAddressGuardProvider interface {
+	// GetDisableSpecialUseAddressGuard returns true if a fetch of, or delivery to, a location supplied by a client or
+	// another party that is not trusted may connect to a special-use address. It is refused when this returns false.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc8725bis-10#section-3.10
+	GetDisableSpecialUseAddressGuard(ctx context.Context) (disable bool)
+
+	// GetSpecialUseAddressGuardAllowedNetworks returns the networks the special-use address guard permits a
+	// connection to, even when the address is a special-use address.
+	GetSpecialUseAddressGuardAllowedNetworks(ctx context.Context) (networks []*net.IPNet)
+}
+
+// SpecialUseAddressGuardEnabled reports whether the special-use address guard applies to config, which it does unless
+// config implements SpecialUseAddressGuardProvider and disables it.
+func SpecialUseAddressGuardEnabled(ctx context.Context, config any) (enabled bool) {
+	provider, ok := config.(SpecialUseAddressGuardProvider)
+
+	return !ok || !provider.GetDisableSpecialUseAddressGuard(ctx)
+}
+
+// SpecialUseAddressGuardAllowedNetworks returns the networks config permits the special-use address guard to connect
+// to, or nil when config does not implement SpecialUseAddressGuardProvider.
+func SpecialUseAddressGuardAllowedNetworks(ctx context.Context, config any) (networks []*net.IPNet) {
+	if provider, ok := config.(SpecialUseAddressGuardProvider); ok {
+		return provider.GetSpecialUseAddressGuardAllowedNetworks(ctx)
+	}
+
+	return nil
+}
+
+// SpecialUseAddressGuardHTTPClient returns the HTTP client to fetch, or deliver to, a location supplied by a client or
+// another party that is not trusted: base when the special-use address guard is disabled, otherwise base guarded by
+// GuardHTTPClient with the networks SpecialUseAddressGuardAllowedNetworks returns. The guarded copy of a given base is
+// made once for each set of allowed networks and reused, so it keeps its own connection pool.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc8725bis-10#section-3.10
+func SpecialUseAddressGuardHTTPClient(ctx context.Context, config any, base *retryablehttp.Client) (client *retryablehttp.Client, err error) {
+	if !SpecialUseAddressGuardEnabled(ctx, config) {
+		return base, nil
+	}
+
+	return guardedHTTPClient(base, allowedNetworkPrefixes(SpecialUseAddressGuardAllowedNetworks(ctx, config)))
+}
+
+var guardedHTTPClients sync.Map
+
+type guardedHTTPClientKey struct {
+	base    weak.Pointer[retryablehttp.Client]
+	allowed string
+}
+
+func allowedNetworksKey(allowed []netip.Prefix) string {
+	parts := make([]string, len(allowed))
+
+	for i, prefix := range allowed {
+		parts[i] = prefix.String()
+	}
+
+	return strings.Join(parts, ",")
+}
+
+func guardedHTTPClient(base *retryablehttp.Client, allowed []netip.Prefix) (client *retryablehttp.Client, err error) {
+	opt := func(guard *specialUseAddressGuard) { guard.allowed = allowed }
+
+	if base == nil {
+		return GuardHTTPClient(base, opt)
+	}
+
+	key := guardedHTTPClientKey{base: weak.Make(base), allowed: allowedNetworksKey(allowed)}
+
+	if value, ok := guardedHTTPClients.Load(key); ok {
+		return value.(*retryablehttp.Client), nil
+	}
+
+	if client, err = GuardHTTPClient(base, opt); err != nil {
+		return nil, err
+	}
+
+	value, loaded := guardedHTTPClients.LoadOrStore(key, client)
+
+	if !loaded {
+		runtime.AddCleanup(base, func(key guardedHTTPClientKey) { guardedHTTPClients.Delete(key) }, key)
+	}
+
+	return value.(*retryablehttp.Client), nil
 }

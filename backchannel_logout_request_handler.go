@@ -68,7 +68,12 @@ func (f *Fosite) SendBackChannelLogout(ctx context.Context, requester BackChanne
 	results = make([]BackChannelLogoutResult, len(clients))
 
 	// Constructed once, outside the delivery loop, so every delivery shares a single transport and connection pool.
-	client := backChannelLogoutHTTPClient(f.Config.GetHTTPClient(ctx))
+	var client *retryablehttp.Client
+
+	base, guardErr := SpecialUseAddressGuardHTTPClient(ctx, f.Config, f.Config.GetHTTPClient(ctx))
+	if guardErr == nil {
+		client = backChannelLogoutHTTPClient(base)
+	}
 
 	var guarded *retryablehttp.Client
 
@@ -105,6 +110,10 @@ func (f *Fosite) SendBackChannelLogout(ctx context.Context, requester BackChanne
 				}
 
 				httpClient = guarded
+			} else if guardErr != nil {
+				results[i] = BackChannelLogoutResult{ClientID: c.GetID(), Err: errorsx.WithStack(ErrServerError.WithWrap(guardErr).WithDebugError(guardErr))}
+
+				return
 			}
 
 			results[i] = f.sendBackChannelLogout(ctx, strategy, httpClient, c, subject, sid, extra)

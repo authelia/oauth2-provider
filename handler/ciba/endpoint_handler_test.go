@@ -222,3 +222,22 @@ func TestNewBackChannelAuthenticationResponseShouldRunBindingHandlersFirst(t *te
 	assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 	assert.Empty(t, store.CIBASessions)
 }
+
+func TestEndpointHandlerShouldRejectACustomRequestWithAUserCode(t *testing.T) {
+	store := storage.NewMemoryStore()
+	provider := newProvider(store)
+
+	request := oauth2.NewBackChannelAuthenticationRequest()
+	request.SetID("request-id")
+	request.DeliveryMode = consts.CIBAModePoll
+	request.UserCode = "1234"
+	request.Client = &oauth2.DefaultClient{ID: "client"}
+	request.Session = &oauth2.DefaultSession{Subject: "john"}
+
+	response, err := provider.NewBackChannelAuthenticationResponse(t.Context(), &customDecisionTestRequest{request})
+	assert.ErrorIs(t, err, oauth2.ErrServerError)
+	assert.Nil(t, response)
+
+	_, err = store.GetCIBASessionByRequestID(t.Context(), "request-id", &oauth2.DefaultSession{})
+	assert.ErrorIs(t, err, oauth2.ErrNotFound)
+}

@@ -24,8 +24,8 @@ type DecisionHandler struct {
 	}
 }
 
-// HandleBackChannelAuthenticationDecision stores the decided request. A request another decision has already decided
-// is oauth2.ErrInvalidRequest.
+// HandleBackChannelAuthenticationDecision stores the decided request without its 'user_code'. A request another
+// decision has already decided is oauth2.ErrInvalidRequest.
 func (h *DecisionHandler) HandleBackChannelAuthenticationDecision(ctx context.Context, request oauth2.BackChannelAuthenticationRequester, _ *oauth2.BackChannelAuthenticationDecisionResult) (err error) {
 	switch request.GetStatus() {
 	case oauth2.CIBAStatusApproved, oauth2.CIBAStatusDenied, oauth2.CIBAStatusFailed, oauth2.CIBAStatusExpired:
@@ -33,7 +33,13 @@ func (h *DecisionHandler) HandleBackChannelAuthenticationDecision(ctx context.Co
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The backchannel authentication request has not been decided."))
 	}
 
-	err = h.Storage.DecideCIBASession(ctx, request.GetAuthRequestIDSignature(), request)
+	var stored oauth2.BackChannelAuthenticationRequester
+
+	if stored, err = withoutUserCode(request); err != nil {
+		return err
+	}
+
+	err = h.Storage.DecideCIBASession(ctx, request.GetAuthRequestIDSignature(), stored)
 
 	switch {
 	case err == nil:

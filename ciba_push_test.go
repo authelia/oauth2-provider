@@ -1160,7 +1160,7 @@ func TestPushApproveCommitFailure(t *testing.T) {
 		err    error
 	}{
 		// The memory stores write at once, so the approval persists whatever the commit returns.
-		{name: "ShouldSendTransactionFailedWhenTheApprovalMayHavePersisted", commit: errors.New("connection lost"), notify: true, err: oauth2.ErrServerError},
+		{name: "ShouldReturnTransactionFailedWhenTheApprovalMayHavePersisted", commit: errors.New("connection lost"), notify: true, err: oauth2.ErrServerError},
 		{name: "ShouldSendNothingWhenACompetingDecisionWon", commit: oauth2.ErrSerializationFailure, err: oauth2.ErrInvalidRequest},
 	}
 
@@ -1210,13 +1210,78 @@ func TestPushApproveCommitFailure(t *testing.T) {
 					require.NotNil(t, result)
 					assert.Equal(t, oauth2.CIBAStatusFailed, result.Status)
 					assert.ErrorIs(t, result.IssuanceError, tc.commit)
-					require.Len(t, notifier.notifications, 1)
+					assert.NoError(t, result.DeliveryError)
 
-					body := decodeCIBAPushTestBody(t, notifier.notifications[0])
+					// Storage cannot tell this approval from a competing one, so the caller decides whether to deliver it.
+					assert.Empty(t, notifier.notifications)
+					require.NotNil(t, result.Notification)
+					assert.Equal(t, consts.CIBAModePush, result.Notification.Mode)
+
+					body := decodeCIBAPushTestBody(t, result.Notification)
 					assert.Equal(t, authReqID, body[consts.FormParameterAuthReqID])
 					assert.Equal(t, "transaction_failed", body[consts.FormParameterError])
 				})
 			}
+		})
+	}
+}
+
+func TestPushApproveCommitFailureWithACompetingDecision(t *testing.T) {
+	scopes := oauth2.Arguments{consts.ScopeOpenID, consts.ScopeOffline}
+
+	stores := []struct {
+		name string
+		new  func(tx *mock.MockTransactional) (any, *storage.MemoryStore)
+	}{
+		{"MemoryStore", func(tx *mock.MockTransactional) (any, *storage.MemoryStore) {
+			s := storage.NewMemoryStore()
+
+			return &cibaPushJoinedMemoryStore{MemoryStore: s, MockTransactional: tx}, s
+		}},
+		{"HydratingMemoryStore", func(tx *mock.MockTransactional) (any, *storage.MemoryStore) {
+			s := storage.NewHydratingMemoryStore()
+
+			return &cibaPushJoinedHydratingStore{HydratingMemoryStore: s, MockTransactional: tx}, s.MemoryStore
+		}},
+	}
+
+	for _, sc := range stores {
+		t.Run(sc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			tx := mock.NewMockTransactional(ctrl)
+			tx.EXPECT().BeginTX(gomock.Any()).DoAndReturn(func(ctx context.Context) (context.Context, error) { return ctx, nil }).Times(1)
+			tx.EXPECT().Rollback(gomock.Any()).Times(0)
+
+			store, memory := sc.new(tx)
+			notifier := &recordingBackChannelNotifier{}
+			provider := newCIBAPushTestProvider(t, store, memory, notifier)
+
+			newCIBAPushTestRequest(t, provider, scopes)
+
+			competing := loadCIBAPushTestRequest(t, provider, nil)
+			signature := competing.GetAuthRequestIDSignature()
+			pending := memory.CIBASessions[signature]
+
+			// The commit fails without persisting the approval, and a competing denial is recorded before the failure is.
+			tx.EXPECT().Commit(gomock.Any()).DoAndReturn(func(ctx context.Context) error {
+				memory.CIBASessions[signature] = pending
+				delete(memory.InvalidatedCIBASessions, signature)
+
+				competing.SetStatus(oauth2.CIBAStatusDenied)
+				require.NoError(t, store.(ciba.Storage).DecideCIBASession(ctx, signature, competing))
+
+				return errors.New("connection lost")
+			}).Times(1)
+
+			result, err := provider.ApproveBackChannelAuthentication(t.Context(), loadCIBAPushTestRequest(t, provider, scopes), newCIBAPushTestApproval())
+			assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+			assert.Nil(t, result)
+			assert.Empty(t, notifier.notifications)
+
+			stored, err := store.(ciba.Storage).GetCIBASessionByRequestID(t.Context(), cibaPushTestRequestID, openid.NewDefaultSession())
+			require.NoError(t, err)
+			assert.Equal(t, oauth2.CIBAStatusDenied, stored.GetStatus())
 		})
 	}
 }

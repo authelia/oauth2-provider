@@ -162,8 +162,11 @@ func (f *Fosite) failBackChannelAuthenticationPush(ctx context.Context, request 
 // failBackChannelAuthenticationPushCommit handles a failed commit of a push approval. A commit which failed with
 // ErrSerializationFailure persisted nothing, so it is handled as any issuance failure is, and a request a competing
 // decision has decided sends nothing. Any other failed commit may have persisted the approval, which rejects recording
-// the failure as already decided: the client is then still sent 'transaction_failed', as its tokens are never
-// delivered, and the result is returned with ErrServerError, as the stored request may remain approved.
+// the failure as already decided. A stored request which is then not approved was decided by a competing decision, so
+// nothing is sent. A stored approval is either this approval, whose tokens are never delivered, or a competing
+// approval which delivered its own, which storage cannot tell apart: the 'transaction_failed' notification is then set
+// on the result but not delivered, and the result is returned with ErrServerError for the caller to deliver or discard
+// it.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.12
 func (f *Fosite) failBackChannelAuthenticationPushCommit(ctx context.Context, request BackChannelAuthenticationRequester, restored Session, commitErr error) (result *BackChannelAuthenticationDecisionResult, err error) {
@@ -173,11 +176,33 @@ func (f *Fosite) failBackChannelAuthenticationPushCommit(ctx context.Context, re
 		return result, err
 	}
 
+	// The approval this commit may have persisted is the only decision recording CIBAStatusApproved for this request
+	// unless a competing approval won; any other recorded status is a competing decision.
+	if f.storedBackChannelAuthenticationStatus(ctx, request, restored) != CIBAStatusApproved {
+		return nil, err
+	}
+
 	result = &BackChannelAuthenticationDecisionResult{Status: CIBAStatusFailed, IssuanceError: commitErr}
 
-	f.notifyBackChannelPushError(ctx, request, result, ErrTransactionFailed, true)
+	f.notifyBackChannelPushError(ctx, request, result, ErrTransactionFailed, false)
 
-	return result, errorsx.WithStack(ErrServerError.WithWrap(commitErr).WithDebugf("The commit of the approval of the backchannel authentication request failed and may have persisted it, so it could not be recorded as failed: %s", backChannelIssuanceFailureCause(commitErr)))
+	return result, errorsx.WithStack(ErrServerError.WithWrap(commitErr).WithDebugf("The commit of the approval of the backchannel authentication request failed and either persisted it or a competing approval was recorded, so the 'transaction_failed' notification was not delivered: %s", backChannelIssuanceFailureCause(commitErr)))
+}
+
+// storedBackChannelAuthenticationStatus returns the stored status of request, which is CIBAStatusApproved when it
+// cannot be read, as the approval of the caller may then have persisted.
+func (f *Fosite) storedBackChannelAuthenticationStatus(ctx context.Context, request BackChannelAuthenticationRequester, restored Session) (status CIBAStatus) {
+	storage, ok := f.Store.(CIBADecisionStorage)
+	if !ok {
+		return CIBAStatusApproved
+	}
+
+	stored, err := storage.GetCIBASessionByRequestID(ctx, request.GetID(), restored.Clone())
+	if (err != nil && !errors.Is(err, ErrInvalidatedCIBASession)) || reflection.IsNil(stored) {
+		return CIBAStatusApproved
+	}
+
+	return stored.GetStatus()
 }
 
 // notifyBackChannelPushError builds the push error notification for the request and, when deliver is true, sends it.

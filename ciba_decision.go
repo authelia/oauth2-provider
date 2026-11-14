@@ -108,9 +108,13 @@ func (f *Fosite) NewBackChannelAuthenticationDecisionRequest(ctx context.Context
 //   - A request another decision has already decided, such as a concurrent approval which won, is ErrInvalidRequest
 //     ("already decided") and sends nothing.
 //   - When the commit of the approval fails with an error other than ErrSerializationFailure, the approval may have
-//     persisted. If it did, the failure cannot be recorded; the client is still sent 'transaction_failed', and the
-//     result, with the Status CIBAStatusFailed, is returned with ErrServerError wrapping the commit error, as the
-//     stored request may remain approved with no tokens delivered.
+//     persisted, so the failure may not be recordable. A competing denial, failure or expiry recorded instead sends
+//     nothing and is ErrInvalidRequest ("already decided"). A recorded approval is either this approval, which then
+//     remains approved with no tokens delivered, or a competing approval which delivered its tokens: the
+//     'transaction_failed' notification is set as the Notification of the result, with the Status CIBAStatusFailed,
+//     but not delivered, and the result is returned with ErrServerError wrapping the commit error. The caller MUST
+//     deliver the notification through its BackChannelNotifier only if it ran no competing approval of the request,
+//     and otherwise discard it.
 //   - When ctx carries an enclosing transaction begun with storage.JoinOrBeginTx, a failure is returned as the error
 //     for the caller to roll back, and nothing is sent. On success the token notification, or the ping notification of
 //     a ping request, is set as the Notification of the result but not delivered: the caller MUST deliver it through its BackChannelNotifier after it commits, and

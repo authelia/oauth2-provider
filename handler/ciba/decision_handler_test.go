@@ -59,6 +59,7 @@ func TestDecisionHandlerShouldRecordTheDecision(t *testing.T) {
 
 					decided := newDecisionTestRequest(status)
 					decided.Session = &oauth2.DefaultSession{Subject: "john", Username: "approved"}
+					decided.UserCode = "1234"
 
 					require.NoError(t, handler.HandleBackChannelAuthenticationDecision(t.Context(), decided, &oauth2.BackChannelAuthenticationDecisionResult{}))
 
@@ -67,6 +68,8 @@ func TestDecisionHandlerShouldRecordTheDecision(t *testing.T) {
 
 					assert.Equal(t, status, stored.GetStatus())
 					assert.Equal(t, "approved", stored.GetSession().GetUsername())
+					assert.Empty(t, stored.GetUserCode())
+					assert.Equal(t, "1234", decided.UserCode)
 
 					err = handler.HandleBackChannelAuthenticationDecision(t.Context(), newDecisionTestRequest(status), &oauth2.BackChannelAuthenticationDecisionResult{})
 					require.Error(t, err)
@@ -115,4 +118,31 @@ func statusName(status oauth2.CIBAStatus) string {
 	default:
 		return "Pending"
 	}
+}
+
+// customDecisionTestRequest is a custom oauth2.BackChannelAuthenticationRequester.
+type customDecisionTestRequest struct {
+	*oauth2.BackChannelAuthenticationRequest
+}
+
+func TestDecisionHandlerShouldRejectACustomRequestWithAUserCode(t *testing.T) {
+	store := storage.NewMemoryStore()
+
+	require.NoError(t, store.CreateCIBASession(t.Context(), "signature", newDecisionTestRequest(oauth2.CIBAStatusPending)))
+
+	decided := newDecisionTestRequest(oauth2.CIBAStatusApproved)
+	decided.UserCode = "1234"
+
+	handler := &ciba.DecisionHandler{Storage: store}
+
+	err := handler.HandleBackChannelAuthenticationDecision(t.Context(), &customDecisionTestRequest{decided}, &oauth2.BackChannelAuthenticationDecisionResult{})
+	assert.ErrorIs(t, err, oauth2.ErrServerError)
+
+	stored, err := store.GetCIBASession(t.Context(), "signature", &oauth2.DefaultSession{})
+	require.NoError(t, err)
+	assert.Equal(t, oauth2.CIBAStatusPending, stored.GetStatus())
+
+	decided.UserCode = ""
+
+	require.NoError(t, handler.HandleBackChannelAuthenticationDecision(t.Context(), &customDecisionTestRequest{decided}, &oauth2.BackChannelAuthenticationDecisionResult{}))
 }

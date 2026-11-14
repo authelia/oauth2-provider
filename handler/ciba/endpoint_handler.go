@@ -57,7 +57,13 @@ func (h *EndpointHandler) HandleBackChannelAuthenticationEndpointRequest(ctx con
 
 	request.GetSession().SetExpiresAt(oauth2.CIBAAuthRequestID, time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision))
 
-	if err = h.Storage.CreateCIBASession(ctx, signature, withoutUserCode(request)); err != nil {
+	var stored oauth2.BackChannelAuthenticationRequester
+
+	if stored, err = withoutUserCode(request); err != nil {
+		return err
+	}
+
+	if err = h.Storage.CreateCIBASession(ctx, signature, stored); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -73,20 +79,25 @@ func (h *EndpointHandler) HandleBackChannelAuthenticationEndpointRequest(ctx con
 	return nil
 }
 
-// withoutUserCode returns a copy of request without the 'user_code', which the application verified before the request
-// is stored and which is a credential of the end user, so it is never persisted.
+// withoutUserCode returns request, or a copy of it without the 'user_code', which the application verified before the
+// request is stored and which is a credential of the end user, so it is never persisted. A custom requester carrying a
+// 'user_code' cannot be copied without it, so it is oauth2.ErrServerError.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.1
-func withoutUserCode(request oauth2.BackChannelAuthenticationRequester) oauth2.BackChannelAuthenticationRequester {
-	req, ok := request.(*oauth2.BackChannelAuthenticationRequest)
-	if !ok || req.UserCode == "" {
-		return request
+func withoutUserCode(request oauth2.BackChannelAuthenticationRequester) (stored oauth2.BackChannelAuthenticationRequester, err error) {
+	if request.GetUserCode() == "" {
+		return request, nil
 	}
 
-	stored := *req
-	stored.UserCode = ""
+	req, ok := request.(*oauth2.BackChannelAuthenticationRequest)
+	if !ok {
+		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("The backchannel authentication request carries a 'user_code' but is not a *oauth2.BackChannelAuthenticationRequest, so it cannot be stored without it."))
+	}
 
-	return &stored
+	clone := *req
+	clone.UserCode = ""
+
+	return &clone, nil
 }
 
 func ceilSeconds(d time.Duration) time.Duration {

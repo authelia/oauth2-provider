@@ -62,11 +62,14 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 		deviceRequester oauth2.Requester
 	)
 
-	if code, _, deviceRequester, err = c.GetCodeAndSession(ctx, request); errors.Is(err, oauth2.ErrInvalidatedDeviceCode) || errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode) {
+	code, _, deviceRequester, err = c.GetCodeAndSession(ctx, request)
+
+	switch {
+	case isInvalidatedCode(err):
 		if deviceRequester == nil {
 			return oauth2.ErrServerError.
 				WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
-				WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode" or "ErrInvalidatedDeviceCode".`)
+				WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode", "ErrInvalidatedDeviceCode" or "ErrInvalidatedCIBASession".`)
 		}
 
 		if verr := c.ValidateCodeAndSession(ctx, request, deviceRequester, code); !IsIntactToken(verr) {
@@ -81,13 +84,11 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 		}
 
 		return revokeCodeGrant(ctx, c.TokenRevocationStorage, deviceRequester.GetID())
-	} else if errors.Is(err, oauth2.ErrAuthorizationPending) || errors.Is(err, oauth2.ErrAccessDenied) ||
-		errors.Is(err, oauth2.ErrDeviceExpiredToken) || errors.Is(err, oauth2.ErrSlowDown) ||
-		errors.Is(err, oauth2.ErrInvalidGrant) {
+	case isPassThroughCodeError(err):
 		return errorsx.WithStack(err)
-	} else if errors.Is(err, oauth2.ErrNotFound) {
+	case errors.Is(err, oauth2.ErrNotFound):
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
-	} else if err != nil {
+	case err != nil:
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -145,8 +146,11 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 
 	gt := oauth2.GrantTypeAuthorizationCode
 
-	if request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode)) {
+	switch {
+	case request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode)):
 		gt = oauth2.GrantTypeDeviceCode
+	case request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeCIBA)):
+		gt = oauth2.GrantTypeCIBA
 	}
 
 	var lifespan time.Duration
@@ -183,7 +187,25 @@ func (c *GenericCodeTokenEndpointHandler) isCodeInvalidated(ctx context.Context,
 
 	request.SetSession(session)
 
-	return errors.Is(err, oauth2.ErrInvalidatedDeviceCode) || errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode)
+	return isInvalidatedCode(err)
+}
+
+// isInvalidatedCode reports whether err shows the code was already redeemed.
+func isInvalidatedCode(err error) bool {
+	return errors.Is(err, oauth2.ErrInvalidatedDeviceCode) || errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode) ||
+		errors.Is(err, oauth2.ErrInvalidatedCIBASession)
+}
+
+// isPassThroughCodeError reports whether err is an answer to the client which CodeTokenEndpointHandler.GetCodeAndSession
+// returns as is, rather than a failure answered as a server error.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.11
+func isPassThroughCodeError(err error) bool {
+	return errors.Is(err, oauth2.ErrAuthorizationPending) || errors.Is(err, oauth2.ErrAccessDenied) ||
+		errors.Is(err, oauth2.ErrDeviceExpiredToken) || errors.Is(err, oauth2.ErrSlowDown) ||
+		errors.Is(err, oauth2.ErrInvalidGrant) || errors.Is(err, oauth2.ErrTransactionFailed) ||
+		errors.Is(err, oauth2.ErrInvalidRequest) || errors.Is(err, oauth2.ErrUnauthorizedClient)
 }
 
 // PopulateTokenEndpointResponse handles populating the access response.
@@ -214,17 +236,15 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 
 	if err != nil {
 		switch {
-		case errors.Is(err, oauth2.ErrInvalidatedDeviceCode), errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode):
+		case isInvalidatedCode(err):
 			if ar == nil {
 				return errorsx.WithStack(oauth2.ErrServerError.
 					WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
-					WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode" or "ErrInvalidatedDeviceCode".`))
+					WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode", "ErrInvalidatedDeviceCode" or "ErrInvalidatedCIBASession".`))
 			}
 
 			return revokeCodeGrant(ctx, c.TokenRevocationStorage, ar.GetID())
-		case errors.Is(err, oauth2.ErrAuthorizationPending), errors.Is(err, oauth2.ErrAccessDenied),
-			errors.Is(err, oauth2.ErrDeviceExpiredToken), errors.Is(err, oauth2.ErrSlowDown),
-			errors.Is(err, oauth2.ErrInvalidGrant):
+		case isPassThroughCodeError(err):
 			return errorsx.WithStack(err)
 		case errors.Is(err, oauth2.ErrNotFound):
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
@@ -265,16 +285,20 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		}
 	}
 
-	var replayed bool
+	var (
+		replayed, owned bool
+	)
 
 	parent := ctx
 
-	if ctx, err = storage.MaybeBeginTx(ctx, c.CoreStorage); err != nil {
+	if ctx, owned, err = storage.JoinOrBeginTx(ctx, c.CoreStorage); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
+	// A joined transaction is finished by its owner, which rolls back on the returned error, so neither the rollback nor
+	// the revocation of a replayed grant happens here.
 	defer func() {
-		if err != nil {
+		if err != nil && owned {
 			if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.CoreStorage); rollBackTxnErr != nil {
 				err = errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("error: %s; rollback error: %s", err, rollBackTxnErr))
 			} else if replayed || (errors.Is(err, oauth2.ErrSerializationFailure) && c.isCodeInvalidated(parent, request)) {
@@ -283,7 +307,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		}
 	}()
 
-	if err = c.InvalidateSession(ctx, signature, ar); errors.Is(err, oauth2.ErrInvalidatedDeviceCode) || errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode) {
+	if err = c.InvalidateSession(ctx, signature, ar); isInvalidatedCode(err) {
 		replayed = true
 
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
@@ -308,8 +332,11 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 
 	gt := oauth2.GrantTypeAuthorizationCode
 
-	if request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode)) {
+	switch {
+	case request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeDeviceCode)):
 		gt = oauth2.GrantTypeDeviceCode
+	case request.GetGrantTypes().ExactOne(string(oauth2.GrantTypeCIBA)):
+		gt = oauth2.GrantTypeCIBA
 	}
 
 	response.SetAccessToken(access)
@@ -321,6 +348,10 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 
 	if refresh != "" {
 		response.SetExtra(consts.AccessResponseRefreshToken, refresh)
+	}
+
+	if !owned {
+		return nil
 	}
 
 	if err = storage.MaybeCommitTx(ctx, c.CoreStorage); err != nil {

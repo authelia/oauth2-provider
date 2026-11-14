@@ -150,6 +150,12 @@ func (s *DefaultClientRegistrationStrategy) MetadataFromClient(ctx context.Conte
 		BackChannelLogoutURI:             registered.BackChannelLogoutURI,
 		BackChannelLogoutSessionRequired: registered.BackChannelLogoutSessionRequired,
 
+		BackChannelTokenDeliveryMode:               registered.BackChannelTokenDeliveryMode,
+		BackChannelClientNotificationEndpoint:      registered.BackChannelClientNotificationEndpoint,
+		BackChannelAuthenticationRequestSigningAlg: registered.BackChannelAuthenticationRequestSigningAlg,
+		BackChannelUserCodeParameter:               registered.BackChannelUserCodeParameter,
+		BackChannelEndpointLoginHintTokenTypes:     registered.BackChannelEndpointLoginHintTokenTypes,
+
 		TokenExchangeSubjectTokenTypes:  registered.TokenExchangeSubjectTokenTypes,
 		TokenExchangeActorTokenTypes:    registered.TokenExchangeActorTokenTypes,
 		TokenExchangeRequestTokenTypes:  registered.TokenExchangeRequestTokenTypes,
@@ -256,6 +262,12 @@ func (s *DefaultClientRegistrationStrategy) apply(registered *oauth2.DefaultRegi
 	registered.PostLogoutRedirectURIs = metadata.PostLogoutRedirectURIs
 	registered.BackChannelLogoutURI = metadata.BackChannelLogoutURI
 	registered.BackChannelLogoutSessionRequired = metadata.BackChannelLogoutSessionRequired
+
+	registered.BackChannelTokenDeliveryMode = metadata.BackChannelTokenDeliveryMode
+	registered.BackChannelClientNotificationEndpoint = metadata.BackChannelClientNotificationEndpoint
+	registered.BackChannelAuthenticationRequestSigningAlg = metadata.BackChannelAuthenticationRequestSigningAlg
+	registered.BackChannelUserCodeParameter = metadata.BackChannelUserCodeParameter
+	registered.BackChannelEndpointLoginHintTokenTypes = metadata.BackChannelEndpointLoginHintTokenTypes
 
 	registered.TLSClientAuthSubjectDN = metadata.TLSClientAuthSubjectDN
 	registered.TLSClientAuthSANDNS = metadata.TLSClientAuthSANDNS

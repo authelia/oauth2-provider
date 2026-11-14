@@ -12,7 +12,7 @@ import "context"
 // device authorization request fails with unmet_authentication_requirements before any handler runs, so the decision
 // is not recorded and the user code can be approved again after the End-User authenticates as required.
 func (f *Fosite) NewRFC8628UserAuthorizeResponse(ctx context.Context, requester DeviceAuthorizeRequester, session Session) (responder DeviceUserAuthorizeResponder, err error) {
-	carryRFC8628SessionBinding(requester.GetSession(), session)
+	carrySessionBinding(requester.GetSession(), session)
 
 	requester.SetSession(session)
 
@@ -33,41 +33,4 @@ func (f *Fosite) NewRFC8628UserAuthorizeResponse(ctx context.Context, requester 
 	}
 
 	return responder, nil
-}
-
-// carryRFC8628SessionBinding copies the proof-of-possession bindings the device authorization endpoint recorded onto
-// the session that replaces it here. A restored binding wins over one the replacement already carries, as it is the
-// key the client committed to with 'dpop_jkt'.
-func carryRFC8628SessionBinding(restored, session Session) {
-	if restored == nil || session == nil {
-		return
-	}
-
-	if from, ok := restored.(DPoPBoundSession); ok {
-		if to, ok := session.(DPoPBoundSession); ok {
-			if jkt := from.GetDPoPJWKThumbprint(); jkt != "" {
-				to.SetDPoPJWKThumbprint(jkt)
-			}
-
-			if jkt := from.GetRequestedDPoPJWKThumbprint(); jkt != "" {
-				to.SetRequestedDPoPJWKThumbprint(jkt)
-			}
-
-			if jwk := from.GetDPoPPublicKeyJWK(); len(jwk) != 0 {
-				to.SetDPoPPublicKeyJWK(jwk)
-			}
-
-			if from.GetOIDCKeyBindingGranted() {
-				to.SetOIDCKeyBindingGranted(true)
-			}
-		}
-	}
-
-	if from, ok := restored.(MTLSBoundSession); ok {
-		if to, ok := session.(MTLSBoundSession); ok {
-			if x5t := from.GetClientCertificateSHA256Thumbprint(); x5t != "" {
-				to.SetClientCertificateSHA256Thumbprint(x5t)
-			}
-		}
-	}
 }

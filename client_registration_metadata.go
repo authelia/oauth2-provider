@@ -80,6 +80,16 @@ type ClientRegistrationMetadata struct {
 	BackChannelLogoutURI             string   `json:"backchannel_logout_uri,omitempty"`
 	BackChannelLogoutSessionRequired bool     `json:"backchannel_logout_session_required,omitempty"`
 
+	// OpenID Connect CIBA Core 1.0 client metadata.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.4
+
+	BackChannelTokenDeliveryMode               string   `json:"backchannel_token_delivery_mode,omitempty"`
+	BackChannelClientNotificationEndpoint      string   `json:"backchannel_client_notification_endpoint,omitempty"`
+	BackChannelAuthenticationRequestSigningAlg string   `json:"backchannel_authentication_request_signing_alg,omitempty"`
+	BackChannelUserCodeParameter               bool     `json:"backchannel_user_code_parameter,omitempty"`
+	BackChannelEndpointLoginHintTokenTypes     []string `json:"backchannel_endpoint_login_hint_token_types,omitempty"`
+
 	// RFC 8693 (OAuth 2.0 Token Exchange) client metadata. Each is a restriction: an empty value applies no
 	// restriction, which is how a client that expresses none behaves.
 	//

@@ -502,6 +502,53 @@ type BackChannelLogoutClient interface {
 	GetBackChannelLogoutSessionRequired() (required bool)
 }
 
+// CIBAClient is a Client which has registered the OpenID Connect CIBA client metadata.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.4
+type CIBAClient interface {
+	Client
+
+	// GetBackChannelTokenDeliveryMode returns the 'backchannel_token_delivery_mode' client metadata value: poll,
+	// ping or push.
+	GetBackChannelTokenDeliveryMode() (mode string)
+
+	// GetBackChannelClientNotificationEndpoint returns the 'backchannel_client_notification_endpoint' client
+	// metadata value, required for the ping and push modes. The OP SHOULD ensure the endpoint is in the administrative
+	// authority of the client.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.14
+	GetBackChannelClientNotificationEndpoint() (endpoint string)
+
+	// GetBackChannelAuthenticationRequestSigningAlg returns the 'backchannel_authentication_request_signing_alg'
+	// client metadata value.
+	GetBackChannelAuthenticationRequestSigningAlg() (alg string)
+
+	// GetBackChannelUserCodeParameter returns the 'backchannel_user_code_parameter' client metadata value.
+	GetBackChannelUserCodeParameter() (supported bool)
+}
+
+// CIBALoginHintTokenTypesClient is a Client which has registered the login_hint_token types it uses at the
+// backchannel authentication endpoint.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.4
+type CIBALoginHintTokenTypesClient interface {
+	Client
+
+	// GetBackChannelEndpointLoginHintTokenTypes returns the 'backchannel_endpoint_login_hint_token_types' client
+	// metadata value.
+	GetBackChannelEndpointLoginHintTokenTypes() (types []string)
+}
+
+// GetCIBADeliveryMode returns the client's CIBA token delivery mode, or an empty string when the client is not a
+// CIBAClient.
+func GetCIBADeliveryMode(client Client) (mode string) {
+	if c, ok := client.(CIBAClient); ok {
+		return c.GetBackChannelTokenDeliveryMode()
+	}
+
+	return ""
+}
+
 // JWTProfileClient represents a client with can handle RFC9068 responses; i.e. the JWT Profile for OAuth 2.0 Access
 // Tokens.
 type JWTProfileClient interface {
@@ -781,6 +828,16 @@ type DefaultBackChannelLogoutClient struct {
 	*DefaultClient
 }
 
+type DefaultCIBAClient struct {
+	BackChannelTokenDeliveryMode               string   `json:"backchannel_token_delivery_mode"`
+	BackChannelClientNotificationEndpoint      string   `json:"backchannel_client_notification_endpoint"`
+	BackChannelAuthenticationRequestSigningAlg string   `json:"backchannel_authentication_request_signing_alg"`
+	BackChannelUserCodeParameter               bool     `json:"backchannel_user_code_parameter"`
+	BackChannelEndpointLoginHintTokenTypes     []string `json:"backchannel_endpoint_login_hint_token_types"`
+
+	*DefaultClient
+}
+
 // DefaultMTLSClient registers the RFC 8705 Section 2.1.2 certificate subject metadata required by the
 // 'tls_client_auth' method.
 //
@@ -1001,6 +1058,31 @@ func (c *DefaultBackChannelLogoutClient) GetBackChannelLogoutSessionRequired() (
 	return c.BackChannelLogoutSessionRequired
 }
 
+// GetBackChannelTokenDeliveryMode returns the 'backchannel_token_delivery_mode' client metadata value.
+func (c *DefaultCIBAClient) GetBackChannelTokenDeliveryMode() (mode string) {
+	return c.BackChannelTokenDeliveryMode
+}
+
+// GetBackChannelClientNotificationEndpoint returns the 'backchannel_client_notification_endpoint' client metadata value.
+func (c *DefaultCIBAClient) GetBackChannelClientNotificationEndpoint() (endpoint string) {
+	return c.BackChannelClientNotificationEndpoint
+}
+
+// GetBackChannelAuthenticationRequestSigningAlg returns the 'backchannel_authentication_request_signing_alg' client metadata value.
+func (c *DefaultCIBAClient) GetBackChannelAuthenticationRequestSigningAlg() (alg string) {
+	return c.BackChannelAuthenticationRequestSigningAlg
+}
+
+// GetBackChannelUserCodeParameter returns the 'backchannel_user_code_parameter' client metadata value.
+func (c *DefaultCIBAClient) GetBackChannelUserCodeParameter() (supported bool) {
+	return c.BackChannelUserCodeParameter
+}
+
+// GetBackChannelEndpointLoginHintTokenTypes returns the 'backchannel_endpoint_login_hint_token_types' client metadata value.
+func (c *DefaultCIBAClient) GetBackChannelEndpointLoginHintTokenTypes() (types []string) {
+	return c.BackChannelEndpointLoginHintTokenTypes
+}
+
 // GetTLSClientAuthSubjectDN returns the 'tls_client_auth_subject_dn' client metadata value.
 func (c *DefaultMTLSClient) GetTLSClientAuthSubjectDN() string {
 	return c.TLSClientAuthSubjectDN
@@ -1027,13 +1109,15 @@ func (c *DefaultMTLSClient) GetTLSClientAuthSANEmail() string {
 }
 
 var (
-	_ Client                      = (*DefaultClient)(nil)
-	_ ResponseModeClient          = (*DefaultResponseModeClient)(nil)
-	_ JARClient                   = (*DefaultJARClient)(nil)
-	_ RequestObjectLifetimeClient = (*DefaultJARClient)(nil)
-	_ RPInitiatedLogoutClient     = (*DefaultRPInitiatedLogoutClient)(nil)
-	_ BackChannelLogoutClient     = (*DefaultBackChannelLogoutClient)(nil)
-	_ TLSClientAuthClient         = (*DefaultMTLSClient)(nil)
-	_ MTLSClient                  = (*DefaultMTLSClient)(nil)
-	_ AuthenticationMethodClient  = (*DefaultMTLSClient)(nil)
+	_ Client                        = (*DefaultClient)(nil)
+	_ ResponseModeClient            = (*DefaultResponseModeClient)(nil)
+	_ JARClient                     = (*DefaultJARClient)(nil)
+	_ RequestObjectLifetimeClient   = (*DefaultJARClient)(nil)
+	_ RPInitiatedLogoutClient       = (*DefaultRPInitiatedLogoutClient)(nil)
+	_ BackChannelLogoutClient       = (*DefaultBackChannelLogoutClient)(nil)
+	_ CIBAClient                    = (*DefaultCIBAClient)(nil)
+	_ CIBALoginHintTokenTypesClient = (*DefaultCIBAClient)(nil)
+	_ TLSClientAuthClient           = (*DefaultMTLSClient)(nil)
+	_ MTLSClient                    = (*DefaultMTLSClient)(nil)
+	_ AuthenticationMethodClient    = (*DefaultMTLSClient)(nil)
 )

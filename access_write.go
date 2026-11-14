@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/reflection"
 )
 
 // WriteAccessResponse writes the successful token endpoint response per RFC 6749 section 5.1 as JSON with the required
@@ -41,13 +42,17 @@ func (f *Fosite) WriteAccessResponse(ctx context.Context, rw http.ResponseWriter
 // issued when nonces are required, as each one issued is persisted for the nonce lifespan.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9449#section-4.3
-func (f *Fosite) writeDPoPNonceOnSuccess(ctx context.Context, rw http.ResponseWriter, request AccessRequester) {
+func (f *Fosite) writeDPoPNonceOnSuccess(ctx context.Context, rw http.ResponseWriter, request Requester) {
 	if !f.Config.GetDPoPEnabled(ctx) || !f.Config.GetDPoPNonceRequired(ctx) {
 		return
 	}
 
 	strategy := f.Config.GetDPoPStrategy(ctx)
 	if strategy == nil {
+		return
+	}
+
+	if reflection.IsNil(request) {
 		return
 	}
 

@@ -36,6 +36,12 @@ var (
 	// request.
 	ErrDeviceAuthorizeDecided = errors.New("device authorization has already been decided")
 
+	// ErrInvalidatedCIBASession is an error indicating that a CIBA authentication request has been used previously.
+	ErrInvalidatedCIBASession = errors.New("CIBA authentication request has been invalidated")
+
+	// ErrCIBADecided is an error indicating that the user already approved or denied a CIBA authentication request.
+	ErrCIBADecided = errors.New("CIBA authentication request has already been decided")
+
 	// ErrDuplicateUserCode is an error indicating that a user code signature is already held by another device code
 	// session.
 	ErrDuplicateUserCode = errors.New("user code is already in use")
@@ -277,6 +283,41 @@ var (
 		DescriptionField: "Too many requests within a short time period.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrUnknownUserID is the 'unknown_user_id' error. It tells a client whether a hint identifies an end user, so
+	// requests should be rate limited per end user and client to limit enumeration.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.13
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.14
+	ErrUnknownUserID = &RFC6749Error{
+		ErrorField:       errUnknownUserIDName,
+		DescriptionField: "The OpenID Provider is not able to identify which end-user the Client wishes to be authenticated.",
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrExpiredLoginHintToken = &RFC6749Error{
+		ErrorField:       errExpiredLoginHintTokenName,
+		DescriptionField: "The login_hint_token provided in the authentication request is not valid because it has expired.",
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrMissingUserCode = &RFC6749Error{
+		ErrorField:       errMissingUserCodeName,
+		DescriptionField: "The user code was required but missing from the authentication request.",
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrInvalidUserCode = &RFC6749Error{
+		ErrorField:       errInvalidUserCodeName,
+		DescriptionField: "The user code was invalid.",
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrInvalidBindingMessage = &RFC6749Error{
+		ErrorField:       errInvalidBindingMessageName,
+		DescriptionField: "The binding message is invalid or unacceptable for use in the context of the given request.",
+		CodeField:        http.StatusBadRequest,
+	}
+	ErrTransactionFailed = &RFC6749Error{
+		ErrorField:       errTransactionFailedName,
+		DescriptionField: "The OpenID Provider encountered an unexpected condition that prevented it from successfully completing the transaction.",
+		CodeField:        http.StatusBadRequest,
+	}
 	ErrInvalidTarget = &RFC6749Error{
 		ErrorField:       errInvalidTargetName,
 		DescriptionField: "The requested resource is invalid, missing, unknown, or malformed.",
@@ -361,6 +402,12 @@ const (
 	errAuthorizationPendingName        = "authorization_pending"
 	errDeviceExpiredTokenName          = "expired_token"
 	errSlowDownName                    = "slow_down"
+	errUnknownUserIDName               = "unknown_user_id"
+	errExpiredLoginHintTokenName       = "expired_login_hint_token"
+	errMissingUserCodeName             = "missing_user_code"
+	errInvalidUserCodeName             = "invalid_user_code"
+	errInvalidBindingMessageName       = "invalid_binding_message"
+	errTransactionFailedName           = "transaction_failed"
 	errInvalidTargetName               = "invalid_target"
 	errInvalidAuthorizationDetailsName = "invalid_authorization_details"
 

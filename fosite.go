@@ -109,6 +109,49 @@ func (a *RFC8628DeviceAuthorizeEndpointBindingHandlers) Append(h RFC8628DeviceAu
 	*a = append(*a, h)
 }
 
+// BackChannelAuthenticationDecisionHandlers is a list of BackChannelAuthenticationDecisionHandler
+type BackChannelAuthenticationDecisionHandlers []BackChannelAuthenticationDecisionHandler
+
+// Append adds a BackChannelAuthenticationDecisionHandler to this list. Ignores duplicates based on reflect.TypeOf.
+func (a *BackChannelAuthenticationDecisionHandlers) Append(h BackChannelAuthenticationDecisionHandler) {
+	for _, this := range *a {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*a = append(*a, h)
+}
+
+// BackChannelAuthenticationEndpointHandlers is a list of BackChannelAuthenticationEndpointHandler
+type BackChannelAuthenticationEndpointHandlers []BackChannelAuthenticationEndpointHandler
+
+// Append adds a BackChannelAuthenticationEndpointHandler to this list. Ignores duplicates based on reflect.TypeOf.
+func (a *BackChannelAuthenticationEndpointHandlers) Append(h BackChannelAuthenticationEndpointHandler) {
+	for _, this := range *a {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*a = append(*a, h)
+}
+
+// BackChannelAuthenticationEndpointBindingHandlers is a list of BackChannelAuthenticationEndpointBindingHandler
+type BackChannelAuthenticationEndpointBindingHandlers []BackChannelAuthenticationEndpointBindingHandler
+
+// Append adds a BackChannelAuthenticationEndpointBindingHandler to this list. Ignores duplicates based on
+// reflect.TypeOf.
+func (a *BackChannelAuthenticationEndpointBindingHandlers) Append(h BackChannelAuthenticationEndpointBindingHandler) {
+	for _, this := range *a {
+		if reflect.TypeOf(this) == reflect.TypeOf(h) {
+			return
+		}
+	}
+
+	*a = append(*a, h)
+}
+
 // TokenIntrospectionHandlers is a list of TokenValidator
 type TokenIntrospectionHandlers []TokenIntrospector
 
@@ -282,6 +325,11 @@ type Configurator interface {
 	RFC8628DeviceAuthorizeEndpointHandlersProvider
 	RFC8628UserAuthorizeEndpointHandlersProvider
 	RFC8628DeviceAuthorizeConfigProvider
+	CIBAConfigProvider
+	BackChannelNotifierProvider
+	BackChannelAuthenticationEndpointHandlersProvider
+	BackChannelAuthenticationEndpointBindingHandlersProvider
+	BackChannelAuthenticationDecisionHandlersProvider
 	IntrospectionJWTResponseStrategyProvider
 	JWTStrategyProvider
 	AuthorizeErrorFieldResponseStrategyProvider

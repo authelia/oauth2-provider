@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -130,10 +131,25 @@ func (f *Fosite) validateRPInitiatedLogoutIDTokenHint(ctx context.Context, reque
 		return nil
 	}
 
+	var claims jwt.MapClaims
+
+	if claims, err = f.validateIDTokenHintForClient(ctx, request.Client, request.IDTokenHint, 0); err != nil {
+		return err
+	}
+
+	request.IDTokenHintClaims = claims
+
+	return nil
+}
+
+// validateIDTokenHintForClient verifies an 'id_token_hint' was issued by this issuer to the client and identifies a
+// subject. An expired hint is accepted for up to maxAgeAfterExp past its 'exp', or indefinitely when maxAgeAfterExp is
+// 0.
+func (f *Fosite) validateIDTokenHintForClient(ctx context.Context, client Client, hint string, maxAgeAfterExp time.Duration) (claims jwt.MapClaims, err error) {
 	strategy := f.Config.GetIDTokenValidationStrategy(ctx)
 
 	if strategy == nil {
-		return errorsx.WithStack(ErrServerError.WithDebug("Failed to validate the 'id_token_hint' because the ID Token validation strategy is not configured."))
+		return nil, errorsx.WithStack(ErrServerError.WithDebug("Failed to validate the 'id_token_hint' because the ID Token validation strategy is not configured."))
 	}
 
 	issuer := f.Config.GetIssuer(ctx)
@@ -141,36 +157,40 @@ func (f *Fosite) validateRPInitiatedLogoutIDTokenHint(ctx context.Context, reque
 	// An empty issuer would silently skip the 'iss' check below, accepting a hint issued by anyone. Refuse to validate
 	// at all rather than validate weakly.
 	if issuer == "" {
-		return errorsx.WithStack(ErrServerError.WithDebug("Failed to validate the 'id_token_hint' because the issuer is not configured."))
+		return nil, errorsx.WithStack(ErrServerError.WithDebug("Failed to validate the 'id_token_hint' because the issuer is not configured."))
 	}
 
-	var claims jwt.MapClaims
-
-	if claims, err = strategy.ValidateIDToken(ctx, &Request{Client: request.Client}, request.IDTokenHint, WithAllowExpired(), WithIDTokenHint()); err != nil {
-		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' could not be validated.").WithWrap(err).WithDebugError(err))
+	if claims, err = strategy.ValidateIDToken(ctx, &Request{Client: client}, hint, WithAllowExpired(), WithIDTokenHint()); err != nil {
+		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' could not be validated.").WithWrap(err).WithDebugError(err))
 	}
 
-	clientID := request.Client.GetID()
+	clientID := client.GetID()
 
 	if err = claims.Valid(
 		jwt.ValidateIgnoreExpiration(),
 		jwt.ValidateIssuer(issuer),
 		jwt.ValidateAudienceAny(clientID),
 	); err != nil {
-		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' claims could not be validated.").WithWrap(err).WithDebugError(err))
+		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' claims could not be validated.").WithWrap(err).WithDebugError(err))
 	}
 
 	if azp, ok := claims[consts.ClaimAuthorizedParty].(string); ok && azp != "" && azp != clientID {
-		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' was not issued to the requesting client."))
+		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' was not issued to the requesting client."))
 	}
 
 	if sub, ok := claims[consts.ClaimSubject].(string); !ok || sub == "" {
-		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' is missing the 'sub' claim."))
+		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' is missing the 'sub' claim."))
 	}
 
-	request.IDTokenHintClaims = claims
+	if maxAgeAfterExp > 0 {
+		exp, errExp := claims.GetExpirationTime()
 
-	return nil
+		if errExp != nil || exp == nil || time.Now().After(exp.Add(maxAgeAfterExp)) {
+			return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' expired too long ago to be accepted."))
+		}
+	}
+
+	return claims, nil
 }
 
 func (f *Fosite) validateRPInitiatedLogoutRedirectURI(ctx context.Context, request *RPInitiatedLogoutRequest) (err error) {

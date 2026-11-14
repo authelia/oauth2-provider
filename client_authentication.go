@@ -448,6 +448,52 @@ func (s *TokenEndpointClientAuthStrategy) AllowMethodNone() bool {
 	return true
 }
 
+// BackChannelAuthenticationEndpointClientAuthStrategy is the EndpointClientAuthStrategy for the CIBA backchannel
+// authentication endpoint. It authenticates clients as the token endpoint does, using the client's
+// 'token_endpoint_auth_method' metadata, except that it does not permit the 'none' method, and names the endpoint so
+// that its URLs are accepted as client assertion audiences there and only there.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#section-7.1
+type BackChannelAuthenticationEndpointClientAuthStrategy struct {
+	TokenEndpointClientAuthStrategy
+}
+
+// Name returns 'backchannel_authentication', the name of the endpoint this strategy represents.
+func (s *BackChannelAuthenticationEndpointClientAuthStrategy) Name() string {
+	return string(ClientAuthEndpointBackChannelAuthentication)
+}
+
+// AllowMethodNone returns false as the backchannel authentication endpoint requires client authentication.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.1
+func (s *BackChannelAuthenticationEndpointClientAuthStrategy) AllowMethodNone() bool {
+	return false
+}
+
+// MetadataName returns 'token', as the backchannel authentication endpoint uses the 'token_endpoint_auth_method' and
+// 'token_endpoint_auth_signing_alg' client metadata.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.4
+func (s *BackChannelAuthenticationEndpointClientAuthStrategy) MetadataName() string {
+	return string(ClientAuthEndpointToken)
+}
+
+// endpointClientAuthMetadataNamer is an EndpointClientAuthStrategy whose client metadata prefix differs from its
+// endpoint name.
+type endpointClientAuthMetadataNamer interface {
+	MetadataName() string
+}
+
+// endpointClientAuthMetadataName returns the client metadata prefix of the strategy, i.e. the '<prefix>' of
+// '<prefix>_endpoint_auth_method'.
+func endpointClientAuthMetadataName(strategy EndpointClientAuthStrategy) string {
+	if namer, ok := strategy.(endpointClientAuthMetadataNamer); ok {
+		return namer.MetadataName()
+	}
+
+	return strategy.Name()
+}
+
 // IntrospectionEndpointClientAuthStrategy is the EndpointClientAuthStrategy for the introspection endpoint. It resolves
 // client authentication configuration from the client's 'introspection_endpoint_auth_method' metadata and does not
 // permit public clients to authenticate using the 'none' method.

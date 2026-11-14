@@ -52,6 +52,8 @@ func clientAssertionAudienceEndpoint(strategy EndpointClientAuthStrategy) (endpo
 		return EndpointRevocation
 	case ClientAuthEndpointIntrospection:
 		return EndpointIntrospection
+	case ClientAuthEndpointBackChannelAuthentication:
+		return EndpointBackChannelAuthentication
 	default:
 		return ""
 	}

@@ -347,20 +347,20 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateMTLS(ctx context.Con
 		if !ok {
 			return "", errorsx.WithStack(ErrInvalidClient.
 				WithHint(hintClientCredentialsInvalid).
-				WithDebugf("The registered client with id '%s' is configured to use the '%s_endpoint_auth_method' method '%s' but does not implement the client registration values that method requires.", client.GetID(), strategy.Name(), method))
+				WithDebugf("The registered client with id '%s' is configured to use the '%s_endpoint_auth_method' method '%s' but does not implement the client registration values that method requires.", client.GetID(), endpointClientAuthMetadataName(strategy), method))
 		}
 
-		if err = matchTLSClientAuthSubject(tc, cert, verified, strategy.Name()); err != nil {
+		if err = matchTLSClientAuthSubject(tc, cert, verified, endpointClientAuthMetadataName(strategy)); err != nil {
 			return "", err
 		}
 	case consts.ClientAuthMethodSelfSignedTLSClientAuth:
-		if err = matchSelfSignedCertificate(ctx, c, cert, jwt.ClientJWKSFetcherStrategy(ctx, s.Config, c), strategy.Name()); err != nil {
+		if err = matchSelfSignedCertificate(ctx, c, cert, jwt.ClientJWKSFetcherStrategy(ctx, s.Config, c), endpointClientAuthMetadataName(strategy)); err != nil {
 			return "", err
 		}
 	default:
 		return "", errorsx.WithStack(ErrInvalidClient.
 			WithHint(hintClientCredentialsInvalid).
-			WithDebugf("The registered client with id '%s' is not configured to use an RFC 8705 Mutual-TLS '%s_endpoint_auth_method' method.", client.GetID(), strategy.Name()))
+			WithDebugf("The registered client with id '%s' is not configured to use an RFC 8705 Mutual-TLS '%s_endpoint_auth_method' method.", client.GetID(), endpointClientAuthMetadataName(strategy)))
 	}
 
 	return method, nil

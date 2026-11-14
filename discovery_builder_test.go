@@ -19,6 +19,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/compose"
+	"authelia.com/provider/oauth2/handler/ciba"
 	"authelia.com/provider/oauth2/handler/idjag"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/handler/rfc7591"
@@ -1079,4 +1080,242 @@ type discoveryResolver struct{}
 
 func (discoveryResolver) ResolveClientIDMetadataDocumentClient(ctx context.Context, id string) (oauth2.Client, error) {
 	return nil, oauth2.ErrInvalidClient
+}
+
+func TestDiscoveryCIBA(t *testing.T) {
+	const (
+		endpoint = "https://auth.example.com/bc-authorize"
+		alias    = "https://mtls.auth.example.com/bc-authorize"
+	)
+
+	members := []string{
+		consts.DiscoveryBackChannelAuthenticationEndpoint,
+		consts.DiscoveryBackChannelTokenDeliveryModesSupported,
+		consts.DiscoveryBackChannelAuthenticationRequestSigningAlgValuesSupported,
+		consts.DiscoveryBackChannelUserCodeParameterSupported,
+		consts.DiscoveryBackChannelEndpointLoginHintTokenTypesSupported,
+	}
+
+	testCases := []struct {
+		name     string
+		setup    func(config *oauth2.Config)
+		composed bool
+		expected func(t *testing.T, config *oauth2.Config, metadata *oauth2.OpenIDConnectProviderMetadata)
+	}{
+		{
+			name:     "ShouldAdvertiseTheComposedHandlers",
+			composed: true,
+			expected: func(t *testing.T, config *oauth2.Config, metadata *oauth2.OpenIDConnectProviderMetadata) {
+				members := marshalMembers(t, metadata)
+
+				assert.Equal(t, endpoint, members[consts.DiscoveryBackChannelAuthenticationEndpoint])
+				assert.Equal(t, []any{consts.CIBAModePoll, consts.CIBAModePing, consts.CIBAModePush}, members[consts.DiscoveryBackChannelTokenDeliveryModesSupported])
+				assert.NotEmpty(t, config.GetCIBARequestSigningAlgValues(context.Background()))
+				assert.Equal(t, config.GetCIBARequestSigningAlgValues(context.Background()), metadata.BackChannelAuthenticationRequestSigningAlgValuesSupported)
+				assert.NotContains(t, members, consts.DiscoveryBackChannelUserCodeParameterSupported)
+				assert.NotContains(t, members, consts.DiscoveryBackChannelEndpointLoginHintTokenTypesSupported)
+				assert.Contains(t, metadata.GrantTypesSupported, consts.GrantTypeOpenIDCIBA)
+				assert.Equal(t, alias, metadata.MutualTLSEndpointAliases.BackChannelAuthentication)
+			},
+		},
+		{
+			name:     "ShouldAdvertiseTheUserCodeParameter",
+			composed: true,
+			setup: func(config *oauth2.Config) {
+				config.CIBAUserCodeSupported = true
+			},
+			expected: func(t *testing.T, _ *oauth2.Config, metadata *oauth2.OpenIDConnectProviderMetadata) {
+				assert.Equal(t, true, marshalMembers(t, metadata)[consts.DiscoveryBackChannelUserCodeParameterSupported])
+			},
+		},
+		{
+			name:     "ShouldOmitTheSigningAlgorithmsWhenNoneAreSupported",
+			composed: true,
+			setup: func(config *oauth2.Config) {
+				config.RequestObjectSigningAlgValues = []string{"HS256"}
+			},
+			expected: func(t *testing.T, _ *oauth2.Config, metadata *oauth2.OpenIDConnectProviderMetadata) {
+				members := marshalMembers(t, metadata)
+
+				assert.Equal(t, endpoint, members[consts.DiscoveryBackChannelAuthenticationEndpoint])
+				assert.NotContains(t, members, consts.DiscoveryBackChannelAuthenticationRequestSigningAlgValuesSupported)
+			},
+		},
+		{
+			name:     "ShouldOmitTheGrantTypeForPushOnly",
+			composed: true,
+			setup: func(config *oauth2.Config) {
+				config.CIBATokenDeliveryModes = []string{consts.CIBAModePush}
+			},
+			expected: func(t *testing.T, _ *oauth2.Config, metadata *oauth2.OpenIDConnectProviderMetadata) {
+				assert.Equal(t, []any{consts.CIBAModePush}, marshalMembers(t, metadata)[consts.DiscoveryBackChannelTokenDeliveryModesSupported])
+				assert.NotContains(t, metadata.GrantTypesSupported, consts.GrantTypeOpenIDCIBA)
+			},
+		},
+		{
+			name: "ShouldOmitEveryMemberWithoutTheHandlers",
+			expected: func(t *testing.T, _ *oauth2.Config, metadata *oauth2.OpenIDConnectProviderMetadata) {
+				for _, member := range members {
+					assert.NotContains(t, marshalMembers(t, metadata), member)
+				}
+
+				assert.NotContains(t, metadata.GrantTypesSupported, consts.GrantTypeOpenIDCIBA)
+				assert.Empty(t, metadata.MutualTLSEndpointAliases.BackChannelAuthentication)
+			},
+		},
+		{
+			name:     "ShouldOmitEveryMemberWithoutTheEndpointURL",
+			composed: true,
+			setup: func(config *oauth2.Config) {
+				config.EndpointURLs.BackChannelAuthentication = ""
+			},
+			expected: func(t *testing.T, _ *oauth2.Config, metadata *oauth2.OpenIDConnectProviderMetadata) {
+				for _, member := range members {
+					assert.NotContains(t, marshalMembers(t, metadata), member)
+				}
+
+				assert.Empty(t, metadata.MutualTLSEndpointAliases.BackChannelAuthentication)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
+			config.EndpointURLs.BackChannelAuthentication = endpoint
+			config.EndpointURLs.MutualTLSAliases.BackChannelAuthentication = alias
+
+			if tc.setup != nil {
+				tc.setup(config)
+			}
+
+			factories := []compose.Factory{
+				compose.OAuth2AuthorizeExplicitFactory,
+				compose.OAuth2RefreshTokenGrantFactory,
+				compose.OpenIDConnectExplicitFactory,
+				compose.OpenIDConnectRefreshFactory,
+			}
+
+			if tc.composed {
+				factories = append(factories,
+					compose.CIBADecisionFactory,
+					compose.CIBATokenFactory,
+					compose.OpenIDConnectCIBAFactory,
+					compose.CIBAEndpointFactory,
+				)
+			}
+
+			strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
+
+			provider := compose.Compose(config, storage.NewMemoryStore(),
+				&compose.CommonStrategy{
+					CoreStrategy:               compose.NewOAuth2HMACStrategy(config),
+					OpenIDConnectTokenStrategy: compose.NewOpenIDConnectStrategy(nil, strategy, config),
+					Strategy:                   strategy,
+				},
+				factories...,
+			)
+
+			metadata, err := provider.NewOpenIDConnectProviderMetadata(context.Background())
+			require.NoError(t, err)
+
+			tc.expected(t, config, metadata)
+		})
+	}
+}
+
+func TestDiscoveryLoginHintTokenTypes(t *testing.T) {
+	const (
+		backChannelEndpoint = "https://auth.example.com/backchannel"
+		typeJWT             = "urn:example:login-hint-token:jwt"
+		typeOpaque          = "urn:example:login-hint-token:opaque"
+	)
+
+	testCases := []struct {
+		name     string
+		types    []string
+		composed bool
+		expected any
+	}{
+		{name: "ShouldAdvertiseTheTypes", types: []string{typeJWT, typeOpaque}, composed: true, expected: []any{typeJWT, typeOpaque}},
+		{name: "ShouldOmitAnEmptyList", composed: true},
+		{name: "ShouldOmitTheTypesWithoutTheHandlers", types: []string{typeJWT}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
+			config.EndpointURLs.BackChannelAuthentication = backChannelEndpoint
+			config.CIBALoginHintTokenTypes = tc.types
+
+			factories := []compose.Factory{compose.OAuth2AuthorizeExplicitFactory, compose.OpenIDConnectExplicitFactory}
+
+			if tc.composed {
+				factories = append(factories, compose.CIBAFactories()...)
+			}
+
+			strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
+
+			provider := compose.Compose(config, storage.NewMemoryStore(),
+				&compose.CommonStrategy{
+					CoreStrategy:               compose.NewOAuth2HMACStrategy(config),
+					OpenIDConnectTokenStrategy: compose.NewOpenIDConnectStrategy(nil, strategy, config),
+					Strategy:                   strategy,
+				},
+				factories...,
+			)
+
+			metadata, err := provider.NewOpenIDConnectProviderMetadata(context.Background())
+			require.NoError(t, err)
+
+			members := marshalMembers(t, metadata)
+
+			if tc.expected == nil {
+				assert.NotContains(t, members, consts.DiscoveryBackChannelEndpointLoginHintTokenTypesSupported)
+
+				return
+			}
+
+			assert.Equal(t, tc.expected, members[consts.DiscoveryBackChannelEndpointLoginHintTokenTypesSupported])
+
+			config.CIBALoginHintTokenTypes[0] = "mutated"
+
+			assert.NotContains(t, metadata.BackChannelEndpointLoginHintTokenTypesSupported, "mutated")
+		})
+	}
+}
+
+// cibaLessStore hides the ciba.Storage methods of the MemoryStore: a field at a shallower depth than a promoted method
+// removes that method from the method set.
+type cibaLessStore struct {
+	*storage.MemoryStore
+
+	CreateCIBASession, GetCIBASession, GetCIBASessionByRequestID, UpdateCIBASession, DecideCIBASession, InvalidateCIBASession struct{}
+}
+
+func TestComposeAllEnabledExcludesCIBA(t *testing.T) {
+	store := &cibaLessStore{MemoryStore: storage.NewMemoryStore()}
+
+	_, ok := any(store).(ciba.Storage)
+	require.False(t, ok)
+
+	config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
+	config.EndpointURLs.BackChannelAuthentication = "https://auth.example.com/bc-authorize"
+
+	var provider oauth2.Provider
+
+	require.NotPanics(t, func() {
+		provider = compose.ComposeAllEnabled(config, store, gen.MustRSAKey())
+	})
+
+	metadata, err := provider.NewOpenIDConnectProviderMetadata(context.Background())
+	require.NoError(t, err)
+
+	members := marshalMembers(t, metadata)
+
+	assert.NotContains(t, members, consts.DiscoveryBackChannelAuthenticationEndpoint)
+	assert.NotContains(t, members, consts.DiscoveryBackChannelTokenDeliveryModesSupported)
+	assert.NotContains(t, members, consts.DiscoveryBackChannelAuthenticationRequestSigningAlgValuesSupported)
+	assert.NotContains(t, members, consts.DiscoveryBackChannelUserCodeParameterSupported)
+	assert.NotContains(t, metadata.GrantTypesSupported, consts.GrantTypeOpenIDCIBA)
 }

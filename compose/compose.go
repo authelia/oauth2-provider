@@ -69,6 +69,15 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 		if dbh, ok := res.(oauth2.RFC8628DeviceAuthorizeEndpointBindingHandler); ok {
 			config.RFC8628DeviceAuthorizeEndpointBindingHandlers.Append(dbh)
 		}
+		if bh, ok := res.(oauth2.BackChannelAuthenticationEndpointHandler); ok {
+			config.BackChannelAuthenticationEndpointHandlers.Append(bh)
+		}
+		if bbh, ok := res.(oauth2.BackChannelAuthenticationEndpointBindingHandler); ok {
+			config.BackChannelAuthenticationEndpointBindingHandlers.Append(bbh)
+		}
+		if bdh, ok := res.(oauth2.BackChannelAuthenticationDecisionHandler); ok {
+			config.BackChannelAuthenticationDecisionHandlers.Append(bdh)
+		}
 		if uh, ok := res.(oauth2.RFC8628UserAuthorizeEndpointHandler); ok {
 			config.RFC8628UserAuthorizeEndpointHandlers.Append(uh)
 		}

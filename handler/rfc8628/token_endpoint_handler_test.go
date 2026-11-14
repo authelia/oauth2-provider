@@ -600,6 +600,14 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 	}
 }
 
+type deviceTxKey struct{}
+
+func inDeviceTx(ctx any) bool {
+	c, ok := ctx.(context.Context)
+
+	return ok && c.Value(deviceTxKey{}) == true
+}
+
 func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 	strategy := o2hmacshaStrategy
 	deviceStrategy := o2hmacshaStrategy
@@ -647,7 +655,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
-					Return(propagatedContext, nil)
+					Return(context.WithValue(propagatedContext, deviceTxKey{}, true), nil)
 				mockDeviceStore.
 					EXPECT().
 					InvalidateDeviceCodeSession(gomock.Any(), gomock.Any()).
@@ -655,17 +663,17 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockCoreStore.
 					EXPECT().
-					CreateAccessTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					CreateAccessTokenSession(gomock.Cond(inDeviceTx), gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockCoreStore.
 					EXPECT().
-					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any(), gomock.Any()).
+					CreateRefreshTokenSession(gomock.Cond(inDeviceTx), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockTransactional.
 					EXPECT().
-					Commit(propagatedContext).
+					Commit(gomock.Cond(inDeviceTx)).
 					Return(nil).
 					Times(1)
 			},
@@ -687,7 +695,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
-					Return(propagatedContext, nil)
+					Return(context.WithValue(propagatedContext, deviceTxKey{}, true), nil)
 				mockDeviceStore.
 					EXPECT().
 					InvalidateDeviceCodeSession(gomock.Any(), gomock.Any()).
@@ -695,7 +703,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockTransactional.
 					EXPECT().
-					Rollback(propagatedContext).
+					Rollback(gomock.Cond(inDeviceTx)).
 					Return(nil).
 					Times(1)
 			},
@@ -717,7 +725,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
-					Return(propagatedContext, nil)
+					Return(context.WithValue(propagatedContext, deviceTxKey{}, true), nil)
 				mockDeviceStore.
 					EXPECT().
 					InvalidateDeviceCodeSession(gomock.Any(), gomock.Any()).
@@ -725,12 +733,12 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockCoreStore.
 					EXPECT().
-					CreateAccessTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					CreateAccessTokenSession(gomock.Cond(inDeviceTx), gomock.Any(), gomock.Any()).
 					Return(errors.New("Whoops, a nasty database error occurred!")).
 					Times(1)
 				mockTransactional.
 					EXPECT().
-					Rollback(propagatedContext).
+					Rollback(gomock.Cond(inDeviceTx)).
 					Return(nil).
 					Times(1)
 			},
@@ -772,7 +780,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
-					Return(propagatedContext, nil)
+					Return(context.WithValue(propagatedContext, deviceTxKey{}, true), nil)
 				mockDeviceStore.
 					EXPECT().
 					InvalidateDeviceCodeSession(gomock.Any(), gomock.Any()).
@@ -780,7 +788,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockTransactional.
 					EXPECT().
-					Rollback(propagatedContext).
+					Rollback(gomock.Cond(inDeviceTx)).
 					Return(errors.New("Whoops, unable to rollback transaction!")).
 					Times(1)
 			},
@@ -802,7 +810,7 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
-					Return(propagatedContext, nil)
+					Return(context.WithValue(propagatedContext, deviceTxKey{}, true), nil)
 				mockDeviceStore.
 					EXPECT().
 					InvalidateDeviceCodeSession(gomock.Any(), gomock.Any()).
@@ -810,22 +818,22 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 					Times(1)
 				mockCoreStore.
 					EXPECT().
-					CreateAccessTokenSession(propagatedContext, gomock.Any(), gomock.Any()).
+					CreateAccessTokenSession(gomock.Cond(inDeviceTx), gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockCoreStore.
 					EXPECT().
-					CreateRefreshTokenSession(propagatedContext, gomock.Any(), gomock.Any(), gomock.Any()).
+					CreateRefreshTokenSession(gomock.Cond(inDeviceTx), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 				mockTransactional.
 					EXPECT().
-					Commit(propagatedContext).
+					Commit(gomock.Cond(inDeviceTx)).
 					Return(errors.New("Whoops, unable to commit transaction!")).
 					Times(1)
 				mockTransactional.
 					EXPECT().
-					Rollback(propagatedContext).
+					Rollback(gomock.Cond(inDeviceTx)).
 					Return(nil).
 					Times(1)
 			},

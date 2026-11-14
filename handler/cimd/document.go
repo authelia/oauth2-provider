@@ -320,6 +320,7 @@ func validateURIs(metadata *oauth2.ClientRegistrationMetadata) (err error) {
 		{"sector_identifier_uri", []string{metadata.SectorIdentifierURI}},
 		{"initiate_login_uri", []string{metadata.InitiateLoginURI}},
 		{"backchannel_logout_uri", []string{metadata.BackChannelLogoutURI}},
+		{"backchannel_client_notification_endpoint", []string{metadata.BackChannelClientNotificationEndpoint}},
 		{"request_uris", metadata.RequestURIs},
 	}
 

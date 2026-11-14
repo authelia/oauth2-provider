@@ -34,6 +34,13 @@ const (
 	defaultAuthorizationDetailsMaxObjects = 32
 	defaultRFC8693MaxActorChainDepth      = 8
 	defaultClaimsParameterMaxLength       = 8192
+	defaultCIBAAuthRequestLifespan        = 5 * time.Minute
+	defaultCIBARequestedExpiryMinimum     = 30 * time.Second
+	defaultCIBARequestedExpiryMaximum     = 30 * time.Minute
+	defaultCIBAPollingInterval            = 5 * time.Second
+	maxCIBALongPollingTimeout             = 30 * time.Second
+	defaultCIBAIDTokenHintMaximumAge      = 24 * time.Hour
+	defaultCIBAMaximumBindingMessageLen   = 64
 )
 
 type Config struct {
@@ -251,6 +258,68 @@ type Config struct {
 	// RFC8628TokenPollingInterval sets the interval that clients should check for device code grants
 	RFC8628TokenPollingInterval time.Duration
 
+	// CIBATokenDeliveryModes are the supported CIBA token delivery modes. Defaults to poll, ping and push. A value
+	// other than poll, ping or push is ignored, so a list holding none of them supports no mode.
+	CIBATokenDeliveryModes []string
+
+	// CIBAAuthRequestLifespan is the default CIBA authentication request lifespan. Defaults to 5 minutes.
+	CIBAAuthRequestLifespan time.Duration
+
+	// CIBARequestedExpiryMinimum is the minimum accepted 'requested_expiry'. Defaults to 30 seconds.
+	CIBARequestedExpiryMinimum time.Duration
+
+	// CIBARequestedExpiryMaximum is the maximum accepted 'requested_expiry'. Defaults to 30 minutes.
+	CIBARequestedExpiryMaximum time.Duration
+
+	// CIBAPollingInterval is the minimum CIBA polling interval. Defaults to 5 seconds.
+	CIBAPollingInterval time.Duration
+
+	// CIBALongPollingTimeout is how long the token endpoint holds a CIBA poll open. Defaults to 0 (disabled) and
+	// values above 30 seconds are treated as 30 seconds.
+	CIBALongPollingTimeout time.Duration
+
+	// CIBASlowDownLimit is the number of 'slow_down' responses after which a CIBA request is denied. Defaults to 0
+	// (disabled).
+	CIBASlowDownLimit int
+
+	// CIBAUserCodeSupported indicates the 'user_code' parameter is supported.
+	CIBAUserCodeSupported bool
+
+	// CIBARequestSigningAlgValues are the JWS algorithms accepted for a signed authentication request. Defaults to
+	// the asymmetric algorithms of RequestObjectSigningAlgValues.
+	CIBARequestSigningAlgValues []string
+
+	// CIBADisableOpenIDScopeRequirement allows a CIBA authentication request without the 'openid' scope.
+	CIBADisableOpenIDScopeRequirement bool
+
+	// CIBAIDTokenHintMaximumAge is how long past its expiry an 'id_token_hint' is accepted. Defaults to 24 hours.
+	CIBAIDTokenHintMaximumAge time.Duration
+
+	// CIBARequireBindingMessage requires the 'binding_message' parameter, unless the request carries an authorization
+	// detail which its AuthorizationDetailsTypeUniqueContextHandler reports identifies a unique authorization context.
+	CIBARequireBindingMessage bool
+
+	// CIBAMaximumBindingMessageLength is the maximum 'binding_message' length. Defaults to 64.
+	CIBAMaximumBindingMessageLength int
+
+	// CIBARequireRequestContext requires the 'request_context' parameter.
+	CIBARequireRequestContext bool
+
+	// CIBASignedRequestMaximumLifetime is the maximum lifetime between the 'nbf' and 'exp' claims of a signed
+	// authentication request. Defaults to RequestObjectMaximumLifetime, or 60 minutes when that is disabled.
+	CIBASignedRequestMaximumLifetime time.Duration
+
+	// CIBARequireSingleAudienceAssertion requires a client assertion at the backchannel authentication endpoint to have
+	// the issuer as its sole 'aud' value, even when DisableClientAssertionIssuerAudience is set.
+	CIBARequireSingleAudienceAssertion bool
+
+	// CIBALoginHintTokenTypes are the 'login_hint_token' types the backchannel authentication endpoint accepts.
+	CIBALoginHintTokenTypes []string
+
+	// BackChannelNotifier delivers CIBA ping and push notifications. Defaults to an HTTPBackChannelNotifier with a
+	// guarded HTTP client.
+	BackChannelNotifier BackChannelNotifier
+
 	// PublicClientIdentityChecker is a function that returns true if the authorization request assures the identity of
 	// a public client, which is required to process a 'prompt' of 'none' for a public client.
 	PublicClientIdentityChecker func(context.Context, AuthorizeRequester) bool
@@ -430,6 +499,18 @@ type Config struct {
 	// RFC8628DeviceAuthorizeEndpointBindingHandlers is a list of handlers that record a proof-of-possession binding
 	// on a device authorization request before the device authorization endpoint handlers run.
 	RFC8628DeviceAuthorizeEndpointBindingHandlers RFC8628DeviceAuthorizeEndpointBindingHandlers
+
+	// BackChannelAuthenticationEndpointBindingHandlers is a list of handlers that record a proof-of-possession binding
+	// on a CIBA authentication request before the backchannel authentication endpoint handlers run.
+	BackChannelAuthenticationEndpointBindingHandlers BackChannelAuthenticationEndpointBindingHandlers
+
+	// BackChannelAuthenticationEndpointHandlers is a list of handlers that issue and persist the 'auth_req_id' of a
+	// CIBA authentication request.
+	BackChannelAuthenticationEndpointHandlers BackChannelAuthenticationEndpointHandlers
+
+	// BackChannelAuthenticationDecisionHandlers is a list of handlers that record the end user's decision on a CIBA
+	// authentication request.
+	BackChannelAuthenticationDecisionHandlers BackChannelAuthenticationDecisionHandlers
 
 	// TokenIntrospectionHandlers is a list of handlers that are called before the token introspection endpoint is served.
 	TokenIntrospectionHandlers TokenIntrospectionHandlers
@@ -809,6 +890,7 @@ type Config struct {
 	// RFC7591SoftwareStatementRequireSoftwareID requires a software statement to carry a non-empty 'software_id'.
 	RFC7591SoftwareStatementRequireSoftwareID bool
 
+	backChannelNotifierOnce                     sync.Once
 	formPostResponseWriterOnce                  sync.Once
 	responseModeHandlersOnce                    sync.Once
 	jwtStrategyOnce                             sync.Once
@@ -869,6 +951,24 @@ func (c *Config) GetTokenEndpointBindingHandlers(ctx context.Context) TokenEndpo
 // device authorization request before the device authorization endpoint handlers run.
 func (c *Config) GetRFC8628DeviceAuthorizeEndpointBindingHandlers(ctx context.Context) RFC8628DeviceAuthorizeEndpointBindingHandlers {
 	return c.RFC8628DeviceAuthorizeEndpointBindingHandlers
+}
+
+// GetBackChannelAuthenticationEndpointBindingHandlers returns the handlers that record a proof-of-possession binding on
+// a CIBA authentication request before the backchannel authentication endpoint handlers run.
+func (c *Config) GetBackChannelAuthenticationEndpointBindingHandlers(_ context.Context) BackChannelAuthenticationEndpointBindingHandlers {
+	return c.BackChannelAuthenticationEndpointBindingHandlers
+}
+
+// GetBackChannelAuthenticationEndpointHandlers returns the handlers that issue and persist the 'auth_req_id' of a CIBA
+// authentication request.
+func (c *Config) GetBackChannelAuthenticationEndpointHandlers(_ context.Context) BackChannelAuthenticationEndpointHandlers {
+	return c.BackChannelAuthenticationEndpointHandlers
+}
+
+// GetBackChannelAuthenticationDecisionHandlers returns the handlers that record the end user's decision on a CIBA
+// authentication request.
+func (c *Config) GetBackChannelAuthenticationDecisionHandlers(_ context.Context) BackChannelAuthenticationDecisionHandlers {
+	return c.BackChannelAuthenticationDecisionHandlers
 }
 
 // GetTokenIntrospectionHandlers returns the handlers called before the token introspection endpoint is served.
@@ -1660,6 +1760,188 @@ func (c *Config) GetRFC8628TokenPollingInterval(_ context.Context) time.Duration
 	return c.RFC8628TokenPollingInterval
 }
 
+// GetCIBATokenDeliveryModes returns the supported CIBA token delivery modes. Defaults to poll, ping and push. Only
+// the poll, ping and push modes are defined, so any other configured value is omitted.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.5
+func (c *Config) GetCIBATokenDeliveryModes(_ context.Context) (modes []string) {
+	if len(c.CIBATokenDeliveryModes) == 0 {
+		return []string{consts.CIBAModePoll, consts.CIBAModePing, consts.CIBAModePush}
+	}
+
+	for _, mode := range c.CIBATokenDeliveryModes {
+		switch mode {
+		case consts.CIBAModePoll, consts.CIBAModePing, consts.CIBAModePush:
+			if !slices.Contains(modes, mode) {
+				modes = append(modes, mode)
+			}
+		}
+	}
+
+	return modes
+}
+
+// GetCIBAAuthRequestLifespan returns the default CIBA authentication request lifespan. Defaults to 5 minutes.
+func (c *Config) GetCIBAAuthRequestLifespan(_ context.Context) (lifespan time.Duration) {
+	if c.CIBAAuthRequestLifespan <= 0 {
+		return defaultCIBAAuthRequestLifespan
+	}
+
+	return c.CIBAAuthRequestLifespan
+}
+
+// GetCIBARequestedExpiryMinimum returns the minimum accepted 'requested_expiry'. Defaults to 30 seconds.
+func (c *Config) GetCIBARequestedExpiryMinimum(_ context.Context) (minimum time.Duration) {
+	if c.CIBARequestedExpiryMinimum <= 0 {
+		return defaultCIBARequestedExpiryMinimum
+	}
+
+	return c.CIBARequestedExpiryMinimum
+}
+
+// GetCIBARequestedExpiryMaximum returns the maximum accepted 'requested_expiry'. Defaults to 30 minutes.
+func (c *Config) GetCIBARequestedExpiryMaximum(_ context.Context) (maximum time.Duration) {
+	if c.CIBARequestedExpiryMaximum <= 0 {
+		return defaultCIBARequestedExpiryMaximum
+	}
+
+	return c.CIBARequestedExpiryMaximum
+}
+
+// GetCIBAPollingInterval returns the minimum CIBA polling interval. Defaults to 5 seconds.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.3
+func (c *Config) GetCIBAPollingInterval(_ context.Context) (interval time.Duration) {
+	if c.CIBAPollingInterval <= 0 {
+		return defaultCIBAPollingInterval
+	}
+
+	return c.CIBAPollingInterval
+}
+
+// GetCIBALongPollingTimeout returns how long the token endpoint holds a CIBA poll open. Defaults to 0 (disabled) and
+// is capped at 30 seconds.
+func (c *Config) GetCIBALongPollingTimeout(_ context.Context) (timeout time.Duration) {
+	switch {
+	case c.CIBALongPollingTimeout <= 0:
+		return 0
+	case c.CIBALongPollingTimeout > maxCIBALongPollingTimeout:
+		return maxCIBALongPollingTimeout
+	default:
+		return c.CIBALongPollingTimeout
+	}
+}
+
+// GetCIBASlowDownLimit returns the number of 'slow_down' responses after which the request is denied. Defaults to 0
+// (disabled).
+func (c *Config) GetCIBASlowDownLimit(_ context.Context) (limit int) {
+	return max(c.CIBASlowDownLimit, 0)
+}
+
+// GetCIBAUserCodeSupported returns true if the 'user_code' parameter is supported.
+func (c *Config) GetCIBAUserCodeSupported(_ context.Context) (supported bool) {
+	return c.CIBAUserCodeSupported
+}
+
+// GetCIBARequestSigningAlgValues returns the JWS algorithms accepted for a signed authentication request. Defaults
+// to the asymmetric algorithms of GetRequestObjectSigningAlgValues.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.1.1
+func (c *Config) GetCIBARequestSigningAlgValues(ctx context.Context) (algs []string) {
+	if len(c.CIBARequestSigningAlgValues) != 0 {
+		return c.CIBARequestSigningAlgValues
+	}
+
+	for _, alg := range c.GetRequestObjectSigningAlgValues(ctx) {
+		if alg == string(jwt.JSONWebTokenAlgNone) || strings.HasPrefix(alg, "HS") {
+			continue
+		}
+
+		algs = append(algs, alg)
+	}
+
+	return algs
+}
+
+// GetCIBARequireOpenIDScope returns true if the 'openid' scope is required. Defaults to true.
+func (c *Config) GetCIBARequireOpenIDScope(_ context.Context) (require bool) {
+	return !c.CIBADisableOpenIDScopeRequirement
+}
+
+// GetCIBAIDTokenHintMaximumAge returns how long past its expiry an 'id_token_hint' is accepted. Defaults to 24 hours.
+func (c *Config) GetCIBAIDTokenHintMaximumAge(_ context.Context) (age time.Duration) {
+	if c.CIBAIDTokenHintMaximumAge <= 0 {
+		return defaultCIBAIDTokenHintMaximumAge
+	}
+
+	return c.CIBAIDTokenHintMaximumAge
+}
+
+// GetCIBARequireBindingMessage returns true if the 'binding_message' parameter is required.
+func (c *Config) GetCIBARequireBindingMessage(_ context.Context) (require bool) {
+	return c.CIBARequireBindingMessage
+}
+
+// GetCIBAMaximumBindingMessageLength returns the maximum 'binding_message' length. Defaults to 64.
+func (c *Config) GetCIBAMaximumBindingMessageLength(_ context.Context) (length int) {
+	if c.CIBAMaximumBindingMessageLength <= 0 {
+		return defaultCIBAMaximumBindingMessageLen
+	}
+
+	return c.CIBAMaximumBindingMessageLength
+}
+
+// GetCIBARequireRequestContext returns true if the 'request_context' parameter is required.
+//
+// See: https://openid.net/specs/fapi-ciba.html#section-4.1.1
+func (c *Config) GetCIBARequireRequestContext(_ context.Context) (require bool) {
+	return c.CIBARequireRequestContext
+}
+
+// GetCIBASignedRequestMaximumLifetime returns the maximum lifetime between the 'nbf' and 'exp' claims of a signed
+// authentication request. Defaults to GetRequestObjectMaximumLifetime, or 60 minutes when that is disabled, so the
+// 'jti' of a signed request is never retained indefinitely.
+//
+// See: https://openid.net/specs/fapi-ciba.html#section-4.1.1
+func (c *Config) GetCIBASignedRequestMaximumLifetime(ctx context.Context) (lifetime time.Duration) {
+	if c.CIBASignedRequestMaximumLifetime > 0 {
+		return c.CIBASignedRequestMaximumLifetime
+	}
+
+	if lifetime = c.GetRequestObjectMaximumLifetime(ctx); lifetime > 0 {
+		return lifetime
+	}
+
+	return defaultRequestObjectMaximumLifetime
+}
+
+// GetCIBARequireSingleAudienceAssertion returns true if a client assertion at the backchannel authentication endpoint
+// must have the issuer as its sole 'aud' value.
+//
+// See: https://openid.net/specs/fapi-ciba.html#section-4.1.1
+func (c *Config) GetCIBARequireSingleAudienceAssertion(_ context.Context) (require bool) {
+	return c.CIBARequireSingleAudienceAssertion
+}
+
+// GetCIBALoginHintTokenTypes returns the 'login_hint_token' types the backchannel authentication endpoint accepts.
+//
+// See: https://openid.net/specs/fapi-ciba.html#section-4.3
+func (c *Config) GetCIBALoginHintTokenTypes(_ context.Context) (types []string) {
+	return c.CIBALoginHintTokenTypes
+}
+
+// GetBackChannelNotifier returns the BackChannelNotifier. Defaults to an HTTPBackChannelNotifier with a guarded HTTP
+// client.
+func (c *Config) GetBackChannelNotifier(_ context.Context) (notifier BackChannelNotifier) {
+	c.backChannelNotifierOnce.Do(func() {
+		if c.BackChannelNotifier == nil {
+			c.BackChannelNotifier = NewHTTPBackChannelNotifier(nil)
+		}
+	})
+
+	return c.BackChannelNotifier
+}
+
 // GetAuthorizeErrorFieldResponseStrategy returns the strategy which handles authorize error responses when the user
 // can't be redirected. Defaults to a JSONAuthorizeErrorFieldResponseStrategy.
 func (c *Config) GetAuthorizeErrorFieldResponseStrategy(ctx context.Context) (strategy AuthorizeErrorFieldResponseStrategy) {
@@ -2079,106 +2361,111 @@ func (c *Config) GetRFC7591ClientRegistrationScopes(ctx context.Context) (scopes
 }
 
 var (
-	_ jwt.ClientJWKSFetcherStrategyProvider                 = (*Config)(nil)
-	_ AuthorizeCodeLifespanProvider                         = (*Config)(nil)
-	_ RefreshTokenLifespanProvider                          = (*Config)(nil)
-	_ DisableRefreshTokenExpirationParametersProvider       = (*Config)(nil)
-	_ AccessTokenLifespanProvider                           = (*Config)(nil)
-	_ ScopeStrategyProvider                                 = (*Config)(nil)
-	_ AudienceStrategyProvider                              = (*Config)(nil)
-	_ RedirectSecureCheckerProvider                         = (*Config)(nil)
-	_ PublicClientIdentityCheckerProvider                   = (*Config)(nil)
-	_ RefreshTokenScopesProvider                            = (*Config)(nil)
-	_ DisableRefreshTokenValidationProvider                 = (*Config)(nil)
-	_ DisableRefreshTokenRotationProvider                   = (*Config)(nil)
-	_ RefreshTokenMaximumLifespanProvider                   = (*Config)(nil)
-	_ DiscoveryMetadataHooksProvider                        = (*Config)(nil)
-	_ DiscoveryMetadataSigningStrategyProvider              = (*Config)(nil)
-	_ JWTScopeFieldProvider                                 = (*Config)(nil)
-	_ JWTSecuredAuthorizeResponseModeStrategyProvider       = (*Config)(nil)
-	_ JWTSecuredAuthorizeResponseModeLifespanProvider       = (*Config)(nil)
-	_ JWTProfileAccessTokensProvider                        = (*Config)(nil)
-	_ AllowedPromptsProvider                                = (*Config)(nil)
-	_ OmitRedirectScopeParamProvider                        = (*Config)(nil)
-	_ MinParameterEntropyProvider                           = (*Config)(nil)
-	_ SanitationAllowedProvider                             = (*Config)(nil)
-	_ AllowPublicClientsWithoutPKCEProvider                 = (*Config)(nil)
-	_ AllowInsecureRedirectURIForPublicClientsProvider      = (*Config)(nil)
-	_ EnablePKCEPlainChallengeMethodProvider                = (*Config)(nil)
-	_ ClaimsParameterEnforcementProvider                    = (*Config)(nil)
-	_ RedirectFragmentGuardProvider                         = (*Config)(nil)
-	_ PostLogoutRedirectWithoutIDTokenHintProvider          = (*Config)(nil)
-	_ AuthenticationRequirementsEnforcementProvider         = (*Config)(nil)
-	_ RFC9470StepUpAuthenticationProvider                   = (*Config)(nil)
-	_ EnforcePKCEProvider                                   = (*Config)(nil)
-	_ GrantTypeJWTBearerCanSkipClientAuthProvider           = (*Config)(nil)
-	_ GrantTypeJWTBearerIDOptionalProvider                  = (*Config)(nil)
-	_ GrantTypeJWTBearerIssuedDateOptionalProvider          = (*Config)(nil)
-	_ GetJWTMaxDurationProvider                             = (*Config)(nil)
-	_ JWTClockSkewProvider                                  = (*Config)(nil)
-	_ IDTokenLifespanProvider                               = (*Config)(nil)
-	_ IDTokenValidationStrategyProvider                     = (*Config)(nil)
-	_ BackChannelLogoutTokenStrategyProvider                = (*Config)(nil)
-	_ BackChannelLogoutLifespanProvider                     = (*Config)(nil)
-	_ BackChannelLogoutConcurrencyProvider                  = (*Config)(nil)
-	_ AuthorizationServerIdentificationProvider             = (*Config)(nil)
-	_ JWKSFetcherStrategyProvider                           = (*Config)(nil)
-	_ ClientAuthenticationStrategyProvider                  = (*Config)(nil)
-	_ SendDebugMessagesToClientsProvider                    = (*Config)(nil)
-	_ ClientAuthenticationRealmProvider                     = (*Config)(nil)
-	_ ResponseModeHandlerProvider                           = (*Config)(nil)
-	_ MessageCatalogProvider                                = (*Config)(nil)
-	_ FormPostHTMLTemplateProvider                          = (*Config)(nil)
-	_ FormPostResponseProvider                              = (*Config)(nil)
-	_ AllowedJWTAssertionAudiencesProvider                  = (*Config)(nil)
-	_ ClaimsParameterMaxLengthProvider                      = (*Config)(nil)
-	_ ClientAssertionClientSecretEncryptionDisabledProvider = (*Config)(nil)
-	_ AllowedIntrospectionAudiencesProvider                 = (*Config)(nil)
-	_ AllowedIntrospectionScopesProvider                    = (*Config)(nil)
-	_ HTTPClientProvider                                    = (*Config)(nil)
-	_ ClientIDMetadataDocumentConfigProvider                = (*Config)(nil)
-	_ ClientIDMetadataDocumentReservedIdentifiersProvider   = (*Config)(nil)
-	_ HMACHashingProvider                                   = (*Config)(nil)
-	_ AuthorizeEndpointHandlersProvider                     = (*Config)(nil)
-	_ TokenEndpointHandlersProvider                         = (*Config)(nil)
-	_ AuthorizeEndpointBindingHandlersProvider              = (*Config)(nil)
-	_ TokenEndpointBindingHandlersProvider                  = (*Config)(nil)
-	_ RFC8628DeviceAuthorizeEndpointBindingHandlersProvider = (*Config)(nil)
-	_ TokenIntrospectionHandlersProvider                    = (*Config)(nil)
-	_ RevocationHandlersProvider                            = (*Config)(nil)
-	_ PushedAuthorizeRequestHandlersProvider                = (*Config)(nil)
-	_ PushedAuthorizeRequestConfigProvider                  = (*Config)(nil)
-	_ RFC8693ConfigProvider                                 = (*Config)(nil)
-	_ IDJAGConfigProvider                                   = (*Config)(nil)
-	_ RFC8628DeviceAuthorizeConfigProvider                  = (*Config)(nil)
-	_ RFC8628DeviceAuthorizeEndpointHandlersProvider        = (*Config)(nil)
-	_ RFC8628UserAuthorizeEndpointHandlersProvider          = (*Config)(nil)
-	_ IntrospectionJWTResponseStrategyProvider              = (*Config)(nil)
-	_ AuthorizeErrorFieldResponseStrategyProvider           = (*Config)(nil)
-	_ TokenEndpointClientAuthStrategyProvider               = (*Config)(nil)
-	_ IntrospectionEndpointClientAuthStrategyProvider       = (*Config)(nil)
-	_ IntrospectionEndpointClientAuthDisabledProvider       = (*Config)(nil)
-	_ IntrospectionTokenTypeEnabledProvider                 = (*Config)(nil)
-	_ RevocationEndpointClientAuthStrategyProvider          = (*Config)(nil)
-	_ SSFConfigProvider                                     = (*Config)(nil)
-	_ DPoPConfigProvider                                    = (*Config)(nil)
-	_ ClientAssertionAlgorithmsProvider                     = (*Config)(nil)
-	_ DiscoveryInformationProvider                          = (*Config)(nil)
-	_ ClientAuthMethodsProvider                             = (*Config)(nil)
-	_ RequestObjectAlgorithmsProvider                       = (*Config)(nil)
-	_ GrantAssertionAlgorithmsProvider                      = (*Config)(nil)
-	_ ResponseEncryptionAlgorithmsProvider                  = (*Config)(nil)
-	_ DPoPStrictRefreshTokenBindingProvider                 = (*Config)(nil)
-	_ OIDCKeyBindingConfigProvider                          = (*Config)(nil)
-	_ MTLSConfigProvider                                    = (*Config)(nil)
-	_ EnforceSenderConstrainedAccessTokensProvider          = (*Config)(nil)
-	_ IntrospectionPermissionProvider                       = (*Config)(nil)
-	_ SignedResponseAlgValuesProvider                       = (*Config)(nil)
-	_ MTLSStrictRefreshTokenBindingProvider                 = (*Config)(nil)
-	_ RFC7591ClientRegistrationConfigProvider               = (*Config)(nil)
-	_ RFC7591ClientRegistrationPolicyProvider               = (*Config)(nil)
-	_ RFC7591ClientRegistrationEndpointHandlersProvider     = (*Config)(nil)
-	_ RFC7592ClientConfigurationEndpointHandlersProvider    = (*Config)(nil)
+	_ jwt.ClientJWKSFetcherStrategyProvider                    = (*Config)(nil)
+	_ AuthorizeCodeLifespanProvider                            = (*Config)(nil)
+	_ RefreshTokenLifespanProvider                             = (*Config)(nil)
+	_ DisableRefreshTokenExpirationParametersProvider          = (*Config)(nil)
+	_ AccessTokenLifespanProvider                              = (*Config)(nil)
+	_ ScopeStrategyProvider                                    = (*Config)(nil)
+	_ AudienceStrategyProvider                                 = (*Config)(nil)
+	_ RedirectSecureCheckerProvider                            = (*Config)(nil)
+	_ PublicClientIdentityCheckerProvider                      = (*Config)(nil)
+	_ RefreshTokenScopesProvider                               = (*Config)(nil)
+	_ DisableRefreshTokenValidationProvider                    = (*Config)(nil)
+	_ DisableRefreshTokenRotationProvider                      = (*Config)(nil)
+	_ RefreshTokenMaximumLifespanProvider                      = (*Config)(nil)
+	_ DiscoveryMetadataHooksProvider                           = (*Config)(nil)
+	_ DiscoveryMetadataSigningStrategyProvider                 = (*Config)(nil)
+	_ JWTScopeFieldProvider                                    = (*Config)(nil)
+	_ JWTSecuredAuthorizeResponseModeStrategyProvider          = (*Config)(nil)
+	_ JWTSecuredAuthorizeResponseModeLifespanProvider          = (*Config)(nil)
+	_ JWTProfileAccessTokensProvider                           = (*Config)(nil)
+	_ AllowedPromptsProvider                                   = (*Config)(nil)
+	_ OmitRedirectScopeParamProvider                           = (*Config)(nil)
+	_ MinParameterEntropyProvider                              = (*Config)(nil)
+	_ SanitationAllowedProvider                                = (*Config)(nil)
+	_ AllowPublicClientsWithoutPKCEProvider                    = (*Config)(nil)
+	_ AllowInsecureRedirectURIForPublicClientsProvider         = (*Config)(nil)
+	_ EnablePKCEPlainChallengeMethodProvider                   = (*Config)(nil)
+	_ ClaimsParameterEnforcementProvider                       = (*Config)(nil)
+	_ RedirectFragmentGuardProvider                            = (*Config)(nil)
+	_ PostLogoutRedirectWithoutIDTokenHintProvider             = (*Config)(nil)
+	_ AuthenticationRequirementsEnforcementProvider            = (*Config)(nil)
+	_ RFC9470StepUpAuthenticationProvider                      = (*Config)(nil)
+	_ EnforcePKCEProvider                                      = (*Config)(nil)
+	_ GrantTypeJWTBearerCanSkipClientAuthProvider              = (*Config)(nil)
+	_ GrantTypeJWTBearerIDOptionalProvider                     = (*Config)(nil)
+	_ GrantTypeJWTBearerIssuedDateOptionalProvider             = (*Config)(nil)
+	_ GetJWTMaxDurationProvider                                = (*Config)(nil)
+	_ JWTClockSkewProvider                                     = (*Config)(nil)
+	_ IDTokenLifespanProvider                                  = (*Config)(nil)
+	_ IDTokenValidationStrategyProvider                        = (*Config)(nil)
+	_ BackChannelLogoutTokenStrategyProvider                   = (*Config)(nil)
+	_ BackChannelLogoutLifespanProvider                        = (*Config)(nil)
+	_ BackChannelLogoutConcurrencyProvider                     = (*Config)(nil)
+	_ AuthorizationServerIdentificationProvider                = (*Config)(nil)
+	_ JWKSFetcherStrategyProvider                              = (*Config)(nil)
+	_ ClientAuthenticationStrategyProvider                     = (*Config)(nil)
+	_ SendDebugMessagesToClientsProvider                       = (*Config)(nil)
+	_ ClientAuthenticationRealmProvider                        = (*Config)(nil)
+	_ ResponseModeHandlerProvider                              = (*Config)(nil)
+	_ MessageCatalogProvider                                   = (*Config)(nil)
+	_ FormPostHTMLTemplateProvider                             = (*Config)(nil)
+	_ FormPostResponseProvider                                 = (*Config)(nil)
+	_ AllowedJWTAssertionAudiencesProvider                     = (*Config)(nil)
+	_ CIBAConfigProvider                                       = (*Config)(nil)
+	_ BackChannelNotifierProvider                              = (*Config)(nil)
+	_ ClaimsParameterMaxLengthProvider                         = (*Config)(nil)
+	_ ClientAssertionClientSecretEncryptionDisabledProvider    = (*Config)(nil)
+	_ AllowedIntrospectionAudiencesProvider                    = (*Config)(nil)
+	_ AllowedIntrospectionScopesProvider                       = (*Config)(nil)
+	_ HTTPClientProvider                                       = (*Config)(nil)
+	_ ClientIDMetadataDocumentConfigProvider                   = (*Config)(nil)
+	_ ClientIDMetadataDocumentReservedIdentifiersProvider      = (*Config)(nil)
+	_ HMACHashingProvider                                      = (*Config)(nil)
+	_ AuthorizeEndpointHandlersProvider                        = (*Config)(nil)
+	_ TokenEndpointHandlersProvider                            = (*Config)(nil)
+	_ AuthorizeEndpointBindingHandlersProvider                 = (*Config)(nil)
+	_ TokenEndpointBindingHandlersProvider                     = (*Config)(nil)
+	_ RFC8628DeviceAuthorizeEndpointBindingHandlersProvider    = (*Config)(nil)
+	_ BackChannelAuthenticationEndpointBindingHandlersProvider = (*Config)(nil)
+	_ BackChannelAuthenticationEndpointHandlersProvider        = (*Config)(nil)
+	_ BackChannelAuthenticationDecisionHandlersProvider        = (*Config)(nil)
+	_ TokenIntrospectionHandlersProvider                       = (*Config)(nil)
+	_ RevocationHandlersProvider                               = (*Config)(nil)
+	_ PushedAuthorizeRequestHandlersProvider                   = (*Config)(nil)
+	_ PushedAuthorizeRequestConfigProvider                     = (*Config)(nil)
+	_ RFC8693ConfigProvider                                    = (*Config)(nil)
+	_ IDJAGConfigProvider                                      = (*Config)(nil)
+	_ RFC8628DeviceAuthorizeConfigProvider                     = (*Config)(nil)
+	_ RFC8628DeviceAuthorizeEndpointHandlersProvider           = (*Config)(nil)
+	_ RFC8628UserAuthorizeEndpointHandlersProvider             = (*Config)(nil)
+	_ IntrospectionJWTResponseStrategyProvider                 = (*Config)(nil)
+	_ AuthorizeErrorFieldResponseStrategyProvider              = (*Config)(nil)
+	_ TokenEndpointClientAuthStrategyProvider                  = (*Config)(nil)
+	_ IntrospectionEndpointClientAuthStrategyProvider          = (*Config)(nil)
+	_ IntrospectionEndpointClientAuthDisabledProvider          = (*Config)(nil)
+	_ IntrospectionTokenTypeEnabledProvider                    = (*Config)(nil)
+	_ RevocationEndpointClientAuthStrategyProvider             = (*Config)(nil)
+	_ SSFConfigProvider                                        = (*Config)(nil)
+	_ DPoPConfigProvider                                       = (*Config)(nil)
+	_ ClientAssertionAlgorithmsProvider                        = (*Config)(nil)
+	_ DiscoveryInformationProvider                             = (*Config)(nil)
+	_ ClientAuthMethodsProvider                                = (*Config)(nil)
+	_ RequestObjectAlgorithmsProvider                          = (*Config)(nil)
+	_ GrantAssertionAlgorithmsProvider                         = (*Config)(nil)
+	_ ResponseEncryptionAlgorithmsProvider                     = (*Config)(nil)
+	_ DPoPStrictRefreshTokenBindingProvider                    = (*Config)(nil)
+	_ OIDCKeyBindingConfigProvider                             = (*Config)(nil)
+	_ MTLSConfigProvider                                       = (*Config)(nil)
+	_ EnforceSenderConstrainedAccessTokensProvider             = (*Config)(nil)
+	_ IntrospectionPermissionProvider                          = (*Config)(nil)
+	_ SignedResponseAlgValuesProvider                          = (*Config)(nil)
+	_ MTLSStrictRefreshTokenBindingProvider                    = (*Config)(nil)
+	_ RFC7591ClientRegistrationConfigProvider                  = (*Config)(nil)
+	_ RFC7591ClientRegistrationPolicyProvider                  = (*Config)(nil)
+	_ RFC7591ClientRegistrationEndpointHandlersProvider        = (*Config)(nil)
+	_ RFC7592ClientConfigurationEndpointHandlersProvider       = (*Config)(nil)
 )
 
 // GetTokenEndpointAuthMethods returns the client authentication methods accepted at the token endpoint, or nil when

@@ -111,6 +111,7 @@ const (
 	DiscoveryBackChannelTokenDeliveryModesSupported                    = "backchannel_token_delivery_modes_supported"
 	DiscoveryBackChannelAuthenticationEndpoint                         = "backchannel_authentication_endpoint"
 	DiscoveryBackChannelAuthenticationRequestSigningAlgValuesSupported = "backchannel_authentication_request_signing_alg_values_supported"
+	DiscoveryBackChannelEndpointLoginHintTokenTypesSupported           = "backchannel_endpoint_login_hint_token_types_supported"
 	DiscoveryBackChannelUserCodeParameterSupported                     = "backchannel_user_code_parameter_supported"
 	DiscoveryGrantManagementActionsSupported                           = "grant_management_actions_supported"
 	DiscoveryGrantManagementEndpoint                                   = "grant_management_endpoint"

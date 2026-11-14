@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/ciba"
 	"authelia.com/provider/oauth2/handler/idjag"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/oidckb"
@@ -57,6 +58,15 @@ var ErrHandlerOrder = errors.New("oauth2: handlers are registered in an order wh
 //   - Every rfc8693.TxnTokenTypeHandler is an RFC 8693 token type handler for that rule, and no other RFC 8693 token
 //     type handler may follow it, as it is the last to decline a request which is not for a Transaction Token (see
 //     draft-ietf-oauth-transaction-tokens-11 Section 11.2).
+//   - Every openid.OpenIDConnectCIBAHandler must precede the ciba.EndpointHandler in the backchannel authentication
+//     endpoint handlers, so a reused 'nonce' is rejected before the request is persisted, and must follow the
+//     ciba.DecisionHandler in the backchannel authentication decision handlers, so only the decision which was
+//     recorded writes an OpenID Connect session.
+//   - Every oidckb.Handler must follow the rfc9449.Handler in the backchannel authentication endpoint binding
+//     handlers, as it reads the DPoP proof key rfc9449.Handler records on the session.
+//   - Every openid.OpenIDConnectCIBAHandler must follow the ciba.TokenEndpointHandler in the token endpoint handlers,
+//     as it requires the scopes the ciba.TokenEndpointHandler grants and computes the ID Token 'at_hash' claim from
+//     the access token it issues.
 //
 // Except for the RFC 8693 rule, a rule only applies when both handlers are registered.
 func ValidateHandlerOrder(config *oauth2.Config) (err error) {
@@ -67,7 +77,17 @@ func ValidateHandlerOrder(config *oauth2.Config) (err error) {
 		validateTokenEndpointBindingHandlerOrder(config),
 		validateIDJAGRedeemHandlerBinding(config),
 		validateRFC8628UserAuthorizeHandlerOrder(config),
+		validateCIBAHandlerOrder(config),
+		validateBackChannelAuthenticationBindingHandlerOrder(config),
 	)
+}
+
+func validateBackChannelAuthenticationBindingHandlerOrder(config *oauth2.Config) (err error) {
+	if handlerPrecedes[*oidckb.Handler, *rfc9449.Handler](config.BackChannelAuthenticationEndpointBindingHandlers) {
+		return fmt.Errorf("%w: the rfc9449.Handler (DPoPTokenFactory) must be registered before the oidckb.Handler (OpenIDConnectKeyBindingFactory) in the backchannel authentication endpoint binding handlers, as it reads the DPoP proof key the rfc9449.Handler records", ErrHandlerOrder)
+	}
+
+	return nil
 }
 
 func validateAuthorizeEndpointHandlerOrder(config *oauth2.Config) (err error) {
@@ -105,6 +125,10 @@ func validateTokenEndpointHandlerOrder(config *oauth2.Config) (err error) {
 
 	if handlerPrecedes[*openid.OpenIDConnectDeviceAuthorizeHandler, *rfc8628.DeviceAuthorizeTokenEndpointHandler](handlers) {
 		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectDeviceAuthorizeHandler (OpenIDConnectDeviceAuthorizeFactory) must be registered after the rfc8628.DeviceAuthorizeTokenEndpointHandler (RFC8628DeviceAuthorizeTokenFactory), as it computes the ID Token 'at_hash' claim from the access token the rfc8628.DeviceAuthorizeTokenEndpointHandler issues", ErrHandlerOrder))
+	}
+
+	if handlerPrecedes[*openid.OpenIDConnectCIBAHandler, *ciba.TokenEndpointHandler](handlers) {
+		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectCIBAHandler (OpenIDConnectCIBAFactory) must be registered after the ciba.TokenEndpointHandler (CIBATokenFactory), as it requires the scopes the ciba.TokenEndpointHandler grants and computes the ID Token 'at_hash' claim from the access token it issues", ErrHandlerOrder))
 	}
 
 	return err
@@ -259,4 +283,19 @@ func validateRFC8628UserAuthorizeHandlerOrder(config *oauth2.Config) (err error)
 	}
 
 	return fmt.Errorf("%w: the oidckb.UserAuthorizeHandler (OpenIDConnectKeyBindingUserAuthorizeFactory) must be registered before the rfc8628.UserAuthorizeHandler (RFC8628UserAuthorizeFactory), as it records the granted key binding onto the device code session the rfc8628.UserAuthorizeHandler persists", ErrHandlerOrder)
+}
+
+// validateCIBAHandlerOrder returns an error when an openid.OpenIDConnectCIBAHandler follows the ciba.EndpointHandler
+// in the backchannel authentication endpoint handlers, or precedes the ciba.DecisionHandler in the backchannel
+// authentication decision handlers.
+func validateCIBAHandlerOrder(config *oauth2.Config) (err error) {
+	if handlerPrecedes[*ciba.EndpointHandler, *openid.OpenIDConnectCIBAHandler](config.BackChannelAuthenticationEndpointHandlers) {
+		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectCIBAHandler (OpenIDConnectCIBAFactory) must be registered before the ciba.EndpointHandler (CIBAEndpointFactory) in the backchannel authentication endpoint handlers, as it rejects a reused 'nonce' before the ciba.EndpointHandler persists the request", ErrHandlerOrder))
+	}
+
+	if handlerPrecedes[*openid.OpenIDConnectCIBAHandler, *ciba.DecisionHandler](config.BackChannelAuthenticationDecisionHandlers) {
+		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectCIBAHandler (OpenIDConnectCIBAFactory) must be registered after the ciba.DecisionHandler (CIBADecisionFactory) in the backchannel authentication decision handlers, as it writes the OpenID Connect session only for the decision the ciba.DecisionHandler records", ErrHandlerOrder))
+	}
+
+	return err
 }

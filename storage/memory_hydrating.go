@@ -193,3 +193,113 @@ func (s *HydratingMemoryStore) GetRefreshTokenSession(ctx context.Context, signa
 
 	return hydrated, err
 }
+
+// CreateCIBASession stores a copy of the request against the 'auth_req_id' signature. The marshalled session is
+// published under the same lock as the write and only once it succeeds, so a failed write leaves no session behind.
+func (s *HydratingMemoryStore) CreateCIBASession(ctx context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) (err error) {
+	var data []byte
+
+	if request.GetSession() != nil {
+		if data, err = json.Marshal(request.GetSession()); err != nil {
+			return err
+		}
+	}
+
+	s.sessionsMutex.Lock()
+	defer s.sessionsMutex.Unlock()
+
+	if err = s.MemoryStore.CreateCIBASession(ctx, signature, request); err != nil {
+		return err
+	}
+
+	if data != nil {
+		s.sessions["ciba:"+signature] = data
+	}
+
+	return nil
+}
+
+// UpdateCIBASession writes the polling state of the request onto the stored request, as MemoryStore does. The
+// marshalled session is not republished.
+func (s *HydratingMemoryStore) UpdateCIBASession(ctx context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) (err error) {
+	return s.MemoryStore.UpdateCIBASession(ctx, signature, request)
+}
+
+// DecideCIBASession stores the request only while the stored request is pending. The marshalled session is published
+// under the same lock as the decision and only once it succeeds, so a reader never sees a decided request with another
+// decider's session and a rejected decision never overwrites the blob.
+func (s *HydratingMemoryStore) DecideCIBASession(ctx context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) (err error) {
+	var data []byte
+
+	if request.GetSession() != nil {
+		if data, err = json.Marshal(request.GetSession()); err != nil {
+			return err
+		}
+	}
+
+	s.sessionsMutex.Lock()
+	defer s.sessionsMutex.Unlock()
+
+	if err = s.MemoryStore.DecideCIBASession(ctx, signature, request); err != nil {
+		return err
+	}
+
+	if data != nil {
+		s.sessions["ciba:"+signature] = data
+	}
+
+	return nil
+}
+
+// GetCIBASession returns the request stored against the 'auth_req_id' signature, carrying the caller-supplied session
+// hydrated from the marshalled session. The request is returned alongside oauth2.ErrInvalidatedCIBASession.
+func (s *HydratingMemoryStore) GetCIBASession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.BackChannelAuthenticationRequester, err error) {
+	s.sessionsMutex.RLock()
+	defer s.sessionsMutex.RUnlock()
+
+	request, err = s.MemoryStore.GetCIBASession(ctx, signature, session)
+
+	return s.hydrateCIBA("ciba:"+signature, request, session, err)
+}
+
+// GetCIBASessionByRequestID returns the request with the given request ID, hydrated as GetCIBASession does.
+func (s *HydratingMemoryStore) GetCIBASessionByRequestID(ctx context.Context, requestID string, session oauth2.Session) (request oauth2.BackChannelAuthenticationRequester, err error) {
+	s.cibaSessionsMutex.RLock()
+	signature, ok := s.CIBARequestIDs[requestID]
+	s.cibaSessionsMutex.RUnlock()
+
+	if !ok {
+		return nil, oauth2.ErrNotFound
+	}
+
+	return s.GetCIBASession(ctx, signature, session)
+}
+
+// hydrateCIBA requires the caller to hold sessionsMutex.
+func (s *HydratingMemoryStore) hydrateCIBA(key string, request oauth2.BackChannelAuthenticationRequester, session oauth2.Session, getErr error) (oauth2.BackChannelAuthenticationRequester, error) {
+	if request == nil || (getErr != nil && !errors.Is(getErr, oauth2.ErrInvalidatedCIBASession)) {
+		return nil, getErr
+	}
+
+	req, ok := request.(*oauth2.BackChannelAuthenticationRequest)
+	if !ok {
+		return nil, fmt.Errorf("HydratingMemoryStore cannot hydrate a %T; it can only clone *oauth2.BackChannelAuthenticationRequest", request)
+	}
+
+	if session == nil {
+		return req, getErr
+	}
+
+	data, found := s.sessions[key]
+	if !found {
+		return req, getErr
+	}
+
+	if err := json.Unmarshal(data, session); err != nil {
+		return nil, err
+	}
+
+	req.Session = session
+
+	return req, getErr
+}

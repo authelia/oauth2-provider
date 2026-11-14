@@ -31,7 +31,10 @@ func OpenIDConnectKeyBindingDeviceAuthorizeFactory(config oauth2.Configurator, s
 }
 
 // OpenIDConnectKeyBindingFactory creates the OpenID Connect Key Binding 1.0 token endpoint binding handler, which
-// confirms the 'c_s256' claim and records the proof key the ID Token's 'cnf' claim carries.
+// confirms the 'c_s256' claim and records the proof key the ID Token's 'cnf' claim carries. The handler is also the
+// OpenID Connect CIBA backchannel authentication endpoint binding handler, which grants key binding when the
+// 'bound_key' scope is requested with a DPoP proof. It reads the proof key the DPoPTokenFactory handler records there,
+// which the order rule above also covers.
 //
 // It MUST be registered after DPoPTokenFactory: it performs no proof validation of its own and instead consumes the
 // proof rfc9449.Handler publishes once every RFC 9449 Section 5 check has passed, and both run in the same

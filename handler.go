@@ -191,6 +191,33 @@ type RFC8628DeviceAuthorizeEndpointHandler interface {
 	HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, request DeviceAuthorizeRequester, response DeviceAuthorizeResponder) (err error)
 }
 
+// BackChannelAuthenticationEndpointHandler issues and persists the 'auth_req_id' of an OpenID Connect CIBA
+// authentication request.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.3
+type BackChannelAuthenticationEndpointHandler interface {
+	// HandleBackChannelAuthenticationEndpointRequest populates the response and persists the request.
+	HandleBackChannelAuthenticationEndpointRequest(ctx context.Context, request BackChannelAuthenticationRequester, response BackChannelAuthenticationResponder) (err error)
+}
+
+// BackChannelAuthenticationDecisionHandler records the end user's decision on an OpenID Connect CIBA authentication
+// request.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.8
+type BackChannelAuthenticationDecisionHandler interface {
+	// HandleBackChannelAuthenticationDecision handles the decision recorded on the request by its status.
+	HandleBackChannelAuthenticationDecision(ctx context.Context, request BackChannelAuthenticationRequester, result *BackChannelAuthenticationDecisionResult) (err error)
+}
+
+// BackChannelAuthenticationEndpointBindingHandler records a proof-of-possession binding onto the session of a CIBA
+// authentication request before any handler persists that session. Handlers run in registration order, and a handler
+// that reads what another records must be registered after it.
+type BackChannelAuthenticationEndpointBindingHandler interface {
+	// BindBackChannelAuthenticationRequest records any binding the request asserts. It returns nil both when it
+	// records one and when there is nothing to record; any error rejects the request.
+	BindBackChannelAuthenticationRequest(ctx context.Context, request BackChannelAuthenticationRequester) (err error)
+}
+
 type RFC8628UserAuthorizeEndpointHandler interface {
 	// HandleRFC8628UserAuthorizeEndpointRequest validates the request with the given user code.
 	//

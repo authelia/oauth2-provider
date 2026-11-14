@@ -6,7 +6,6 @@ package oauth2
 
 import (
 	"context"
-	"crypto/subtle"
 	"net/http"
 	"net/url"
 	"strings"
@@ -82,71 +81,7 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 		requester.SetRequestedAuthorizationDetails(details)
 	}
 
-	var found = false
-	for _, loader := range f.Config.GetTokenEndpointHandlers(ctx) {
-		if !loader.CanHandleTokenEndpointRequest(ctx, requester) {
-			continue
-		}
-
-		if clientErr != nil && (presented || !loader.CanSkipClientAuth(ctx, requester)) {
-			return requester, clientErr
-		}
-
-		if err = loader.HandleTokenEndpointRequest(ctx, requester); err == nil {
-			found = true
-		} else if errors.Is(err, ErrUnknownRequest) {
-			// This is a duplicate because it should already have been handled by
-			// `loader.CanHandleTokenEndpointRequest` but let's keep it for sanity.
-
-			continue
-		} else if err != nil {
-			return requester, err
-		}
-	}
-
-	if !found {
-		return nil, errorsx.WithStack(ErrInvalidRequest.WithDebugf("The client with id '%s' requested grant type '%s' which is invalid, unknown, not supported, or not configured to be handled.", requester.GetRequestForm().Get(consts.FormParameterClientID), strings.Join(requester.GetGrantTypes(), " ")))
-	}
-
-	// Created here rather than by a handler because context values do not propagate between the handlers in this
-	// loop: the container must exist before the first handler runs for a later one to observe what an earlier one
-	// published.
-	ctx = context.WithValue(ctx, DPoPProofContextKey, &DPoPProofHolder{})
-
-	// Binding handlers run only once a grant handler has accepted the request, so a binding handler needs neither a
-	// grant type claim nor a client authentication policy of its own: by this point the accepting grant handler has
-	// enforced whatever authentication it requires, or legitimately waived it.
-	for _, binding := range f.Config.GetTokenEndpointBindingHandlers(ctx) {
-		if err = binding.BindAccessRequest(ctx, requester); err != nil {
-			return requester, err
-		}
-	}
-
-	// FAPI 2.0 Security Profile Section 5.3.2.1: only sender-constrained access tokens may be issued, and the request
-	// must prove possession of the key or certificate the session is bound to.
-	provider, _ := f.Config.(EnforceSenderConstrainedAccessTokensProvider)
-
-	if IsSenderConstrainedAccessTokenEnforced(ctx, provider, requester.GetClient()) && !f.isSenderConstrainedByRequest(ctx, r, requester.GetSession()) {
-		return requester, errorsx.WithStack(ErrInvalidRequest.WithHint("The request requires a sender-constrained access token, but neither a DPoP proof nor a mutual-TLS client certificate was presented to bind it to."))
-	}
-
-	return requester, nil
-}
-
-func (f *Fosite) isSenderConstrainedByRequest(ctx context.Context, r *http.Request, session Session) bool {
-	if s, ok := session.(DPoPBoundSession); ok && s.GetDPoPJWKThumbprint() != "" && f.Config.GetDPoPEnabled(ctx) {
-		if proof := GetDPoPProof(ctx); proof != nil && subtle.ConstantTimeCompare([]byte(proof.Thumbprint), []byte(s.GetDPoPJWKThumbprint())) == 1 {
-			return true
-		}
-	}
-
-	if s, ok := session.(MTLSBoundSession); ok && s.GetClientCertificateSHA256Thumbprint() != "" && f.Config.GetMTLSEnabled(ctx) {
-		if _, err := ValidateClientCertificateBinding(r, f.Config.GetMTLSClientCertificateHeader(ctx), s.GetClientCertificateSHA256Thumbprint()); err == nil {
-			return true
-		}
-	}
-
-	return false
+	return f.handleAccessRequest(ctx, r, requester, clientErr, presented)
 }
 
 func hasClientCredentials(r *http.Request, form url.Values) bool {

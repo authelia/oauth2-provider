@@ -37,6 +37,8 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 		return requester, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	} else if len(r.PostForm) == 0 {
 		return requester, errorsx.WithStack(ErrInvalidRequest.WithHint("The POST body can not be empty."))
+	} else if err = ValidateRequestParametersNotRepeated(r.PostForm); err != nil {
+		return requester, err
 	}
 
 	requester.Form = r.PostForm

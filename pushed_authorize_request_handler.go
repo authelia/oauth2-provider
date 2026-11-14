@@ -35,6 +35,10 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
 
+	if err = ValidateRequestParametersNotRepeated(r.Form); err != nil {
+		return request, err
+	}
+
 	request.Form = withoutClientCredentials(r.Form)
 	request.State = request.Form.Get(consts.FormParameterState)
 

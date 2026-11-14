@@ -62,6 +62,12 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
 
+	if err = validateRequestParametersNotRepeated(r.Form, authorizeRedirectRequestParameters); err != nil {
+		return request, err
+	}
+
+	errRepeated := ValidateRequestParametersNotRepeated(r.Form)
+
 	request.Form = r.Form
 
 	request.State = request.Form.Get(consts.FormParameterState)
@@ -74,7 +80,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		}
 
 		if isPAR {
-			return request, nil
+			return request, errRepeated
 		}
 
 		if config, ok := f.Config.(PushedAuthorizeRequestConfigProvider); ok && config.GetRequirePushedAuthorizationRequests(ctx) {
@@ -113,6 +119,10 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 
 	if err = f.validateAuthorizeRedirectURI(ctx, r, request); err != nil {
 		return request, err
+	}
+
+	if errRepeated != nil {
+		return request, errRepeated
 	}
 
 	if err = f.validateScope(ctx, r, request); err != nil {

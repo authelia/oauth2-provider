@@ -56,7 +56,8 @@ type SSFConfig struct {
 	// enabled, on a verification request, and on every push.
 	EndpointValidator SSFEndpointValidator
 
-	// HTTPClient is the HTTP client used to push a Security Event Token. Nil means Config.GetHTTPClient. See
+	// HTTPClient is the HTTP client used to push a Security Event Token. Nil means Config.GetHTTPClient. It is guarded
+	// by GuardHTTPClient unless SpecialUseAddressGuardProvider disables the guard. See
 	// NewSpecialUseAddressGuardedHTTPClient.
 	HTTPClient *retryablehttp.Client
 
@@ -151,7 +152,7 @@ type SSFClientPolicy struct {
 //
 // URL validation alone cannot block private addresses because DNS can change after validation. The application must
 // also check the resolved address at connection time in the transport of SSFConfig.HTTPClient, or of the HTTP client
-// returned by Config.GetHTTPClient when it is nil.
+// returned by Config.GetHTTPClient when it is nil, which the special-use address guard does unless it is disabled.
 type SSFEndpointValidator interface {
 	// ValidateSSFEndpoint returns an error when the endpoint is not permitted for the client. An error matching
 	// ErrTemporarilyUnavailable makes a push SSFPushRetryable rather than SSFPushRejected.

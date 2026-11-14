@@ -8,6 +8,7 @@ import (
 	"context"
 	"hash"
 	"html/template"
+	"net"
 	"net/url"
 	"slices"
 	"strings"
@@ -388,8 +389,26 @@ type Config struct {
 
 	// HTTPClient is the HTTP client to use for requests. URL validation cannot block private addresses because DNS can
 	// change, so a deployment that fetches or delivers to untrusted URLs must also check the resolved address at
-	// connection time in this client's transport.
+	// connection time. Such fetches refuse special-use addresses unless DisableSpecialUseAddressGuard is set.
 	HTTPClient *retryablehttp.Client
+
+	// DisableSpecialUseAddressGuard disables the special-use address guard. While the guard is enabled every fetch of,
+	// or delivery to, a location supplied by a client or another party that is not trusted refuses to connect to a
+	// special-use address, as the HTTP client used for it is guarded with GuardHTTPClient, which also ignores the proxy.
+	// It covers the 'request_uri', the 'jwks_uri' of a client fetched by a DefaultJWKSFetcherStrategy, the
+	// 'backchannel_logout_uri', the 'sector_identifier_uri' and the Shared Signals Framework push endpoint. A custom
+	// JWKSFetcherStrategy is not guarded and must guard itself. The HTTP clients of Client ID Metadata Documents are not
+	// changed, as they must already refuse special-use addresses. Defaults to false.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc8725bis-10#section-3.10
+	DisableSpecialUseAddressGuard bool
+
+	// SpecialUseAddressGuardAllowedNetworks permits the special-use address guard to connect to an address within any
+	// of these networks, even when it is a special-use address, such as an internal network that clients are trusted
+	// to name.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc8725bis-10#section-3.10
+	SpecialUseAddressGuardAllowedNetworks []*net.IPNet
 
 	// ClientIDMetadataDocumentResolver resolves a Client Identifier URL which is not a registered client. Client ID
 	// Metadata Documents are disabled when it is nil.
@@ -918,6 +937,16 @@ func (c *Config) GetHTTPClient(ctx context.Context) *retryablehttp.Client {
 	return c.HTTPClient
 }
 
+// GetDisableSpecialUseAddressGuard returns the value of DisableSpecialUseAddressGuard.
+func (c *Config) GetDisableSpecialUseAddressGuard(_ context.Context) (disable bool) {
+	return c.DisableSpecialUseAddressGuard
+}
+
+// GetSpecialUseAddressGuardAllowedNetworks returns the value of SpecialUseAddressGuardAllowedNetworks.
+func (c *Config) GetSpecialUseAddressGuardAllowedNetworks(_ context.Context) (networks []*net.IPNet) {
+	return c.SpecialUseAddressGuardAllowedNetworks
+}
+
 // GetClientIDMetadataDocumentResolver returns the Client ID Metadata Document resolver, or nil when disabled.
 func (c *Config) GetClientIDMetadataDocumentResolver(_ context.Context) ClientIDMetadataDocumentResolver {
 	return c.ClientIDMetadataDocumentResolver
@@ -1409,13 +1438,15 @@ func (c *Config) GetJWKSFetcherStrategy(_ context.Context) jwt.JWKSFetcherStrate
 
 // GetClientJWKSFetcherStrategy returns the strategy used to fetch the 'jwks_uri' of the given client, which is the
 // ClientIDMetadataDocumentJWKSFetcherStrategy for a client resolved from a Client ID Metadata Document, or for any
-// client whose identifier is a Client Identifier URL while the feature is enabled, and may then be nil.
+// client whose identifier is a Client Identifier URL while the feature is enabled, and may then be nil. Otherwise it is
+// the JWKSFetcherStrategy wrapped by SpecialUseAddressGuardJWKSFetcherStrategy, which refuses special-use addresses
+// unless DisableSpecialUseAddressGuard is true or it is not a *DefaultJWKSFetcherStrategy.
 func (c *Config) GetClientJWKSFetcherStrategy(ctx context.Context, client any) jwt.JWKSFetcherStrategy {
 	if isClientIDMetadataDocumentFetchClient(ctx, c, client) {
 		return c.ClientIDMetadataDocumentJWKSFetcherStrategy
 	}
 
-	return c.GetJWKSFetcherStrategy(ctx)
+	return SpecialUseAddressGuardJWKSFetcherStrategy(ctx, c, c.GetJWKSFetcherStrategy(ctx))
 }
 
 // GetTokenEntropy returns the entropy of the "message" part of a HMAC Token. Defaults to 32.
@@ -2137,6 +2168,8 @@ var (
 	_ AllowedIntrospectionAudiencesProvider                 = (*Config)(nil)
 	_ AllowedIntrospectionScopesProvider                    = (*Config)(nil)
 	_ HTTPClientProvider                                    = (*Config)(nil)
+	_ SpecialUseAddressGuardProvider                        = (*Config)(nil)
+	_ ClientJWKSFetcherStrategyProvider                     = (*Config)(nil)
 	_ ClientIDMetadataDocumentConfigProvider                = (*Config)(nil)
 	_ ClientIDMetadataDocumentReservedIdentifiersProvider   = (*Config)(nil)
 	_ HMACHashingProvider                                   = (*Config)(nil)

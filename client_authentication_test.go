@@ -11,12 +11,14 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1137,9 +1139,10 @@ func TestAuthenticateClient(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &Config{
-				JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
-				Issuer:              "token-url",
-				HTTPClient:          retryablehttp.NewClient(),
+				JWKSFetcherStrategy:           NewDefaultJWKSFetcherStrategy(),
+				Issuer:                        "token-url",
+				HTTPClient:                    retryablehttp.NewClient(),
+				DisableSpecialUseAddressGuard: true,
 			}
 
 			config.JWTStrategy = &jwt.DefaultStrategy{
@@ -1549,6 +1552,79 @@ func TestClientAuthenticationChallengePreservesErrorChain(t *testing.T) {
 	assert.Equal(t, `Basic realm="oauth2"`, rw.Header().Get(consts.HeaderWWWAuthenticate))
 }
 
+func TestSpecialUseAddressGuardAuthenticateClientPrivateKeyJWT(t *testing.T) {
+	key := gen.MustRSAKey()
+
+	jwks := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{KeyID: "kid-foo", Use: "sig", Algorithm: "RS256", Key: &key.PublicKey}}}
+
+	testCases := []struct {
+		name      string
+		disable   bool
+		allowed   []*net.IPNet
+		permitted bool
+	}{
+		{name: "ShouldFetchWhenDisabled", disable: true},
+		{name: "ShouldRefuseByDefault"},
+		{name: "ShouldFetchWhenTheNetworkIsAllowed", allowed: mustParseNetworks("127.0.0.0/8", "::1/128"), permitted: true},
+		{name: "ShouldRefuseWhenOnlyAnotherNetworkIsAllowed", allowed: mustParseNetworks("10.0.0.0/8")},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var hits atomic.Int64
+
+			server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+				hits.Add(1)
+				require.NoError(t, json.NewEncoder(rw).Encode(jwks))
+			}))
+			defer server.Close()
+
+			config := &Config{
+				JWKSFetcherStrategy:                   NewDefaultJWKSFetcherStrategy(JWKSFetcherWithHTTPClient(guardTestHTTPClient())),
+				Issuer:                                "token-url",
+				DisableSpecialUseAddressGuard:         tc.disable,
+				SpecialUseAddressGuardAllowedNetworks: tc.allowed,
+			}
+
+			config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(jwks)}
+
+			client := &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar"}, JSONWebKeysURI: server.URL, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT}
+
+			store := storage.NewMemoryStore()
+			store.Clients[client.GetID()] = client
+
+			provider := &Fosite{Store: store, Config: config}
+
+			form := url.Values{
+				consts.FormParameterClientID: {"bar"},
+				consts.FormParameterClientAssertion: {mustGenerateClientAssertion(t, jwt.MapClaims{
+					consts.ClaimSubject:        "bar",
+					consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+					consts.ClaimIssuer:         "bar",
+					consts.ClaimJWTID:          "12345",
+					consts.ClaimAudience:       "token-url",
+				}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", key)},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			}
+
+			_, _, err := provider.AuthenticateClientWithAuthHandler(t.Context(), new(http.Request), form, config.GetTokenEndpointClientAuthStrategy(t.Context()))
+
+			if !tc.disable && !tc.permitted {
+				assert.ErrorIs(t, err, ErrInvalidClient)
+				assert.Zero(t, hits.Load())
+
+				_, err = jwt.ClientJWKSFetcherStrategy(t.Context(), config, client).Resolve(t.Context(), server.URL, false)
+
+				assert.ErrorIs(t, err, ErrSpecialUseAddress)
+				assert.Zero(t, hits.Load())
+			} else {
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+				assert.Equal(t, int64(1), hits.Load())
+			}
+		})
+	}
+}
+
 func mustGenerateClientAssertion(t *testing.T, claims jwt.MapClaims, alg jose.SignatureAlgorithm, typ, kid string, key any) string {
 	t.Helper()
 
@@ -1642,4 +1718,25 @@ type failingClientAssertionStore struct {
 
 func (s *failingClientAssertionStore) SetClientAssertionJWT(_ context.Context, _, _ string, _ time.Time) error {
 	return errors.New("the store is unavailable")
+}
+
+func guardTestHTTPClient() *retryablehttp.Client {
+	client := retryablehttp.NewClient()
+	client.RetryMax = 0
+	client.Logger = nil
+
+	return client
+}
+
+func mustParseNetworks(cidrs ...string) (networks []*net.IPNet) {
+	for _, cidr := range cidrs {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			panic(err)
+		}
+
+		networks = append(networks, network)
+	}
+
+	return networks
 }

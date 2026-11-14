@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -45,7 +46,7 @@ func TestSectorIdentifierValidator(t *testing.T) {
 
 	httpClient.HTTPClient = server.Client()
 
-	config := &oauth2.Config{HTTPClient: httpClient}
+	config := &oauth2.Config{HTTPClient: httpClient, DisableSpecialUseAddressGuard: true}
 	validator := NewSectorIdentifierValidator(config)
 
 	t.Run("ShouldSkipWhenAbsent", func(t *testing.T) {
@@ -143,4 +144,49 @@ func TestSectorIdentifierValidator(t *testing.T) {
 		require.Error(t, err)
 		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), fmt.Sprintf("The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value '%s/redirect' returned HTTP status code 302 instead of the expected 200.", server.URL))
 	})
+}
+
+func TestSectorIdentifierValidatorSpecialUseAddressGuard(t *testing.T) {
+	testCases := []struct {
+		name    string
+		disable bool
+	}{
+		{name: "ShouldFetchWhenDisabled", disable: true},
+		{name: "ShouldRefuseByDefault"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var hits atomic.Int64
+
+			server := httptest.NewTLSServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+				hits.Add(1)
+				rw.Header().Set("Content-Type", "application/json")
+				_, _ = rw.Write([]byte(`["https://example.com/cb"]`))
+			}))
+
+			t.Cleanup(server.Close)
+
+			httpClient := retryablehttp.NewClient()
+			httpClient.Logger = nil
+			httpClient.RetryMax = 0
+
+			httpClient.HTTPClient = server.Client()
+
+			validator := NewSectorIdentifierValidator(&oauth2.Config{HTTPClient: httpClient, DisableSpecialUseAddressGuard: tc.disable})
+
+			err := validator.ValidateClientRegistrationMetadata(t.Context(), nil, &oauth2.ClientRegistrationMetadata{
+				SectorIdentifierURI: server.URL + "/good",
+				RedirectURIs:        []string{"https://example.com/cb"},
+			})
+
+			if !tc.disable {
+				assert.ErrorIs(t, err, oauth2.ErrSpecialUseAddress)
+				assert.Zero(t, hits.Load())
+			} else {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				assert.Equal(t, int64(1), hits.Load())
+			}
+		})
+	}
 }

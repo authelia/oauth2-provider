@@ -67,16 +67,6 @@ func TestConfigRequestObjectEncryptionAlgDefaultsFromDecryptionKeys(t *testing.T
 	assert.ElementsMatch(t, append(symmetricKeyAlgorithms(), string(jose.RSA_OAEP_256), string(jose.ECDH_ES_A128KW)), actual)
 }
 
-func symmetricKeyAlgorithms() (algs []string) {
-	for _, alg := range jwt.EncryptionKeyAlgorithms {
-		if jwt.IsEncryptedJWTClientSecretAlg(alg) {
-			algs = append(algs, string(alg))
-		}
-	}
-
-	return algs
-}
-
 func TestConfigAlgorithmOverrides(t *testing.T) {
 	ctx := context.Background()
 
@@ -109,4 +99,99 @@ func TestConfigAlgorithmOverrides(t *testing.T) {
 
 	assert.Equal(t, algorithmStrings(jwt.EncryptionKeyAlgorithms), c.GetResponseEncryptionAlgValues(ctx, ResponseEncryptionTargetIDToken))
 	assert.Equal(t, algorithmStrings(jwt.ContentEncryptionAlgorithms), c.GetResponseEncryptionEncValues(ctx, ResponseEncryptionTargetIDToken))
+}
+
+func TestConfigRSA15KeyManagement(t *testing.T) {
+	targets := []ResponseEncryptionTarget{
+		ResponseEncryptionTargetIDToken,
+		ResponseEncryptionTargetUserInfo,
+		ResponseEncryptionTargetAuthorization,
+		ResponseEncryptionTargetIntrospection,
+		ResponseEncryptionTargetAccessToken,
+	}
+
+	rsa15 := string(jose.RSA1_5)
+
+	newConfig := func(enabled bool) *Config {
+		c := &Config{EnableRSA15KeyManagement: enabled}
+		c.JWTStrategy = &jwt.DefaultStrategy{Config: c, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+			{Key: gen.MustRSAKey(), KeyID: "a", Algorithm: rsa15, Use: jwt.JSONWebTokenUseEncryption},
+			{Key: gen.MustRSAKey(), KeyID: "b", Algorithm: string(jose.RSA_OAEP_256), Use: jwt.JSONWebTokenUseEncryption},
+		}})}
+
+		return c
+	}
+
+	configured := func(c *Config) *Config {
+		c.ClientAssertionEncryptionAlgValues = []string{rsa15, string(jose.RSA_OAEP)}
+		c.RequestObjectEncryptionAlgValues = []string{rsa15, string(jose.RSA_OAEP)}
+		c.ResponseEncryptionAlgValues = map[ResponseEncryptionTarget][]string{}
+
+		for _, target := range targets {
+			c.ResponseEncryptionAlgValues[target] = []string{rsa15, string(jose.RSA_OAEP)}
+		}
+
+		return c
+	}
+
+	t.Run("ShouldExcludeRSA15ByDefault", func(t *testing.T) {
+		ctx := context.Background()
+		c := newConfig(false)
+
+		assert.False(t, c.GetEnableRSA15KeyManagement(ctx))
+		assert.NotContains(t, c.GetClientAssertionEncryptionAlgValues(ctx), rsa15)
+		assert.NotContains(t, c.GetRequestObjectEncryptionAlgValues(ctx), rsa15)
+		assert.Contains(t, c.GetRequestObjectEncryptionAlgValues(ctx), string(jose.RSA_OAEP_256))
+
+		for _, target := range targets {
+			assert.NotContains(t, c.GetResponseEncryptionAlgValues(ctx, target), rsa15, string(target))
+		}
+	})
+
+	t.Run("ShouldRemoveConfiguredRSA15ByDefault", func(t *testing.T) {
+		ctx := context.Background()
+		c := configured(newConfig(false))
+
+		assert.Equal(t, []string{string(jose.RSA_OAEP)}, c.GetClientAssertionEncryptionAlgValues(ctx))
+		assert.Equal(t, []string{string(jose.RSA_OAEP)}, c.GetRequestObjectEncryptionAlgValues(ctx))
+
+		for _, target := range targets {
+			assert.Equal(t, []string{string(jose.RSA_OAEP)}, c.GetResponseEncryptionAlgValues(ctx, target), string(target))
+		}
+	})
+
+	t.Run("ShouldIncludeRSA15WhenEnabled", func(t *testing.T) {
+		ctx := context.Background()
+		c := newConfig(true)
+
+		assert.True(t, c.GetEnableRSA15KeyManagement(ctx))
+		assert.Equal(t, append([]string{rsa15}, algorithmStrings(jwt.EncryptionKeyAlgorithms)...), c.GetClientAssertionEncryptionAlgValues(ctx))
+		assert.Contains(t, c.GetRequestObjectEncryptionAlgValues(ctx), rsa15)
+
+		for _, target := range targets {
+			assert.Equal(t, append([]string{rsa15}, algorithmStrings(jwt.EncryptionKeyAlgorithms)...), c.GetResponseEncryptionAlgValues(ctx, target), string(target))
+		}
+	})
+
+	t.Run("ShouldKeepConfiguredRSA15WhenEnabled", func(t *testing.T) {
+		ctx := context.Background()
+		c := configured(newConfig(true))
+
+		assert.Equal(t, []string{rsa15, string(jose.RSA_OAEP)}, c.GetClientAssertionEncryptionAlgValues(ctx))
+		assert.Equal(t, []string{rsa15, string(jose.RSA_OAEP)}, c.GetRequestObjectEncryptionAlgValues(ctx))
+
+		for _, target := range targets {
+			assert.Equal(t, []string{rsa15, string(jose.RSA_OAEP)}, c.GetResponseEncryptionAlgValues(ctx, target), string(target))
+		}
+	})
+}
+
+func symmetricKeyAlgorithms() (algs []string) {
+	for _, alg := range jwt.EncryptionKeyAlgorithms {
+		if jwt.IsEncryptedJWTClientSecretAlg(alg) {
+			algs = append(algs, string(alg))
+		}
+	}
+
+	return algs
 }

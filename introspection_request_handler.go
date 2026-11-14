@@ -182,7 +182,7 @@ func isZeroQuality(value string) bool {
 func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.Context, r *http.Request, session Session, token string) (client Client, err error) {
 	var clientToken string
 
-	if clientToken, err = introspectionCredentialFromRequest(r); err != nil {
+	if clientToken, err = introspectionCredentialFromRequest(r, f.Config.GetAccessTokenURIQueryParameterEnabled(ctx)); err != nil {
 		return nil, err
 	}
 
@@ -260,7 +260,7 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 // introspectionCredentialFromRequest extracts the access token presented to authenticate a request to the introspection
 // endpoint, accepting the RFC 9449 DPoP scheme in addition to the schemes AccessTokenFromRequest understands. The proof
 // is checked by ValidateBearerAuthorization.
-func introspectionCredentialFromRequest(r *http.Request) (token string, err error) {
+func introspectionCredentialFromRequest(r *http.Request, query bool) (token string, err error) {
 	var scheme, value string
 
 	if scheme, value, err = AuthorizationCredentialFromRequest(r); err != nil {
@@ -269,7 +269,8 @@ func introspectionCredentialFromRequest(r *http.Request) (token string, err erro
 
 	// RFC 6750 Section 2 and Section 3.1: a token in both the header and the 'access_token' parameter is
 	// 'invalid_request'. A 'Basic' header is client authentication rather than a token transport, so it may accompany
-	// the parameter. The parameter is read off r.Form, which carries the URI query alongside the form body.
+	// the parameter. The parameter is read off r.Form, which carries the URI query alongside the form body, so a token in
+	// the URI query is rejected alongside one in the header even when it would otherwise be ignored.
 	if len(value) != 0 && (strings.EqualFold(scheme, BearerAccessToken) || strings.EqualFold(scheme, DPoPAccessToken)) && r.Form.Get(consts.FormParameterAccessToken) != "" {
 		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
 	}
@@ -278,7 +279,7 @@ func introspectionCredentialFromRequest(r *http.Request) (token string, err erro
 		return value, nil
 	}
 
-	return AccessTokenFromRequest(r), nil
+	return AccessTokenFromRequest(r, WithAccessTokenURIQueryParameter(query)), nil
 }
 
 type IntrospectionResponse struct {

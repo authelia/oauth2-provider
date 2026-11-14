@@ -36,26 +36,55 @@ func AuthorizationCredentialFromRequest(r *http.Request) (scheme, token string, 
 	return scheme, strings.TrimLeft(token, " "), nil
 }
 
-// AccessTokenFromRequest extracts a bearer access token from an HTTP request. Per RFC 6750 the token may be supplied in
-// the Authorization header (Bearer scheme) or as the 'access_token' form parameter. Returns the empty string if no
-// token can be located.
-func AccessTokenFromRequest(r *http.Request) string {
-	// RFC 6750: the Authorization header is tried first, then the 'access_token' parameter.
+// AccessTokenFromRequestOption configures AccessTokenFromRequest.
+type AccessTokenFromRequestOption func(opts *accessTokenFromRequestOptions)
 
+type accessTokenFromRequestOptions struct {
+	query bool
+}
+
+// WithAccessTokenURIQueryParameter permits AccessTokenFromRequest to read the token from the RFC 6750 Section 2.3
+// 'access_token' URI query parameter when enabled is true. OAuth 2.1 Section 5.1 requires resource servers to ignore a
+// token in the URI query, so this should only be enabled for a resource server that cannot do otherwise.
+//
+// See: https://www.rfc-editor.org/rfc/rfc6750#section-2.3
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-5.1
+func WithAccessTokenURIQueryParameter(enabled bool) AccessTokenFromRequestOption {
+	return func(opts *accessTokenFromRequestOptions) {
+		opts.query = enabled
+	}
+}
+
+// AccessTokenFromRequest extracts a bearer access token from an HTTP request: the RFC 6750 Section 2.1 Authorization
+// header (Bearer scheme), then the RFC 6750 Section 2.2 'access_token' parameter of a form-encoded body. The URI query
+// is ignored per OAuth 2.1 Section 5.1 unless WithAccessTokenURIQueryParameter enables it. Returns the empty string if
+// no token can be located.
+//
+// See: https://www.rfc-editor.org/rfc/rfc6750#section-2
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-5.1
+func AccessTokenFromRequest(r *http.Request, opts ...AccessTokenFromRequestOption) string {
 	auth := r.Header.Get(consts.HeaderAuthorization)
 	split := strings.SplitN(auth, " ", 2)
 
-	if len(split) != 2 || !strings.EqualFold(split[0], BearerAccessToken) {
-		// Nothing in Authorization header, try access_token
-		// Empty string returned if there's no such parameter
-		if err := r.ParseForm(); err != nil {
-			return ""
-		}
+	if len(split) == 2 && strings.EqualFold(split[0], BearerAccessToken) {
+		return split[1]
+	}
 
+	options := &accessTokenFromRequestOptions{}
+
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return ""
+	}
+
+	if options.query {
 		return r.Form.Get(consts.FormParameterAccessToken)
 	}
 
-	return split[1]
+	return r.PostForm.Get(consts.FormParameterAccessToken)
 }
 
 // IntrospectToken validates the provided opaque or structured token against each configured TokenIntrospector. It

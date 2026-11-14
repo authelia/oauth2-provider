@@ -1031,6 +1031,17 @@ type IntrospectionTokenTypeEnabledProvider interface {
 	GetIntrospectionTokenTypeEnabled(ctx context.Context) (enabled bool)
 }
 
+// AccessTokenURIQueryParameterEnabledProvider returns the provider for accepting an access token in the URI query.
+type AccessTokenURIQueryParameterEnabledProvider interface {
+	// GetAccessTokenURIQueryParameterEnabled returns true if an access token presented in the RFC 6750 Section 2.3
+	// 'access_token' URI query parameter is accepted where the library reads a bearer credential. OAuth 2.1 Section
+	// 5.1 requires resource servers to ignore it, so it is ignored when this returns false.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc6750#section-2.3
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-5.1
+	GetAccessTokenURIQueryParameterEnabled(ctx context.Context) (enabled bool)
+}
+
 // RevocationEndpointClientAuthStrategyProvider returns the provider for the client authentication strategy used at the
 // revocation endpoint.
 type RevocationEndpointClientAuthStrategyProvider interface {

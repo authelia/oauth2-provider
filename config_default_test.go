@@ -219,6 +219,18 @@ func TestConfigIntrospectionTokenTypeEnabled(t *testing.T) {
 	})
 }
 
+func TestConfigAccessTokenURIQueryParameterEnabled(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("DefaultsToDisabled", func(t *testing.T) {
+		assert.False(t, (&Config{}).GetAccessTokenURIQueryParameterEnabled(ctx))
+	})
+
+	t.Run("Configured", func(t *testing.T) {
+		assert.True(t, (&Config{AccessTokenURIQueryParameterEnabled: true}).GetAccessTokenURIQueryParameterEnabled(ctx))
+	})
+}
+
 func TestConfigRFC7591ClientRegistrationMetadataStrategy(t *testing.T) {
 	config := &Config{}
 

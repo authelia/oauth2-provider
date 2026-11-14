@@ -292,6 +292,50 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			},
 			isActive: true,
 		},
+		{
+			name: "ShouldFailWithAQueryParameterCredentialWhenClientAuthIsDisabled",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
+				config.IntrospectionEndpointClientAuthDisabled = true
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+
+				r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL+"?access_token=some-token", nil)
+				r.PostForm = url.Values{"token": []string{"introspect-token"}}
+
+				return r
+			},
+			err: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The request did not include an Access Token to authorize the call, and client authentication is disabled at this endpoint.",
+		},
+		{
+			name: "ShouldPassWithAQueryParameterCredentialWhenEnabled",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
+				config.IntrospectionEndpointClientAuthDisabled = true
+				config.AccessTokenURIQueryParameterEnabled = true
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
+				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+
+				r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL+"?access_token=some-token", nil)
+				r.PostForm = url.Values{"token": []string{"introspect-token"}}
+
+				return r
+			},
+			isActive: true,
+		},
+		{
+			name: "ShouldPassWithAFormBodyCredentialWhenClientAuthIsDisabled",
+			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
+				config.IntrospectionEndpointClientAuthDisabled = true
+				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
+				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+
+				r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, nil)
+				r.PostForm = url.Values{"token": []string{"introspect-token"}, consts.FormParameterAccessToken: []string{"some-token"}}
+
+				return r
+			},
+			isActive: true,
+		},
 	}
 
 	for _, tc := range testCases {

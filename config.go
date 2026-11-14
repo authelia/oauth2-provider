@@ -530,6 +530,18 @@ type JWKSFetcherStrategyProvider interface {
 	GetJWKSFetcherStrategy(ctx context.Context) (strategy jwt.JWKSFetcherStrategy)
 }
 
+// ClientJWKSFetcherStrategyProvider returns the provider for selecting the JWKS fetcher strategy by client. It
+// satisfies jwt.ClientJWKSFetcherStrategyProvider.
+type ClientJWKSFetcherStrategyProvider interface {
+	// GetClientJWKSFetcherStrategy returns the strategy used to fetch the 'jwks_uri' of the given client, or nil when
+	// that 'jwks_uri' must not be fetched. Implementations should wrap the strategy they return with
+	// SpecialUseAddressGuardJWKSFetcherStrategy so the fetch refuses special-use addresses; a custom strategy which is
+	// not a *DefaultJWKSFetcherStrategy passes through that wrapper unchanged and must guard itself.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc8725bis-10#section-3.10
+	GetClientJWKSFetcherStrategy(ctx context.Context, client any) (strategy jwt.JWKSFetcherStrategy)
+}
+
 // HTTPClientProvider returns the provider for configuring the HTTP client.
 type HTTPClientProvider interface {
 	// GetHTTPClient returns the HTTP client provider.

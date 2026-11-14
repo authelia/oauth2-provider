@@ -59,7 +59,7 @@ func TestOutboundFetches(t *testing.T) {
 
 				r := httptest.NewRequest(http.MethodGet, "https://auth.example.com/authorize?"+form.Encode(), nil).WithContext(ctx)
 
-				provider := &Fosite{Store: store, Config: &Config{HTTPClient: client}}
+				provider := &Fosite{Store: store, Config: &Config{HTTPClient: client, DisableSpecialUseAddressGuard: true}}
 
 				_, _ = provider.NewAuthorizeRequest(ctx, r)
 			},

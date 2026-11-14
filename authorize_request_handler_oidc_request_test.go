@@ -807,14 +807,14 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 				},
 			}
 
-			config := &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), Issuer: "https://auth.example.com"}
+			config := &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), Issuer: "https://auth.example.com", DisableSpecialUseAddressGuard: true}
 
 			strategy := &jwt.DefaultStrategy{
 				Config: config,
 				Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(jwksPrivate),
 			}
 
-			providerConfig := &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), Issuer: "https://auth.example.com", JWTStrategy: strategy}
+			providerConfig := &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), Issuer: "https://auth.example.com", JWTStrategy: strategy, DisableSpecialUseAddressGuard: true}
 			if tc.config != nil {
 				tc.config(providerConfig)
 			}

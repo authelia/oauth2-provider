@@ -420,6 +420,39 @@ func TestSendBackChannelLogout_DocumentClientFailsClosedWithoutGuardedClient(t *
 	assert.Len(t, *tokens, 1)
 }
 
+func TestSendBackChannelLogout_SpecialUseAddressGuard(t *testing.T) {
+	testCases := []struct {
+		name    string
+		disable bool
+	}{
+		{name: "ShouldDeliverWhenDisabled", disable: true},
+		{name: "ShouldRefuseByDefault"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, config := newBCLProvider(t)
+
+			config.DisableSpecialUseAddressGuard = tc.disable
+
+			server, tokens := bclServer(t, http.StatusOK)
+
+			results, err := f.SendBackChannelLogout(t.Context(), oauth2.NewBackChannelLogoutRequest("alice", "session-1", []oauth2.Client{bclClient("rp-1", server.URL, false)}))
+
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+
+			if !tc.disable {
+				assert.ErrorIs(t, results[0].Err, oauth2.ErrSpecialUseAddress)
+				assert.Empty(t, *tokens)
+			} else {
+				assert.True(t, results[0].Success())
+				assert.Len(t, *tokens, 1)
+			}
+		})
+	}
+}
+
 func TestRetryableHTTPClientFieldCount(t *testing.T) {
 	assert.Equal(t, 13, reflect.TypeOf(retryablehttp.Client{}).NumField(),
 		"retryablehttp.Client's field count changed: review backChannelLogoutHTTPClient in backchannel_logout_request_handler.go")
@@ -428,7 +461,7 @@ func TestRetryableHTTPClientFieldCount(t *testing.T) {
 func newBCLProvider(t *testing.T) (*oauth2.Fosite, *oauth2.Config) {
 	t.Helper()
 
-	config := &oauth2.Config{Issuer: bclTestIssuer, MinParameterEntropy: 8}
+	config := &oauth2.Config{Issuer: bclTestIssuer, MinParameterEntropy: 8, DisableSpecialUseAddressGuard: true}
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(bclTestKey)}
 

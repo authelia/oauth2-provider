@@ -216,6 +216,12 @@ func validateRedirectURIs(metadata *oauth2.ClientRegistrationMetadata) (err erro
 		if err = validateRedirectURI(oauth2.ErrInvalidRedirectURI, consts.ClientMetadataRedirectURIs, raw, metadata.ApplicationType); err != nil {
 			return err
 		}
+
+		parsed, _ := url.Parse(raw)
+
+		if name, found := oauth2.GetRedirectURIAuthorizationResponseParameter(parsed); found {
+			return errorsx.WithStack(oauth2.ErrInvalidRedirectURI.WithHintf("The '%s' value '%s' must not include the '%s' query parameter as it is defined for use in the authorization response.", consts.ClientMetadataRedirectURIs, raw, name))
+		}
 	}
 
 	return nil

@@ -28,6 +28,8 @@ func (f *Fosite) NewRevocationRequest(ctx context.Context, r *http.Request) erro
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	} else if len(r.PostForm) == 0 {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The POST body can not be empty."))
+	} else if err = ValidateRequestParametersNotRepeated(r.PostForm); err != nil {
+		return err
 	}
 
 	client, _, err := f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, f.Config.GetRevocationEndpointClientAuthStrategy(ctx))

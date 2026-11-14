@@ -32,6 +32,8 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 		return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	} else if len(r.PostForm) == 0 {
 		return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrInvalidRequest.WithHint("The POST body can not be empty."))
+	} else if err = ValidateRequestParametersNotRepeated(r.PostForm); err != nil {
+		return &IntrospectionResponse{Active: false}, err
 	}
 
 	token := r.PostForm.Get(consts.FormParameterToken)

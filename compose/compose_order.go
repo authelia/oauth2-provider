@@ -148,6 +148,21 @@ func handlerPrecedes[Dependent, Dependency, Handler any](handlers []Handler) boo
 	return unordered && dependency
 }
 
+// handlerFollows reports whether any Later handler follows any Earlier handler.
+func handlerFollows[Later, Earlier, Handler any](handlers []Handler) bool {
+	var earlier bool
+
+	for _, handler := range handlers {
+		if _, ok := any(handler).(Earlier); ok {
+			earlier = true
+		} else if _, ok = any(handler).(Later); ok && earlier {
+			return true
+		}
+	}
+
+	return false
+}
+
 func validateRFC8693HandlerOrder(config *oauth2.Config) (err error) {
 	var grant, typed, validator, txn, grantUnordered, validatorUnordered, txnUnordered bool
 
@@ -289,7 +304,7 @@ func validateRFC8628UserAuthorizeHandlerOrder(config *oauth2.Config) (err error)
 // in the backchannel authentication endpoint handlers, or precedes the ciba.DecisionHandler in the backchannel
 // authentication decision handlers.
 func validateCIBAHandlerOrder(config *oauth2.Config) (err error) {
-	if handlerPrecedes[*ciba.EndpointHandler, *openid.OpenIDConnectCIBAHandler](config.BackChannelAuthenticationEndpointHandlers) {
+	if handlerFollows[*openid.OpenIDConnectCIBAHandler, *ciba.EndpointHandler](config.BackChannelAuthenticationEndpointHandlers) {
 		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectCIBAHandler (OpenIDConnectCIBAFactory) must be registered before the ciba.EndpointHandler (CIBAEndpointFactory) in the backchannel authentication endpoint handlers, as it rejects a reused 'nonce' before the ciba.EndpointHandler persists the request", ErrHandlerOrder))
 	}
 

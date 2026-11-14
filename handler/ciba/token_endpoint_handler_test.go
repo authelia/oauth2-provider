@@ -7,6 +7,8 @@ package ciba_test
 import (
 	"context"
 	"net/url"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -522,6 +524,78 @@ func TestCIBATokenReplayRevokes(t *testing.T) {
 			assert.Error(t, err)
 		})
 	}
+}
+
+// barrierTokenTestStore holds the first two GetCIBASession calls until both have arrived, so two redemptions read the
+// approved request before either invalidates it.
+type barrierTokenTestStore struct {
+	tokenTestStore
+
+	calls   atomic.Int32
+	arrived sync.WaitGroup
+}
+
+func newBarrierTokenTestStore(store tokenTestStore) *barrierTokenTestStore {
+	s := &barrierTokenTestStore{tokenTestStore: store}
+	s.arrived.Add(2)
+
+	return s
+}
+
+func (s *barrierTokenTestStore) GetCIBASession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.BackChannelAuthenticationRequester, err error) {
+	if s.calls.Add(1) <= 2 {
+		s.arrived.Done()
+		s.arrived.Wait()
+	}
+
+	return s.tokenTestStore.GetCIBASession(ctx, signature, session)
+}
+
+// TestCIBATokenConcurrentRedemptionIssuesOnce runs against the HydratingMemoryStore only: the MemoryStore hands both
+// redemptions the same stored session, which they then both write to.
+func TestCIBATokenConcurrentRedemptionIssuesOnce(t *testing.T) {
+	store := newBarrierTokenTestStore(storage.NewHydratingMemoryStore())
+	f := newTokenFixture(store, nil)
+
+	client := newTokenTestClient("client", consts.CIBAModePoll)
+	id, signature := f.create(t, client, consts.CIBAModePoll, time.Minute)
+	f.decide(t, t.Context(), client, consts.CIBAModePoll, signature, oauth2.CIBAStatusApproved)
+
+	type outcome struct {
+		response *oauth2.AccessResponse
+		err      error
+	}
+
+	outcomes := make(chan outcome, 2)
+
+	for range 2 {
+		go func() {
+			response, err := f.poll(context.Background(), client, id, time.Now().UTC())
+			outcomes <- outcome{response, err}
+		}()
+	}
+
+	var issued, rejected int
+
+	for range 2 {
+		o := <-outcomes
+
+		if o.err == nil {
+			requireTokens(t, o.response, o.err)
+
+			issued++
+
+			continue
+		}
+
+		requireRFC6749Error(t, o.err, "invalid_grant")
+
+		rejected++
+	}
+
+	assert.Equal(t, 1, issued)
+	assert.Equal(t, 1, rejected)
+	assert.GreaterOrEqual(t, store.calls.Load(), int32(2))
 }
 
 // recordingTokenTestStore signals each UpdateCIBASession, which records a poll before it is held open.

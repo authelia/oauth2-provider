@@ -382,7 +382,7 @@ func (s *HMACCoreStrategy) IsOpaqueCIBAAuthRequestID(ctx context.Context, id str
 // CIBAAuthRequestIDSignature implements ciba.AuthRequestIDStrategy.
 func (s *HMACCoreStrategy) CIBAAuthRequestIDSignature(ctx context.Context, id string) (signature string, err error) {
 	if !s.usePrefix || s.IsOpaqueCIBAAuthRequestID(ctx, id) {
-		return s.Enigma.Signature(id), nil
+		return s.Enigma.Signature(s.trimPrefix(id, tokenPrefixPartCIBAAuthRequestID)), nil
 	}
 
 	return "", errorsx.WithStack(oauth2.ErrInvalidTokenFormat.WithHint("Provided Token does not appear to be an Authentication Request ID."))

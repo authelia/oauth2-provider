@@ -160,6 +160,11 @@ func TestValidateHandlerOrderCIBA(t *testing.T) {
 			err:    "oauth2: handlers are registered in an order which does not work: the openid.OpenIDConnectCIBAHandler (OpenIDConnectCIBAFactory) must be registered before the ciba.EndpointHandler (CIBAEndpointFactory) in the backchannel authentication endpoint handlers, as it rejects a reused 'nonce' before the ciba.EndpointHandler persists the request",
 		},
 		{
+			name:   "ShouldFailWhenAnOpenIDConnectHandlerFollowsTheEndpointHandler",
+			config: &oauth2.Config{BackChannelAuthenticationEndpointHandlers: oauth2.BackChannelAuthenticationEndpointHandlers{oidc, endpoint, oidc}},
+			err:    "oauth2: handlers are registered in an order which does not work: the openid.OpenIDConnectCIBAHandler (OpenIDConnectCIBAFactory) must be registered before the ciba.EndpointHandler (CIBAEndpointFactory) in the backchannel authentication endpoint handlers, as it rejects a reused 'nonce' before the ciba.EndpointHandler persists the request",
+		},
+		{
 			name:   "ShouldFailWhenTheOpenIDConnectHandlerPrecedesTheDecisionHandler",
 			config: &oauth2.Config{BackChannelAuthenticationDecisionHandlers: oauth2.BackChannelAuthenticationDecisionHandlers{oidc, decision}},
 			err:    "oauth2: handlers are registered in an order which does not work: the openid.OpenIDConnectCIBAHandler (OpenIDConnectCIBAFactory) must be registered after the ciba.DecisionHandler (CIBADecisionFactory) in the backchannel authentication decision handlers, as it writes the OpenID Connect session only for the decision the ciba.DecisionHandler records",

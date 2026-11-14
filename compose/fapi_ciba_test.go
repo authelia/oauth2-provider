@@ -254,6 +254,15 @@ func TestValidateFAPICIBAProfile(t *testing.T) {
 			expected: []string{"FAPI-CIBA Profile Section 4.1.1: the poll token delivery mode must be supported"},
 		},
 		{
+			name:   "ShouldPassWithAShorterSignedRequestLifetime",
+			modify: func(config *oauth2.Config) { config.CIBASignedRequestMaximumLifetime = 10 * time.Minute },
+		},
+		{
+			name:     "ShouldRejectALongerSignedRequestLifetime",
+			modify:   func(config *oauth2.Config) { config.CIBASignedRequestMaximumLifetime = 2 * time.Hour },
+			expected: []string{"FAPI-CIBA Profile Section 4.1.1: a signed authentication request must have a lifetime of at most 1h0m0s, but CIBASignedRequestMaximumLifetime is 2h0m0s"},
+		},
+		{
 			name:     "ShouldRequireTheBindingMessage",
 			modify:   func(config *oauth2.Config) { config.CIBARequireBindingMessage = false },
 			expected: []string{"FAPI-CIBA Profile Section 4.1.1: a unique authorization context or a 'binding_message' must be required, but CIBARequireBindingMessage is not set"},

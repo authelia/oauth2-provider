@@ -58,6 +58,7 @@ func (h *Handler) BindBackChannelAuthenticationRequest(ctx context.Context, requ
 	if header == "" {
 		session.SetDPoPJWKThumbprint(jkt)
 		session.SetRequestedDPoPJWKThumbprint(jkt)
+		session.SetDPoPPublicKeyJWK(nil)
 
 		return nil
 	}

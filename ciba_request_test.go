@@ -39,6 +39,8 @@ func TestBackChannelAuthenticationRequestSanitize(t *testing.T) {
 	assert.Equal(t, CIBAStatusApproved, actual.Status)
 	assert.Empty(t, actual.AuthRequestID)
 	assert.Empty(t, actual.ClientNotificationToken)
+	assert.Empty(t, actual.UserCode)
+	assert.Equal(t, "1234", r.UserCode)
 	assert.Equal(t, "id", r.AuthRequestID)
 	assert.Equal(t, "secret", r.ClientNotificationToken)
 

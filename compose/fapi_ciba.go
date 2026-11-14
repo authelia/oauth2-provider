@@ -117,7 +117,9 @@ func ApplyFAPICIBAProfile(config *oauth2.Config) {
 // ValidateFAPICIBAProfile returns an error joining every way the configuration and the handlers registered with it
 // fail the authorization server requirements of the FAPI-CIBA profile on a FAPI 2.0 base, including those
 // ValidateFAPI2SecurityProfile returns, or nil when they meet them. Call it once the provider is composed. It does not
-// check the clients, which must be confidential and register the poll or ping token delivery mode.
+// check the clients, which must be confidential and register the poll or ping token delivery mode, or the keys which
+// sign the ID Tokens, UserInfo responses and JWT access tokens the server issues and their signing algorithms, which
+// the configuration does not expose.
 //
 // See: https://openid.net/specs/fapi-ciba.html#section-4.1.1
 func ValidateFAPICIBAProfile(ctx context.Context, config oauth2.Configurator) (err error) {
@@ -156,6 +158,10 @@ func (v *fapi2Violations) cibaAuthorizationServer(ctx context.Context, config oa
 
 	if !fapi2Registered[*openid.OpenIDConnectCIBAHandler](config.GetTokenEndpointHandlers(ctx)) {
 		v.fail(fapiCIBASectionAuthorizationServer, "the 'acr' claim must be returned in the ID Token when requested, but the OpenID Connect CIBA handler is not registered")
+	}
+
+	if lifetime := config.GetCIBASignedRequestMaximumLifetime(ctx); lifetime > fapiCIBAMaximumSignedRequestLifetime {
+		v.fail(fapiCIBASectionAuthorizationServer, "a signed authentication request must have a lifetime of at most %s, but CIBASignedRequestMaximumLifetime is %s", fapiCIBAMaximumSignedRequestLifetime, lifetime)
 	}
 
 	if config.GetDisableClientAssertionIssuerAudience(ctx) {

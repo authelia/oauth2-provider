@@ -27,6 +27,7 @@ func TestGenerateCIBAAuthRequestID(t *testing.T) {
 	}{
 		{"ShouldGenerateWithoutPrefix", "", ""},
 		{"ShouldGenerateWithPrefix", "authelia_%s_", "authelia_ar_"},
+		{"ShouldGenerateWithADottedPrefix", "authelia.%s.", "authelia.ar."},
 	}
 
 	for _, tc := range testCases {

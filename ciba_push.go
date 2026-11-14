@@ -40,7 +40,9 @@ func NewBackChannelPushTokenNotification(client Client, request BackChannelAuthe
 // ExpireBackChannelAuthentication sends the 'expired_token' push error notification for an expired authentication
 // request of a push client, such as from a sweep of expired requests. It records nothing, so each call on the same
 // request sends the notification again; a sweep must track the requests it has notified. It returns ErrInvalidRequest
-// for a request of another token delivery mode, a decided request, or an unexpired request.
+// for a request of another token delivery mode, a decided request, or an unexpired request. A request is decided when
+// either the given request or the one in storage is; the two are not compared atomically, so a decision recorded
+// concurrently can still be followed by the notification.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.12
 func (f *Fosite) ExpireBackChannelAuthentication(ctx context.Context, request BackChannelAuthenticationRequester) (result *BackChannelAuthenticationDecisionResult, err error) {
@@ -59,11 +61,42 @@ func (f *Fosite) ExpireBackChannelAuthentication(ctx context.Context, request Ba
 		return nil, err
 	}
 
+	// A copy loaded before a decision was recorded is still pending, so the stored request is checked.
+	if err = f.checkBackChannelAuthenticationStillPending(ctx, request); err != nil {
+		return nil, err
+	}
+
 	result = &BackChannelAuthenticationDecisionResult{Status: request.GetStatus()}
 
-	f.notifyBackChannelPushError(ctx, request, result, ErrDeviceExpiredToken)
+	f.notifyBackChannelPushError(ctx, request, result, ErrDeviceExpiredToken, true)
 
 	return result, nil
+}
+
+// checkBackChannelAuthenticationStillPending returns ErrInvalidRequest when the stored request with the ID of request
+// is decided.
+func (f *Fosite) checkBackChannelAuthenticationStillPending(ctx context.Context, request BackChannelAuthenticationRequester) (err error) {
+	storage, ok := f.Store.(CIBADecisionStorage)
+	if !ok {
+		return errorsx.WithStack(ErrServerError.WithDebug("The storage does not implement CIBADecisionStorage."))
+	}
+
+	stored, err := storage.GetCIBASessionByRequestID(ctx, request.GetID(), request.GetSession().Clone())
+
+	switch {
+	case errors.Is(err, ErrInvalidatedCIBASession):
+		return errorsx.WithStack(errBackChannelAuthenticationDecided.WithWrap(err).WithDebugError(err))
+	case errors.Is(err, ErrNotFound):
+		return errorsx.WithStack(err)
+	case err != nil:
+		return errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugError(err))
+	case stored == nil:
+		return errorsx.WithStack(ErrNotFound)
+	case stored.GetStatus() != CIBAStatusPending:
+		return errorsx.WithStack(errBackChannelAuthenticationDecided)
+	}
+
+	return nil
 }
 
 // approveBackChannelAuthenticationPush records the approval of a push request, issues its tokens and invalidates it in
@@ -120,7 +153,7 @@ func (f *Fosite) approveBackChannelAuthenticationPush(ctx context.Context, reque
 			result.Status = CIBAStatusFailed
 			result.IssuanceError = err
 
-			f.notifyBackChannelPushError(ctx, request, result, ErrTransactionFailed)
+			f.notifyBackChannelPushError(ctx, request, result, ErrTransactionFailed, true)
 
 			return result, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugf("The approval of the backchannel authentication request could not be rolled back because the storage does not implement storage.Transactional: %s", backChannelIssuanceFailureCause(err)))
 		}
@@ -137,13 +170,7 @@ func (f *Fosite) approveBackChannelAuthenticationPush(ctx context.Context, reque
 	notification, err := NewBackChannelPushTokenNotification(request.GetClient(), request, GetAuthRequestID(request), response)
 
 	// The tokens of an enclosing transaction are delivered by its owner once it commits.
-	if !owned {
-		result.Notification, result.DeliveryError = notification, err
-
-		return result, nil
-	}
-
-	f.deliverBackChannelNotification(ctx, result, notification, err)
+	f.deliverBackChannelNotification(ctx, result, notification, err, owned)
 
 	return result, nil
 }
@@ -161,18 +188,18 @@ func (f *Fosite) failBackChannelAuthenticationPush(ctx context.Context, request 
 
 	result.IssuanceError = issuanceErr
 
-	f.notifyBackChannelPushError(ctx, request, result, ErrTransactionFailed)
+	f.notifyBackChannelPushError(ctx, request, result, ErrTransactionFailed, true)
 
 	return result, nil
 }
 
-// notifyBackChannelPushError sends the push error notification for the request.
+// notifyBackChannelPushError builds the push error notification for the request and, when deliver is true, sends it.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.12
-func (f *Fosite) notifyBackChannelPushError(ctx context.Context, request BackChannelAuthenticationRequester, result *BackChannelAuthenticationDecisionResult, rfcErr *RFC6749Error) {
+func (f *Fosite) notifyBackChannelPushError(ctx context.Context, request BackChannelAuthenticationRequester, result *BackChannelAuthenticationDecisionResult, rfcErr *RFC6749Error, deliver bool) {
 	notification, err := NewBackChannelPushErrorNotification(request.GetClient(), request, GetAuthRequestID(request), rfcErr)
 
-	f.deliverBackChannelNotification(ctx, result, notification, err)
+	f.deliverBackChannelNotification(ctx, result, notification, err, deliver)
 }
 
 // issueBackChannelPushAccessResponse issues the tokens of an approved push request. The push token notification must

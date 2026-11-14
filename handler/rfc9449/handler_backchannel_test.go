@@ -149,6 +149,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				h := newHandler()
 
 				session := &oauth2.DefaultSession{}
+				session.SetDPoPPublicKeyJWK([]byte(`{"kty":"EC"}`))
 				request := newTestBackChannelRequest(session, consts.CIBAModePoll, &oauth2.DefaultClient{}, otherJKT)
 
 				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(http.MethodPost, testBackChannelURL, ""), request))

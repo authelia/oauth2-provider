@@ -457,6 +457,63 @@ func TestPushApproveInJoinedTransactionLeavesDeliveryToTheOwner(t *testing.T) {
 	}
 }
 
+func TestPushDenyInJoinedTransactionLeavesDeliveryToTheOwner(t *testing.T) {
+	stores := []struct {
+		name string
+		new  func(tx *mock.MockTransactional) (any, *storage.MemoryStore)
+	}{
+		{"MemoryStore", func(tx *mock.MockTransactional) (any, *storage.MemoryStore) {
+			s := storage.NewMemoryStore()
+
+			return &cibaPushJoinedMemoryStore{MemoryStore: s, MockTransactional: tx}, s
+		}},
+		{"HydratingMemoryStore", func(tx *mock.MockTransactional) (any, *storage.MemoryStore) {
+			s := storage.NewHydratingMemoryStore()
+
+			return &cibaPushJoinedHydratingStore{HydratingMemoryStore: s, MockTransactional: tx}, s.MemoryStore
+		}},
+	}
+
+	for _, sc := range stores {
+		t.Run(sc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			tx := mock.NewMockTransactional(ctrl)
+			tx.EXPECT().BeginTX(gomock.Any()).DoAndReturn(func(ctx context.Context) (context.Context, error) { return ctx, nil }).Times(1)
+			tx.EXPECT().Commit(gomock.Any()).Return(nil).Times(1)
+			tx.EXPECT().Rollback(gomock.Any()).Times(0)
+
+			store, memory := sc.new(tx)
+			notifier := &recordingBackChannelNotifier{}
+			provider := newCIBAPushTestProvider(t, store, memory, notifier)
+
+			authReqID := newCIBAPushTestRequest(t, provider, oauth2.Arguments{consts.ScopeOpenID})
+
+			request := loadCIBAPushTestRequest(t, provider, nil)
+
+			outer, owned, err := storage.JoinOrBeginTx(t.Context(), store)
+			require.NoError(t, err)
+			require.True(t, owned)
+
+			result, err := provider.DenyBackChannelAuthentication(outer, request)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, oauth2.CIBAStatusDenied, result.Status)
+			assert.NoError(t, result.DeliveryError)
+
+			assert.Empty(t, notifier.notifications)
+
+			require.NotNil(t, result.Notification)
+
+			body := decodeCIBAPushTestBody(t, result.Notification)
+			assert.Equal(t, authReqID, body[consts.FormParameterAuthReqID])
+			assert.Equal(t, "access_denied", body[consts.FormParameterError])
+
+			require.NoError(t, storage.MaybeCommitTx(outer, store))
+		})
+	}
+}
+
 type cibaPushFailingNonTransactionalStore struct {
 	*storage.MemoryStore
 }
@@ -716,15 +773,17 @@ func TestPushDenyFailExpireBodies(t *testing.T) {
 
 func TestExpireBackChannelAuthenticationRejects(t *testing.T) {
 	testCases := []struct {
-		name   string
-		mode   string
-		expire bool
-		decide bool
+		name         string
+		mode         string
+		expire       bool
+		decide       bool
+		decideStored bool
 	}{
-		{"ShouldRejectAnUnexpiredPushRequest", consts.CIBAModePush, false, false},
-		{"ShouldRejectAPollRequest", consts.CIBAModePoll, true, false},
-		{"ShouldRejectAPingRequest", consts.CIBAModePing, true, false},
-		{"ShouldRejectADecidedPushRequest", consts.CIBAModePush, true, true},
+		{"ShouldRejectAnUnexpiredPushRequest", consts.CIBAModePush, false, false, false},
+		{"ShouldRejectAPollRequest", consts.CIBAModePoll, true, false, false},
+		{"ShouldRejectAPingRequest", consts.CIBAModePing, true, false, false},
+		{"ShouldRejectADecidedPushRequest", consts.CIBAModePush, true, true, false},
+		{"ShouldRejectAPendingCopyOfADecidedPushRequest", consts.CIBAModePush, true, false, true},
 	}
 
 	for _, tc := range testCases {
@@ -742,6 +801,13 @@ func TestExpireBackChannelAuthenticationRejects(t *testing.T) {
 
 					if tc.decide {
 						request.SetStatus(oauth2.CIBAStatusDenied)
+					}
+
+					if tc.decideStored {
+						_, err := provider.DenyBackChannelAuthentication(t.Context(), loadCIBAPushTestRequest(t, provider, nil))
+						require.NoError(t, err)
+
+						notifier.notifications = nil
 					}
 
 					if tc.expire {

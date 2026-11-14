@@ -88,12 +88,14 @@ func (f *Fosite) NewBackChannelAuthenticationDecisionRequest(ctx context.Context
 // ApproveBackChannelAuthentication records the end user's approval of the authentication request and runs the
 // decision handlers. The session is the application's approval session, which replaces the stored session: it must
 // carry the subject set when the request was made, else ErrAccessDenied, and the 'auth_time', 'acr' and 'amr' of the
-// authentication. The proof-of-possession bindings and the expiry recorded when the request was made are carried onto
-// it. The scopes, audience, resources and authorization details granted on the request may narrow but never widen
-// those requested, and the 'openid' scope must be granted when requested, else ErrAccessDenied. An ID Token subject set
-// on the session must be the ID Token subject recorded when the request was made or, when none was recorded and the
-// client does not use pairwise subject identifiers, the subject, else ErrAccessDenied. The request time of the session
-// is set to when the request was made.
+// authentication. An OpenID Connect approval session must carry an ID Token subject when the 'openid' scope is
+// granted, else ErrAccessDenied. The proof-of-possession bindings and the expiry recorded when the request was made
+// are carried onto it, so a session which cannot carry a recorded binding is ErrServerError. The scopes, audience,
+// resources and authorization details granted on the request may narrow but never widen those requested, and the
+// 'openid' scope must be granted when requested, else ErrAccessDenied. An ID Token subject set on the session must be
+// the ID Token subject recorded when the request was made or, when none was recorded and the client does not use
+// pairwise subject identifiers, the subject, else ErrAccessDenied. The request time of the session is set to when the
+// request was made.
 //
 // The application must grant the scopes, audience, resources and authorization details the end user approved on
 // request, with GrantScope, GrantAudience, GrantResource and SetGrantedAuthorizationDetails, before calling it.
@@ -106,8 +108,8 @@ func (f *Fosite) NewBackChannelAuthenticationDecisionRequest(ctx context.Context
 //   - A request another decision has already decided, such as a concurrent approval which won, is ErrInvalidRequest
 //     ("already decided") and sends nothing.
 //   - When ctx carries an enclosing transaction begun with storage.JoinOrBeginTx, a failure is returned as the error
-//     for the caller to roll back, and nothing is sent. On success the token notification is set as the Notification
-//     of the result but not delivered: the caller MUST deliver it through its BackChannelNotifier after it commits, and
+//     for the caller to roll back, and nothing is sent. On success the token notification, or the ping notification of
+//     a ping request, is set as the Notification of the result but not delivered: the caller MUST deliver it through its BackChannelNotifier after it commits, and
 //     MUST discard it if it rolls back.
 //   - Without storage.Transactional the approval cannot be rolled back. When issuance fails the request stays
 //     approved with no tokens delivered; access and refresh token sessions written before the failure remain
@@ -131,11 +133,15 @@ func (f *Fosite) ApproveBackChannelAuthentication(ctx context.Context, request B
 		return nil, errorsx.WithStack(ErrAccessDenied.WithDebugf("The subject '%s' of the approval session is not the subject of the backchannel authentication request.", subject))
 	}
 
-	if err = validateBackChannelAuthenticationIDTokenSubject(request.GetClient(), restored, session); err != nil {
+	if err = validateBackChannelAuthenticationIDTokenSubject(request, restored, session); err != nil {
 		return nil, err
 	}
 
 	if err = validateBackChannelAuthenticationGrant(request); err != nil {
+		return nil, err
+	}
+
+	if err = validateSessionBindingCarry(restored, session); err != nil {
 		return nil, err
 	}
 
@@ -182,7 +188,9 @@ func (f *Fosite) ApproveBackChannelAuthentication(ctx context.Context, request B
 }
 
 // DenyBackChannelAuthentication records the end user's denial of the authentication request and runs the decision
-// handlers. A ping client is sent a ping, and a push client 'access_denied'.
+// handlers. A ping client is sent a ping, and a push client 'access_denied'. When ctx carries an enclosing transaction
+// begun with storage.JoinOrBeginTx, the notification is set as the Notification of the result but not delivered: the
+// caller MUST deliver it through its BackChannelNotifier after it commits, and MUST discard it if it rolls back.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.8
 func (f *Fosite) DenyBackChannelAuthentication(ctx context.Context, request BackChannelAuthenticationRequester) (result *BackChannelAuthenticationDecisionResult, err error) {
@@ -195,7 +203,8 @@ func (f *Fosite) DenyBackChannelAuthentication(ctx context.Context, request Back
 
 // FailBackChannelAuthentication records that the authentication request failed for the given cause, such as an
 // unreachable authentication device, and runs the decision handlers. A ping client is sent a ping, and a push client
-// 'transaction_failed'.
+// 'transaction_failed'. A notification within an enclosing transaction is left to the caller to deliver, as for
+// DenyBackChannelAuthentication.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.12
 func (f *Fosite) FailBackChannelAuthentication(ctx context.Context, request BackChannelAuthenticationRequester, cause string) (result *BackChannelAuthenticationDecisionResult, err error) {
@@ -234,7 +243,7 @@ func (f *Fosite) validateBackChannelAuthenticationDecision(ctx context.Context, 
 // decideBackChannelAuthentication records the decision on the request and runs the decision handlers in one
 // transaction, then sends the notification of the decision. When a handler fails the transaction is rolled back, so
 // the request stays pending and the decision can be retried. A transaction joined from ctx is left for its owner to
-// finish. Without storage.Transactional the writes of the handlers before the failure are not rolled back.
+// finish, and so is delivering the notification set on the result. Without storage.Transactional the writes of the handlers before the failure are not rolled back.
 func (f *Fosite) decideBackChannelAuthentication(ctx context.Context, request BackChannelAuthenticationRequester, status CIBAStatus, cause string) (result *BackChannelAuthenticationDecisionResult, err error) {
 	txCtx, owned, err := transaction.JoinOrBegin(ctx, f.Store)
 	if err != nil {
@@ -260,7 +269,8 @@ func (f *Fosite) decideBackChannelAuthentication(ctx context.Context, request Ba
 		}
 	}
 
-	f.notifyBackChannelAuthenticationDecision(ctx, request, result)
+	// The notification of an enclosing transaction is delivered by its owner once it commits.
+	f.notifyBackChannelAuthenticationDecision(ctx, request, result, owned)
 
 	return result, nil
 }
@@ -296,29 +306,30 @@ func (f *Fosite) runBackChannelAuthenticationDecisionHandlers(ctx context.Contex
 
 // notifyBackChannelAuthenticationDecision sends the ping notification of a ping client, or the push error notification
 // of a denied or failed push client, once the decision is recorded. A failure to build or deliver it is recorded on
-// the result and never reverts the decision.
+// the result and never reverts the decision. When deliver is false the notification is only built and set on the
+// result.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.2
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.12
-func (f *Fosite) notifyBackChannelAuthenticationDecision(ctx context.Context, request BackChannelAuthenticationRequester, result *BackChannelAuthenticationDecisionResult) {
+func (f *Fosite) notifyBackChannelAuthenticationDecision(ctx context.Context, request BackChannelAuthenticationRequester, result *BackChannelAuthenticationDecisionResult, deliver bool) {
 	switch request.GetDeliveryMode() {
 	case consts.CIBAModePing:
 		notification, err := NewBackChannelPingNotification(request.GetClient(), request, GetAuthRequestID(request))
 
-		f.deliverBackChannelNotification(ctx, result, notification, err)
+		f.deliverBackChannelNotification(ctx, result, notification, err, deliver)
 	case consts.CIBAModePush:
 		switch result.Status {
 		case CIBAStatusDenied:
-			f.notifyBackChannelPushError(ctx, request, result, ErrAccessDenied)
+			f.notifyBackChannelPushError(ctx, request, result, ErrAccessDenied, deliver)
 		case CIBAStatusFailed:
-			f.notifyBackChannelPushError(ctx, request, result, ErrTransactionFailed)
+			f.notifyBackChannelPushError(ctx, request, result, ErrTransactionFailed, deliver)
 		}
 	}
 }
 
-// deliverBackChannelNotification records the built notification on the result and delivers it. A failure to build or
-// deliver it is recorded as the DeliveryError of the result.
-func (f *Fosite) deliverBackChannelNotification(ctx context.Context, result *BackChannelAuthenticationDecisionResult, notification *BackChannelNotification, err error) {
+// deliverBackChannelNotification records the built notification on the result and, when deliver is true, delivers it.
+// A failure to build or deliver it is recorded as the DeliveryError of the result.
+func (f *Fosite) deliverBackChannelNotification(ctx context.Context, result *BackChannelAuthenticationDecisionResult, notification *BackChannelNotification, err error, deliver bool) {
 	if err != nil {
 		result.DeliveryError = err
 
@@ -326,6 +337,10 @@ func (f *Fosite) deliverBackChannelNotification(ctx context.Context, result *Bac
 	}
 
 	result.Notification = notification
+
+	if !deliver {
+		return
+	}
 
 	notifier := f.Config.GetBackChannelNotifier(ctx)
 	if reflection.IsNil(notifier) {
@@ -373,16 +388,28 @@ func validateBackChannelAuthenticationGrant(request BackChannelAuthenticationReq
 	return nil
 }
 
-// validateBackChannelAuthenticationIDTokenSubject requires the ID Token subject of the approval session, when set, to
-// be the ID Token subject recorded on the session when the request was made or, when none was recorded and the client
-// does not use pairwise subject identifiers, the subject of that session. A pairwise subject identifier is computed by
-// the application, so without a recorded ID Token subject there is nothing to compare it with.
+// validateBackChannelAuthenticationIDTokenSubject requires the ID Token subject of an OpenID Connect approval session to
+// be set when the 'openid' scope is granted on a request with a subject, and, when set, to be the ID Token subject
+// recorded on the session when the request was made or, when none was recorded and the client does not use pairwise
+// subject identifiers, the subject of that session. A pairwise subject identifier is computed by the application, so
+// without a recorded ID Token subject there is nothing to compare it with.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.8
 // See: https://openid.net/specs/openid-connect-core-1_0.html#SubjectIDTypes
-func validateBackChannelAuthenticationIDTokenSubject(client Client, restored, session Session) (err error) {
+func validateBackChannelAuthenticationIDTokenSubject(request BackChannelAuthenticationRequester, restored, session Session) (err error) {
+	client := request.GetClient()
+
 	approval, ok := session.(interface{ IDTokenClaims() *jwt.IDTokenClaims })
-	if !ok || approval.IDTokenClaims() == nil || approval.IDTokenClaims().Subject == "" {
+	if !ok {
+		return nil
+	}
+
+	if approval.IDTokenClaims() == nil || approval.IDTokenClaims().Subject == "" {
+		// An ID Token is issued for a granted 'openid' scope and cannot be issued without a subject.
+		if request.GetGrantedScopes().Has(consts.ScopeOpenID) && restored.GetSubject() != "" {
+			return errorsx.WithStack(ErrAccessDenied.WithDebug("The approval session has no ID Token subject but the 'openid' scope was granted."))
+		}
+
 		return nil
 	}
 

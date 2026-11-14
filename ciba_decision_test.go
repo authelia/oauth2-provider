@@ -255,7 +255,7 @@ func TestApproveIDTokenSubjectMismatchDenied(t *testing.T) {
 		err      bool
 	}{
 		{name: "ShouldAllowTheRecordedIDTokenSubject", recorded: "john", approved: "john"},
-		{name: "ShouldAllowNoIDTokenSubject", recorded: "john", approved: ""},
+		{name: "ShouldDenyNoIDTokenSubjectWhenOpenIDIsGranted", recorded: "john", approved: "", err: true},
 		{name: "ShouldDenyAnIDTokenSubjectOfAnotherEndUser", recorded: "john", approved: "jane", err: true},
 		{name: "ShouldAllowTheRecordedPairwiseIDTokenSubject", recorded: "pairwise-john", approved: "pairwise-john"},
 		{name: "ShouldDenyAnotherPairwiseIDTokenSubject", recorded: "pairwise-john", approved: "pairwise-jane", err: true},
@@ -751,4 +751,60 @@ func TestDecisionRequestRequiresStorageAndHandlers(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, oauth2.ErrServerError)
 	})
+}
+
+// cibaUnboundTestSession is an oauth2.Session which carries neither a DPoP nor a certificate binding.
+type cibaUnboundTestSession struct {
+	oauth2.Session
+}
+
+func TestApproveRejectsASessionWhichCannotCarryTheBinding(t *testing.T) {
+	testCases := []struct {
+		name string
+		bind func(session *openid.DefaultSession)
+		err  bool
+	}{
+		{name: "ShouldRejectADPoPBinding", bind: func(session *openid.DefaultSession) {
+			session.SetDPoPJWKThumbprint("0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I")
+		}, err: true},
+		{name: "ShouldRejectACertificateBinding", bind: func(session *openid.DefaultSession) { session.SetClientCertificateSHA256Thumbprint("x5t") }, err: true},
+		{name: "ShouldAllowNoBinding", bind: func(_ *openid.DefaultSession) {}},
+	}
+
+	for _, sc := range cibaDecisionTestStores {
+		t.Run(sc.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					store := sc.new()
+					provider := newCIBADecisionTestProvider(store)
+
+					original := newCIBADecisionTestSession("john")
+					tc.bind(original)
+
+					request := newCIBADecisionTestRequest(original)
+					request.RequestedScope = oauth2.Arguments{"profile"}
+
+					createCIBADecisionTestRequest(t, provider, request)
+
+					loaded, err := provider.NewBackChannelAuthenticationDecisionRequest(t.Context(), cibaDecisionTestRequestID, openid.NewDefaultSession())
+					require.NoError(t, err)
+
+					_, err = provider.ApproveBackChannelAuthentication(t.Context(), loaded, &cibaUnboundTestSession{Session: &oauth2.DefaultSession{Subject: "john"}})
+
+					stored, gerr := store.GetCIBASessionByRequestID(t.Context(), cibaDecisionTestRequestID, openid.NewDefaultSession())
+					require.NoError(t, gerr)
+
+					if tc.err {
+						assert.ErrorIs(t, err, oauth2.ErrServerError)
+						assert.Equal(t, oauth2.CIBAStatusPending, stored.GetStatus())
+
+						return
+					}
+
+					require.NoError(t, err)
+					assert.Equal(t, oauth2.CIBAStatusApproved, stored.GetStatus())
+				})
+			}
+		})
+	}
 }

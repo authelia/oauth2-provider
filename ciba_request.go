@@ -281,14 +281,16 @@ func (r *BackChannelAuthenticationRequest) Merge(requester Requester) {
 }
 
 // Sanitize returns a shallow copy of the request with its form restricted to allowedParameters and the always-allowed
-// parameters, with the AuthRequestID and ClientNotificationToken fields cleared, and with 'client_notification_token' and 'user_code' removed whatever allowedParameters holds, as both
-// are credentials which must not be persisted in the form.
+// parameters, with the AuthRequestID, ClientNotificationToken and UserCode fields cleared, and with
+// 'client_notification_token' and 'user_code' removed whatever allowedParameters holds, as both are credentials which
+// must not be persisted in the form.
 func (r *BackChannelAuthenticationRequest) Sanitize(allowedParameters []string) Requester {
 	b := *r
 
 	b.httpRequest = nil
 	b.AuthRequestID = ""
 	b.ClientNotificationToken = ""
+	b.UserCode = ""
 
 	if sanitized, ok := r.Request.Sanitize(allowedParameters).(*Request); ok {
 		b.Request = *sanitized

@@ -38,6 +38,11 @@ type OpenIDConnectCIBAHandler struct {
 	*IDTokenHandleHelper
 }
 
+// IsOpenIDConnectHandler marks this handler as an OpenID Connect authorization flow handler.
+//
+// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+func (c *OpenIDConnectCIBAHandler) IsOpenIDConnectHandler() {}
+
 // HandleBackChannelAuthenticationEndpointRequest records the 'nonce' of a request for the 'openid' scope as used by the
 // client until the 'auth_req_id' expires, and rejects a 'nonce' the client already used with oauth2.ErrInvalidRequest.
 //

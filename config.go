@@ -578,14 +578,15 @@ type FormPostResponseProvider interface {
 // authentication assertions.
 type AllowedJWTAssertionAudiencesProvider interface {
 	// GetAllowedJWTAssertionAudiences returns the audiences accepted for an RFC 7523 JWT authorization grant in
-	// addition to the issuer identifier and the token endpoint URL. They are accepted for a JWT client authentication
-	// assertion only when GetDisableClientAssertionIssuerAudience returns true.
+	// addition to the issuer identifier and the token endpoint URL. They are never accepted for a JWT client
+	// authentication assertion.
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
 	GetAllowedJWTAssertionAudiences(ctx context.Context) (audiences []string)
 
-	// GetDisableClientAssertionIssuerAudience returns true when a JWT client authentication assertion is not required
-	// to carry the issuer identifier as the sole value of its 'aud' claim. The authorization grant is unaffected.
+	// GetDisableClientAssertionIssuerAudience returns true when a JWT client authentication assertion may carry, as
+	// the sole value of its 'aud' claim, either the issuer identifier or the URL or RFC 8705 mutual TLS alias of the
+	// endpoint it is presented to. The authorization grant is unaffected.
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
 	// See: https://www.rfc-editor.org/rfc/rfc10070#section-5

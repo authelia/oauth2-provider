@@ -30,6 +30,9 @@ const (
 	audienceTestTokenURL = "https://as.example.com/token" //nolint:gosec
 	audienceTestMTLSURL  = "https://mtls.as.example.com/token"
 	audienceTestPARURL   = "https://as.example.com/par"
+	audienceTestRevURL   = "https://as.example.com/revoke"
+	audienceTestIntURL   = "https://as.example.com/introspect"
+	audienceTestDevURL   = "https://as.example.com/device"
 	audienceTestListed   = "https://legacy.example.com"
 	audienceTestOther    = "https://other.example.com"
 	audienceTestSecret   = "0123456789abcdef0123456789abcdef"
@@ -44,6 +47,7 @@ const (
 
 	audienceTestErrInvalid  = "invalid audience"
 	audienceTestErrSole     = "sole audience value"
+	audienceTestErrSingle   = "must carry exactly one of"
 	audienceTestErrNoIssuer = "no issuer identifier configured"
 )
 
@@ -99,11 +103,33 @@ func TestClientAssertionAudience(t *testing.T) {
 		{name: "ShouldAcceptTheIssuerWhenDisabled", disable: true, aud: audienceTestIssuer},
 		{name: "ShouldAcceptTheTokenEndpointURLWhenDisabled", disable: true, aud: audienceTestTokenURL},
 		{name: "ShouldAcceptTheMutualTLSTokenEndpointAliasWhenDisabled", disable: true, aud: audienceTestMTLSURL},
-		{name: "ShouldAcceptThePushedAuthorizationRequestEndpointURLWhenDisabled", disable: true, aud: audienceTestPARURL},
-		{name: "ShouldAcceptAConfiguredAudienceWhenDisabled", disable: true, aud: audienceTestListed},
-		{name: "ShouldAcceptMultipleAudiencesWhenDisabled", disable: true, aud: []string{audienceTestOther, audienceTestTokenURL}},
+		{name: "ShouldRejectThePushedAuthorizationRequestEndpointURLAtTheTokenEndpointWhenDisabled", disable: true, aud: audienceTestPARURL, err: audienceTestErrInvalid},
+		{name: "ShouldRejectAConfiguredAudienceWhenDisabled", disable: true, aud: audienceTestListed, err: audienceTestErrInvalid},
+		{name: "ShouldRejectMultipleAudiencesWhenDisabled", disable: true, aud: []string{audienceTestOther, audienceTestTokenURL}, err: audienceTestErrSingle},
+		{name: "ShouldRejectTheIssuerAlongsideTheTokenEndpointURLWhenDisabled", disable: true, aud: []string{audienceTestIssuer, audienceTestTokenURL}, err: audienceTestErrSingle},
+		{name: "ShouldRejectTheTokenEndpointURLRepeatedWhenDisabled", disable: true, aud: []string{audienceTestTokenURL, audienceTestTokenURL}, err: audienceTestErrSingle},
 		{name: "ShouldRejectAnUnknownAudienceWhenDisabled", disable: true, aud: audienceTestOther, err: audienceTestErrInvalid},
-		{name: "ShouldAcceptTheTokenEndpointURLAtThePushedAuthorizationRequestEndpointWhenDisabled", disable: true, endpoint: audienceTestPAR, aud: audienceTestTokenURL},
+		{name: "ShouldAcceptTheIssuerAtThePushedAuthorizationRequestEndpointWhenDisabled", disable: true, endpoint: audienceTestPAR, aud: audienceTestIssuer},
+		{name: "ShouldAcceptThePushedAuthorizationRequestEndpointURLAtThatEndpointWhenDisabled", disable: true, endpoint: audienceTestPAR, aud: audienceTestPARURL},
+		{name: "ShouldRejectTheTokenEndpointURLAtThePushedAuthorizationRequestEndpointWhenDisabled", disable: true, endpoint: audienceTestPAR, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldRejectMultipleAudiencesAtThePushedAuthorizationRequestEndpointWhenDisabled", disable: true, endpoint: audienceTestPAR, aud: []string{audienceTestIssuer, audienceTestPARURL}, err: audienceTestErrSingle},
+		{name: "ShouldAcceptTheIssuerAtTheRevocationEndpointWhenDisabled", disable: true, endpoint: audienceTestRevocation, aud: audienceTestIssuer},
+		{name: "ShouldAcceptTheRevocationEndpointURLAtThatEndpointWhenDisabled", disable: true, endpoint: audienceTestRevocation, aud: audienceTestRevURL},
+		{name: "ShouldRejectTheTokenEndpointURLAtTheRevocationEndpointWhenDisabled", disable: true, endpoint: audienceTestRevocation, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldAcceptTheIssuerAtTheIntrospectionEndpointWhenDisabled", disable: true, endpoint: audienceTestIntrospection, aud: audienceTestIssuer},
+		{name: "ShouldAcceptTheIntrospectionEndpointURLAtThatEndpointWhenDisabled", disable: true, endpoint: audienceTestIntrospection, aud: audienceTestIntURL},
+		{name: "ShouldRejectTheTokenEndpointURLAtTheIntrospectionEndpointWhenDisabled", disable: true, endpoint: audienceTestIntrospection, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldAcceptTheIssuerAtTheDeviceAuthorizationEndpointWhenDisabled", disable: true, endpoint: audienceTestDevice, aud: audienceTestIssuer},
+		{name: "ShouldAcceptTheDeviceAuthorizationEndpointURLAtThatEndpointWhenDisabled", disable: true, endpoint: audienceTestDevice, aud: audienceTestDevURL},
+		{name: "ShouldRejectTheTokenEndpointURLAtTheDeviceAuthorizationEndpointWhenDisabled", disable: true, endpoint: audienceTestDevice, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{
+			name:     "ShouldAcceptOnlyTheIssuerAtAnEndpointWithoutAURLWhenDisabled",
+			disable:  true,
+			endpoint: audienceTestRevocation,
+			config:   func(config *Config) { config.EndpointURLs.Revocation = "" },
+			aud:      audienceTestRevURL,
+			err:      audienceTestErrInvalid,
+		},
 		{
 			name:    "ShouldAcceptTheTokenEndpointURLWhenDisabledWithoutAnIssuer",
 			disable: true,
@@ -178,6 +204,9 @@ func newAudienceTestProvider(key *rsa.PrivateKey) (config *Config, provider *Fos
 		EndpointURLs: EndpointURLs{
 			Token:                      audienceTestTokenURL,
 			PushedAuthorizationRequest: audienceTestPARURL,
+			Revocation:                 audienceTestRevURL,
+			Introspection:              audienceTestIntURL,
+			DeviceAuthorization:        audienceTestDevURL,
 			MutualTLSAliases:           RFC8705MutualTLSEndpointAliases{Token: audienceTestMTLSURL},
 		},
 		AllowedJWTAssertionAudiences: []string{audienceTestListed},
@@ -250,7 +279,7 @@ func authenticateAudienceTestClient(t *testing.T, config *Config, provider *Fosi
 	case audienceTestPAR:
 		_, err = provider.NewPushedAuthorizeRequest(ctx, newAudienceTestFormRequest(audienceTestPARURL, form))
 	case audienceTestDevice:
-		_, err = provider.NewRFC862DeviceAuthorizeRequest(ctx, newAudienceTestFormRequest("https://as.example.com/device", form))
+		_, err = provider.NewRFC862DeviceAuthorizeRequest(ctx, newAudienceTestFormRequest(audienceTestDevURL, form))
 	default:
 		_, _, err = provider.AuthenticateClientWithAuthHandler(ctx, new(http.Request), form, config.GetTokenEndpointClientAuthStrategy(ctx))
 	}

@@ -223,8 +223,7 @@ type Config struct {
 	ClientAssertionClientSecretEncryptionDisabled bool
 
 	// AllowedJWTAssertionAudiences are audiences accepted for an RFC 7523 JWT authorization grant in addition to the
-	// issuer identifier and the token endpoint URL. They are accepted for a JWT client authentication assertion only
-	// when DisableClientAssertionIssuerAudience is true.
+	// issuer identifier and the token endpoint URL. They are never accepted for a JWT client authentication assertion.
 	AllowedJWTAssertionAudiences []string
 
 	// AllowedIntrospectionAudiences is a list of audiences permitted for an Access Token used to authenticate a request
@@ -954,9 +953,9 @@ func (c *Config) GetAllowedJWTAssertionAudiences(ctx context.Context) []string {
 }
 
 // GetDisableClientAssertionIssuerAudience returns whether a JWT client authentication assertion may carry an 'aud'
-// claim other than this server's issuer identifier as its sole value. When true, an 'aud' claim containing the issuer
-// identifier, the token or pushed authorization request endpoint URL, or a value of AllowedJWTAssertionAudiences is
-// accepted, as RFC 7523 Section 3 and RFC 9126 Section 2 permitted before RFC 10070. Defaults to false.
+// claim other than this server's issuer identifier as its sole value. When true, the sole 'aud' value may be the
+// issuer identifier, or the EndpointURLs value or RFC 8705 mutual TLS alias of the endpoint the assertion is presented
+// to. An 'aud' claim with more than one value is rejected either way. Defaults to false.
 //
 // See: https://www.rfc-editor.org/rfc/rfc10070#section-4
 // See: https://www.rfc-editor.org/rfc/rfc10070#section-5

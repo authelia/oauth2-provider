@@ -663,7 +663,7 @@ func TestAuthorizeCodeFlow_ResourceIndicatorSubset(t *testing.T) {
 					consts.FormParameterRedirectURI: []string{"https://client.example.com/cb"},
 					consts.FormParameterResource:    grantedAudience,
 				},
-				RequestedScope:    oauth2.Arguments{"foo"},
+				RequestedScope:    oauth2.Arguments{"foo", "bar"},
 				GrantedScope:      oauth2.Arguments{"foo"},
 				RequestedAudience: grantedAudience,
 				GrantedAudience:   grantedAudience,
@@ -713,6 +713,8 @@ func TestAuthorizeCodeFlow_ResourceIndicatorSubset(t *testing.T) {
 		assert.Equal(t, oauth2.Arguments{resourceUsers}, accessRequest.GetRequestedAudience(),
 			"requested audience at token endpoint must be preserved when it is a subset of the authorize request's granted audience")
 		assert.NotContains(t, accessRequest.GetRequestedAudience(), resourceTenants)
+		assert.Equal(t, oauth2.Arguments{"foo"}, accessRequest.GetGrantedScopes())
+		assert.Equal(t, oauth2.Arguments{resourceUsers}, accessRequest.GetGrantedAudience())
 
 		response := oauth2.NewAccessResponse()
 		require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))
@@ -1411,6 +1413,7 @@ func TestAuthorizeCode_AuthorizationDetails(t *testing.T) {
 		accessRequest := newAccessRequest(code, nil)
 
 		require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), accessRequest))
+		assert.Equal(t, granted, accessRequest.GetGrantedAuthorizationDetails())
 
 		response := oauth2.NewAccessResponse()
 		require.NoError(t, handler.PopulateTokenEndpointResponse(t.Context(), accessRequest, response))

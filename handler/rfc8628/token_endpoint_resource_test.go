@@ -145,12 +145,13 @@ func TestDeviceCodeTokenRequestResourceAndAudience(t *testing.T) {
 
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 
+			assert.ElementsMatch(t, oauth2.Arguments{consts.ScopeOfflineAccess}, request.GetGrantedScopes())
+			assert.ElementsMatch(t, tc.grantedAudience, request.GetGrantedAudience())
+			assert.ElementsMatch(t, tc.grantedResource, request.GetGrantedResource())
+
 			response := oauth2.NewAccessResponse()
 
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), request, response)))
-
-			assert.ElementsMatch(t, tc.grantedAudience, request.GetGrantedAudience())
-			assert.ElementsMatch(t, tc.grantedResource, request.GetGrantedResource())
 
 			refresh, _ := response.GetExtra(consts.AccessResponseRefreshToken).(string)
 			require.NotEmpty(t, refresh)

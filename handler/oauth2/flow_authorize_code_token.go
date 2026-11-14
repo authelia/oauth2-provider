@@ -171,6 +171,8 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		request.SetClaims(requester.GetClaims())
 	}
 
+	grantCodeTokenRequest(request, authorizeRequest.GetGrantedScopes(), details)
+
 	// The POST client_id is not checked as the client is already authenticated.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.2.1
@@ -195,6 +197,24 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	}
 
 	return nil
+}
+
+// grantCodeTokenRequest grants the values of a code token request. The requested audience and resource are subsets of
+// the values granted to the code, or equal to them when the token request named neither parameter.
+func grantCodeTokenRequest(request oauth2.AccessRequester, scopes oauth2.Arguments, details oauth2.AuthorizationDetails) {
+	for _, scope := range scopes {
+		request.GrantScope(scope)
+	}
+
+	for _, audience := range request.GetRequestedAudience() {
+		request.GrantAudience(audience)
+	}
+
+	for _, resource := range request.GetRequestedResource() {
+		request.GrantResource(resource)
+	}
+
+	request.SetGrantedAuthorizationDetails(details)
 }
 
 func canIssueRefreshToken(ctx context.Context, config oauth2.RefreshTokenScopesProvider, request oauth2.Requester) (issue bool) {
@@ -256,23 +276,6 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 	} else if err = c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, request, code); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
 	}
-
-	for _, scope := range ar.GetGrantedScopes() {
-		request.GrantScope(scope)
-	}
-
-	// Grant the audience and resource requested at the token endpoint. HandleTokenEndpointRequest has already ensured
-	// these sets are subsets of the authorize request's granted values, or equal to them when the token request named
-	// neither parameter.
-	for _, audience := range request.GetRequestedAudience() {
-		request.GrantAudience(audience)
-	}
-
-	for _, resource := range request.GetRequestedResource() {
-		request.GrantResource(resource)
-	}
-
-	request.SetGrantedAuthorizationDetails(request.GetRequestedAuthorizationDetails())
 
 	var access, accessSignature string
 

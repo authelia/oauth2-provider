@@ -137,6 +137,8 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' from this request does not match the one from the authorize request."))
 	}
 
+	grantCodeTokenRequest(request, deviceRequester.GetGrantedScopes(), details)
+
 	// The POST client_id is not checked as the client is already authenticated.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.2.1
@@ -235,20 +237,6 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		// This needs to happen after store retrieval for the session to be hydrated properly
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
 	}
-
-	for _, scope := range ar.GetGrantedScopes() {
-		request.GrantScope(scope)
-	}
-
-	for _, audience := range request.GetRequestedAudience() {
-		request.GrantAudience(audience)
-	}
-
-	for _, resource := range request.GetRequestedResource() {
-		request.GrantResource(resource)
-	}
-
-	request.SetGrantedAuthorizationDetails(request.GetRequestedAuthorizationDetails())
 
 	var (
 		access, accessSignature   string

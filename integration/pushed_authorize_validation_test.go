@@ -26,6 +26,7 @@ import (
 // RFC 9126 Section 2.1.
 func TestPushedAuthorizeRequestRejectsWhatTheAuthorizationEndpointWould(t *testing.T) {
 	f := composeAllEnabledWithImplicit(&oauth2.Config{
+		RedirectSecureChecker:                 oauth2.IsRedirectURISecure,
 		GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
 		EnforcePKCE:                           true,

@@ -36,7 +36,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 			Username: "peteru",
 		},
 	}
-	fc := new(oauth2.Config)
+	fc := &oauth2.Config{RedirectSecureChecker: oauth2.IsRedirectURISecure}
 	fc.RefreshTokenLifespan = -1
 	fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
 	fc.RFC7591ClientRegistrationGlobalSecret = []byte("a-completely-different-secret-at-least-32b")
@@ -151,7 +151,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 		{
 			name: "should fail with expired refresh token",
 			setup: func(t *testing.T) {
-				fc = new(oauth2.Config)
+				fc = &oauth2.Config{RedirectSecureChecker: oauth2.IsRedirectURISecure}
 				fc.RefreshTokenLifespan = time.Nanosecond
 				fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
 				fc.RFC7591ClientRegistrationGlobalSecret = []byte("a-completely-different-secret-at-least-32b")
@@ -167,7 +167,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 		{
 			name: "should pass with limited but not expired refresh token",
 			setup: func(t *testing.T) {
-				fc = new(oauth2.Config)
+				fc = &oauth2.Config{RedirectSecureChecker: oauth2.IsRedirectURISecure}
 				fc.RefreshTokenLifespan = time.Minute
 				fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")
 				fc.RFC7591ClientRegistrationGlobalSecret = []byte("a-completely-different-secret-at-least-32b")
@@ -206,7 +206,7 @@ func TestRefreshTokenFlow(t *testing.T) {
 		{
 			name: "should keep the refresh token when rotation is disabled",
 			setup: func(t *testing.T) {
-				fc = new(oauth2.Config)
+				fc = &oauth2.Config{RedirectSecureChecker: oauth2.IsRedirectURISecure}
 				fc.RefreshTokenLifespan = time.Minute
 				fc.DisableRefreshTokenRotation = true
 				fc.GlobalSecret = []byte("some-secret-thats-random-some-secret-thats-random-")

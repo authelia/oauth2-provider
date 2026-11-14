@@ -29,6 +29,7 @@ func TestAuthorizeOptionalState(t *testing.T) {
 	}
 
 	provider := composeAllEnabledWithImplicit(&oauth2.Config{
+		RedirectSecureChecker:                 oauth2.IsRedirectURISecure,
 		GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
 	}, store, gen.MustRSAKey())

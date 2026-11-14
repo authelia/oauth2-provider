@@ -66,7 +66,7 @@ func TestNone_HandleAuthorizeEndpointRequest(t *testing.T) {
 				},
 				RedirectURI: parseUrl("http://asdf.com/cb"),
 			},
-			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for hosts with suffix 'localhost', for example: http://myapp.localhost/.",
+			err: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for native clients using a loopback redirect URI, for example: http://127.0.0.1:8080/callback.",
 		},
 		{
 			name: "ShouldFailMismatchedAudiences",

@@ -133,7 +133,7 @@ func (c *AuthorizeExplicitGrantHandler) GetSanitationWhiteList(ctx context.Conte
 // authorization code session: the sanitation whitelist, and the 'code_challenge' and 'code_challenge_method' when a
 // registered handler verifies PKCE, so a replayed code only revokes the grant for the matching 'code_verifier'.
 //
-// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-16#section-7.5.3
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-7.5.3
 func (c *AuthorizeExplicitGrantHandler) GetAuthorizeCodeSessionParameters(ctx context.Context) (parameters []string) {
 	parameters = c.GetSanitationWhiteList(ctx)
 

@@ -160,7 +160,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 
 	// The 'state' parameter is optional, but when present it must not be guessable.
 	//
-	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-16#section-4.1.1 and
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-4.1.1 and
 	// https://www.rfc-editor.org/rfc/rfc6819#section-4.4.1.8
 	if minimum := f.GetMinParameterEntropy(ctx); len(request.State) != 0 && len(request.State) < minimum {
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHintf("Request parameter 'state' is set but does not satisfy the minimum entropy of %d characters.", minimum))

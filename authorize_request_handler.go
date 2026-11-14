@@ -29,7 +29,9 @@ import (
 // NewAuthorizeRequest parses and validates an authorization endpoint request per RFC 6749 section 3.1 and OpenID
 // Connect 1.0. The HTTP method must be GET or POST as defined by the specification; any other method results in
 // ErrInvalidRequest. The returned AuthorizeRequester carries the parsed client, scopes, audience, redirect URI and
-// response type. Errors from this method should be sent to the client via WriteAuthorizeError.
+// response type. Every AuthorizeRequestValidator among the authorize endpoint binding handlers and authorize endpoint
+// handlers is run before the request is returned, as OAuth 2.1 Section 4.1.1 validates the request before the resource
+// owner is authenticated. Errors from this method should be sent to the client via WriteAuthorizeError.
 func (f *Fosite) NewAuthorizeRequest(ctx context.Context, r *http.Request) (AuthorizeRequester, error) {
 	switch r.Method {
 	case http.MethodGet, http.MethodPost:
@@ -80,7 +82,15 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		}
 
 		if isPAR {
-			return request, errRepeated
+			if errRepeated != nil {
+				return request, errRepeated
+			}
+
+			if err = f.validateAuthorizeRequest(ctx, request); err != nil {
+				return request, err
+			}
+
+			return request, nil
 		}
 
 		if config, ok := f.Config.(PushedAuthorizeRequestConfigProvider); ok && config.GetRequirePushedAuthorizationRequests(ctx) {
@@ -180,7 +190,35 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 		return request, err
 	}
 
+	// OAuth 2.1 Section 4.1.1: the request is validated before the resource owner is authenticated. The pushed
+	// authorization request endpoint runs these checks itself once it has resolved the DPoP proof.
+	if !isPARRequest {
+		if err = f.validateAuthorizeRequest(ctx, request); err != nil {
+			return request, err
+		}
+	}
+
 	return request, nil
+}
+
+func (f *Fosite) validateAuthorizeRequest(ctx context.Context, request AuthorizeRequester) (err error) {
+	for _, h := range f.Config.GetAuthorizeEndpointBindingHandlers(ctx) {
+		if v, ok := h.(AuthorizeRequestValidator); ok {
+			if err = v.ValidateAuthorizeRequest(ctx, request); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, h := range f.Config.GetAuthorizeEndpointHandlers(ctx) {
+		if v, ok := h.(AuthorizeRequestValidator); ok {
+			if err = v.ValidateAuthorizeRequest(ctx, request); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (f *Fosite) validateNonceEntropy(ctx context.Context, form url.Values) (err error) {

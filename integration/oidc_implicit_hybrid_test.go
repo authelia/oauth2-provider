@@ -17,7 +17,6 @@ import (
 	xoauth2 "golang.org/x/oauth2"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
@@ -93,7 +92,7 @@ func TestOIDCImplicitFlow(t *testing.T) {
 					Headers: &jwt.Headers{},
 				},
 			}
-			f := compose.ComposeAllEnabled(&oauth2.Config{
+			f := composeAllEnabledWithImplicit(&oauth2.Config{
 				GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
 				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
 			}, store, gen.MustRSAKey())

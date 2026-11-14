@@ -17,7 +17,6 @@ import (
 	xoauth2 "golang.org/x/oauth2"
 
 	"authelia.com/provider/oauth2"
-	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -135,7 +134,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 				}
 				config.ResponseModeHandlers = []oauth2.ResponseModeHandler{&oauth2.DefaultResponseModeHandler{Config: config}, &DecoratedFormPostResponse{}}
 
-				f := compose.ComposeAllEnabled(config, store, gen.MustRSAKey())
+				f := composeAllEnabledWithImplicit(config, store, gen.MustRSAKey())
 				server := mockServer(t, f, session)
 
 				defer server.Close()
@@ -195,7 +194,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 				}
 				config.ResponseModeHandlers = []oauth2.ResponseModeHandler{&oauth2.DefaultResponseModeHandler{Config: config}, &DecoratedFormPostResponse{}}
 
-				f := compose.ComposeAllEnabled(config, store, gen.MustRSAKey())
+				f := composeAllEnabledWithImplicit(config, store, gen.MustRSAKey())
 				server := mockServer(t, f, session)
 
 				defer server.Close()

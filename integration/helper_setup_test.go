@@ -5,6 +5,7 @@
 package integration_test
 
 import (
+	"context"
 	"crypto"
 	"net/http"
 	"net/http/httptest"
@@ -16,11 +17,72 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/compose"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/integration/clients"
 	"authelia.com/provider/oauth2/internal/randx"
 	"authelia.com/provider/oauth2/storage"
+	"authelia.com/provider/oauth2/token/jwt"
 )
+
+func composeAllEnabledWithImplicit(config *oauth2.Config, s any, key any) oauth2.Provider {
+	keyGetter := func(context.Context) (any, error) {
+		return key, nil
+	}
+
+	strategy := &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+	}
+
+	return compose.Compose(
+		config,
+		s,
+		&compose.CommonStrategy{
+			CoreStrategy:               compose.NewOAuth2HMACStrategy(config),
+			OpenIDConnectTokenStrategy: compose.NewOpenIDConnectStrategy(keyGetter, strategy, config),
+			Strategy:                   strategy,
+		},
+		compose.OAuth2AuthorizeExplicitFactory,
+		compose.OAuth2AuthorizeImplicitFactory,
+		compose.OAuth2AuthorizeNoneFactory,
+		compose.OAuth2ClientCredentialsGrantFactory,
+		compose.OAuth2RefreshTokenGrantFactory,
+		compose.RFC8628DeviceAuthorizeFactory,
+		compose.RFC8628UserAuthorizeFactory,
+		compose.RFC8628DeviceAuthorizeTokenFactory,
+
+		compose.RFC7523AssertionGrantFactory,
+
+		compose.RFC8693TokenExchangeGrantFactory,
+		compose.RFC8693AccessTokenTypeFactory,
+		compose.RFC8693RefreshTokenTypeFactory,
+		compose.RFC8693IDTokenTypeFactory,
+		compose.RFC8693CustomJWTTypeFactory,
+		compose.IDJAGIssueFactory,
+		compose.RFC8693ActorTokenValidationFactory,
+
+		compose.OpenIDConnectExplicitFactory,
+		compose.OpenIDConnectImplicitFactory,
+		compose.OpenIDConnectHybridFactory,
+		compose.OpenIDConnectRefreshFactory,
+		compose.OpenIDConnectDeviceAuthorizeFactory,
+
+		compose.OAuth2TokenIntrospectionFactory,
+		compose.OAuth2TokenRevocationFactory,
+
+		compose.OAuth2PKCEFactory,
+		compose.PushedAuthorizeHandlerFactory,
+
+		compose.RFC7591ClientRegistrationFactory,
+		compose.RFC7592ClientConfigurationFactory,
+
+		compose.DPoPAuthorizeFactory,
+		compose.DPoPTokenFactory,
+		compose.IDJAGRedeemFactory,
+		compose.RFC8705Factory,
+	)
+}
 
 func newTestNonce() string {
 	return randx.MustString(32, randx.AlphaNum)

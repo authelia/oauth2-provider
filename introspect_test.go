@@ -26,6 +26,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 	testCases := []struct {
 		name     string
 		setup    func() *http.Request
+		opts     []AccessTokenFromRequestOption
 		expected string
 	}{
 		{
@@ -57,31 +58,104 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			expected: "TokenFromHeader",
 		},
 		{
-			name: "ShouldReturnTokenFromQueryParameter",
+			name: "ShouldIgnoreTokenFromQueryParameter",
 			setup: func() *http.Request {
 				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test?access_token=TokenFromQueryParam", nil)
 				return req
 			},
+			expected: "",
+		},
+		{
+			name: "ShouldReturnTokenFromQueryParameterWhenEnabled",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test?access_token=TokenFromQueryParam", nil)
+				return req
+			},
+			opts:     []AccessTokenFromRequestOption{WithAccessTokenURIQueryParameter(true)},
 			expected: "TokenFromQueryParam",
 		},
 		{
+			name: "ShouldIgnoreTokenFromQueryParameterWhenExplicitlyDisabled",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test?access_token=TokenFromQueryParam", nil)
+				return req
+			},
+			opts:     []AccessTokenFromRequestOption{WithAccessTokenURIQueryParameter(false)},
+			expected: "",
+		},
+		{
+			name: "ShouldReturnTokenFromFormBody",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodPost, "http://example.com/test", strings.NewReader("access_token=TokenFromFormBody"))
+				req.Header.Set(consts.HeaderContentType, "application/x-www-form-urlencoded")
+
+				return req
+			},
+			expected: "TokenFromFormBody",
+		},
+		{
+			name: "ShouldIgnoreTokenFromQueryParameterAlongsideAFormBody",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodPost, "http://example.com/test?access_token=TokenFromQueryParam", strings.NewReader("scope=openid"))
+				req.Header.Set(consts.HeaderContentType, "application/x-www-form-urlencoded")
+
+				return req
+			},
+			expected: "",
+		},
+		{
+			name: "ShouldPreferFormBodyOverQueryParameterWhenEnabled",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodPost, "http://example.com/test?access_token=TokenFromQueryParam", strings.NewReader("access_token=TokenFromFormBody"))
+				req.Header.Set(consts.HeaderContentType, "application/x-www-form-urlencoded")
+
+				return req
+			},
+			opts:     []AccessTokenFromRequestOption{WithAccessTokenURIQueryParameter(true)},
+			expected: "TokenFromFormBody",
+		},
+		{
 			name: "ShouldFallThroughToFormWhenAuthorizationHeaderIsMalformed",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodPost, "http://example.com/test", strings.NewReader("access_token=TokenFromFormBody"))
+				req.Header.Set(consts.HeaderContentType, "application/x-www-form-urlencoded")
+				req.Header.Add(consts.HeaderAuthorization, "Basic abc")
+
+				return req
+			},
+			expected: "TokenFromFormBody",
+		},
+		{
+			name: "ShouldFallThroughToFormWhenAuthorizationHeaderHasSingleSegment",
+			setup: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodPost, "http://example.com/test", strings.NewReader("access_token=TokenFromFormBody"))
+				req.Header.Set(consts.HeaderContentType, "application/x-www-form-urlencoded")
+				req.Header.Add(consts.HeaderAuthorization, "Bearer")
+
+				return req
+			},
+			expected: "TokenFromFormBody",
+		},
+		{
+			name: "ShouldFallThroughToQueryParameterWhenAuthorizationHeaderIsMalformedAndEnabled",
 			setup: func() *http.Request {
 				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test?access_token=TokenFromQueryParam", nil)
 				req.Header.Add(consts.HeaderAuthorization, "Basic abc")
 
 				return req
 			},
+			opts:     []AccessTokenFromRequestOption{WithAccessTokenURIQueryParameter(true)},
 			expected: "TokenFromQueryParam",
 		},
 		{
-			name: "ShouldFallThroughToFormWhenAuthorizationHeaderHasSingleSegment",
+			name: "ShouldFallThroughToQueryParameterWhenAuthorizationHeaderHasSingleSegmentAndEnabled",
 			setup: func() *http.Request {
 				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test?access_token=TokenFromQueryParam", nil)
 				req.Header.Add(consts.HeaderAuthorization, "Bearer")
 
 				return req
 			},
+			opts:     []AccessTokenFromRequestOption{WithAccessTokenURIQueryParameter(true)},
 			expected: "TokenFromQueryParam",
 		},
 		{
@@ -98,7 +172,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := AccessTokenFromRequest(tc.setup())
+			actual := AccessTokenFromRequest(tc.setup(), tc.opts...)
 			assert.Equal(t, tc.expected, actual)
 		})
 	}

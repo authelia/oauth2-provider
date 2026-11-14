@@ -344,6 +344,7 @@ type Configurator interface {
 	IntrospectionEndpointClientAuthStrategyProvider
 	IntrospectionEndpointClientAuthDisabledProvider
 	IntrospectionTokenTypeEnabledProvider
+	AccessTokenURIQueryParameterEnabledProvider
 	ClientAssertionClientSecretEncryptionDisabledProvider
 	DPoPConfigProvider
 	SSFConfigProvider

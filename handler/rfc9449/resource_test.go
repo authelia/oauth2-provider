@@ -29,6 +29,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 	testCases := []struct {
 		name    string
 		request func() *http.Request
+		opts    []oauth2.AccessTokenFromRequestOption
 		token   string
 		dpop    bool
 	}{
@@ -83,10 +84,19 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			dpop:  false,
 		},
 		{
-			name: "QueryParameterFallback",
+			name: "QueryParameterIgnored",
 			request: func() *http.Request {
 				return httptest.NewRequest(http.MethodGet, "https://rs.example.com/userinfo?access_token=query-token", nil)
 			},
+			token: "",
+			dpop:  false,
+		},
+		{
+			name: "QueryParameterFallbackWhenEnabled",
+			request: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "https://rs.example.com/userinfo?access_token=query-token", nil)
+			},
+			opts:  []oauth2.AccessTokenFromRequestOption{oauth2.WithAccessTokenURIQueryParameter(true)},
 			token: "query-token",
 			dpop:  false,
 		},
@@ -112,7 +122,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			token, dpop := AccessTokenFromRequest(tc.request())
+			token, dpop := AccessTokenFromRequest(tc.request(), tc.opts...)
 			assert.Equal(t, tc.token, token)
 			assert.Equal(t, tc.dpop, dpop)
 		})

@@ -312,6 +312,10 @@ type Config struct {
 	// active access token. Defaults to false, which omits it. See IntrospectionTokenTypeEnabledProvider.
 	IntrospectionTokenTypeEnabled bool
 
+	// AccessTokenURIQueryParameterEnabled accepts an access token in the RFC 6750 Section 2.3 'access_token' URI query
+	// parameter. Defaults to false, which ignores it. See AccessTokenURIQueryParameterEnabledProvider.
+	AccessTokenURIQueryParameterEnabled bool
+
 	// RevocationEndpointClientAuthStrategy indicates the EndpointClientAuthStrategy used to authenticate clients at the
 	// revocation endpoint. Defaults to a RevocationEndpointClientAuthStrategy.
 	RevocationEndpointClientAuthStrategy EndpointClientAuthStrategy
@@ -1708,6 +1712,12 @@ func (c *Config) GetIntrospectionTokenTypeEnabled(ctx context.Context) (enabled 
 	return c.IntrospectionTokenTypeEnabled
 }
 
+// GetAccessTokenURIQueryParameterEnabled returns whether an access token in the 'access_token' URI query parameter is
+// accepted. See AccessTokenURIQueryParameterEnabledProvider.
+func (c *Config) GetAccessTokenURIQueryParameterEnabled(ctx context.Context) (enabled bool) {
+	return c.AccessTokenURIQueryParameterEnabled
+}
+
 // GetRevocationEndpointClientAuthStrategy returns the EndpointClientAuthStrategy used to authenticate clients at the
 // revocation endpoint. Defaults to a RevocationEndpointClientAuthStrategy.
 func (c *Config) GetRevocationEndpointClientAuthStrategy(ctx context.Context) (strategy EndpointClientAuthStrategy) {
@@ -2160,6 +2170,7 @@ var (
 	_ IntrospectionEndpointClientAuthStrategyProvider       = (*Config)(nil)
 	_ IntrospectionEndpointClientAuthDisabledProvider       = (*Config)(nil)
 	_ IntrospectionTokenTypeEnabledProvider                 = (*Config)(nil)
+	_ AccessTokenURIQueryParameterEnabledProvider           = (*Config)(nil)
 	_ RevocationEndpointClientAuthStrategyProvider          = (*Config)(nil)
 	_ SSFConfigProvider                                     = (*Config)(nil)
 	_ DPoPConfigProvider                                    = (*Config)(nil)

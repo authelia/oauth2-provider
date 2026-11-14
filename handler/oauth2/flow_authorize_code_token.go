@@ -43,8 +43,8 @@ func revokeCodeGrant(ctx context.Context, store TokenRevocationStorage, requestI
 // to and repeats the 'redirect_uri' from the authorization request, per RFC 6749 Section 4.1.3.
 var pkceParameters = []string{consts.FormParameterCodeChallenge, consts.FormParameterCodeChallengeMethod}
 
-func validateReplayedAuthorizeCode(authorizeRequest oauth2.Requester, request oauth2.AccessRequester, pkce bool) (err error) {
-	if err = validateAuthorizeCodeBinding(authorizeRequest, request); err != nil {
+func validateReplayedAuthorizeCode(authorizeRequest oauth2.Requester, request oauth2.AccessRequester, pkce, optional bool) (err error) {
+	if err = validateAuthorizeCodeBinding(authorizeRequest, request, optional); err != nil {
 		return err
 	}
 
@@ -66,7 +66,7 @@ func validateReplayedAuthorizeCode(authorizeRequest oauth2.Requester, request oa
 	return nil
 }
 
-func validateAuthorizeCodeBinding(authorizeRequest oauth2.Requester, request oauth2.AccessRequester) (err error) {
+func validateAuthorizeCodeBinding(authorizeRequest oauth2.Requester, request oauth2.AccessRequester, optional bool) (err error) {
 	// The code must have been issued to this client.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
@@ -77,6 +77,7 @@ func validateAuthorizeCodeBinding(authorizeRequest oauth2.Requester, request oau
 	// The 'redirect_uri' must be identical to the one included in the authorization request.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-10.2
 	redirectURI := authorizeRequest.GetRequestForm().Get(consts.FormParameterRedirectURI)
 
 	switch redirectURI {
@@ -87,6 +88,10 @@ func validateAuthorizeCodeBinding(authorizeRequest oauth2.Requester, request oau
 	case request.GetRequestForm().Get(consts.FormParameterRedirectURI):
 		return nil
 	default:
+		if optional && !request.GetRequestForm().Has(consts.FormParameterRedirectURI) {
+			return nil
+		}
+
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'redirect_uri' from this request does not match the one from the authorize request.").WithDebugf("The 'redirect_uri' parameter value '%s' utilized in the Access Request does not match the original 'redirect_uri' parameter value '%s' requested in the Authorize Request which is not permitted.", request.GetRequestForm().Get(consts.FormParameterRedirectURI), redirectURI))
 	}
 
@@ -124,7 +129,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		// the code was issued for, does not revoke the grant.
 		//
 		// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-16#section-7.5.3
-		if err = validateReplayedAuthorizeCode(authorizeRequest, request, c.isPKCEVerified(ctx)); err != nil {
+		if err = validateReplayedAuthorizeCode(authorizeRequest, request, c.isPKCEVerified(ctx), c.isTokenRequestRedirectURIOptional(ctx, authorizeRequest, request)); err != nil {
 			return err
 		}
 
@@ -153,7 +158,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		return err
 	}
 
-	if err = validateAuthorizeCodeBinding(authorizeRequest, request); err != nil {
+	if err = validateAuthorizeCodeBinding(authorizeRequest, request, c.isTokenRequestRedirectURIOptional(ctx, authorizeRequest, request)); err != nil {
 		return err
 	}
 
@@ -195,6 +200,24 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	}
 
 	return nil
+}
+
+func (c *AuthorizeExplicitGrantHandler) isTokenRequestRedirectURIOptional(ctx context.Context, authorizeRequest oauth2.Requester, request oauth2.AccessRequester) (optional bool) {
+	if authorizeRequest.GetRequestedScopes().Has(consts.ScopeOpenID) {
+		return false
+	}
+
+	if !c.isPKCEVerified(ctx) || authorizeRequest.GetRequestForm().Get(consts.FormParameterCodeChallenge) == "" {
+		return false
+	}
+
+	if client, ok := request.GetClient().(oauth2.TokenRequestRedirectURIOptionalClient); ok {
+		return client.GetTokenRequestRedirectURIOptional()
+	}
+
+	provider, ok := c.Config.(oauth2.TokenRequestRedirectURIOptionalProvider)
+
+	return ok && provider.GetTokenRequestRedirectURIOptional(ctx)
 }
 
 func canIssueRefreshToken(ctx context.Context, config oauth2.RefreshTokenScopesProvider, request oauth2.Requester) (issue bool) {

@@ -312,6 +312,11 @@ type Config struct {
 	// active access token. Defaults to false, which omits it. See IntrospectionTokenTypeEnabledProvider.
 	IntrospectionTokenTypeEnabled bool
 
+	// TokenRequestRedirectURIOptional permits an authorization code token request protected by PKCE to omit the
+	// 'redirect_uri' parameter as OAuth 2.1 Section 10.2 does. Defaults to false, which enforces RFC 6749 Section
+	// 4.1.3. See TokenRequestRedirectURIOptionalProvider.
+	TokenRequestRedirectURIOptional bool
+
 	// RevocationEndpointClientAuthStrategy indicates the EndpointClientAuthStrategy used to authenticate clients at the
 	// revocation endpoint. Defaults to a RevocationEndpointClientAuthStrategy.
 	RevocationEndpointClientAuthStrategy EndpointClientAuthStrategy
@@ -1703,6 +1708,11 @@ func (c *Config) GetIntrospectionEndpointClientAuthDisabled(ctx context.Context)
 	return c.IntrospectionEndpointClientAuthDisabled
 }
 
+// GetTokenRequestRedirectURIOptional returns the value of TokenRequestRedirectURIOptional.
+func (c *Config) GetTokenRequestRedirectURIOptional(ctx context.Context) (optional bool) {
+	return c.TokenRequestRedirectURIOptional
+}
+
 // GetIntrospectionTokenTypeEnabled returns whether the introspection response includes the 'token_type' member.
 func (c *Config) GetIntrospectionTokenTypeEnabled(ctx context.Context) (enabled bool) {
 	return c.IntrospectionTokenTypeEnabled
@@ -2160,6 +2170,7 @@ var (
 	_ IntrospectionEndpointClientAuthStrategyProvider       = (*Config)(nil)
 	_ IntrospectionEndpointClientAuthDisabledProvider       = (*Config)(nil)
 	_ IntrospectionTokenTypeEnabledProvider                 = (*Config)(nil)
+	_ TokenRequestRedirectURIOptionalProvider               = (*Config)(nil)
 	_ RevocationEndpointClientAuthStrategyProvider          = (*Config)(nil)
 	_ SSFConfigProvider                                     = (*Config)(nil)
 	_ DPoPConfigProvider                                    = (*Config)(nil)

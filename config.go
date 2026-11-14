@@ -1020,6 +1020,20 @@ type IntrospectionEndpointClientAuthDisabledProvider interface {
 	GetIntrospectionEndpointClientAuthDisabled(ctx context.Context) (disabled bool)
 }
 
+// TokenRequestRedirectURIOptionalProvider is optionally implemented by the configuration to permit the OAuth 2.1
+// authorization code token request, which omits the 'redirect_uri' parameter. When true, a token request may omit
+// it if the authorization code was issued with a verified PKCE 'code_challenge' and without the 'openid' scope; a
+// 'redirect_uri' that is sent must still be identical to the one from the authorization request. A configuration which
+// does not implement this interface is treated as returning false, which enforces RFC 6749 Section 4.1.3. A client
+// implementing TokenRequestRedirectURIOptionalClient overrides this value.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-10.2
+type TokenRequestRedirectURIOptionalProvider interface {
+	// GetTokenRequestRedirectURIOptional returns true if an authorization code token request protected by PKCE may
+	// omit the 'redirect_uri' parameter.
+	GetTokenRequestRedirectURIOptional(ctx context.Context) (optional bool)
+}
+
 // IntrospectionTokenTypeEnabledProvider returns the provider for including 'token_type' in introspection responses.
 type IntrospectionTokenTypeEnabledProvider interface {
 	// GetIntrospectionTokenTypeEnabled returns true if the introspection response for an active access token includes

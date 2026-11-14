@@ -387,6 +387,22 @@ func (c *EndpointClientAuthJWTClient) IsClientSigned() (is bool) {
 // authenticate using the 'none' method.
 type TokenEndpointClientAuthStrategy struct{}
 
+// AudienceEndpointClientAuthStrategy authenticates clients as the wrapped EndpointClientAuthStrategy does, except that
+// the URL of AudienceEndpoint is the endpoint URL accepted as a client assertion audience. The pushed authorization
+// request and device authorization endpoints wrap the token endpoint strategy with it.
+//
+// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
+type AudienceEndpointClientAuthStrategy struct {
+	EndpointClientAuthStrategy
+
+	AudienceEndpoint EndpointName
+}
+
+// GetClientAssertionAudienceEndpoint returns AudienceEndpoint.
+func (s *AudienceEndpointClientAuthStrategy) GetClientAssertionAudienceEndpoint() (endpoint EndpointName) {
+	return s.AudienceEndpoint
+}
+
 // GetAuthMethod returns the client's registered 'token_endpoint_auth_method'.
 func (s *TokenEndpointClientAuthStrategy) GetAuthMethod(client AuthenticationMethodClient) string {
 	return client.GetTokenEndpointAuthMethod()

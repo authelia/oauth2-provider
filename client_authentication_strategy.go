@@ -441,7 +441,9 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	var audience []string
 
 	// For client authentication the 'aud' claim must be solely the issuer identifier and never the token endpoint URL.
-	// This differs from the authorization grant handled in handler/rfc7523, which may use either.
+	// This differs from the authorization grant handled in handler/rfc7523, which may use either. With
+	// DisableClientAssertionIssuerAudience set, the URL of the endpoint the assertion is presented to is also accepted,
+	// but still as the sole value.
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
 	// See: https://www.rfc-editor.org/rfc/rfc10070#section-5
@@ -456,7 +458,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 
 		audience = []string{issuer}
 	} else {
-		audience = clientAssertionLegacyAudiences(ctx, s.Config)
+		audience = clientAssertionLegacyAudiences(ctx, s.Config, clientAssertionAudienceEndpoint(strategy))
 	}
 
 	if len(audience) == 0 {
@@ -488,16 +490,18 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 
 	// Checked separately because ValidateAudienceAny is satisfied by any one entry matching, which cannot express
 	// the sole value requirement.
-	if enforceIssuerAudience {
-		var aud jwt.ClaimStrings
+	var aud jwt.ClaimStrings
 
-		if aud, err = token.Claims.GetAudience(); err != nil {
-			return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' had an 'aud' claim which could not be read: %s.", client.GetID(), err.Error()))
-		}
+	if aud, err = token.Claims.GetAudience(); err != nil {
+		return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' had an 'aud' claim which could not be read: %s.", client.GetID(), err.Error()))
+	}
 
-		if len(aud) != 1 {
+	if len(aud) != 1 {
+		if enforceIssuerAudience {
 			return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' carries %d audience values but the issuer identifier must be its sole audience value.", client.GetID(), len(aud)))
 		}
+
+		return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' carries %d audience values but must carry exactly one of '%s'.", client.GetID(), len(aud), strings.Join(audience, "', '")))
 	}
 
 	var (

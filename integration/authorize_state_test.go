@@ -20,7 +20,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// OAuth 2.1 draft-16 Section 4.1.1 and Section 4.1.2.
+// OAuth 2.1 draft-17 Section 4.1.1 and Section 4.1.2.
 func TestAuthorizeOptionalState(t *testing.T) {
 	session := &defaultSession{
 		DefaultSession: &openid.DefaultSession{

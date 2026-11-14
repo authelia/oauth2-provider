@@ -123,7 +123,7 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 		// A replayed code with invalid parameters, including a 'code_verifier' that does not match the 'code_challenge'
 		// the code was issued for, does not revoke the grant.
 		//
-		// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-16#section-7.5.3
+		// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-7.5.3
 		if err = validateReplayedAuthorizeCode(authorizeRequest, request, c.isPKCEVerified(ctx)); err != nil {
 			return err
 		}

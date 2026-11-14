@@ -39,7 +39,7 @@ func TestAuthorizeCodeFlowDupeCode(t *testing.T) {
 }
 
 func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
-	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+	f := compose.Compose(&oauth2.Config{RedirectSecureChecker: oauth2.IsRedirectURISecure}, store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
 	ts := mockServer(t, f, &openid.DefaultSession{Subject: "foo-sub"})
 	defer ts.Close()
 
@@ -151,7 +151,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 }
 
 func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy any) {
-	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+	f := compose.Compose(&oauth2.Config{RedirectSecureChecker: oauth2.IsRedirectURISecure}, store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
 	ts := mockServer(t, f, &oauth2.DefaultSession{})
 	defer ts.Close()
 

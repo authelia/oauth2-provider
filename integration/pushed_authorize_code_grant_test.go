@@ -38,6 +38,7 @@ func TestPushedAuthorizeCodeFlow(t *testing.T) {
 
 func TestPushedAuthorizeCodeFlowDetectsReusedValues(t *testing.T) {
 	f := compose.ComposeAllEnabled(&oauth2.Config{
+		RedirectSecureChecker:                 oauth2.IsRedirectURISecure,
 		GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
 	}, store, gen.MustRSAKey())
@@ -122,7 +123,7 @@ func TestPushedAuthorizeCodeFlowDetectsReusedValues(t *testing.T) {
 }
 
 func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
-	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory, compose.PushedAuthorizeHandlerFactory)
+	f := compose.Compose(&oauth2.Config{RedirectSecureChecker: oauth2.IsRedirectURISecure}, store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory, compose.PushedAuthorizeHandlerFactory)
 	ts := mockServer(t, f, &oauth2.DefaultSession{Subject: "foo-sub"})
 
 	defer ts.Close()

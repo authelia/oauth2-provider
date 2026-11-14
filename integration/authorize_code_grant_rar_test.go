@@ -44,6 +44,7 @@ func TestAuthorizeCodeFlowWithAuthorizationDetails(t *testing.T) {
 			s, clients := st.new()
 
 			config := &oauth2.Config{
+				RedirectSecureChecker:            oauth2.IsRedirectURISecure,
 				AuthorizationDetailsTypeHandlers: []oauth2.AuthorizationDetailsTypeHandler{internal.PaymentInitiationTypeHandler{}},
 			}
 

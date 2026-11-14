@@ -257,7 +257,8 @@ type Config struct {
 	PublicClientIdentityChecker func(context.Context, AuthorizeRequester) bool
 
 	// RedirectSecureChecker is a function that returns true if the provided URL can be securely used as a redirect URL.
-	// It applies to every client unless AllowInsecureRedirectURIForPublicClients exempts public clients.
+	// It applies to every client unless AllowInsecureRedirectURIForPublicClients exempts public clients. When nil,
+	// IsRedirectURISecureForClient applies, which permits 'http' only for native clients using loopback redirection.
 	RedirectSecureChecker func(context.Context, *url.URL) bool
 
 	// AllowInsecureRedirectURIForPublicClients exempts public clients from RedirectSecureChecker: the checker is not
@@ -1437,12 +1438,9 @@ func (c *Config) GetPublicClientIdentityChecker(_ context.Context) func(context.
 	return c.PublicClientIdentityChecker
 }
 
-// GetRedirectSecureChecker returns the checker to check if redirect URI is secure. Defaults to oauth2.IsRedirectURISecure.
+// GetRedirectSecureChecker returns the configured RedirectSecureChecker, or nil when none is configured, in which case
+// ValidateRedirectURISecurity applies IsRedirectURISecureForClient.
 func (c *Config) GetRedirectSecureChecker(_ context.Context) func(context.Context, *url.URL) bool {
-	if c.RedirectSecureChecker == nil {
-		return IsRedirectURISecure
-	}
-
 	return c.RedirectSecureChecker
 }
 

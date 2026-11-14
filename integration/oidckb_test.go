@@ -509,6 +509,7 @@ func newOIDCKeyBindingProvider(t *testing.T, oidcKeyBindingEnabled bool) (provid
 	}
 
 	config := &oauth2.Config{
+		RedirectSecureChecker:      oauth2.IsRedirectURISecure,
 		GlobalSecret:               []byte("oidckb-integration-test-secret-32-bytes"),
 		DPoPEnabled:                true,
 		OIDCKeyBindingEnabled:      oidcKeyBindingEnabled,

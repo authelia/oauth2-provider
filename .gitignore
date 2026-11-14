@@ -178,3 +178,4 @@ graphify-out/
 # Downloaded specification documents (see specs/README.md).
 specs/ietf/
 specs/openid/
+specs/mcp/

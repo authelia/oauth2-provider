@@ -131,6 +131,12 @@ finalized, so support for one may change in any release.
 | [RFC 8935: Push-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8935)         |   ✅   |            | Single push attempt with a typed outcome; queueing and retries are left to the application                                                                                                                                    |
 | [RFC 8936: Poll-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8936)         |   ✅   |            | Request parsing and response writing; the SET queue, acknowledgements and long polling are left to the application                                                                                                            |
 
+### Model Context Protocol
+
+| Specification                                                                                                                                                                                                         | Status | Draft | Notes                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----: | ----- | ------------------------------------------------------------------------------------------------------------------------------- |
+| [MCP Enterprise-Managed Authorization (2026-07-28)](https://github.com/modelcontextprotocol/ext-auth/blob/main/specification/stable/enterprise-managed-authorization/2026-07-28/enterprise-managed-authorization.mdx) |   ✅   |       | The IdP and Resource Authorization Server roles through ID-JAG; the MCP client and MCP server roles are left to the application |
+
 ### Not Yet Supported: Drafts
 
 Drafts adopted by the IETF OAuth Working Group or the OpenID Foundation which are likely to be finalized.

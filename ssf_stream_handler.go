@@ -484,7 +484,7 @@ func checkSSFTransmitterProperties(body *SSFStreamRequestBody, stored *SSFStream
 		return mismatch
 	}
 
-	if len(body.Audience) != 0 && string(body.Audience) != "null" {
+	if len(body.Audience) != 0 && string(body.Audience) != jsonNull {
 		var audience []string
 
 		if err = json.Unmarshal(body.Audience, &audience); err != nil {
@@ -614,7 +614,7 @@ func validateSSFPushEndpoint(ctx context.Context, config *SSFConfig, client Clie
 
 	var endpoint *url.URL
 
-	if endpoint, err = url.Parse(raw); err != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil || strings.Contains(raw, "#") {
+	if endpoint, err = url.Parse(raw); err != nil || endpoint.Scheme != consts.SchemeHTTPS || endpoint.Hostname() == "" || endpoint.User != nil || strings.Contains(raw, "#") {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The delivery 'endpoint_url' must be an absolute https URL."))
 	}
 

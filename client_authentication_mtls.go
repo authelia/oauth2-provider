@@ -166,7 +166,7 @@ func matchTLSClientAuthSubject(client TLSClientAuthClient, cert *x509.Certificat
 	}
 
 	if ip := client.GetTLSClientAuthSANIP(); ip != "" {
-		count, parameter = count+1, "tls_client_auth_san_ip"
+		count, parameter = count+1, consts.ClientMetadataTLSClientAuthSANIP
 		match = func() bool { return matchCertificateIPAddress(cert, ip) }
 	}
 
@@ -192,7 +192,7 @@ func matchTLSClientAuthSubject(client TLSClientAuthClient, cert *x509.Certificat
 
 	// Checked ahead of the match so an unparsable registered value is reported as the registration error it is,
 	// rather than as a certificate that failed to match.
-	if parameter == "tls_client_auth_san_ip" && net.ParseIP(client.GetTLSClientAuthSANIP()) == nil {
+	if parameter == consts.ClientMetadataTLSClientAuthSANIP && net.ParseIP(client.GetTLSClientAuthSANIP()) == nil {
 		return errorsx.WithStack(ErrInvalidClient.
 			WithHint(hintClientCredentialsInvalid).
 			WithDebugf("The registered client with id '%s' has a 'tls_client_auth_san_ip' value of '%s' which is not a valid IP address.", client.GetID(), client.GetTLSClientAuthSANIP()))

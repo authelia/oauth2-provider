@@ -88,7 +88,7 @@ func ValidateClientIdentifierURL(id string) (err error) {
 			return errClientIdentifierURL("The client identifier '%s' contains a path segment which could not be decoded: %v.", id, err)
 		}
 
-		if decoded == "." || decoded == ".." {
+		if decoded == pathSegmentCurrent || decoded == pathSegmentParent {
 			return errClientIdentifierURL("The client identifier '%s' contains a single-dot or double-dot path segment.", id)
 		}
 	}

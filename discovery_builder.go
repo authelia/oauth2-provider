@@ -683,7 +683,7 @@ func validateDiscoveryIssuer(issuer string) (err error) {
 		return fmt.Errorf("the authorization server metadata requires a valid issuer: %w", err)
 	}
 
-	if u.Scheme != "https" {
+	if u.Scheme != consts.SchemeHTTPS {
 		return fmt.Errorf("the authorization server metadata requires an issuer using the 'https' scheme but the issuer '%s' uses the '%s' scheme", issuer, u.Scheme)
 	}
 

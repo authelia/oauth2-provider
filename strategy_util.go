@@ -8,6 +8,11 @@ import (
 	"authelia.com/provider/oauth2/internal/slicesx"
 )
 
+const (
+	pathSegmentCurrent = "."
+	pathSegmentParent  = ".."
+)
+
 // JoinGrantedAudienceAndResource returns the concatenation of the granted audience and resource
 // indicator values, deduplicated, for use as the 'aud' claim in tokens and introspection responses.
 func JoinGrantedAudienceAndResource(audience, resource Arguments) Arguments {
@@ -44,7 +49,7 @@ func hasDotOrEncodedSlashSegment(escapedPath string) bool {
 			return true
 		}
 
-		if decoded, err := url.PathUnescape(segment); err != nil || decoded == "." || decoded == ".." {
+		if decoded, err := url.PathUnescape(segment); err != nil || decoded == pathSegmentCurrent || decoded == pathSegmentParent {
 			return true
 		}
 	}

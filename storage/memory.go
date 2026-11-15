@@ -323,52 +323,45 @@ func (s StoreRefreshToken) SetClaims(claims *oauth2.ClaimsRequest) {
 func NewExampleStore() *MemoryStore {
 	store := NewMemoryStore()
 
-	example := &MemoryStore{
-		Clients: map[string]oauth2.Client{
-			"my-client": &oauth2.DefaultClient{
-				ID:                   "my-client",
-				ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`),                        // = "foobar".
-				RotatedClientSecrets: []oauth2.ClientSecret{oauth2.NewBCryptClientSecret(`$2a$04$4X4/mCFdQ9tmfjSBBk6RNOhg0MtKE0ql7BPyMHDuiuq7YeY6wGlh.`)}, // = "foobaz".
-				RedirectURIs:         []string{"http://localhost:3846/callback"},
-				ResponseTypes:        []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
-				GrantTypes:           []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials", "urn:ietf:params:oauth:grant-type:token-exchange"},
-				Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
-			},
-			"custom-lifespan-client": &oauth2.DefaultClientWithCustomTokenLifespans{
-				DefaultClient: &oauth2.DefaultClient{
-					ID:                   "custom-lifespan-client",
-					ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`),                        // = "foobar".
-					RotatedClientSecrets: []oauth2.ClientSecret{oauth2.NewBCryptClientSecret(`$2a$04$4X4/mCFdQ9tmfjSBBk6RNOhg0MtKE0ql7BPyMHDuiuq7YeY6wGlh.`)}, // = "foobaz".
-					RedirectURIs:         []string{"http://localhost:3846/callback"},
-					ResponseTypes:        []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
-					GrantTypes:           []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-					Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
-				},
-				TokenLifespans: exampleLifespans(),
-			},
-			"encoded:client": &oauth2.DefaultClient{
-				ID:                   "encoded:client",
-				ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$04$8FzF6Ig9KHbTD8Q4VLOb5eIH8vbg.Lz3TXb2vAkDeP/XEDHmqCHGi`), // = "encoded&password".
-				RotatedClientSecrets: nil,
-				RedirectURIs:         []string{"http://localhost:3846/callback"},
-				ResponseTypes:        []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
-				GrantTypes:           []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-				Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
-			},
-		},
-		Users: map[string]MemoryUserRelation{
-			"peter": {
-				// This store simply checks for equality, a real storage implementation would obviously use
-				// a hashing algorithm for encrypting the user password.
-				Username: "peter",
-				Password: "secret",
-			},
-		},
+	foobar := oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`) // = "foobar".
+	foobaz := oauth2.NewBCryptClientSecret(`$2a$04$4X4/mCFdQ9tmfjSBBk6RNOhg0MtKE0ql7BPyMHDuiuq7YeY6wGlh.`) // = "foobaz".
+
+	myClient := newExampleClient("my-client", foobar, []oauth2.ClientSecret{foobaz}, consts.GrantTypeOAuthTokenExchange)
+
+	customLifespanClient := &oauth2.DefaultClientWithCustomTokenLifespans{
+		DefaultClient:  newExampleClient("custom-lifespan-client", foobar, []oauth2.ClientSecret{foobaz}),
+		TokenLifespans: exampleLifespans(),
 	}
 
-	store.Clients, store.Users = example.Clients, example.Users
+	encodedClient := newExampleClient("encoded:client", oauth2.NewBCryptClientSecret(`$2a$04$8FzF6Ig9KHbTD8Q4VLOb5eIH8vbg.Lz3TXb2vAkDeP/XEDHmqCHGi`), nil) // = "encoded&password".
+
+	// This store simply checks for equality, a real storage implementation would obviously use a hashing algorithm for
+	// encrypting the user password.
+	user := MemoryUserRelation{Username: "peter", Password: "secret"}
+
+	store.Clients = map[string]oauth2.Client{
+		myClient.ID:                  myClient,
+		customLifespanClient.GetID(): customLifespanClient,
+		encodedClient.ID:             encodedClient,
+	}
+
+	store.Users = map[string]MemoryUserRelation{
+		user.Username: user,
+	}
 
 	return store
+}
+
+func newExampleClient(id string, secret oauth2.ClientSecret, rotated []oauth2.ClientSecret, grantTypes ...string) *oauth2.DefaultClient {
+	return &oauth2.DefaultClient{
+		ID:                   id,
+		ClientSecret:         secret,
+		RotatedClientSecrets: rotated,
+		RedirectURIs:         []string{"http://localhost:3846/callback"},
+		ResponseTypes:        []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
+		GrantTypes:           append([]string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"}, grantTypes...),
+		Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
+	}
 }
 
 func exampleLifespans() *oauth2.ClientLifespanConfig {

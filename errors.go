@@ -21,6 +21,8 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+const hintValidTokenFormat = "Check that you provided a valid token in the right format."
+
 var (
 	// ErrInvalidatedAuthorizeCode is an error indicating that an authorization code has been
 	// used previously.
@@ -188,14 +190,14 @@ var (
 	ErrTokenSignatureMismatch = &RFC6749Error{
 		ErrorField:       errTokenSignatureMismatchName,
 		DescriptionField: "Token signature mismatch.",
-		HintField:        "Check that you provided a valid token in the right format.",
+		HintField:        hintValidTokenFormat,
 		CodeField:        http.StatusBadRequest,
 	}
 	// ErrInvalidTokenFormat is returned when the token is expired, revoked, malformed, or otherwise invalid.
 	ErrInvalidTokenFormat = &RFC6749Error{
 		ErrorField:       errInvalidTokenFormatName,
 		DescriptionField: "The token provided is expired, revoked, malformed, or invalid for other reasons.",
-		HintField:        "Check that you provided a valid token in the right format.",
+		HintField:        hintValidTokenFormat,
 		CodeField:        http.StatusBadRequest,
 	}
 	// ErrInvalidToken is a resource-server rejection per RFC 8705 Section 3: a protected-resource request bearing a

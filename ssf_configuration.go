@@ -74,7 +74,7 @@ func SSFConfigurationURL(issuer string) (uri string, err error) {
 		return "", errors.New("issuer must be an absolute URL")
 	}
 
-	if u.Scheme != "https" {
+	if u.Scheme != consts.SchemeHTTPS {
 		return "", errors.New("issuer must use the https scheme")
 	}
 

@@ -713,7 +713,7 @@ func TestDPoPAuthorizeStepEnforcement(t *testing.T) {
 		require.Len(t, store.AuthorizeCodes, 1)
 
 		for _, stored := range store.AuthorizeCodes {
-			bound, ok := stored.Requester.GetSession().(oauth2.DPoPBoundSession)
+			bound, ok := stored.GetSession().(oauth2.DPoPBoundSession)
 			require.True(t, ok)
 
 			assert.Equal(t, thumbprintOf(t, key), bound.GetDPoPJWKThumbprint(),

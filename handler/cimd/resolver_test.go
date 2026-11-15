@@ -1570,19 +1570,19 @@ func newResolverEnv(t *testing.T, configure func(config *Config)) *resolverEnv {
 			_, _ = fmt.Fprintf(rw, `{"client_id":%q}`, env.server.URL+"/ok")
 		case "/secret":
 			rw.Header().Set("Content-Type", "application/json")
-			_, _ = rw.Write([]byte(fmt.Sprintf(`{"client_id":%q,"client_secret":"s"}`, id)))
+			_, _ = fmt.Fprintf(rw, `{"client_id":%q,"client_secret":"s"}`, id)
 		case "/greedy":
 			rw.Header().Set("Content-Type", "application/json")
-			_, _ = rw.Write([]byte(fmt.Sprintf(`{"client_id":%q,"redirect_uris":["https://client.example.com/cb"],"scope":"oauth2 admin authelia:oauth2:dynamic-client-registration","grant_types":["authorization_code","refresh_token","client_credentials","implicit"],"response_types":["code","token","code id_token"],"audience":["https://api.example.com"],"resource":["https://resource.example.com"],"authorization_details_types":["payment_initiation"],"authorization_grant_profiles_supported":["urn:example:profile"],"sector_identifier_uri":"https://victim.example.com/sector.json"}`, id)))
+			_, _ = fmt.Fprintf(rw, `{"client_id":%q,"redirect_uris":["https://client.example.com/cb"],"scope":"oauth2 admin authelia:oauth2:dynamic-client-registration","grant_types":["authorization_code","refresh_token","client_credentials","implicit"],"response_types":["code","token","code id_token"],"audience":["https://api.example.com"],"resource":["https://resource.example.com"],"authorization_details_types":["payment_initiation"],"authorization_grant_profiles_supported":["urn:example:profile"],"sector_identifier_uri":"https://victim.example.com/sector.json"}`, id)
 		case "/native":
 			rw.Header().Set("Content-Type", "application/json")
-			_, _ = rw.Write([]byte(fmt.Sprintf(`{"client_id":%q,"application_type":"native","redirect_uris":["http://127.0.0.1/cb","http://[::1]/cb"]}`, id)))
+			_, _ = fmt.Fprintf(rw, `{"client_id":%q,"application_type":"native","redirect_uris":["http://127.0.0.1/cb","http://[::1]/cb"]}`, id)
 		case "/idjag":
 			rw.Header().Set("Content-Type", "application/json")
-			_, _ = rw.Write([]byte(fmt.Sprintf(`{"client_id":%q,"grant_types":["urn:ietf:params:oauth:grant-type:token-exchange","urn:ietf:params:oauth:grant-type:jwt-bearer"],"authorization_grant_profiles_supported":["urn:ietf:params:oauth:grant-profile:id-jag"],"token_endpoint_auth_methods_supported":["private_key_jwt"],"jwks_uri":"https://client.example.com/jwks.json"}`, id)))
+			_, _ = fmt.Fprintf(rw, `{"client_id":%q,"grant_types":["urn:ietf:params:oauth:grant-type:token-exchange","urn:ietf:params:oauth:grant-type:jwt-bearer"],"authorization_grant_profiles_supported":["urn:ietf:params:oauth:grant-profile:id-jag"],"token_endpoint_auth_methods_supported":["private_key_jwt"],"jwks_uri":"https://client.example.com/jwks.json"}`, id)
 		case "/credentials":
 			rw.Header().Set("Content-Type", "application/json")
-			_, _ = rw.Write([]byte(fmt.Sprintf(`{"client_id":%q,"grant_types":["client_credentials"],"token_endpoint_auth_method":"private_key_jwt","jwks_uri":"https://client.example.com/jwks.json"}`, id)))
+			_, _ = fmt.Fprintf(rw, `{"client_id":%q,"grant_types":["client_credentials"],"token_endpoint_auth_method":"private_key_jwt","jwks_uri":"https://client.example.com/jwks.json"}`, id)
 		case "/busy":
 			rw.WriteHeader(http.StatusTooManyRequests)
 		case "/reset":
@@ -1591,7 +1591,7 @@ func newResolverEnv(t *testing.T, configure func(config *Config)) *resolverEnv {
 			}
 		case "/bad-redirect":
 			rw.Header().Set("Content-Type", "application/json")
-			_, _ = rw.Write([]byte(fmt.Sprintf(`{"client_id":%q,"redirect_uris":["http://client.example.com/cb"]}`, id)))
+			_, _ = fmt.Fprintf(rw, `{"client_id":%q,"redirect_uris":["http://client.example.com/cb"]}`, id)
 		default:
 			http.NotFound(rw, r)
 		}

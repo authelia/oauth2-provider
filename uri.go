@@ -40,7 +40,7 @@ func IsValidRedirectURI(uri *url.URL) bool {
 // non-HTTP schemes and HTTP URIs that resolve to localhost are considered secure. Use IsRedirectURISecureStrict for
 // stricter handling that rejects custom-scheme URIs.
 func IsRedirectURISecure(ctx context.Context, uri *url.URL) bool {
-	return !(uri.Scheme == consts.SchemeHTTP && !IsLocalhost(uri))
+	return uri.Scheme != consts.SchemeHTTP || IsLocalhost(uri)
 }
 
 // IsRedirectURISecureForClient reports whether the given URI is acceptable as a redirect target for the client. It

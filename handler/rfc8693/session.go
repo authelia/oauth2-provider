@@ -171,15 +171,15 @@ func (s *DefaultSession) SetClaimActor(act map[string]any) {
 		return
 	}
 
-	if s.DefaultSession.Claims == nil {
-		s.DefaultSession.Claims = &jwt.IDTokenClaims{}
+	if s.Claims == nil {
+		s.Claims = &jwt.IDTokenClaims{}
 	}
 
-	if s.DefaultSession.Claims.Extra == nil {
-		s.DefaultSession.Claims.Extra = map[string]any{}
+	if s.Claims.Extra == nil {
+		s.Claims.Extra = map[string]any{}
 	}
 
-	s.DefaultSession.Claims.Extra[consts.ClaimActor] = act
+	s.Claims.Extra[consts.ClaimActor] = act
 }
 
 // GetJWTClaims implements oauth2.JWTSessionContainer. The claims of an RFC 9068 JWT access token issued for the session

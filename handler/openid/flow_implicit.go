@@ -37,7 +37,7 @@ type OpenIDConnectImplicitHandler struct {
 //
 //nolint:gocyclo
 func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
-	if !(request.GetGrantedScopes().Has(consts.ScopeOpenID) && (request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken) || request.GetResponseTypes().ExactOne(consts.ResponseTypeImplicitFlowIDToken))) {
+	if !request.GetGrantedScopes().Has(consts.ScopeOpenID) || (!request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken) && !request.GetResponseTypes().ExactOne(consts.ResponseTypeImplicitFlowIDToken)) {
 		return nil
 	} else if request.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
 		// hybrid flow.
@@ -127,7 +127,7 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 func (c *OpenIDConnectImplicitHandler) ValidateAuthorizeRequest(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
 	types := request.GetResponseTypes()
 
-	if !(types.Has(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken) || types.ExactOne(consts.ResponseTypeImplicitFlowIDToken)) || types.Has(consts.ResponseTypeAuthorizationCodeFlow) {
+	if (!types.Has(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken) && !types.ExactOne(consts.ResponseTypeImplicitFlowIDToken)) || types.Has(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
 	}
 

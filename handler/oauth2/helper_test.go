@@ -33,6 +33,7 @@ func TestIssueAccessToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	areq := &oauth2.AccessRequest{}
 	accessStrat := mock.NewMockAccessTokenStrategy(ctrl)
+
 	accessStore := mock.NewMockAccessTokenStorage(ctrl)
 	defer ctrl.Finish()
 

@@ -292,6 +292,7 @@ func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
 	ctx1 := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw1)
 
 	require.NoError(t, h.BindAccessRequest(ctx1, request))
+
 	jkt := session.GetDPoPJWKThumbprint()
 	require.NotEmpty(t, jkt)
 

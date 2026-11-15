@@ -78,6 +78,7 @@ func (s *DefaultSession) SetExpiresAt(key TokenType, exp time.Time) {
 	if s.ExpiresAt == nil {
 		s.ExpiresAt = make(map[TokenType]time.Time)
 	}
+
 	s.ExpiresAt[key] = exp
 }
 
@@ -109,6 +110,7 @@ func (s *DefaultSession) GetUsername() string {
 	if s == nil {
 		return ""
 	}
+
 	return s.Username
 }
 

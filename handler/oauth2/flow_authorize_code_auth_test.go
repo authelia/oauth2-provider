@@ -191,6 +191,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			strategy := &hmacshaStrategy
 			store := storage.NewMemoryStore()
+
 			config := tc.config
 			if config == nil {
 				config = &oauth2.Config{
@@ -198,6 +199,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 					ScopeStrategy:    oauth2.HierarchicScopeStrategy,
 				}
 			}
+
 			handler := AuthorizeExplicitGrantHandler{
 				CoreStorage:           store,
 				AuthorizeCodeStrategy: strategy,
@@ -205,6 +207,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequestHMAC(t *testing.T) {
 			}
 
 			aresp := oauth2.NewAuthorizeResponse()
+
 			err := handler.HandleAuthorizeEndpointRequest(t.Context(), tc.areq, aresp)
 			if tc.err != "" {
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)

@@ -167,6 +167,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 				req := oauth2.NewAccessRequest(nil)
 				req.GrantedScope = []string{consts.ScopeOpenID}
 				req.GrantTypes = []string{string(oauth2.GrantTypeAuthorizationCode)}
+
 				return req, oauth2.NewAccessResponse()
 			},
 			err: "The handler is not responsible for this request.",
@@ -178,6 +179,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 				req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("", errors.New(""))
+
 				return req, oauth2.NewAccessResponse()
 			},
 			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
@@ -190,6 +192,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(nil, ErrNoSessionFound)
+
 				return req, oauth2.NewAccessResponse()
 			},
 			err: "The handler is not responsible for this request. Could not find the requested resource(s).",
@@ -202,6 +205,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(nil, errors.New(""))
+
 				return req, oauth2.NewAccessResponse()
 			},
 			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
@@ -219,6 +223,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
+
 				return req, resp
 			},
 			err: "The request failed because of an internal error that is probably caused by misconfiguration. An OpenID Connect session was found but the openid scope is missing, probably due to a broken code configuration.",
@@ -240,6 +245,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
+
 				return req, resp
 			},
 			err: "The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use the authorization grant 'urn:ietf:params:oauth:grant-type:device_code'.",
@@ -263,6 +269,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
+
 				return req, resp
 			},
 			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because the session must be of type 'openid.Session'.",
@@ -294,6 +301,7 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 
 				tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
 				oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).Return(authReq, nil)
+
 				return req, resp
 			},
 			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because subject is an empty string.",

@@ -95,6 +95,7 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request 
 
 	if last.Add(interval).After(requestedAt) {
 		_ = c.UpdateLastChecked(ctx, request, deviceAuthReq)
+
 		return code, signature, deviceAuthReq, errorsx.WithStack(
 			oauth2.ErrSlowDown.WithHintf(
 				"The device made an attempt within [%d] seconds. This request will not be processed.",

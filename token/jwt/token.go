@@ -542,8 +542,10 @@ func pointer(v any) any {
 	if reflect.ValueOf(v).Kind() != reflect.Ptr {
 		value := reflect.New(reflect.ValueOf(v).Type())
 		value.Elem().Set(reflect.ValueOf(v))
+
 		return value.Interface()
 	}
+
 	return v
 }
 

@@ -217,7 +217,6 @@ func (v *OpenIDConnectRequestValidator) validatePromptParameters(ctx context.Con
 		// Client Impersonation: a request is not processed without user interaction unless the client's identity is
 		// assured.
 		// See: https://datatracker.ietf.org/doc/html/rfc8252#section-8.6
-
 		if slices.Contains(requiredPrompt, consts.PromptTypeNone) && !v.getPublicClientIdentityChecker(ctx)(ctx, request) {
 			return errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and the redirect uri does not assure the identity of the client, but 'prompt' type 'none' was requested."))
 		}
@@ -236,5 +235,6 @@ func isWhitelisted(items []string, whiteList []string) bool {
 			return false
 		}
 	}
+
 	return true
 }

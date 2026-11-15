@@ -77,5 +77,6 @@ func (a *AccessResponse) GetTokenType() string {
 func (a *AccessResponse) ToMap() map[string]any {
 	a.Extra[consts.AccessResponseAccessToken] = a.GetAccessToken()
 	a.Extra[consts.AccessResponseTokenType] = a.GetTokenType()
+
 	return a.Extra
 }

@@ -45,6 +45,7 @@ func TestAuthorizeJWTBearerSuite(t *testing.T) {
 				jwtStrategy,
 				tc.factories...,
 			)
+
 			testServer := mockServer(t, provider, &oauth2.DefaultSession{})
 			defer testServer.Close()
 
@@ -332,6 +333,7 @@ func (s *authorizeJWTBearerSuite) TestSuccessResponseForSecondRequestWithSameJTI
 	s.NotNil(token)
 
 	time.Sleep(time.Second)
+
 	config.Expiry = jwt.NewNumericDate(time.Now().Add(time.Hour))
 
 	token2, err := client.GetToken(ctx, config, nil)

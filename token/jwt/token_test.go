@@ -268,6 +268,7 @@ func TestUnsignedToken(t *testing.T) {
 			parts := strings.Split(rawToken, ".")
 			require.Len(t, parts, 3)
 			require.Empty(t, parts[2])
+
 			tk, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{JSONWebTokenAlgNone, jose.HS256, jose.HS384, jose.HS512, jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512})
 			require.NoError(t, err)
 			require.Len(t, tk.Headers, 1)
@@ -340,25 +341,30 @@ func TestParser_Parse(t *testing.T) {
 		randomKey              = func(*Token) (any, error) {
 			k, err := rsa.GenerateKey(rand.Reader, 2048)
 			require.NoError(t, err)
+
 			return &k.PublicKey, nil
 		}
 	)
+
 	type expected struct {
 		errors  uint32
 		keyFunc Keyfunc
 		valid   bool
 		claims  MapClaims
 	}
+
 	type generate struct {
 		claims     MapClaims
 		signingKey any
 		method     jose.SignatureAlgorithm
 	}
+
 	type given struct {
 		name        string
 		tokenString string
 		generate    *generate
 	}
+
 	var jwtTestData = []struct {
 		expected
 		given
@@ -627,18 +633,23 @@ func TestParser_Parse(t *testing.T) {
 			if data.generate != nil {
 				signingKey := data.generate.signingKey
 				method := data.generate.method
+
 				if signingKey == nil {
 					signingKey = defaultSigningKey
 					method = jose.RS256
 				}
+
 				data.tokenString = makeSampleToken(data.generate.claims, method, signingKey)
 			}
 
-			var token *Token
-			var err error
+			var (
+				token *Token
+				err   error
+			)
 
 			token, err = ParseWithClaims(data.tokenString, MapClaims{}, data.keyFunc)
 			assert.EqualValues(t, data.claims, token.Claims.ToMapClaims())
+
 			if data.valid && err != nil {
 				t.Errorf("[%v] Error while verifying token: %T:%v", data.name, err, err)
 			}
@@ -952,8 +963,8 @@ func TestToken_CompactEncrypted_PropagatesSigningError(t *testing.T) {
 
 func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key any) string {
 	token := NewWithClaims(m, c)
-	s, e := token.CompactSignedString(key)
 
+	s, e := token.CompactSignedString(key)
 	if e != nil {
 		panic(e.Error())
 	}
@@ -964,8 +975,8 @@ func makeSampleToken(c MapClaims, m jose.SignatureAlgorithm, key any) string {
 func makeSampleTokenWithCustomHeaders(c MapClaims, m jose.SignatureAlgorithm, headers map[string]any, key any) string {
 	token := NewWithClaims(m, c)
 	token.Header = headers
-	s, e := token.CompactSignedString(key)
 
+	s, e := token.CompactSignedString(key)
 	if e != nil {
 		panic(e.Error())
 	}
@@ -990,8 +1001,10 @@ func parseRSAPublicKeyFromPEM(key []byte) *rsa.PublicKey {
 		}
 	}
 
-	var pkey *rsa.PublicKey
-	var ok bool
+	var (
+		pkey *rsa.PublicKey
+		ok   bool
+	)
 	if pkey, ok = parsedKey.(*rsa.PublicKey); !ok {
 		panic("not an *rsa.PublicKey")
 	}
@@ -1014,8 +1027,10 @@ func parseRSAPrivateKeyFromPEM(key []byte) *rsa.PrivateKey {
 		}
 	}
 
-	var pkey *rsa.PrivateKey
-	var ok bool
+	var (
+		pkey *rsa.PrivateKey
+		ok   bool
+	)
 	if pkey, ok = parsedKey.(*rsa.PrivateKey); !ok {
 		panic("not an rsa private key")
 	}

@@ -243,6 +243,7 @@ func (h *RedeemHandler) finish(ctx context.Context, request oauth2.AccessRequest
 	}
 
 	session.SetSubject(subject)
+
 	expires := time.Now().UTC().Add(h.lifespan(ctx, client)).Round(time.Second)
 
 	// RFC 7521 Section 4.1: the access token SHOULD NOT outlive the assertion by a significant period.

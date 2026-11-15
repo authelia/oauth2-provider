@@ -16,6 +16,7 @@ func MustRSAKey() *rsa.PrivateKey {
 	if err != nil {
 		panic(err)
 	}
+
 	return key
 }
 
@@ -24,6 +25,7 @@ func MustES256Key() *ecdsa.PrivateKey {
 	if err != nil {
 		panic(err)
 	}
+
 	return key
 }
 
@@ -32,5 +34,6 @@ func MustES521Key() *ecdsa.PrivateKey {
 	if err != nil {
 		panic(err)
 	}
+
 	return key
 }

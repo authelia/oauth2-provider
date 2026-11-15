@@ -61,6 +61,7 @@ func TestRandomBytesPseudoRandomness(t *testing.T) {
 
 				_, ok := results[string(bytes)]
 				assert.Falsef(t, ok, "duplicate random output at iteration %d", i)
+
 				results[string(bytes)] = true
 			}
 		})

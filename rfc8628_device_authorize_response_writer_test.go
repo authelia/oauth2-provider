@@ -89,6 +89,7 @@ func TestNewRFC862DeviceAuthorizeResponse(t *testing.T) {
 			dar := mock.NewMockDeviceAuthorizeRequester(ctrl)
 
 			handlers := make([]*mock.MockRFC8628DeviceAuthorizeEndpointHandler, tc.handlers)
+
 			endpointHandlers := make(RFC8628DeviceAuthorizeEndpointHandlers, tc.handlers)
 			for i := 0; i < tc.handlers; i++ {
 				handlers[i] = mock.NewMockRFC8628DeviceAuthorizeEndpointHandler(ctrl)

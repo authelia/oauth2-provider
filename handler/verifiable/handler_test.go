@@ -19,11 +19,13 @@ import (
 
 func TestHandler(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 
 	t.Run("CorrectScopes", func(t *testing.T) {
 		t.Parallel()
 		handler := newHandler(t)
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -42,6 +44,7 @@ func TestHandler(t *testing.T) {
 	t.Run("IncorrectScopes", func(t *testing.T) {
 		t.Parallel()
 		handler := newHandler(t)
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -60,6 +63,7 @@ type mockNonceManager struct{ t *testing.T }
 func (m *mockNonceManager) NewNonce(ctx context.Context, accessToken string, expiresAt time.Time) (string, error) {
 	assert.Equal(m.t, "fake access token", accessToken)
 	assert.WithinDuration(m.t, time.Now().Add(time.Hour), expiresAt, 5*time.Second)
+
 	return "mocked nonce", nil
 }
 

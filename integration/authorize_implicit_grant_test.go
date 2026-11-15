@@ -63,6 +63,7 @@ func TestAuthorizeImplicitFlow(t *testing.T) {
 			},
 			check: func(t *testing.T, r *http.Response) {
 				var b oauth2.AccessRequest
+
 				b.Client = new(oauth2.DefaultClient)
 				b.Session = newDefaultSession()
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
@@ -114,6 +115,7 @@ func TestAuthorizeImplicitFlow(t *testing.T) {
 				require.NoError(t, err)
 				expires, err := strconv.Atoi(fragment.Get(consts.AccessResponseExpiresIn))
 				require.NoError(t, err)
+
 				token := &xoauth2.Token{
 					AccessToken:  fragment.Get(consts.AccessResponseAccessToken),
 					TokenType:    fragment.Get(consts.AccessResponseTokenType),

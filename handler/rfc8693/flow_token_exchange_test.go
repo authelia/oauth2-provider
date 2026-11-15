@@ -339,6 +339,7 @@ func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 
 	mkJWT := func(t *testing.T, iss string) string {
 		t.Helper()
+
 		token, _, err := strategy.Encode(context.Background(), jwt.MapClaims{
 			"iss": iss,
 			"aud": []string{"exchange-client"},
@@ -346,11 +347,13 @@ func TestHandleTokenEndpointRequest_PerClientIssuerEndToEnd(t *testing.T) {
 			"exp": time.Now().Add(15 * time.Minute).Unix(),
 		})
 		require.NoError(t, err)
+
 		return token
 	}
 
 	run := func(t *testing.T, client oauth2.Client, jwtIss string) error {
 		t.Helper()
+
 		cfg := mkConfig()
 		teHandler := &TokenExchangeGrantHandler{
 			Config:           cfg,

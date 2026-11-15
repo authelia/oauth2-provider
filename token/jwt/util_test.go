@@ -646,6 +646,7 @@ func TestNewMapClaims(t *testing.T) {
 	assert.Equal(t, "value", mc["set"])
 	_, hasSkip := mc["-"]
 	assert.False(t, hasSkip, "fields with json:\"-\" must be skipped")
+
 	_, hasEmpty := mc["empty"]
 	assert.False(t, hasEmpty, "omitempty fields with zero value must be skipped")
 	require.NotNil(t, mc["nested"])

@@ -182,6 +182,7 @@ func TestAccessResponseToMap(t *testing.T) {
 				ar := NewAccessResponse()
 				ar.SetAccessToken("access")
 				ar.SetTokenType(BearerAccessToken)
+
 				return ar
 			},
 			expected: map[string]any{
@@ -197,6 +198,7 @@ func TestAccessResponseToMap(t *testing.T) {
 				ar.SetTokenType(BearerAccessToken)
 				ar.SetExtra(consts.AccessResponseAccessToken, "invalid")
 				ar.SetExtra("foo", "bar")
+
 				return ar
 			},
 			expected: map[string]any{

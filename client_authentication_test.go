@@ -1640,6 +1640,7 @@ func mustGenerateClientAssertion(t *testing.T, claims jwt.MapClaims, alg jose.Si
 
 	tokenString, err := token.CompactSignedString(key)
 	require.NoError(t, err)
+
 	return tokenString
 }
 
@@ -1659,6 +1660,7 @@ func mustGenerateHSAssertion(t *testing.T, claims jwt.MapClaims, key []byte) str
 	token := jwt.NewWithClaims(jose.HS256, claims)
 	tokenString, err := token.CompactSignedString(jwk)
 	require.NoError(t, err)
+
 	return tokenString
 }
 
@@ -1667,11 +1669,13 @@ func mustGenerateNoneAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.Priv
 	token := jwt.NewWithClaims(jwt.SigningMethodNone, claims)
 	tokenString, err := token.CompactSignedString(jwt.UnsafeAllowNoneSignatureType)
 	require.NoError(t, err)
+
 	return tokenString
 }
 
 func clientBasicAuthHeader(clientID, clientSecret string) http.Header {
 	creds := url.QueryEscape(clientID) + ":" + url.QueryEscape(clientSecret)
+
 	return http.Header{
 		consts.HeaderAuthorization: {
 			prefixSchemeBasic + base64.StdEncoding.EncodeToString([]byte(creds)),

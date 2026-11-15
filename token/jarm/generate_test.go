@@ -293,6 +293,7 @@ func (c *stubConfigurator) GetJWTSecuredAuthorizeResponseModeStrategy(_ context.
 	if c.strategy == nil {
 		return nil
 	}
+
 	return c.strategy
 }
 

@@ -296,6 +296,7 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 	}
 
 	var keyID string
+
 	for _, header := range token.Headers {
 		if header.KeyID != "" {
 			keyID = header.KeyID
@@ -313,6 +314,7 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 
 			return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebugf("%s %s", keyNotFound, oauth2.ErrorToDebugRFC6749Error(err).Error()))
 		}
+
 		return key, nil
 	}
 
@@ -410,6 +412,7 @@ verify:
 		if err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
+
 		if used {
 			return errorsx.WithStack(errJWTUsed)
 		}

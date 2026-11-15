@@ -179,6 +179,7 @@ func TestNewAuthorizeResponse(t *testing.T) {
 			ar := mock.NewMockAuthorizeRequester(ctrl)
 
 			handlers := make([]*mock.MockAuthorizeEndpointHandler, tc.handlers)
+
 			endpointHandlers := make(AuthorizeEndpointHandlers, tc.handlers)
 			for i := 0; i < tc.handlers; i++ {
 				handlers[i] = mock.NewMockAuthorizeEndpointHandler(ctrl)

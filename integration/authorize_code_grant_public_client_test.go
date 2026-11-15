@@ -29,6 +29,7 @@ func TestAuthorizeCodeFlowWithPublicClient(t *testing.T) {
 
 func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy any) {
 	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+
 	ts := mockServer(t, f, &oauth2.DefaultSession{Subject: "foo-sub"})
 	defer ts.Close()
 
@@ -38,6 +39,7 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy any) {
 	store.Clients[testClientIDPublic].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
+
 	testCases := []struct {
 		name           string
 		setup          func()
@@ -71,6 +73,7 @@ func runAuthorizeCodeGrantWithPublicClientTest(t *testing.T, strategy any) {
 			},
 			check: func(t *testing.T, r *http.Response) {
 				var b oauth2.AccessRequest
+
 				b.Client = new(oauth2.DefaultClient)
 				b.Session = newDefaultSession()
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))

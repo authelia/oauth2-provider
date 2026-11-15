@@ -825,6 +825,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 
 			if tc.err != nil {
 				assert.EqualError(t, actual, tc.err.Error())
+
 				if tc.errString != "" {
 					assert.EqualError(t, ErrorToDebugRFC6749Error(actual), tc.errString)
 				}
@@ -839,6 +840,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 			require.NoError(t, ErrorToDebugRFC6749Error(actual))
 
 			assert.Equal(t, len(tc.expected), len(r.Form))
+
 			for k, v := range tc.expected {
 				assert.Contains(t, r.Form, k)
 				assert.EqualValues(t, v, r.Form[k], fmt.Sprintf("Parameter %s did not match", k))
@@ -852,13 +854,16 @@ func mustGenerateAssertion(t *testing.T, claims jwt.MapClaims, key *rsa.PrivateK
 	if kid != "" {
 		token.Header[consts.JSONWebTokenHeaderKeyIdentifier] = kid
 	}
+
 	tokenString, err := token.CompactSignedString(key)
 	require.NoError(t, err)
+
 	return tokenString
 }
 
 func mangleSig(tokenString string) string {
 	parts := strings.Split(tokenString, ".")
+
 	raw, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
 		panic(err)

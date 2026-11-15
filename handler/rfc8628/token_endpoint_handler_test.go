@@ -339,6 +339,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 			setup: func(t *testing.T, requester *oauth2.AccessRequest, deviceRequester *oauth2.DeviceAuthorizeRequest) {
 				deviceCode, _, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 				require.NoError(t, err)
+
 				requester.Form = url.Values{consts.FormParameterDeviceCode: {deviceCode}}
 			},
 			err: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Could not find the requested resource(s).",
@@ -438,6 +439,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				device.SetSession(openid.NewDefaultSession())
 				device.GetSession().SetExpiresAt(oauth2.UserCode, time.Now().Add(time.Hour).UTC())
 				device.GetSession().SetExpiresAt(oauth2.DeviceCode, time.Now().Add(time.Hour).UTC())
+
 				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 				require.NoError(t, err)
 				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
@@ -470,6 +472,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				device.SetSession(openid.NewDefaultSession())
 				device.GetSession().SetExpiresAt(oauth2.UserCode, time.Now().Add(time.Hour).UTC())
 				device.GetSession().SetExpiresAt(oauth2.DeviceCode, time.Now().Add(time.Hour).UTC())
+
 				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 				require.NoError(t, err)
 				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
@@ -507,6 +510,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				deviceRequester.SetSession(openid.NewDefaultSession())
 				deviceRequester.GetSession().SetExpiresAt(oauth2.UserCode, expiredAt)
 				deviceRequester.GetSession().SetExpiresAt(oauth2.DeviceCode, expiredAt)
+
 				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 				require.NoError(t, err)
 				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
@@ -540,6 +544,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				device.SetSession(openid.NewDefaultSession())
 				device.GetSession().SetExpiresAt(oauth2.UserCode, expiredAt)
 				device.GetSession().SetExpiresAt(oauth2.DeviceCode, expiredAt)
+
 				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 				require.NoError(t, err)
 				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
@@ -574,6 +579,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				device.SetSession(openid.NewDefaultSession())
 				device.GetSession().SetExpiresAt(oauth2.UserCode, expiredAt)
 				device.GetSession().SetExpiresAt(oauth2.DeviceCode, expiredAt)
+
 				dCode, dSig, err := strategy.GenerateRFC8628DeviceCode(t.Context())
 				require.NoError(t, err)
 				_, uSig, err := strategy.GenerateRFC8628UserCode(t.Context())
@@ -601,6 +607,7 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err, "%+v", err)
 			} else {
 				require.NoError(t, err)
+
 				if tc.check != nil {
 					tc.check(t, tc.requester, tc.deviceRequester)
 				}
@@ -873,8 +880,11 @@ func TestDeviceAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.
 			}
 			token, signature, err := deviceStrategy.GenerateRFC8628DeviceCode(t.Context())
 			require.NoError(t, err)
+
 			request.Form = url.Values{consts.FormParameterDeviceCode: {token}}
+
 			deviceAuthReq.SetDeviceCodeSignature(signature)
+
 			response := oauth2.NewAccessResponse()
 
 			tc.setup(propagatedContext, mockTransactional, mockCoreStore, mockDeviceStore)
@@ -1329,6 +1339,7 @@ func TestDeviceAuthorizeCodeReplayRevokesTheGrant(t *testing.T) {
 			if tc.redeemed {
 				client := requester.Client.(*oauth2.DefaultClient)
 				client.GrantTypes = append(client.GrantTypes, consts.GrantTypeRefreshToken)
+
 				deviceRequester.GrantScope(consts.ScopeOffline)
 			}
 

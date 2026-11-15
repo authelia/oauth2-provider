@@ -100,6 +100,7 @@ func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, 
 	}
 
 	response.AddParameter(consts.FormParameterAuthorizationCode, code)
+
 	if state := request.GetState(); len(state) != 0 {
 		response.AddParameter(consts.FormParameterState, state)
 	}

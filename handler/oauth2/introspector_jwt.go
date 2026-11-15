@@ -91,6 +91,7 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 	claims.FromMapClaims(mapClaims)
 
 	requestedAt := claims.IssuedAt
+
 	requestedAtClaim, ok := mapClaims[consts.ClaimRequestedAt]
 	if ok {
 		switch rat := requestedAtClaim.(type) {
@@ -102,6 +103,7 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 	}
 
 	clientId := ""
+
 	clientIdClaim, ok := mapClaims[consts.ClaimClientIdentifier]
 	if ok {
 		if id, ok := clientIdClaim.(string); ok {

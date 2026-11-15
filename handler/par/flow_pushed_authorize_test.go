@@ -191,6 +191,7 @@ func TestAuthorizeCode_HandleAuthorizeEndpointRequest(t *testing.T) {
 			}
 
 			aresp := &oauth2.PushedAuthorizeResponse{}
+
 			err := handler.HandlePushedAuthorizeEndpointRequest(context.Background(), tc.areq, aresp)
 			if tc.err != "" {
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)

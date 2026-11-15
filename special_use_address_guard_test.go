@@ -438,6 +438,7 @@ func TestSpecialUseAddressGuardAuthorizeRequestURI(t *testing.T) {
 
 			server := httptest.NewTLSServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 				hits.Add(1)
+
 				_, _ = rw.Write([]byte(object))
 			}))
 			defer server.Close()

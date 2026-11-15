@@ -94,6 +94,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Headers: &jwt.Headers{},
 					Subject: testSubjectPeter,
 				}
+
 				return makeOpenIDConnectHybridHandler(42)
 			},
 			expected:      "The request used a security parameter (e.g., anti-replay, anti-csrf) with insufficient entropy. Parameter 'nonce' is set but does not satisfy the minimum entropy of 42 characters.",
@@ -112,6 +113,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Scopes:        []string{consts.ScopeOpenID},
 				}
 				request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
 			expected:      "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to validate OpenID Connect 1.0 request because the session is not of type 'openid.Session' which is required.",
@@ -136,6 +138,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 					Headers: &jwt.Headers{},
 					Subject: testSubjectPeter,
 				}
+
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
 			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Parameter 'nonce' must be set when requesting an ID Token using the OpenID Connect Hybrid Flow.",
@@ -167,13 +170,16 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
 				params := response.GetParameters()
+
 				var stateParam []string
+
 				for k, v := range params {
 					if k == "state" {
 						stateParam = v
 						break
 					}
 				}
+
 				assert.Len(t, stateParam, 1)
 			},
 		},
@@ -205,13 +211,16 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 			},
 			check: func(t *testing.T, request *oauth2.AuthorizeRequest, response *oauth2.AuthorizeResponse) {
 				params := response.GetParameters()
+
 				var stateParam []string
+
 				for k, v := range params {
 					if k == consts.FormParameterState {
 						stateParam = v
 						break
 					}
 				}
+
 				assert.Len(t, stateParam, 1)
 
 				idToken := response.GetParameters().Get(consts.AccessResponseIDToken)
@@ -272,6 +281,7 @@ func TestHybrid_HandleAuthorizeEndpointRequest(t *testing.T) {
 				request.Client = &oauth2.DefaultClient{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
 				}
+
 				return makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
 			},
 			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0.",
@@ -854,6 +864,7 @@ func (s *defaultSession) IDTokenHeaders() *jwt.Headers {
 	if s.Headers == nil {
 		s.Headers = &jwt.Headers{}
 	}
+
 	return s.Headers
 }
 
@@ -862,5 +873,6 @@ func (s *defaultSession) IDTokenClaims() *jwt.IDTokenClaims {
 	if s.Claims == nil {
 		s.Claims = &jwt.IDTokenClaims{}
 	}
+
 	return s.Claims
 }

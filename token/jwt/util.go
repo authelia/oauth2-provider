@@ -571,6 +571,7 @@ func assign(a, b map[string]any) {
 		if _, ok := a[k]; ok {
 			continue
 		}
+
 		a[k] = w
 	}
 }
@@ -612,8 +613,10 @@ func UnsafeParseSignedAny(tokenString string, dest any) (token *jwt.JSONWebToken
 
 //nolint:unparam
 func newError(message string, err error, more ...error) error {
-	var format string
-	var args []any
+	var (
+		format string
+		args   []any
+	)
 
 	if message != "" {
 		format = "%w: %s"
@@ -625,6 +628,7 @@ func newError(message string, err error, more ...error) error {
 
 	for _, e := range more {
 		format += ": %w"
+
 		args = append(args, e)
 	}
 
@@ -649,6 +653,7 @@ func toMap(obj any) (result map[string]any) {
 
 	for i := 0; i < v.NumField(); i++ {
 		tag, opts := parseTag(v.Field(i).Tag.Get("json"))
+
 		field := reflectValue.Field(i).Interface()
 		if tag != "" && tag != "-" {
 			if opts.Contains("omitempty") && isEmptyValue(reflect.ValueOf(field)) {
@@ -682,6 +687,7 @@ func (o tagOptionsJSON) Contains(optionName string) bool {
 
 	for s != "" {
 		var name string
+
 		name, s, _ = strings.Cut(s, ",")
 		if name == optionName {
 			return true

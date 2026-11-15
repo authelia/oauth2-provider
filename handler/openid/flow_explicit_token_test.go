@@ -76,6 +76,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				}
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
+
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
 				store.EXPECT().GetOpenIDConnectSession(t.Context(), "foobar", req).Return(storedReq, nil)
@@ -93,6 +94,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				}
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
+
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: testSubjectPeter},
 				}
@@ -110,6 +112,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
+
 				claims := decodedIdToken.Claims.ToMapClaims()
 				assert.NotEmpty(t, claims["at_hash"])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
@@ -124,6 +127,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				}
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
+
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: testSubjectPeter},
 				}
@@ -141,6 +145,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
+
 				claims := decodedIdToken.Claims.ToMapClaims()
 				assert.NotEmpty(t, claims["at_hash"])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
@@ -152,6 +157,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
+
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: ""},
 				}
@@ -167,6 +173,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(store *mock.MockOpenIDConnectRequestStorage, req *oauth2.AccessRequest) {
 				req.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
 				req.Form.Set(consts.FormParameterAuthorizationCode, "foobar")
+
 				storedReq := oauth2.NewAuthorizeRequest()
 				storedReq.Session = nil
 				storedReq.GrantScope(consts.ScopeOpenID)
@@ -182,6 +189,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 				}
 				req.GrantTypes = oauth2.Arguments{"authorization_code"}
 				req.Form.Set("code", "foobar")
+
 				storedSession := &DefaultSession{
 					Claims: &jwt.IDTokenClaims{Subject: testSubjectPeter},
 				}
@@ -241,6 +249,7 @@ func TestExplicit_PopulateTokenEndpointResponse(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+
 			if tc.check != nil {
 				tc.check(t, aresp)
 			}

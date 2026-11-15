@@ -34,6 +34,7 @@ func TestAuthorizeJWTBearerRequiredJtiSuite(t *testing.T) {
 		compose.OAuth2ClientCredentialsGrantFactory,
 		compose.RFC7523AssertionGrantFactory,
 	)
+
 	testServer := mockServer(t, provider, &oauth2.DefaultSession{})
 	defer testServer.Close()
 

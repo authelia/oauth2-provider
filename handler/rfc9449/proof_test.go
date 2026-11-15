@@ -171,6 +171,7 @@ func TestParseProof(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+
 			if tc.check != nil {
 				tc.check(t, proof)
 			}

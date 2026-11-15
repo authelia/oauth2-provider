@@ -29,8 +29,10 @@ func (h *Headers) Clone() *Headers {
 
 // ToMap will transform the headers to a map structure.
 func (h *Headers) ToMap() map[string]any {
-	var filter = map[string]bool{JSONWebTokenHeaderAlgorithm: true}
-	var extra = map[string]any{}
+	var (
+		filter = map[string]bool{JSONWebTokenHeaderAlgorithm: true}
+		extra  = map[string]any{}
+	)
 
 	// filter known values from extra.
 	for k, v := range h.Extra {

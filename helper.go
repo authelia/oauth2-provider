@@ -43,6 +43,7 @@ func RemoveEmpty(args []string) (ret []string) {
 			ret = append(ret, v)
 		}
 	}
+
 	return
 }
 

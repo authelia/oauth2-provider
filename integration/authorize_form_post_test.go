@@ -243,6 +243,7 @@ func TestAuthorizeFormPostResponseMode(t *testing.T) {
 					assert.Contains(t, cparam, "custom_err_param")
 					return
 				}
+
 				assert.Contains(t, cparam, "custom_param")
 			})
 		})

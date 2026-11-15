@@ -334,6 +334,7 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 	}
 
 	form := request.GetRequestForm()
+
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 	if requestedTokenType == "" {
 		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)

@@ -49,6 +49,7 @@ func RequireEqualDuration(t *testing.T, expected time.Duration, actual time.Dura
 	if delta < 0 {
 		delta = -delta
 	}
+
 	require.Less(t, delta, precision, fmt.Sprintf("expected %s; got %s", expected, actual))
 }
 
@@ -59,6 +60,7 @@ func RequireEqualTime(t *testing.T, expected time.Time, actual time.Time, precis
 	if delta < 0 {
 		delta = -delta
 	}
+
 	require.Less(t, delta, precision, fmt.Sprintf(
 		"expected %s; got %s",
 		expected.Format(time.RFC3339Nano),
@@ -147,6 +149,7 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 			if err != nil {
 				return "", "", "", token, customParameters, rFC6749Error, err
 			}
+
 			token.Expiry = time.Now().UTC().Add(time.Duration(expires) * time.Second)
 		case consts.AccessResponseTokenType:
 			token.TokenType = v

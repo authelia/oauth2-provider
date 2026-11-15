@@ -30,6 +30,7 @@ func Test_HandleDeviceEndpointRequest(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
 	store := storage.NewMemoryStore()
 	handler := DeviceAuthorizeHandler{
 		Storage:  store,

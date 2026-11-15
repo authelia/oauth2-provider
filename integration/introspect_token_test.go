@@ -66,6 +66,7 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 		AllowedIntrospectionScopes:    []string{"oauth2"},
 		AllowedIntrospectionAudiences: []string{tokenURL},
 	}, store, strategy, compose.OAuth2ClientCredentialsGrantFactory, introspectionFactory)
+
 	ts := mockServer(t, f, &oauth2.DefaultSession{})
 	defer ts.Close()
 
@@ -155,6 +156,7 @@ func runIntrospectTokenTest(t *testing.T, strategy hoauth2.AccessTokenStrategy, 
 			require.NoError(t, json.Unmarshal(body, &res))
 
 			assert.Equal(t, tc.isActive, res.Active)
+
 			if tc.isActive {
 				assert.Equal(t, "oauth2", res.Scope)
 				assert.True(t, res.ExpiresAt > 0)

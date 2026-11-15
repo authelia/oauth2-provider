@@ -105,6 +105,7 @@ func (s *DefaultSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 	if _, ok := s.ExpiresAt[key]; !ok {
 		return time.Time{}
 	}
+
 	return s.ExpiresAt[key]
 }
 
@@ -137,6 +138,7 @@ func (s *DefaultSession) GetUsername() string {
 	if s == nil {
 		return ""
 	}
+
 	return s.Username
 }
 
@@ -230,6 +232,7 @@ func (s *DefaultSession) IDTokenHeaders() *jwt.Headers {
 	if s.Headers == nil {
 		s.Headers = &jwt.Headers{}
 	}
+
 	return s.Headers
 }
 
@@ -238,6 +241,7 @@ func (s *DefaultSession) IDTokenClaims() *jwt.IDTokenClaims {
 	if s.Claims == nil {
 		s.Claims = &jwt.IDTokenClaims{}
 	}
+
 	return s.Claims
 }
 

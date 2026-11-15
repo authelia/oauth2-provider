@@ -175,9 +175,12 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 			ctx := context.Background()
 			aresp := oauth2.NewAccessResponse()
 			found := false
+
 			var err error
+
 			tc.areq.Form.Set("grant_type", string(oauth2.GrantTypeTokenExchange))
 			tc.areq.GrantTypes = oauth2.Arguments{consts.GrantTypeOAuthTokenExchange}
+
 			tc.areq.Client = store.Clients["my-client"]
 			for _, loader := range tc.handlers {
 				if !loader.CanHandleTokenEndpointRequest(ctx, tc.areq) {
@@ -269,7 +272,6 @@ func createJWT(ctx context.Context, client any, strategy jwt.Strategy, claims jw
 	}
 
 	token, _, err := strategy.Encode(ctx, claims, jwt.WithIDTokenClient(client))
-
 	if err != nil {
 		panic(err.Error())
 	}
@@ -281,5 +283,6 @@ func introspectAccessToken(ctx context.Context, token string, coreStrategy hoaut
 	oauth2.Requester, error) {
 	sig := coreStrategy.AccessTokenSignature(ctx, token)
 	or, err := storage.GetAccessTokenSession(ctx, sig, &oauth2.DefaultSession{})
+
 	return or, err
 }

@@ -327,6 +327,7 @@ func TestRequestAppendRequestedScope(t *testing.T) {
 			for _, s := range tc.appends {
 				r.AppendRequestedScope(s)
 			}
+
 			assert.Equal(t, tc.expected, r.GetRequestedScopes())
 		})
 	}
@@ -365,6 +366,7 @@ func TestRequestAppendRequestedAudience(t *testing.T) {
 			for _, a := range tc.appends {
 				r.AppendRequestedAudience(a)
 			}
+
 			assert.Equal(t, tc.expected, r.GetRequestedAudience())
 		})
 	}
@@ -403,6 +405,7 @@ func TestRequestGrantScope(t *testing.T) {
 			for _, s := range tc.grants {
 				r.GrantScope(s)
 			}
+
 			assert.Equal(t, tc.expected, r.GetGrantedScopes())
 		})
 	}
@@ -441,6 +444,7 @@ func TestRequestGrantAudience(t *testing.T) {
 			for _, a := range tc.grants {
 				r.GrantAudience(a)
 			}
+
 			assert.Equal(t, tc.expected, r.GetGrantedAudience())
 		})
 	}
@@ -474,6 +478,7 @@ func TestRequestMerge(t *testing.T) {
 					Form:           url.Values{},
 					Session:        new(DefaultSession),
 				}
+
 				return target, source
 			},
 			check: func(t *testing.T, target *Request, source *Request) {
@@ -504,6 +509,7 @@ func TestRequestMerge(t *testing.T) {
 					GrantedScope:   Arguments{"granted-1"},
 					Form:           url.Values{},
 				}
+
 				return target, source
 			},
 			check: func(t *testing.T, target *Request, source *Request) {

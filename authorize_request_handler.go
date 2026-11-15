@@ -743,6 +743,7 @@ func (f *Fosite) validateResponseTypes(_ context.Context, _ *http.Request, reque
 	}
 
 	var found bool
+
 	for _, t := range request.GetClient().GetResponseTypes() {
 		if Arguments(responseTypes).Matches(RemoveEmpty(strings.Split(t, " "))...) {
 			found = true

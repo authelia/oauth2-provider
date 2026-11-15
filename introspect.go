@@ -41,7 +41,6 @@ func AuthorizationCredentialFromRequest(r *http.Request) (scheme, token string, 
 // token can be located.
 func AccessTokenFromRequest(r *http.Request) string {
 	// RFC 6750: the Authorization header is tried first, then the 'access_token' parameter.
-
 	auth := r.Header.Get(consts.HeaderAuthorization)
 	split := strings.SplitN(auth, " ", 2)
 
@@ -63,8 +62,10 @@ func AccessTokenFromRequest(r *http.Request) string {
 // ErrRequestUnauthorized if no introspector recognizes the token. The tokenUse argument is treated as a hint that
 // introspectors may use to short-circuit when the token type is known in advance.
 func (f *Fosite) IntrospectToken(ctx context.Context, token string, tokenUse TokenUse, session Session, scopes ...string) (TokenUse, AccessRequester, error) {
-	var found = false
-	var foundTokenUse TokenUse = ""
+	var (
+		found                  = false
+		foundTokenUse TokenUse = ""
+	)
 
 	ar := NewAccessRequest(session)
 	for _, validator := range f.Config.GetTokenIntrospectionHandlers(ctx) {

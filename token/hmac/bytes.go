@@ -17,5 +17,6 @@ func RandomBytes(n int) ([]byte, error) {
 	if _, err := io.ReadFull(rand.Reader, bytes); err != nil {
 		return []byte{}, errorsx.WithStack(err)
 	}
+
 	return bytes, nil
 }

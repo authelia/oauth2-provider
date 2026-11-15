@@ -25,6 +25,7 @@ func Cause(err error) error {
 		if !ok || cause.Cause() == nil {
 			break
 		}
+
 		err = cause.Cause()
 	}
 

@@ -1099,6 +1099,7 @@ func postIDJAGToken(t *testing.T, ts *httptest.Server, clientID string, form url
 	require.NoError(t, err)
 
 	req.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+
 	if clientID != "" {
 		req.SetBasicAuth(clientID, idjagClientSecret)
 	}

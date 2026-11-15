@@ -162,6 +162,7 @@ func TestIsMatchingResourceIndicator(t *testing.T) {
 	mustParse := func(s string) *url.URL {
 		u, err := url.Parse(s)
 		require.NoError(t, err, "test bug: unparsable url %q", s)
+
 		return u
 	}
 

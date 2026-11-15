@@ -65,6 +65,7 @@ func TestOIDCKeyBindingDeviceFlow(t *testing.T) {
 
 	daResp, err := http.DefaultClient.Do(daReq)
 	require.NoError(t, err)
+
 	defer daResp.Body.Close()
 
 	daBody, err := io.ReadAll(daResp.Body)
@@ -83,6 +84,7 @@ func TestOIDCKeyBindingDeviceFlow(t *testing.T) {
 		consts.FormParameterUserCode: {device.UserCode},
 	})
 	require.NoError(t, err)
+
 	defer verifyResp.Body.Close()
 
 	verifyBody, err := io.ReadAll(verifyResp.Body)
@@ -351,6 +353,7 @@ func postOIDCKBToken(t *testing.T, ts *httptest.Server, clientID, clientSecret s
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
+
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
@@ -458,6 +461,7 @@ func runOIDCKeyBindingCodeFlow(t *testing.T, oidcKeyBindingEnabled bool, scopes 
 
 	resp, err := http.Get(oauthClient.AuthCodeURL(testState, opts...))
 	require.NoError(t, err)
+
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)

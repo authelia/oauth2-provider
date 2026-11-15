@@ -153,6 +153,7 @@ func mockServer(t *testing.T, f oauth2.Provider, session oauth2.Session) *httpte
 	router.HandleFunc("/par", pushedAuthorizeRequestHandler(t, f, session))
 
 	ts := httptest.NewServer(router)
+
 	return ts
 }
 

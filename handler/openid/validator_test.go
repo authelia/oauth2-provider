@@ -40,6 +40,7 @@ func TestValidatePrompt(t *testing.T) {
 	var genIDToken = func(c jwt.IDTokenClaims) string {
 		s, _, err := j.Encode(t.Context(), c.ToMapClaims())
 		require.NoError(t, err)
+
 		return s
 	}
 

@@ -65,6 +65,7 @@ func (d *AuthorizeRequest) IsRedirectURIValid() bool {
 	if err != nil {
 		return false
 	}
+
 	return IsValidRedirectURI(redirectURI)
 }
 
@@ -113,6 +114,7 @@ func (d *AuthorizeRequest) SetDefaultResponseMode(defaultResponseMode ResponseMo
 	if d.ResponseMode == ResponseModeDefault {
 		d.ResponseMode = defaultResponseMode
 	}
+
 	d.DefaultResponseMode = defaultResponseMode
 }
 

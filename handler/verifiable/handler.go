@@ -44,6 +44,7 @@ func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oau
 
 	lifespan := c.Config.GetVerifiableCredentialsNonceLifespan(ctx)
 	expiry := time.Now().UTC().Add(lifespan)
+
 	nonce, err := c.NewNonce(ctx, response.GetAccessToken(), expiry)
 	if err != nil {
 		return err

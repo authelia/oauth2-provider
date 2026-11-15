@@ -43,6 +43,7 @@ func TestWriteRFC862DeviceAuthorizeResponse(t *testing.T) {
 				resp.SetVerificationURIComplete(
 					provider.Config.GetRFC8628UserVerificationURL(t.Context()) + "?user_code=" + resp.GetUserCode(),
 				)
+
 				return resp
 			},
 			headers: http.Header{
@@ -63,6 +64,7 @@ func TestWriteRFC862DeviceAuthorizeResponse(t *testing.T) {
 				resp.SetUserCode("CCCC")
 				resp.SetDeviceCode("DDDD")
 				resp.SetVerificationURI("https://auth.example.com")
+
 				return resp
 			},
 			headers: http.Header{
@@ -83,6 +85,7 @@ func TestWriteRFC862DeviceAuthorizeResponse(t *testing.T) {
 				}
 				resp.SetUserCode("EEEE")
 				resp.SetDeviceCode("FFFF")
+
 				return resp
 			},
 			headers: http.Header{
@@ -102,6 +105,7 @@ func TestWriteRFC862DeviceAuthorizeResponse(t *testing.T) {
 				}
 				resp.SetUserCode("GGGG")
 				resp.SetDeviceCode("HHHH")
+
 				return resp
 			},
 			headers: http.Header{
@@ -192,6 +196,7 @@ func TestWriteRFC862DeviceAuthorizeResponseBody(t *testing.T) {
 				resp.SetVerificationURIComplete("https://auth.example.com/device?user_code=USER-CODE")
 				resp.SetExpiresIn(600)
 				resp.SetInterval(5)
+
 				return resp
 			},
 			expected: map[string]any{
@@ -211,6 +216,7 @@ func TestWriteRFC862DeviceAuthorizeResponseBody(t *testing.T) {
 				resp.SetDeviceCode("DEVICE")
 				resp.SetVerificationURI("https://auth.example.com/device")
 				resp.SetExpiresIn(300)
+
 				return resp
 			},
 			expected: map[string]any{
@@ -235,6 +241,7 @@ func TestWriteRFC862DeviceAuthorizeResponseBody(t *testing.T) {
 				resp.SetDeviceCode("Y")
 				resp.SetVerificationURI("https://auth.example.com/device")
 				resp.SetExpiresIn(100)
+
 				return resp
 			},
 			expected: map[string]any{

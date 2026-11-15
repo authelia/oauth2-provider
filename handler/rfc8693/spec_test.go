@@ -115,6 +115,7 @@ func TestSpec_4_1_ActClaim_DoesNotMutateSubjectTokenMap(t *testing.T) {
 	act := session.Extra[consts.ClaimActor].(map[string]any)
 	nested := act[consts.ClaimActor].(map[string]any)
 	nested["injected"] = true
+
 	assert.NotContains(t, priorAct, "injected", "mutating the issued nested 'act' must not leak into the subject_token's act map")
 }
 
@@ -215,6 +216,7 @@ func TestSpec_2_1_CustomJWT_AudienceReplacesSessionAudience(t *testing.T) {
 	require.NoError(t, cjt.PopulateTokenEndpointResponse(context.Background(), req, resp))
 
 	var rawClaims map[string]any
+
 	_, err := jwt.UnsafeParseSignedAny(resp.AccessToken, &rawClaims)
 	require.NoError(t, err)
 
@@ -239,6 +241,7 @@ func TestSpec_4_1_ActClaim_AppearsInIssuedCustomJWT(t *testing.T) {
 	require.NotEmpty(t, resp.AccessToken, "exchange must produce a custom JWT in access_token")
 
 	var rawClaims map[string]any
+
 	_, err := jwt.UnsafeParseSignedAny(resp.AccessToken, &rawClaims)
 	require.NoError(t, err, "issued JWT must be parseable")
 

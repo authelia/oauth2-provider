@@ -179,6 +179,7 @@ func (s *ClaimStrings) UnmarshalJSON(data []byte) (err error) {
 			if !ok {
 				return ErrInvalidType
 			}
+
 			aud = append(aud, vs)
 		}
 	case nil:

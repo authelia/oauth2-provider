@@ -73,6 +73,7 @@ func TestGenerateIDToken(t *testing.T) {
 
 func TestIssueExplicitToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
+
 	resp := mock.NewMockAccessResponder(ctrl)
 	defer ctrl.Finish()
 
@@ -83,6 +84,7 @@ func TestIssueExplicitToken(t *testing.T) {
 	}, Headers: &jwt.Headers{}})
 
 	resp.EXPECT().SetExtra("id_token", gomock.Any())
+
 	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
 	err := h.IssueExplicitIDToken(t.Context(), time.Duration(0), ar, resp)
 	assert.NoError(t, err)
@@ -90,6 +92,7 @@ func TestIssueExplicitToken(t *testing.T) {
 
 func TestIssueImplicitToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
+
 	resp := mock.NewMockAuthorizeResponder(ctrl)
 	defer ctrl.Finish()
 
@@ -100,6 +103,7 @@ func TestIssueImplicitToken(t *testing.T) {
 	}, Headers: &jwt.Headers{}})
 
 	resp.EXPECT().AddParameter(consts.AccessResponseIDToken, gomock.Any())
+
 	h := &IDTokenHandleHelper{IDTokenStrategy: strategy}
 	err := h.IssueImplicitIDToken(t.Context(), time.Duration(0), ar, resp)
 	assert.NoError(t, err)

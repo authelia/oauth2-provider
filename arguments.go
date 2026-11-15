@@ -20,6 +20,7 @@ func (r Arguments) Matches(items ...string) bool {
 		if !slices.Contains(r, item) {
 			return false
 		}
+
 		found[item] = struct{}{}
 	}
 
@@ -41,6 +42,7 @@ func (r Arguments) MatchesFold(items ...string) bool {
 		if !slices.ContainsFunc(r, equalFold(item)) {
 			return false
 		}
+
 		found[item] = struct{}{}
 	}
 

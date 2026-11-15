@@ -32,6 +32,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 			oauth2.RFC8628DeviceAuthorizeConfigProvider
 		}
 	}
+
 	type args struct {
 		ctx    context.Context
 		req    oauth2.DeviceAuthorizeRequester
@@ -236,11 +237,13 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse(t *te
 			if tt.setup != nil {
 				tt.setup(t, tt.args.req, &tt.fields, &tt.args)
 			}
+
 			if tt.wantErr != nil {
 				tt.wantErr(t, d.PopulateRFC8628UserAuthorizeEndpointResponse(tt.args.ctx, tt.args.req, tt.args.resp),
 					fmt.Sprintf("PopulateRFC8628UserAuthorizeEndpointResponse(%v, %v, %v)",
 						tt.args.ctx, tt.args.req, tt.args.resp))
 			}
+
 			if tt.check != nil {
 				tt.check(t, tt.args.resp, &tt.args)
 			}
@@ -353,6 +356,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 			oauth2.RFC8628DeviceAuthorizeConfigProvider
 		}
 	}
+
 	type args struct {
 		ctx    context.Context
 		req    oauth2.DeviceAuthorizeRequester
@@ -859,6 +863,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 			if tt.setup != nil {
 				tt.setup(t, tt.args.req, &tt.fields, &tt.args)
 			}
+
 			if tt.wantErr != nil {
 				tt.wantErr(t, d.HandleRFC8628UserAuthorizeEndpointRequest(tt.args.ctx, tt.args.req),
 					fmt.Sprintf("HandleRFC8628UserAuthorizeEndpointRequest(%v, %v)", tt.args.ctx, tt.args.req))

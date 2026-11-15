@@ -217,6 +217,7 @@ func (a *Request) GrantScope(scope string) {
 	if slices.Contains(a.GrantedScope, scope) {
 		return
 	}
+
 	a.GrantedScope = append(a.GrantedScope, scope)
 }
 
@@ -292,6 +293,7 @@ var alwaysAllowedParameters = []string{
 // credentials and other sensitive form fields before persisting the request to storage.
 func (a *Request) Sanitize(allowedParameters []string) Requester {
 	b := new(Request)
+
 	allowed := map[string]bool{}
 	for _, v := range allowedParameters {
 		allowed[v] = true
@@ -305,6 +307,7 @@ func (a *Request) Sanitize(allowedParameters []string) Requester {
 
 	*b = *a
 	b.ID = a.GetID()
+
 	b.Form = url.Values{}
 	for k := range a.Form {
 		if allowed[k] {

@@ -86,6 +86,7 @@ func (c *JWTClaims) With(expiry time.Time, scope, audience []string) JWTClaimsCo
 	c.ExpiresAt = expiry
 	c.Scope = scope
 	c.Audience = audience
+
 	return c
 }
 
@@ -111,6 +112,7 @@ func (c *JWTClaims) WithDefaults(iat, nbf time.Time, issuer string) JWTClaimsCon
 	if c.Issuer == "" {
 		c.Issuer = issuer
 	}
+
 	return c
 }
 
@@ -172,6 +174,7 @@ func (c *JWTClaims) ToMap() map[string]any {
 		if c.ScopeField == JWTScopeFieldUnset || c.ScopeField == JWTScopeFieldList || c.ScopeField == JWTScopeFieldBoth {
 			ret[ClaimScopeNonStandard] = c.Scope
 		}
+
 		if c.ScopeField == JWTScopeFieldString || c.ScopeField == JWTScopeFieldBoth {
 			ret[ClaimScope] = strings.Join(c.Scope, " ")
 		}
@@ -190,6 +193,7 @@ func (c *JWTClaims) ToMap() map[string]any {
 //nolint:gocyclo
 func (c *JWTClaims) FromMap(m map[string]any) {
 	c.Extra = make(map[string]any)
+
 	for k, v := range m {
 		switch k {
 		case consts.ClaimJWTID:

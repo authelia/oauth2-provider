@@ -90,6 +90,7 @@ func TestNewAccessResponse(t *testing.T) {
 			} else {
 				config.TokenEndpointHandlers = TokenEndpointHandlers{handler}
 			}
+
 			provider := &Fosite{Config: config}
 
 			tc.mock(handler)

@@ -168,6 +168,7 @@ func (s *DefaultJWKSFetcherStrategy) resolve(ctx context.Context, location strin
 		}
 
 		_ = s.cache.SetWithTTL(cacheKey, &set, 1, s.ttl)
+
 		return &set, nil
 	}
 

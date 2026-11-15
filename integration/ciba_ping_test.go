@@ -61,6 +61,7 @@ func TestCIBAPingFlow(t *testing.T) {
 				_ = json.Unmarshal(data, &p.body)
 
 				mu.Lock()
+
 				pings = append(pings, p)
 				mu.Unlock()
 

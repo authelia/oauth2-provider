@@ -64,6 +64,7 @@ var jwtValidCase = func(tokenType oauth2.TokenType) *oauth2.Request {
 	r.GrantScope(consts.ScopeOffline)
 	r.SetRequestedAudience([]string{"group0"})
 	r.GrantAudience("group0")
+
 	return r
 }
 
@@ -93,6 +94,7 @@ var jwtInvalidTypCase = func(tokenType oauth2.TokenType) *oauth2.Request {
 	r.GrantScope(consts.ScopeOffline)
 	r.SetRequestedAudience([]string{"group0"})
 	r.GrantAudience("group0")
+
 	return r
 }
 
@@ -123,6 +125,7 @@ var jwtValidCaseWithZeroRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2
 	r.GrantScope(consts.ScopeOffline)
 	r.SetRequestedAudience([]string{"group0"})
 	r.GrantAudience("group0")
+
 	return r
 }
 
@@ -153,6 +156,7 @@ var jwtValidCaseWithRefreshExpiry = func(tokenType oauth2.TokenType) *oauth2.Req
 	r.GrantScope(consts.ScopeOffline)
 	r.SetRequestedAudience([]string{"group0"})
 	r.GrantAudience("group0")
+
 	return r
 }
 
@@ -183,5 +187,6 @@ var jwtExpiredCase = func(tokenType oauth2.TokenType, now time.Time) *oauth2.Req
 	r.GrantScope(consts.ScopeOffline)
 	r.SetRequestedAudience([]string{"group0"})
 	r.GrantAudience("group0")
+
 	return r
 }

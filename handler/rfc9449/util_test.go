@@ -51,6 +51,7 @@ func TestSingleDPoPHeader(t *testing.T) {
 			if tc.wantErr != nil {
 				assert.ErrorIs(t, err, tc.wantErr)
 				assert.Empty(t, got)
+
 				return
 			}
 

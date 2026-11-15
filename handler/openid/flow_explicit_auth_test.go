@@ -69,6 +69,7 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 			name: "ShouldFailWithStorageError",
 			setup: func(ctrl *gomock.Controller, request *oauth2.AuthorizeRequest, responder *mock.MockAuthorizeResponder) (handler OpenIDConnectExplicitHandler) {
 				handler, store := makeOpenIDConnectExplicitHandler(ctrl, oauth2.MinParameterEntropy)
+
 				responder.EXPECT().GetCode().AnyTimes().Return("codeexample")
 
 				store.EXPECT().CreateOpenIDConnectSession(t.Context(), "codeexample", gomock.Eq(request.Sanitize(oidcParameters))).Return(errors.New("connection refused"))

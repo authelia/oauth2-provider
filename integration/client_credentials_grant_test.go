@@ -40,7 +40,9 @@ func introspect(t *testing.T, ts *httptest.Server, token string, p any, username
 	req.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
 	r, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
+
 	defer r.Body.Close()
+
 	body, err := io.ReadAll(r.Body)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, r.StatusCode, "%s", body)
@@ -49,6 +51,7 @@ func introspect(t *testing.T, ts *httptest.Server, token string, p any, username
 
 func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStrategy) {
 	f := compose.Compose(new(oauth2.Config), store, strategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory)
+
 	ts := mockServer(t, f, &oauth2.DefaultSession{})
 	defer ts.Close()
 
@@ -99,10 +102,13 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 				introspect(t, ts, token.AccessToken, &j, oauthClient.ClientID, oauthClient.ClientSecret)
 				assert.Equal(t, oauthClient.ClientID, j[consts.ClaimClientIdentifier])
 				assert.Equal(t, "oauth2", j[consts.ClaimScope])
+
 				atReq, ok := store.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
 				require.True(t, ok)
+
 				atExp := atReq.GetSession().GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(time.Hour), atExp, time.Minute)
+
 				atExpIn := time.Duration(token.Extra(consts.AccessResponseExpiresIn).(float64)) * time.Second
 				internal.RequireEqualDuration(t, time.Hour, atExpIn, time.Minute)
 			},
@@ -121,10 +127,13 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 
 				atReq, ok := store.AccessTokens[strings.Split(token.AccessToken, ".")[1]]
 				require.True(t, ok)
+
 				atExp := atReq.GetSession().GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.ClientCredentialsGrantAccessTokenLifespan), atExp, time.Minute)
+
 				atExpIn := time.Duration(token.Extra(consts.AccessResponseExpiresIn).(float64)) * time.Second
 				internal.RequireEqualDuration(t, *internal.TestLifespans.ClientCredentialsGrantAccessTokenLifespan, atExpIn, time.Minute)
+
 				rtExp := atReq.GetSession().GetExpiresAt(oauth2.RefreshToken)
 				internal.RequireEqualTime(t, time.Time{}, rtExp, time.Minute)
 			},
@@ -138,6 +147,7 @@ func runClientCredentialsGrantTest(t *testing.T, strategy hoauth2.AccessTokenStr
 			oauthClient.EndpointParams = tc.params
 			token, err := oauthClient.Token(t.Context())
 			require.Equal(t, tc.err, err != nil)
+
 			if !tc.err {
 				assert.NotEmpty(t, token.AccessToken)
 			}

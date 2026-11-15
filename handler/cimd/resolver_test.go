@@ -1537,6 +1537,7 @@ func newResolverEnv(t *testing.T, configure func(config *Config)) *resolverEnv {
 			_, _ = rw.Write([]byte(body))
 		case "/slow":
 			env.entered <- struct{}{}
+
 			<-env.release
 
 			rw.Header().Set("Content-Type", "application/json")

@@ -159,6 +159,7 @@ func TestWriteIntrospectionResponse(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			provider := &Fosite{Config: new(Config)}
+
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
@@ -219,10 +220,12 @@ func TestWriteIntrospectionResponseBody(t *testing.T) {
 				ires.Active = true
 				ires.TokenUse = AccessToken
 				session := &DefaultSession{}
+
 				session.GetExtraClaims()["extra"] = "foobar"
 				for _, field := range []string{consts.ClaimExpirationTime, consts.ClaimClientIdentifier, consts.ClaimScope, consts.ClaimIssuedAt, consts.ClaimSubject, consts.ClaimAudience, consts.ClaimUsername} {
 					session.GetExtraClaims()[field] = "invalid"
 				}
+
 				session.SetExpiresAt(ires.TokenUse, time.Time{})
 				ires.AccessRequester = NewAccessRequest(session)
 			},

@@ -91,6 +91,7 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	}
 
 	claims := session.IDTokenClaims()
+
 	if request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken) {
 		if err = c.AuthorizeImplicitGrantTypeHandler.IssueImplicitAccessToken(ctx, request, response); err != nil {
 			return errorsx.WithStack(err)

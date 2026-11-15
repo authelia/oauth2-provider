@@ -65,6 +65,7 @@ func TestTokenExchangeReadsTheJWTSessionOfASubjectToken(t *testing.T) {
 
 					store := sc.newStore()
 					config, strategy := newBindingExchangeConfig()
+
 					client := store.GetClients()["my-client"]
 					if kind.tokenType == consts.TokenTypeRFC8693AccessToken {
 						client = store.GetClients()["custom-lifespan-client"]

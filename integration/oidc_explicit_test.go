@@ -103,6 +103,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.RedirectURL = ""
 				oauthClient.Scopes = []string{"openid"}
+
 				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce() + "&prompt=login"
 			},
 			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
@@ -140,6 +141,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.RedirectURL = ""
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
+
 				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce() + "&prompt=login"
 			},
 			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
@@ -154,6 +156,7 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 			setup: func(oauthClient *xoauth2.Config) string {
 				oauthClient.RedirectURL = ""
 				oauthClient.Scopes = []string{"openid"}
+
 				return oauthClient.AuthCodeURL(testState) + "&nonce=" + newTestNonce() + "&prompt=login"
 			},
 			expectAuthErr:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter is required when using OpenID Connect 1.0."}`,
@@ -196,10 +199,12 @@ func TestOpenIDConnectExplicitFlow(t *testing.T) {
 
 			resp, err := http.Get(tc.setup(oauthClient))
 			require.NoError(t, err)
+
 			defer resp.Body.Close()
 
 			body, _ := io.ReadAll(resp.Body)
 			require.Equal(t, tc.authStatusCode, resp.StatusCode, "Got response: %s", body)
+
 			if resp.StatusCode >= 400 {
 				assert.Equal(t, tc.expectAuthErr, strings.Replace(string(body), "error: ", "", 1))
 			}

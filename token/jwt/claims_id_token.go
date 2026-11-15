@@ -402,6 +402,7 @@ func (c IDTokenClaims) ToMapClaims() MapClaims {
 //nolint:gocyclo
 func (c *IDTokenClaims) FromMap(m map[string]any) {
 	c.Extra = make(map[string]any)
+
 	for k, v := range m {
 		switch k {
 		case ClaimJWTID:

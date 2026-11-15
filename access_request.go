@@ -33,6 +33,7 @@ func NewAccessRequest(session Session) *AccessRequest {
 		Request:          *NewRequest(),
 	}
 	r.Session = session
+
 	return r
 }
 

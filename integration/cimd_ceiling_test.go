@@ -215,6 +215,7 @@ func newCIMDCeilingEnv(t *testing.T, resolver cimd.Config) *cimdCeilingEnv {
 
 	env.config.ClientIDMetadataDocumentResolver, err = cimd.NewResolver(resolver)
 	env.config.Issuer = cimdIssuer
+
 	require.NoError(t, err)
 
 	env.config.ClientIDMetadataDocumentHTTPClient = client

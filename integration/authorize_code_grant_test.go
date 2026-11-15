@@ -40,6 +40,7 @@ func TestAuthorizeCodeFlowDupeCode(t *testing.T) {
 
 func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 	f := compose.Compose(&oauth2.Config{RedirectSecureChecker: oauth2.IsRedirectURISecure}, store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+
 	ts := mockServer(t, f, &openid.DefaultSession{Subject: "foo-sub"})
 	defer ts.Close()
 
@@ -48,6 +49,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 	store.Clients[testClientIDLifespan].(*oauth2.DefaultClientWithCustomTokenLifespans).RedirectURIs[0] = ts.URL + "/callback"
 
 	var state string
+
 	testCases := []struct {
 		name           string
 		setup          func()
@@ -83,6 +85,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			},
 			check: func(t *testing.T, r *http.Response, _ *xoauth2.Token) {
 				var b oauth2.AccessRequest
+
 				b.Client = new(oauth2.DefaultClient)
 				b.Session = newDefaultSession()
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
@@ -110,13 +113,16 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			},
 			check: func(t *testing.T, r *http.Response, token *xoauth2.Token) {
 				var b oauth2.AccessRequest
+
 				b.Client = new(oauth2.DefaultClient)
 				b.Session = newDefaultSession()
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
 				atExp := b.Session.GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.AuthorizationCodeGrantAccessTokenLifespan), atExp, time.Minute)
+
 				atExpIn := time.Duration(token.Extra(consts.AccessResponseExpiresIn).(float64)) * time.Second
 				internal.RequireEqualDuration(t, *internal.TestLifespans.AuthorizationCodeGrantAccessTokenLifespan, atExpIn, time.Minute)
+
 				rtExp := b.Session.GetExpiresAt(oauth2.RefreshToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.AuthorizationCodeGrantRefreshTokenLifespan), rtExp, time.Minute)
 			},
@@ -152,6 +158,7 @@ func runAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 
 func runAuthorizeCodeGrantDupeCodeTest(t *testing.T, strategy any) {
 	f := compose.Compose(&oauth2.Config{RedirectSecureChecker: oauth2.IsRedirectURISecure}, store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+
 	ts := mockServer(t, f, &oauth2.DefaultSession{})
 	defer ts.Close()
 

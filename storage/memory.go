@@ -393,6 +393,7 @@ func (s *MemoryStore) CreateOpenIDConnectSession(_ context.Context, authorizeCod
 	defer s.idSessionsMutex.Unlock()
 
 	s.IDSessions[authorizeCode] = request
+
 	return nil
 }
 
@@ -406,6 +407,7 @@ func (s *MemoryStore) GetOpenIDConnectSession(_ context.Context, authorizeCode s
 	if !ok {
 		return nil, oauth2.ErrNotFound
 	}
+
 	return cl, nil
 }
 
@@ -432,6 +434,7 @@ func (s *MemoryStore) DeleteOpenIDConnectSession(_ context.Context, authorizeCod
 	defer s.idSessionsMutex.Unlock()
 
 	delete(s.IDSessions, authorizeCode)
+
 	return nil
 }
 
@@ -444,6 +447,7 @@ func (s *MemoryStore) GetClient(_ context.Context, id string) (oauth2.Client, er
 	if !ok {
 		return nil, oauth2.ErrNotFound
 	}
+
 	return cl, nil
 }
 
@@ -693,6 +697,7 @@ func (s *MemoryStore) CreateAuthorizeCodeSession(_ context.Context, code string,
 	defer s.authorizeCodesMutex.Unlock()
 
 	s.AuthorizeCodes[code] = StoreAuthorizeCode{active: true, Requester: req}
+
 	return nil
 }
 
@@ -707,6 +712,7 @@ func (s *MemoryStore) GetAuthorizeCodeSession(_ context.Context, code string, _ 
 	if !ok {
 		return nil, oauth2.ErrNotFound
 	}
+
 	if !rel.active {
 		return rel, oauth2.ErrInvalidatedAuthorizeCode
 	}
@@ -742,6 +748,7 @@ func (s *MemoryStore) CreatePKCERequestSession(_ context.Context, code string, r
 	defer s.pkcesMutex.Unlock()
 
 	s.PKCES[code] = req
+
 	return nil
 }
 
@@ -755,6 +762,7 @@ func (s *MemoryStore) GetPKCERequestSession(_ context.Context, code string, _ oa
 	if !ok {
 		return nil, oauth2.ErrNotFound
 	}
+
 	return rel, nil
 }
 
@@ -782,6 +790,7 @@ func (s *MemoryStore) DeletePKCERequestSession(_ context.Context, code string) e
 	defer s.pkcesMutex.Unlock()
 
 	delete(s.PKCES, code)
+
 	return nil
 }
 
@@ -792,6 +801,7 @@ func (s *MemoryStore) CreateAccessTokenSession(_ context.Context, signature stri
 	// locking happens in RevokeAccessToken and using the same order prevents deadlocks.
 	s.accessTokenRequestIDsMutex.Lock()
 	defer s.accessTokenRequestIDsMutex.Unlock()
+
 	s.accessTokensMutex.Lock()
 	defer s.accessTokensMutex.Unlock()
 
@@ -818,6 +828,7 @@ func (s *MemoryStore) GetAccessTokenSession(_ context.Context, signature string,
 	if !ok {
 		return nil, oauth2.ErrNotFound
 	}
+
 	return rel, nil
 }
 
@@ -826,6 +837,7 @@ func (s *MemoryStore) GetAccessTokenSession(_ context.Context, signature string,
 func (s *MemoryStore) DeleteAccessTokenSession(_ context.Context, signature string) error {
 	s.accessTokenRequestIDsMutex.Lock()
 	defer s.accessTokenRequestIDsMutex.Unlock()
+
 	s.accessTokensMutex.Lock()
 	defer s.accessTokensMutex.Unlock()
 
@@ -886,11 +898,13 @@ func (s *MemoryStore) CreateRefreshTokenSession(_ context.Context, signature, ac
 	// locking happens in RevokeRefreshToken and using the same order prevents deadlocks.
 	s.refreshTokenRequestIDsMutex.Lock()
 	defer s.refreshTokenRequestIDsMutex.Unlock()
+
 	s.refreshTokensMutex.Lock()
 	defer s.refreshTokensMutex.Unlock()
 
 	s.RefreshTokens[signature] = StoreRefreshToken{active: true, accessTokenSignature: accessTokenSignature, Requester: req}
 	s.RefreshTokenRequestIDs[req.GetID()] = signature
+
 	return nil
 }
 
@@ -905,9 +919,11 @@ func (s *MemoryStore) GetRefreshTokenSession(_ context.Context, signature string
 	if !ok {
 		return nil, oauth2.ErrNotFound
 	}
+
 	if !rel.active {
 		return rel, oauth2.ErrInactiveToken
 	}
+
 	return rel, nil
 }
 
@@ -936,6 +952,7 @@ func (s *MemoryStore) DeleteRefreshTokenSession(_ context.Context, signature str
 	defer s.refreshTokensMutex.Unlock()
 
 	delete(s.RefreshTokens, signature)
+
 	return nil
 }
 
@@ -975,9 +992,11 @@ func (s *MemoryStore) deactivateRefreshToken(requestID string) error {
 		if !ok {
 			return oauth2.ErrNotFound
 		}
+
 		rel.active = false
 		s.RefreshTokens[signature] = rel
 	}
+
 	return nil
 }
 
@@ -1020,6 +1039,7 @@ func (s *MemoryStore) rotateRefreshToken(requestID, signature string) error {
 func (s *MemoryStore) RevokeAccessToken(_ context.Context, requestID string) error {
 	s.accessTokenRequestIDsMutex.Lock()
 	defer s.accessTokenRequestIDsMutex.Unlock()
+
 	s.accessTokensMutex.Lock()
 	defer s.accessTokensMutex.Unlock()
 

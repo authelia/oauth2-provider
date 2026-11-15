@@ -41,6 +41,7 @@ func (f *Fosite) NewRevocationRequest(ctx context.Context, r *http.Request) erro
 	tokenTypeHint := TokenType(r.PostForm.Get(consts.FormParameterTokenTypeHint))
 
 	var found = false
+
 	for _, loader := range f.Config.GetRevocationHandlers(ctx) {
 		if err = loader.RevokeToken(ctx, token, tokenTypeHint, client); err == nil {
 			found = true

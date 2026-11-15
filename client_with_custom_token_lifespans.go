@@ -77,6 +77,7 @@ func (c *DefaultClientWithCustomTokenLifespans) GetEffectiveLifespan(gt GrantTyp
 	if c.TokenLifespans == nil {
 		return fallback
 	}
+
 	var cl *time.Duration
 
 	switch gt {

@@ -48,6 +48,7 @@ func NewDefaultMessageCatalog(bundles []*DefaultLocaleBundle) MessageCatalog {
 	}
 
 	c.makeMatcher()
+
 	return c
 }
 

@@ -112,6 +112,7 @@ func TestRefreshFlow_HandleTokenEndpointRequestHMAC(t *testing.T) {
 				require.NoError(t, err)
 
 				requester.Form.Add(consts.FormParameterRefreshToken, token)
+
 				err = store.CreateRefreshTokenSession(t.Context(), sig, "", &oauth2.Request{
 					Client:       &oauth2.DefaultClient{ID: ""},
 					GrantedScope: []string{consts.ScopeOffline},
@@ -592,6 +593,7 @@ func TestRefreshFlowTransactional_HandleTokenEndpointRequest(t *testing.T) {
 					ID:         "foo",
 					GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken},
 				}
+
 				mockRevocationStore.
 					EXPECT().
 					GetRefreshTokenSession(ctx, gomock.Any(), gomock.Any()).
@@ -1606,6 +1608,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1628,6 +1631,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			err:  "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The refresh token has been revoked. Could not find the requested resource(s).",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1651,6 +1655,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.ID = "req-id"
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				gomock.InOrder(
 					mockTransactional.
 						EXPECT().
@@ -1689,6 +1694,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.ID = "req-id"
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				gomock.InOrder(
 					mockTransactional.
 						EXPECT().
@@ -1752,6 +1758,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1779,6 +1786,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Failed to refresh token because of multiple concurrent requests using the same token which is not allowed. The request could not be completed due to concurrent access",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1806,6 +1814,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Failed to refresh token because of multiple concurrent requests using the same token which is not allowed. The request could not be completed due to concurrent access",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1838,6 +1847,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1870,6 +1880,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Whoops, a nasty database error occurred!",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1907,6 +1918,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Failed to refresh token because of multiple concurrent requests using the same token which is not allowed. The request could not be completed due to concurrent access",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1944,6 +1956,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Could not create transaction!",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1956,6 +1969,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. error: invalid_request; rollback error: Could not rollback transaction!",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -1978,6 +1992,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			err:  "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Could not commit transaction!",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -2020,6 +2035,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Failed to refresh token because of multiple concurrent requests using the same token which is not allowed. The request could not be completed due to concurrent access",
 			setup: func(request *oauth2.AccessRequest, mockTransactional *mock.MockTransactional, mockRevocationStore *mock.MockTokenRevocationStorage) {
 				request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
 				mockTransactional.
 					EXPECT().
 					BeginTX(propagatedContext).
@@ -2068,6 +2084,7 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 			mockRevocationStore := mock.NewMockTokenRevocationStorage(ctrl)
 			request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
 			response := oauth2.NewAccessResponse()
+
 			tc.setup(request, mockTransactional, mockRevocationStore)
 
 			handler := RefreshTokenGrantHandler{

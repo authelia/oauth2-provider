@@ -130,6 +130,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
+
 				claims := decodedIdToken.Claims.ToMapClaims()
 				assert.NotEmpty(t, claims[consts.ClaimAccessTokenHash])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
@@ -164,6 +165,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 					return key.PublicKey, nil
 				})
 				require.NoError(t, err)
+
 				claims := decodedIdToken.Claims.ToMapClaims()
 				assert.NotEmpty(t, claims[consts.ClaimAccessTokenHash])
 				idTokenExp := internal.ExtractJwtExpClaim(t, idToken)
@@ -280,6 +282,7 @@ func TestOpenIDConnectRefreshHandler_PopulateTokenEndpointResponse(t *testing.T)
 			}
 
 			aresp := oauth2.NewAccessResponse()
+
 			err := h.PopulateTokenEndpointResponse(t.Context(), tc.areq, aresp)
 			if tc.err != "" {
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err, "%v", err)

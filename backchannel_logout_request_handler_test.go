@@ -499,6 +499,7 @@ func bclServer(t *testing.T, status int) (server *httptest.Server, tokens *[]str
 		require.NoError(t, r.ParseForm())
 
 		mu.Lock()
+
 		collected = append(collected, r.PostForm.Get("logout_token"))
 		mu.Unlock()
 

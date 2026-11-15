@@ -58,6 +58,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 				GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
 				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
 			}, store, gen.MustRSAKey())
+
 			ts := mockServer(t, f, session)
 			defer ts.Close()
 
@@ -118,6 +119,7 @@ func TestOIDCImplicitFlowPublicClientPKCE(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, response.StatusCode, http.StatusOK)
+
 			token := xoauth2.Token{}
 			require.NoError(t, json.Unmarshal(body, &token))
 

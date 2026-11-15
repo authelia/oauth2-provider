@@ -50,7 +50,6 @@ func (f *Fosite) handleAccessRequest(ctx context.Context, r *http.Request, reque
 		} else if errors.Is(err, ErrUnknownRequest) {
 			// This is a duplicate because it should already have been handled by
 			// `loader.CanHandleTokenEndpointRequest` but let's keep it for sanity.
-
 			continue
 		} else if err != nil {
 			return requester, err

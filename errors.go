@@ -531,6 +531,7 @@ func (e *RFC6749Error) WithTrace(err error) *RFC6749Error {
 	} else {
 		e.Wrap(err)
 	}
+
 	return e
 }
 
@@ -553,6 +554,7 @@ func (e RFC6749Error) Is(err error) bool {
 		return e.ErrorField == te.ErrorField &&
 			e.CodeField == te.CodeField
 	}
+
 	return false
 }
 
@@ -606,6 +608,7 @@ func (e *RFC6749Error) WithHintf(hint string, args ...any) *RFC6749Error {
 
 	err.hintArgs = args
 	err.HintField = fmt.Sprintf(hint, args...)
+
 	return &err
 }
 
@@ -618,6 +621,7 @@ func (e *RFC6749Error) WithHint(hint string) *RFC6749Error {
 	}
 
 	err.HintField = hint
+
 	return &err
 }
 
@@ -627,6 +631,7 @@ func (e *RFC6749Error) WithHintIDOrDefaultf(id string, def string, args ...any) 
 	err.hintIDField = id
 	err.hintArgs = args
 	err.HintField = fmt.Sprintf(def, args...)
+
 	return &err
 }
 
@@ -635,6 +640,7 @@ func (e *RFC6749Error) WithHintIDOrDefaultf(id string, def string, args ...any) 
 func (e *RFC6749Error) WithHintTranslationID(id string) *RFC6749Error {
 	err := *e
 	err.hintIDField = id
+
 	return &err
 }
 
@@ -673,6 +679,7 @@ func (e *RFC6749Error) WithDebugf(debug string, args ...any) *RFC6749Error {
 func (e *RFC6749Error) WithDescription(description string) *RFC6749Error {
 	err := *e
 	err.DescriptionField = description
+
 	return &err
 }
 
@@ -709,6 +716,7 @@ func (e *RFC6749Error) WithLocalizer(catalog i18n.MessageCatalog, lang language.
 	err := *e
 	err.catalog = catalog
 	err.lang = lang
+
 	return &err
 }
 
@@ -718,6 +726,7 @@ func (e *RFC6749Error) WithLocalizer(catalog i18n.MessageCatalog, lang language.
 func (e *RFC6749Error) Sanitize() *RFC6749Error {
 	err := *e
 	err.DebugField = ""
+
 	return &err
 }
 
@@ -833,6 +842,7 @@ func (e *RFC6749Error) ToValues() url.Values {
 
 	if e.useLegacyFormat {
 		values.Set("error_description", sanitizeErrorDescription(e.DescriptionField))
+
 		if e.HintField != "" {
 			values.Set("error_hint", sanitizeErrorDescription(e.HintField))
 		}

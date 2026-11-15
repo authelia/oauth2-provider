@@ -209,6 +209,7 @@ func TestNumericDate_MarshalJSON(t *testing.T) {
 	}
 
 	original := TimePrecision
+
 	t.Cleanup(func() { TimePrecision = original })
 
 	for _, tc := range testCases {
@@ -521,6 +522,7 @@ func TestClaimStrings_MarshalJSON(t *testing.T) {
 	}
 
 	original := MarshalSingleStringAsArray
+
 	t.Cleanup(func() { MarshalSingleStringAsArray = original })
 
 	for _, tc := range testCases {
@@ -601,6 +603,7 @@ func TestCopy(t *testing.T) {
 		assert.Equal(t, original, copied)
 
 		copied["a"] = 99
+
 		assert.Equal(t, 1, original["a"], "mutating the copy must not affect the original")
 	})
 

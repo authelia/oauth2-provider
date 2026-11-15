@@ -21,11 +21,14 @@ import (
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2
 func TestWriteAuthorizeError(t *testing.T) {
-	var urls = []string{
-		"https://foobar.com/",
-		"https://foobar.com/?foo=bar",
-	}
-	var purls = []*url.URL{}
+	var (
+		urls = []string{
+			"https://foobar.com/",
+			"https://foobar.com/?foo=bar",
+		}
+		purls = []*url.URL{}
+	)
+
 	for _, u := range urls {
 		purl, _ := url.Parse(u)
 		purls = append(purls, purl)
@@ -458,6 +461,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
+
 			rw := mock.NewMockResponseWriter(ctrl)
 			req := mock.NewMockAuthorizeRequester(ctrl)
 

@@ -117,6 +117,7 @@ func (c JARMClaims) ToMapClaims() MapClaims {
 // FromMap will set the claims based on a mapping.
 func (c *JARMClaims) FromMap(m map[string]any) {
 	c.Extra = make(map[string]any)
+
 	for k, v := range m {
 		switch k {
 		case ClaimIssuer:

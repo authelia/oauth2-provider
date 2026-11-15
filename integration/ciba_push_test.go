@@ -264,6 +264,7 @@ func TestCIBAPushFlow(t *testing.T) {
 				_ = json.Unmarshal(data, &payload)
 
 				mu.Lock()
+
 				payloads = append(payloads, payload)
 				headers = append(headers, r.Header.Clone())
 				mu.Unlock()

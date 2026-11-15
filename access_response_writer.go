@@ -18,8 +18,10 @@ import (
 // returns ErrServerError if no handler issued an access token. Use WriteAccessResponse to send the result, or
 // WriteAccessError if this method returns an error.
 func (f *Fosite) NewAccessResponse(ctx context.Context, request AccessRequester) (AccessResponder, error) {
-	var err error
-	var tk TokenEndpointHandler
+	var (
+		err error
+		tk  TokenEndpointHandler
+	)
 
 	response := NewAccessResponse()
 

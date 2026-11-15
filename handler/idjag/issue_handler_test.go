@@ -351,6 +351,7 @@ func TestIssueHandlerStorageClaimsCannotOverrideRegisteredClaims(t *testing.T) {
 	handler, _, key := newIssueFixture(t, false)
 
 	session := newIssueSession(time.Now().Add(time.Hour))
+
 	setIssueClaims(handler, map[string]any{consts.ClaimAudience: redeemEvil, consts.ClaimClientIdentifier: "evil", consts.ClaimConfirmation: map[string]any{"jkt": "x"}, consts.ClaimTenant: "acme"})
 
 	request := newIssueRequest(t, session, nil)
@@ -450,6 +451,7 @@ func TestIssueHandlerAuthenticationClaims(t *testing.T) {
 			handler, _, key := newIssueFixture(t, false)
 
 			session := newIssueSession(time.Now().Add(time.Hour))
+
 			setIssueClaims(handler, tc.extra)
 
 			maps.Copy(session.SubjectToken, tc.subject)

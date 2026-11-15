@@ -34,6 +34,7 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 	c.EnforcePKCE = true
 	c.EnablePKCEPlainChallengeMethod = true
 	provider := compose.Compose(c, store, strategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2PKCEFactory, compose.OAuth2TokenIntrospectionFactory)
+
 	ts := mockServer(t, provider, &oauth2.DefaultSession{})
 	defer ts.Close()
 
@@ -42,8 +43,11 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 	oauthClient.ClientID = testClientIDPublic
 	store.Clients[testClientIDPublic].(*oauth2.DefaultClient).RedirectURIs[0] = ts.URL + "/callback"
 
-	var authCodeUrl string
-	var verifier string
+	var (
+		authCodeUrl string
+		verifier    string
+	)
+
 	testCases := []struct {
 		name            string
 		setup           func()
@@ -93,6 +97,7 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 					consts.FormParameterCodeVerifier:      {verifier},
 				})
 				require.NoError(t, err)
+
 				defer tokenResp.Body.Close()
 
 				body, err := io.ReadAll(tokenResp.Body)
@@ -100,13 +105,16 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 
 				if tc.tokenStatusCode != 0 {
 					require.Equal(t, tc.tokenStatusCode, tokenResp.StatusCode)
+
 					token := xoauth2.Token{}
 					require.NoError(t, json.Unmarshal(body, &token))
 					require.Empty(t, token.AccessToken)
+
 					return
 				}
 
 				assert.Equal(t, tokenResp.StatusCode, http.StatusOK)
+
 				token := xoauth2.Token{}
 				require.NoError(t, json.Unmarshal(body, &token))
 

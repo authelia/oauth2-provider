@@ -121,6 +121,7 @@ func TestActorTokenValidationHandler_HandlesNonScalarMayActWithoutPanic(t *testi
 		)
 
 		var err error
+
 		require.NotPanics(t, func() {
 			err = h.HandleTokenEndpointRequest(context.Background(), reqMismatch)
 		})

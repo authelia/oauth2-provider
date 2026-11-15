@@ -341,6 +341,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 
 	response.SetAccessToken(access)
 	response.SetTokenType(oauth2.BearerAccessToken)
+
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), gt, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, atLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())

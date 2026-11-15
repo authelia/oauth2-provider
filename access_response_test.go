@@ -208,10 +208,8 @@ func TestAccessResponseToMap(t *testing.T) {
 			},
 		},
 		{
-			name: "ShouldEmitEmptyTokenFieldsWhenUnset",
-			setup: func() *AccessResponse {
-				return NewAccessResponse()
-			},
+			name:  "ShouldEmitEmptyTokenFieldsWhenUnset",
+			setup: NewAccessResponse,
 			expected: map[string]any{
 				consts.AccessResponseAccessToken: "",
 				consts.AccessResponseTokenType:   "",

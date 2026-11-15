@@ -791,7 +791,6 @@ func (h *authorizationDetailsTokenEndpointHandler) CanHandleAuthorizationDetails
 	return h.accepts
 }
 
-//nolint:unparam
 func basicAuth(username, password string) string {
 	return prefixSchemeBasic + base64.StdEncoding.EncodeToString(fmt.Appendf(nil, "%s:%s", username, password))
 }

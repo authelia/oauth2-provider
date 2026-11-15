@@ -10,9 +10,9 @@ package consts
 // https://datatracker.ietf.org/doc/html/rfc7592#section-3.
 const (
 	ClientRegistrationResponseClientID                = "client_id"
-	ClientRegistrationResponseClientSecret            = "client_secret" //nolint:gosec // This is a parameter name, not a credential.
+	ClientRegistrationResponseClientSecret            = "client_secret"
 	ClientRegistrationResponseClientIDIssuedAt        = "client_id_issued_at"
-	ClientRegistrationResponseClientSecretExpiresAt   = "client_secret_expires_at" //nolint:gosec // This is a parameter name, not a credential.
+	ClientRegistrationResponseClientSecretExpiresAt   = "client_secret_expires_at"
 	ClientRegistrationResponseRegistrationAccessToken = "registration_access_token"
 	ClientRegistrationResponseRegistrationClientURI   = "registration_client_uri"
 )

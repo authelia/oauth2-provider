@@ -48,7 +48,6 @@ func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, 
 		handlers = []RevocationTokenLookupFunc{r.handleGetRefreshTokenRequester, r.handleGetAccessTokenRequester}
 	}
 
-	//nolint:prealloc
 	var (
 		request, inactive oauth2.Requester
 		tt                oauth2.TokenType

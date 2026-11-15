@@ -613,7 +613,6 @@ func UnsafeParseSignedAny(tokenString string, dest any) (token *jwt.JSONWebToken
 	return token, nil
 }
 
-//nolint:unparam
 func newError(message string, err error, more ...error) error {
 	var (
 		format string

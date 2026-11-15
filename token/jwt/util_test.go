@@ -633,7 +633,7 @@ func TestNewMapClaims(t *testing.T) {
 	type sample struct {
 		Sub      string `json:"sub"`
 		Skip     string `json:"-"`
-		Untagged string //nolint:unused
+		Untagged string
 		Empty    string `json:"empty,omitempty"`
 		Set      string `json:"set,omitempty"`
 		Nested   nested `json:"nested"`

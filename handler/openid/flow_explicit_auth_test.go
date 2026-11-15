@@ -197,7 +197,6 @@ func TestExplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 	}
 }
 
-//nolint:unparam
 func TestExplicit_HandleAuthorizeEndpointRequestEnforcesClaims(t *testing.T) {
 	testCases := []struct {
 		name    string

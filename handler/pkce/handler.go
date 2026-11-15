@@ -189,8 +189,6 @@ func (c *Handler) validate(ctx context.Context, challenge, method string, client
 // HandleTokenEndpointRequest implements oauth2.TokenEndpointHandler.
 //
 // TODO: Refactor time permitting.
-//
-//nolint:gocyclo
 func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)

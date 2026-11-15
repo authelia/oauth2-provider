@@ -209,12 +209,15 @@ func TestAccessTokenExchangeImpersonation(t *testing.T) {
 						continue
 					}
 
-					if err = loader.PopulateTokenEndpointResponse(ctx, tc.areq, aresp); err == nil {
-						found = true
-					} else if errors.Is(err, oauth2.ErrUnknownRequest) {
+					err = loader.PopulateTokenEndpointResponse(ctx, tc.areq, aresp)
+
+					if errors.Is(err, oauth2.ErrUnknownRequest) {
 						err = nil
+
 						continue
-					} else if err != nil {
+					}
+
+					if err != nil {
 						break
 					}
 				}

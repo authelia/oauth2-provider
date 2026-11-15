@@ -165,7 +165,6 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "ShouldPassWithCustomLifespan",
 			setup: func(requester *oauth2.AuthorizeRequest, responder *oauth2.AuthorizeResponse) (handler OpenIDConnectImplicitHandler) {
-				responder = oauth2.NewAuthorizeResponse()
 				requester.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: testSubjectPeter,
@@ -197,7 +196,6 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "should pass",
 			setup: func(requester *oauth2.AuthorizeRequest, responder *oauth2.AuthorizeResponse) (handler OpenIDConnectImplicitHandler) {
-				responder = oauth2.NewAuthorizeResponse()
 				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
 
 				requester.Client.(*oauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)

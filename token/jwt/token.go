@@ -541,7 +541,7 @@ func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 }
 
 func pointer(v any) any {
-	if reflect.ValueOf(v).Kind() != reflect.Ptr {
+	if reflect.ValueOf(v).Kind() != reflect.Pointer {
 		value := reflect.New(reflect.ValueOf(v).Type())
 		value.Elem().Set(reflect.ValueOf(v))
 

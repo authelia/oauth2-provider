@@ -649,7 +649,7 @@ func toMap(obj any) (result map[string]any) {
 	reflectValue := reflect.ValueOf(obj)
 	reflectValue = reflect.Indirect(reflectValue)
 
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 

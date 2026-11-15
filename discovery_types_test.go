@@ -27,7 +27,7 @@ func TestDiscoveryMetadataUniqueJSONNames(t *testing.T) {
 
 			if f.Anonymous {
 				ft := f.Type
-				if ft.Kind() == reflect.Ptr {
+				if ft.Kind() == reflect.Pointer {
 					ft = ft.Elem()
 				}
 

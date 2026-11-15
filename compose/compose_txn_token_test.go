@@ -81,9 +81,10 @@ func TestComposeIssuesATransactionToken(t *testing.T) {
 				RFC8693TokenTypes: map[string]oauth2.RFC8693TokenType{
 					consts.TokenTypeRFC8693AccessToken: &rfc8693.DefaultTokenType{Name: consts.TokenTypeRFC8693AccessToken},
 					consts.TokenTypeRFC8693TxnToken: &rfc8693.TxnTokenType{
-						Name:        consts.TokenTypeRFC8693TxnToken,
-						TrustDomain: txnComposeTrustDomain,
-						Replacement: &rfc8693.TxnTokenReplacement{KeyFunc: func(*jwt.Token) (any, error) { return &key.PublicKey, nil }},
+						Name: consts.TokenTypeRFC8693TxnToken,
+						Domains: map[string]*rfc8693.TxnTokenTrustDomain{
+							txnComposeTrustDomain: {Replacement: &rfc8693.TxnTokenReplacement{KeyFunc: func(*jwt.Token) (any, error) { return &key.PublicKey, nil }}},
+						},
 					},
 				},
 			}
@@ -214,7 +215,7 @@ func (*txnComposeClient) GetAllowTxnTokenReplacement() bool {
 
 type txnScopeStorage struct{}
 
-func (txnScopeStorage) GetTxnTokenSubjectScopes(context.Context, oauth2.Client, string, string, map[string]any) ([]string, error) {
+func (txnScopeStorage) GetTxnTokenSubjectScopes(context.Context, oauth2.Client, string, string, string, map[string]any) ([]string, error) {
 	return nil, nil
 }
 

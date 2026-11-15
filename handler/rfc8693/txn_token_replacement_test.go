@@ -32,7 +32,7 @@ const txnSecondWorkload = "txn-client-2"
 
 func (f *txnIssueFixture) enableReplacement() {
 	f.client.replacement = true
-	f.txnType.Replacement = &TxnTokenReplacement{KeyFunc: func(*jwt.Token) (any, error) { return &key.PublicKey, nil }}
+	f.txnDomain.Replacement = &TxnTokenReplacement{KeyFunc: func(*jwt.Token) (any, error) { return &key.PublicKey, nil }}
 }
 
 func (f *txnIssueFixture) issueForReplacement(t *testing.T, form url.Values) string {
@@ -58,7 +58,7 @@ func TestTxnTokenReplacementClaims(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newTxnIssueFixture(t, store)
 			f.enableReplacement()
-			f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+			f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 				if _, replacing := input.SubjectClaims[consts.ClaimTransaction]; !replacing {
 					input.Claims["department"] = "sales"
 					input.Claims[consts.ClaimRequestContext] = input.RequestContext
@@ -111,7 +111,7 @@ func TestTxnTokenReplacementIsOptIn(t *testing.T) {
 		name string
 		arm  func(f *txnIssueFixture)
 	}{
-		{"ShouldRefuseWithoutTheSetting", func(f *txnIssueFixture) { f.txnType.Replacement = nil }},
+		{"ShouldRefuseWithoutTheSetting", func(f *txnIssueFixture) { f.txnDomain.Replacement = nil }},
 		{"ShouldRefuseWithoutTheClientOptIn", func(f *txnIssueFixture) { f.client.replacement = false }},
 	}
 
@@ -151,7 +151,7 @@ func TestTxnTokenReplacementIsOptIn(t *testing.T) {
 
 		first := f.issueForReplacement(t, nil)
 
-		f.txnType.Replacement.KeyFunc = nil
+		f.txnDomain.Replacement.KeyFunc = nil
 
 		_, err := f.exchange(t, txnReplacementExchange(first))
 
@@ -191,7 +191,7 @@ func TestTxnTokenReplacementScope(t *testing.T) {
 
 				first := f.issueForReplacement(t, nil)
 
-				f.txnType.MapScopes = func(context.Context, oauth2.AccessRequester, []string) ([]string, error) {
+				f.txnDomain.MapScopes = func(context.Context, oauth2.AccessRequester, string, []string) ([]string, error) {
 					return nil, errors.New("mapped a replacement")
 				}
 
@@ -254,9 +254,9 @@ func TestTxnTokenReplacementRefusesAnInvalidToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newTxnIssueFixture(t, storage.NewExampleStore())
 			f.enableReplacement()
-			f.txnType.Issuer = tc.issuer
-			f.txnType.Replacement.MaxChainLength = tc.chain
-			f.txnType.Replacement.KeyFunc = func(*jwt.Token) (any, error) { return &f.workloadKey.PublicKey, nil }
+			f.txnDomain.Issuer = tc.issuer
+			f.txnDomain.Replacement.MaxChainLength = tc.chain
+			f.txnDomain.Replacement.KeyFunc = func(*jwt.Token) (any, error) { return &f.workloadKey.PublicKey, nil }
 
 			_, err := f.exchange(t, txnReplacementExchange(signToken(t, jose.ES256, f.workloadKey, txnKeyID, tc.claims, tc.headers), "trade.stocks"))
 
@@ -306,7 +306,7 @@ func TestTxnTokenReplacementHookCannotChangeCarriedClaims(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newTxnIssueFixture(t, store)
 			f.enableReplacement()
-			f.txnType.TranscribeClaims = CopyTxnTokenRequestParameters
+			f.txnDomain.TranscribeClaims = CopyTxnTokenRequestParameters
 
 			first := f.issueForReplacement(t, url.Values{
 				consts.FormParameterRequestContext: {`{"req_ip":"192.0.2.1"}`},
@@ -314,7 +314,7 @@ func TestTxnTokenReplacementHookCannotChangeCarriedClaims(t *testing.T) {
 			})
 			firstClaims := txnPayload(t, &oauth2.AccessResponse{AccessToken: first})
 
-			f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+			f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 				tctx := input.Claims[consts.ClaimTransactionContext].(map[string]any)
 				tctx["items"].([]any)[0] = "tampered"
 				tctx["nested"].(map[string]any)["k"] = "tampered"
@@ -349,11 +349,11 @@ func TestTxnTokenReplacementHookCannotChangeCarriedClaims(t *testing.T) {
 func TestTxnTokenReplacementKeepsNumbersWithoutAHook(t *testing.T) {
 	f := newTxnIssueFixture(t, storage.NewExampleStore())
 	f.enableReplacement()
-	f.txnType.TranscribeClaims = CopyTxnTokenRequestParameters
+	f.txnDomain.TranscribeClaims = CopyTxnTokenRequestParameters
 
 	first := f.issueForReplacement(t, url.Values{consts.FormParameterRequestDetails: {`{"quantity":9007199254740993}`}})
 
-	f.txnType.TranscribeClaims = nil
+	f.txnDomain.TranscribeClaims = nil
 
 	response, err := f.exchange(t, txnReplacementExchange(first))
 	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -391,7 +391,7 @@ func TestTxnTokenReplacementHandlerChecksTheOptIn(t *testing.T) {
 func TestTxnTokenReplacementRefusesAnOverflowingExpiry(t *testing.T) {
 	f := newTxnIssueFixture(t, storage.NewExampleStore())
 	f.enableReplacement()
-	f.txnType.Replacement.KeyFunc = func(*jwt.Token) (any, error) { return &f.workloadKey.PublicKey, nil }
+	f.txnDomain.Replacement.KeyFunc = func(*jwt.Token) (any, error) { return &f.workloadKey.PublicKey, nil }
 
 	token := signToken(t, jose.ES256, f.workloadKey, txnKeyID, map[string]any{
 		consts.ClaimIssuedAt:           time.Now().Unix(),
@@ -410,7 +410,7 @@ func TestTxnTokenReplacementRefusesAnOverflowingExpiry(t *testing.T) {
 
 func TestTxnTokenHookCannotForgeTheChain(t *testing.T) {
 	f := newTxnIssueFixture(t, storage.NewExampleStore())
-	f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+	f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 		input.Claims[consts.ClaimRequestingWorkloadChain] = []string{"forged"}
 
 		return nil
@@ -445,7 +445,7 @@ func TestTxnTokenReplacementActor(t *testing.T) {
 	t.Run("ShouldCarryTheActWithoutAnActorToken", func(t *testing.T) {
 		f := newTxnIssueFixture(t, storage.NewExampleStore())
 		f.enableReplacement()
-		f.txnType.Replacement.KeyFunc = func(*jwt.Token) (any, error) { return &f.workloadKey.PublicKey, nil }
+		f.txnDomain.Replacement.KeyFunc = func(*jwt.Token) (any, error) { return &f.workloadKey.PublicKey, nil }
 
 		response, err := f.exchange(t, txnReplacementExchange(sign(t, f), "trade.stocks"))
 		require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -456,7 +456,7 @@ func TestTxnTokenReplacementActor(t *testing.T) {
 	t.Run("ShouldRefuseAnActorToken", func(t *testing.T) {
 		f := newTxnIssueFixture(t, storage.NewExampleStore())
 		f.enableReplacement()
-		f.txnType.Replacement.KeyFunc = func(*jwt.Token) (any, error) { return &f.workloadKey.PublicKey, nil }
+		f.txnDomain.Replacement.KeyFunc = func(*jwt.Token) (any, error) { return &f.workloadKey.PublicKey, nil }
 
 		e := txnReplacementExchange(sign(t, f), "trade.stocks")
 		e.actorToken = f.mint(t, txnMint{scopes: []string{"trade.stocks"}})

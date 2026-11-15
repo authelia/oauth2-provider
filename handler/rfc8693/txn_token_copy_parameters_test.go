@@ -52,7 +52,7 @@ func TestCopyTxnTokenRequestParameters(t *testing.T) {
 			for _, tc := range testCases {
 				t.Run(tc.name, func(t *testing.T) {
 					f := newTxnIssueFixture(t, store)
-					f.txnType.TranscribeClaims = CopyTxnTokenRequestParameters
+					f.txnDomain.TranscribeClaims = CopyTxnTokenRequestParameters
 
 					response, err := f.exchange(t, f.hookExchange(t, tc.form))
 					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -81,7 +81,7 @@ func assertClaimOrAbsent(t *testing.T, payload map[string]any, name string, want
 
 func TestCopyTxnTokenRequestParametersKeepsNumberPrecision(t *testing.T) {
 	f := newTxnIssueFixture(t, storageForCopyTest())
-	f.txnType.TranscribeClaims = CopyTxnTokenRequestParameters
+	f.txnDomain.TranscribeClaims = CopyTxnTokenRequestParameters
 
 	response, err := f.exchange(t, f.hookExchange(t, url.Values{consts.FormParameterRequestDetails: {`{"quantity":9007199254740993}`}}))
 	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -92,7 +92,7 @@ func TestCopyTxnTokenRequestParametersKeepsNumberPrecision(t *testing.T) {
 // A parameter that is absent leaves a value the deployer set, and one that is present replaces it.
 func TestCopyTxnTokenRequestParametersFromAHook(t *testing.T) {
 	f := newTxnIssueFixture(t, storageForCopyTest())
-	f.txnType.TranscribeClaims = func(ctx context.Context, request oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+	f.txnDomain.TranscribeClaims = func(ctx context.Context, request oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 		input.Claims[consts.ClaimRequestContext] = map[string]any{"source": "deployer"}
 		input.Claims[consts.ClaimTransactionContext] = map[string]any{"source": "deployer"}
 
@@ -111,7 +111,7 @@ func TestCopyTxnTokenRequestParametersFromAHook(t *testing.T) {
 // The helper is opt-in, so nothing is copied unless the deployer sets it.
 func TestTxnTokenParametersNotCopiedWithoutTheHelper(t *testing.T) {
 	f := newTxnIssueFixture(t, storageForCopyTest())
-	f.txnType.TranscribeClaims = func(context.Context, oauth2.AccessRequester, *TxnTokenClaimsInput) error { return nil }
+	f.txnDomain.TranscribeClaims = func(context.Context, oauth2.AccessRequester, *TxnTokenClaimsInput) error { return nil }
 
 	response, err := f.exchange(t, f.hookExchange(t, url.Values{consts.FormParameterRequestContext: {`{"a":"b"}`}, consts.FormParameterRequestDetails: {`{"a":"b"}`}}))
 	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))

@@ -530,9 +530,9 @@ func TestTxnTokenJTINotConsumedWhenIssuanceFails(t *testing.T) {
 		arm  func(f *txnIssueFixture) (disarm func())
 	}{
 		{"ShouldKeepItWhenTheHookFails", func(f *txnIssueFixture) func() {
-			f.txnType.TranscribeClaims = func(context.Context, oauth2.AccessRequester, *TxnTokenClaimsInput) error { return failure }
+			f.txnDomain.TranscribeClaims = func(context.Context, oauth2.AccessRequester, *TxnTokenClaimsInput) error { return failure }
 
-			return func() { f.txnType.TranscribeClaims = nil }
+			return func() { f.txnDomain.TranscribeClaims = nil }
 		}},
 		{"ShouldKeepItWhenSigningFails", func(f *txnIssueFixture) func() {
 			strategy := f.txn.Strategy
@@ -541,9 +541,9 @@ func TestTxnTokenJTINotConsumedWhenIssuanceFails(t *testing.T) {
 			return func() { f.txn.Strategy = strategy }
 		}},
 		{"ShouldKeepItWhenTheIssuerIsMisconfigured", func(f *txnIssueFixture) func() {
-			f.txnType.Issuer = f.cfg.Issuer
+			f.txnDomain.Issuer = f.cfg.Issuer
 
-			return func() { f.txnType.Issuer = "" }
+			return func() { f.txnDomain.Issuer = "" }
 		}},
 	}
 

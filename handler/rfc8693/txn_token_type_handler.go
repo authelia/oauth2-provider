@@ -48,7 +48,7 @@ var txnTokenProtectedClaims = []string{
 // supports, and issues the token. It is registered after all other token type handlers and before
 // ActorTokenValidationHandler. Neither token type is accepted as an 'actor_token' or for any other
 // 'requested_token_type'. It also validates a Transaction Token presented for replacement when
-// TxnTokenType.Replacement permits it.
+// TxnTokenTrustDomain.Replacement permits it.
 //
 // The issued token never outlives the 'subject_token', carries no 'cnf' claim, and is not stored. A DPoP or mutual-TLS
 // bound 'subject_token' still requires the requester to prove that key.
@@ -91,6 +91,12 @@ func (c *TxnTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, re
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
 	}
 
+	var name string
+
+	if name, _, err = txnTokenTypeOf(resolveRequestedTokenType(ctx, request, config)).trustDomain(request); err != nil {
+		return err
+	}
+
 	if err = c.validateJTIStorage(ctx, request, config); err != nil {
 		return err
 	}
@@ -105,7 +111,7 @@ func (c *TxnTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, re
 
 	var ceiling []string
 
-	if ceiling, err = c.scopeCeiling(ctx, request, session, config); err != nil {
+	if ceiling, err = c.scopeCeiling(ctx, request, session, config, name); err != nil {
 		return err
 	}
 
@@ -199,28 +205,38 @@ func (c *TxnTokenTypeHandler) validateAssertedSubjectToken(ctx context.Context, 
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-13.15
 func (c *TxnTokenTypeHandler) validateReplacedToken(ctx context.Context, request oauth2.AccessRequester, session Session, tokenType *TxnTokenType, value string) error {
-	if resolveRequestedTokenType(ctx, request, c.Config) != oauth2.RFC8693TokenType(tokenType) || !allowsTxnTokenReplacement(request.GetClient(), tokenType) {
+	name, domain, err := tokenType.trustDomain(request)
+	if err != nil {
+		return err
+	}
+
+	if resolveRequestedTokenType(ctx, request, c.Config) != oauth2.RFC8693TokenType(tokenType) || !allowsTxnTokenReplacement(request.GetClient(), domain) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The OAuth 2.0 Client is not permitted to present a '%s' as a '%s'.", consts.TokenTypeRFC8693TxnToken, consts.FormParameterSubjectTokenType))
 	}
 
-	if tokenType.Replacement.KeyFunc == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The '%s' token type permits replacement with no key function configured.", tokenType.Name))
+	if domain.Replacement.KeyFunc == nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The '%s' Trust Domain permits replacement with no key function configured.", name))
 	}
 
 	validated, err := txntoken.Validate(value, txntoken.Config{
-		TrustDomain: tokenType.TrustDomain,
-		KeyFunc:     tokenType.Replacement.KeyFunc,
+		TrustDomain: name,
+		KeyFunc:     domain.Replacement.KeyFunc,
 		ClockSkew:   c.Config.GetJWTClockSkew(ctx),
 	})
 	if err != nil {
 		return errInvalidSelfSigned("The presented Transaction Token could not be validated.", err)
 	}
 
-	if tokenType.Issuer != "" && validated.Issuer != tokenType.Issuer {
+	// The 'aud' is carried unchanged, so a token valid in another Trust Domain as well cannot be replaced (section 13.15).
+	if len(validated.Audience) != 1 {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim '%s' from the presented Transaction Token must be exactly the Trust Domain.", consts.ClaimAudience))
+	}
+
+	if domain.Issuer != "" && validated.Issuer != domain.Issuer {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("Claim '%s' from the presented Transaction Token is not this service.", consts.ClaimIssuer))
 	}
 
-	if len(validated.RequestingWorkloadChain) >= tokenType.Replacement.maxChainLength() {
+	if len(validated.RequestingWorkloadChain) >= domain.Replacement.maxChainLength() {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The presented Transaction Token has been replaced the permitted number of times."))
 	}
 
@@ -320,7 +336,7 @@ func applyCarriedTxnTokenClaims(claims map[string]any, carried map[string]json.R
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-13.6
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-13.14
-func (c *TxnTokenTypeHandler) scopeCeiling(ctx context.Context, request oauth2.AccessRequester, session Session, config oauth2.RFC8693ConfigProvider) (ceiling []string, err error) {
+func (c *TxnTokenTypeHandler) scopeCeiling(ctx context.Context, request oauth2.AccessRequester, session Session, config oauth2.RFC8693ConfigProvider, trustDomain string) (ceiling []string, err error) {
 	subjectTokenType := request.GetRequestForm().Get(consts.FormParameterSubjectTokenType)
 	claims := session.GetSubjectToken()
 
@@ -330,7 +346,7 @@ func (c *TxnTokenTypeHandler) scopeCeiling(ctx context.Context, request oauth2.A
 
 		return scopes, nil
 	case consts.TokenTypeRFC8693IDToken:
-		return c.storedScopes(ctx, request, session, subjectTokenType)
+		return c.storedScopes(ctx, request, session, trustDomain, subjectTokenType)
 	}
 
 	switch config.GetRFC8693TokenTypes(ctx)[subjectTokenType].(type) {
@@ -339,22 +355,22 @@ func (c *TxnTokenTypeHandler) scopeCeiling(ctx context.Context, request oauth2.A
 			return scopeClaim(claims), nil
 		}
 
-		return c.storedScopes(ctx, request, session, subjectTokenType)
+		return c.storedScopes(ctx, request, session, trustDomain, subjectTokenType)
 	case *TxnTokenType:
 		return scopeClaim(claims), nil
 	case *SelfSignedTokenType, *UnsignedJSONTokenType:
-		return c.storedScopes(ctx, request, session, subjectTokenType)
+		return c.storedScopes(ctx, request, session, trustDomain, subjectTokenType)
 	default:
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The scope of the '%s' token type cannot be determined.", subjectTokenType))
 	}
 }
 
-func (c *TxnTokenTypeHandler) storedScopes(ctx context.Context, request oauth2.AccessRequester, session Session, subjectTokenType string) (scopes []string, err error) {
+func (c *TxnTokenTypeHandler) storedScopes(ctx context.Context, request oauth2.AccessRequester, session Session, trustDomain, subjectTokenType string) (scopes []string, err error) {
 	if c.Storage == nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The scope of the '%s' cannot be determined.", consts.FormParameterSubjectToken))
 	}
 
-	if scopes, err = c.Storage.GetTxnTokenSubjectScopes(ctx, request.GetClient(), subjectTokenType, request.GetSession().GetSubject(), copyClaimMap(session.GetSubjectToken())); err != nil {
+	if scopes, err = c.Storage.GetTxnTokenSubjectScopes(ctx, request.GetClient(), trustDomain, subjectTokenType, request.GetSession().GetSubject(), copyClaimMap(session.GetSubjectToken())); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -366,6 +382,8 @@ func (c *TxnTokenTypeHandler) storedScopes(ctx context.Context, request oauth2.A
 }
 
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-9
+//
+//nolint:gocyclo
 func (c *TxnTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, tokenType *TxnTokenType, response oauth2.AccessResponder) (err error) {
 	session, ok := request.GetSession().(Session)
 	if !ok || session == nil {
@@ -380,7 +398,12 @@ func (c *TxnTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRe
 		return err
 	}
 
-	if err = c.validateIssuable(ctx, tokenType); err != nil {
+	name, domain, err := tokenType.trustDomain(request)
+	if err != nil {
+		return err
+	}
+
+	if err = c.validateIssuable(ctx, name, domain); err != nil {
 		return err
 	}
 
@@ -389,7 +412,7 @@ func (c *TxnTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRe
 		expires time.Time
 	)
 
-	if draft, expires, err = draftTxnTokenClaims(request, session, tokenType); err != nil {
+	if draft, expires, err = draftTxnTokenClaims(request, session, name, domain); err != nil {
 		return err
 	}
 
@@ -403,21 +426,21 @@ func (c *TxnTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRe
 		if err = applyCarriedTxnTokenClaims(draft, carried); err != nil {
 			return err
 		}
-	} else if err = mapTxnTokenScopes(ctx, request, tokenType, draft); err != nil {
+	} else if err = mapTxnTokenScopes(ctx, request, name, domain, draft); err != nil {
 		return err
 	}
 
-	if draft, err = transcribeTxnTokenClaims(ctx, request, session, tokenType, draft, carried); err != nil {
+	if draft, err = transcribeTxnTokenClaims(ctx, request, session, name, domain, draft, carried); err != nil {
 		return err
 	}
 
-	for name, raw := range carried {
-		draft[name] = raw
+	for claim, raw := range carried {
+		draft[claim] = raw
 	}
 
 	var token string
 
-	if token, err = c.signTxnToken(ctx, tokenType, draft); err != nil {
+	if token, err = c.signTxnToken(ctx, domain, draft); err != nil {
 		return err
 	}
 
@@ -438,13 +461,13 @@ func (c *TxnTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRe
 // Token. RFC 8725 Section 3.12 requires mutually exclusive validation rules for JWTs from one issuer.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
-func (c *TxnTokenTypeHandler) validateIssuable(ctx context.Context, tokenType *TxnTokenType) error {
+func (c *TxnTokenTypeHandler) validateIssuable(ctx context.Context, name string, domain *TxnTokenTrustDomain) error {
 	if c.Strategy == nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The JSON Web Token strategy required to issue a Transaction Token is not configured."))
 	}
 
-	if issuer := c.Config.GetIssuer(ctx); tokenType.Issuer != "" && tokenType.Issuer == issuer {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The '%s' token type has the issuer '%s' which is the issuer of this server.", tokenType.Name, issuer))
+	if issuer := c.Config.GetIssuer(ctx); domain.Issuer != "" && domain.Issuer == issuer {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The '%s' Trust Domain has the issuer '%s' which is the issuer of this server.", name, issuer))
 	}
 
 	return nil
@@ -455,7 +478,7 @@ func (c *TxnTokenTypeHandler) validateIssuable(ctx context.Context, tokenType *T
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-9.2
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-13.4
-func draftTxnTokenClaims(request oauth2.AccessRequester, session Session, tokenType *TxnTokenType) (claims map[string]any, expires time.Time, err error) {
+func draftTxnTokenClaims(request oauth2.AccessRequester, session Session, name string, domain *TxnTokenTrustDomain) (claims map[string]any, expires time.Time, err error) {
 	subject := request.GetSession().GetSubject()
 	if subject == "" {
 		return nil, time.Time{}, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' does not identify a subject.", consts.FormParameterSubjectToken))
@@ -467,7 +490,7 @@ func draftTxnTokenClaims(request oauth2.AccessRequester, session Session, tokenT
 	}
 
 	now := time.Now().UTC()
-	expires = capToSubjectTokenExpiry(request, now.Add(tokenType.expiry()))
+	expires = capToSubjectTokenExpiry(request, now.Add(domain.expiry()))
 
 	if expires.Unix() <= now.Unix() {
 		return nil, time.Time{}, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' expires too soon to issue a Transaction Token.", consts.FormParameterSubjectToken))
@@ -481,7 +504,7 @@ func draftTxnTokenClaims(request oauth2.AccessRequester, session Session, tokenT
 
 	claims = map[string]any{
 		consts.ClaimIssuedAt:           now.Unix(),
-		consts.ClaimAudience:           tokenType.TrustDomain,
+		consts.ClaimAudience:           name,
 		consts.ClaimExpirationTime:     expires.Unix(),
 		consts.ClaimTransaction:        uuid.New().String(),
 		consts.ClaimSubject:            subject,
@@ -489,8 +512,8 @@ func draftTxnTokenClaims(request oauth2.AccessRequester, session Session, tokenT
 		consts.ClaimRequestingWorkload: request.GetClient().GetID(),
 	}
 
-	if tokenType.Issuer != "" {
-		claims[consts.ClaimIssuer] = tokenType.Issuer
+	if domain.Issuer != "" {
+		claims[consts.ClaimIssuer] = domain.Issuer
 	}
 
 	if len(act) > 0 {
@@ -500,15 +523,15 @@ func draftTxnTokenClaims(request oauth2.AccessRequester, session Session, tokenT
 	return claims, expires, nil
 }
 
-// mapTxnTokenScopes replaces the 'scope' of the draft with the result of TxnTokenType.MapScopes.
+// mapTxnTokenScopes replaces the 'scope' of the draft with the result of TxnTokenTrustDomain.MapScopes.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-9.2.1
-func mapTxnTokenScopes(ctx context.Context, request oauth2.AccessRequester, tokenType *TxnTokenType, draft map[string]any) error {
-	if tokenType.MapScopes == nil {
+func mapTxnTokenScopes(ctx context.Context, request oauth2.AccessRequester, trustDomain string, domain *TxnTokenTrustDomain, draft map[string]any) error {
+	if domain.MapScopes == nil {
 		return nil
 	}
 
-	mapped, err := tokenType.MapScopes(ctx, request, scopeClaim(draft))
+	mapped, err := domain.MapScopes(ctx, request, trustDomain, scopeClaim(draft))
 	if err != nil {
 		return err
 	}
@@ -517,7 +540,7 @@ func mapTxnTokenScopes(ctx context.Context, request oauth2.AccessRequester, toke
 
 	for _, scope := range mapped {
 		if !isScopeToken(scope) {
-			return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The '%s' token type scope mapping returned the invalid scope '%s'.", tokenType.Name, scope))
+			return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The '%s' Trust Domain scope mapping returned the invalid scope '%s'.", trustDomain, scope))
 		}
 
 		if !slices.Contains(scopes, scope) {
@@ -526,7 +549,7 @@ func mapTxnTokenScopes(ctx context.Context, request oauth2.AccessRequester, toke
 	}
 
 	if len(scopes) == 0 {
-		return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("No requested scope is available for the '%s' token type.", tokenType.Name))
+		return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("No requested scope is available for the '%s' Trust Domain.", trustDomain))
 	}
 
 	draft[consts.ClaimScope] = strings.Join(scopes, " ")
@@ -555,12 +578,12 @@ func isScopeToken(scope string) bool {
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.3
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-9.2
-func transcribeTxnTokenClaims(ctx context.Context, request oauth2.AccessRequester, session Session, tokenType *TxnTokenType, draft map[string]any, carried map[string]json.RawMessage) (claims map[string]any, err error) {
-	if tokenType.TranscribeClaims == nil {
+func transcribeTxnTokenClaims(ctx context.Context, request oauth2.AccessRequester, session Session, trustDomain string, domain *TxnTokenTrustDomain, draft map[string]any, carried map[string]json.RawMessage) (claims map[string]any, err error) {
+	if domain.TranscribeClaims == nil {
 		return draft, nil
 	}
 
-	input := &TxnTokenClaimsInput{SubjectClaims: copyClaimMap(session.GetSubjectToken()), Claims: draft, Replacement: carried != nil}
+	input := &TxnTokenClaimsInput{TrustDomain: trustDomain, SubjectClaims: copyClaimMap(session.GetSubjectToken()), Claims: draft, Replacement: carried != nil}
 
 	if input.RequestContext, err = parseTxnTokenParameter(request.GetRequestForm(), consts.FormParameterRequestContext); err != nil {
 		return nil, err
@@ -581,12 +604,12 @@ func transcribeTxnTokenClaims(ctx context.Context, request oauth2.AccessRequeste
 	protected = copyClaimMap(protected)
 	ceiling := scopeClaim(draft)
 
-	if err = tokenType.TranscribeClaims(ctx, request, input); err != nil {
+	if err = domain.TranscribeClaims(ctx, request, input); err != nil {
 		return nil, err
 	}
 
 	if claims = input.Claims; claims == nil {
-		return nil, errInvalidTxnTokenHook("The '%s' token type hook removed the claims.", tokenType.Name)
+		return nil, errInvalidTxnTokenHook("The '%s' Trust Domain hook removed the claims.", trustDomain)
 	}
 
 	if err = restoreTxnTokenClaims(claims, protected, carried); err != nil {
@@ -594,20 +617,20 @@ func transcribeTxnTokenClaims(ctx context.Context, request oauth2.AccessRequeste
 	}
 
 	if subject, _ := claims[consts.ClaimSubject].(string); subject == "" {
-		return nil, errInvalidTxnTokenHook("The '%s' token type hook left the '%s' claim without a non-empty string.", tokenType.Name, consts.ClaimSubject)
+		return nil, errInvalidTxnTokenHook("The '%s' Trust Domain hook left the '%s' claim without a non-empty string.", trustDomain, consts.ClaimSubject)
 	}
 
-	if err = narrowTxnTokenScope(claims, ceiling, tokenType); err != nil {
+	if err = narrowTxnTokenScope(claims, ceiling, trustDomain); err != nil {
 		return nil, err
 	}
 
 	for _, name := range []string{consts.ClaimRequestContext, consts.ClaimTransactionContext} {
-		if err = omitEmptyTxnTokenObjectClaim(claims, name, tokenType); err != nil {
+		if err = omitEmptyTxnTokenObjectClaim(claims, name, trustDomain); err != nil {
 			return nil, err
 		}
 	}
 
-	if err = encodeTxnTokenHookClaims(claims, tokenType); err != nil {
+	if err = encodeTxnTokenHookClaims(claims, trustDomain); err != nil {
 		return nil, err
 	}
 
@@ -626,7 +649,7 @@ func restoreTxnTokenClaims(claims, protected map[string]any, carried map[string]
 	return applyCarriedTxnTokenClaims(claims, carried)
 }
 
-func encodeTxnTokenHookClaims(claims map[string]any, tokenType *TxnTokenType) error {
+func encodeTxnTokenHookClaims(claims map[string]any, trustDomain string) error {
 	for name, value := range claims {
 		if _, isString := value.(string); isString || slices.Contains(txnTokenProtectedClaims, name) {
 			continue
@@ -634,7 +657,7 @@ func encodeTxnTokenHookClaims(claims map[string]any, tokenType *TxnTokenType) er
 
 		raw, err := json.Marshal(value)
 		if err != nil {
-			return errInvalidTxnTokenHook("The '%s' token type hook set the '%s' claim to a value that cannot be encoded.", tokenType.Name, name)
+			return errInvalidTxnTokenHook("The '%s' Trust Domain hook set the '%s' claim to a value that cannot be encoded.", trustDomain, name)
 		}
 
 		claims[name] = json.RawMessage(raw)
@@ -643,10 +666,10 @@ func encodeTxnTokenHookClaims(claims map[string]any, tokenType *TxnTokenType) er
 	return nil
 }
 
-func narrowTxnTokenScope(claims map[string]any, ceiling []string, tokenType *TxnTokenType) error {
+func narrowTxnTokenScope(claims map[string]any, ceiling []string, trustDomain string) error {
 	value, ok := claims[consts.ClaimScope].(string)
 	if !ok {
-		return errInvalidTxnTokenHook("The '%s' token type hook left the '%s' claim without a string.", tokenType.Name, consts.ClaimScope)
+		return errInvalidTxnTokenHook("The '%s' Trust Domain hook left the '%s' claim without a string.", trustDomain, consts.ClaimScope)
 	}
 
 	var scopes []string
@@ -656,14 +679,14 @@ func narrowTxnTokenScope(claims map[string]any, ceiling []string, tokenType *Txn
 		case scope == "", slices.Contains(scopes, scope):
 			continue
 		case !slices.Contains(ceiling, scope):
-			return errInvalidTxnTokenHook("The '%s' token type hook widened the '%s' claim with '%s'.", tokenType.Name, consts.ClaimScope, scope)
+			return errInvalidTxnTokenHook("The '%s' Trust Domain hook widened the '%s' claim with '%s'.", trustDomain, consts.ClaimScope, scope)
 		}
 
 		scopes = append(scopes, scope)
 	}
 
 	if len(scopes) == 0 {
-		return errInvalidTxnTokenHook("The '%s' token type hook left the '%s' claim empty.", tokenType.Name, consts.ClaimScope)
+		return errInvalidTxnTokenHook("The '%s' Trust Domain hook left the '%s' claim empty.", trustDomain, consts.ClaimScope)
 	}
 
 	claims[consts.ClaimScope] = strings.Join(scopes, " ")
@@ -671,7 +694,7 @@ func narrowTxnTokenScope(claims map[string]any, ceiling []string, tokenType *Txn
 	return nil
 }
 
-func omitEmptyTxnTokenObjectClaim(claims map[string]any, name string, tokenType *TxnTokenType) error {
+func omitEmptyTxnTokenObjectClaim(claims map[string]any, name string, trustDomain string) error {
 	value, present := claims[name]
 	if !present {
 		return nil
@@ -685,7 +708,7 @@ func omitEmptyTxnTokenObjectClaim(claims map[string]any, name string, tokenType 
 
 	raw, err := json.Marshal(value)
 	if err != nil || len(raw) == 0 || raw[0] != '{' {
-		return errInvalidTxnTokenHook("The '%s' token type hook set the '%s' claim to a value that is not a JSON object.", tokenType.Name, name)
+		return errInvalidTxnTokenHook("The '%s' Trust Domain hook set the '%s' claim to a value that is not a JSON object.", trustDomain, name)
 	}
 
 	if string(raw) == "{}" {
@@ -699,10 +722,10 @@ func errInvalidTxnTokenHook(format string, args ...any) error {
 	return errorsx.WithStack(oauth2.ErrServerError.WithDebugf(format, args...))
 }
 
-func (c *TxnTokenTypeHandler) signTxnToken(ctx context.Context, tokenType *TxnTokenType, claims map[string]any) (token string, err error) {
+func (c *TxnTokenTypeHandler) signTxnToken(ctx context.Context, domain *TxnTokenTrustDomain, claims map[string]any) (token string, err error) {
 	headers := &jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeTxnToken}}
 
-	if token, _, err = c.Strategy.Encode(ctx, jwt.MapClaims(claims), jwt.WithHeaders(headers), jwt.WithIssuerSigningAlg(tokenType.signingAlg())); err != nil {
+	if token, _, err = c.Strategy.Encode(ctx, jwt.MapClaims(claims), jwt.WithHeaders(headers), jwt.WithIssuerSigningAlg(domain.signingAlg())); err != nil {
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 

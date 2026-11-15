@@ -24,7 +24,8 @@ func TestTokenTypeIdentifiersAreReservedFromClientIdentifierURLs(t *testing.T) {
 	}{
 		{"ShouldRefuseTheIssueIssuer", &JWTType{Name: "urn:example:jwt", Issue: &JWTIssueConfig{Issuer: id}}},
 		{"ShouldRefuseTheValidateIssuer", &JWTType{Name: "urn:example:jwt", Validate: &JWTValidationConfig{Issuer: id}}},
-		{"ShouldRefuseTheTransactionTokenIssuer", &TxnTokenType{Name: "urn:example:txn", Issuer: id, TrustDomain: "trust.example.com"}},
+		{"ShouldRefuseTheTransactionTokenIssuer", &TxnTokenType{Name: "urn:example:txn", Domains: map[string]*TxnTokenTrustDomain{"trust.example.com": {Issuer: id}}}},
+		{"ShouldRefuseTheTrustDomain", &TxnTokenType{Name: "urn:example:txn", Domains: map[string]*TxnTokenTrustDomain{id: {}}}},
 	}
 
 	for _, tc := range testCases {
@@ -57,7 +58,9 @@ func TestTokenTypeIdentifiers(t *testing.T) {
 		{"ShouldReturnTheValidateIssuer", &JWTType{Validate: &JWTValidationConfig{Issuer: "https://idp.example.com"}}, []string{"https://idp.example.com"}},
 		{"ShouldReturnNothingForATypeWithoutRoles", &JWTType{}, nil},
 		{"ShouldReturnNothingForANilJWTType", (*JWTType)(nil), nil},
-		{"ShouldReturnTheTransactionTokenIssuerAndTrustDomain", &TxnTokenType{Issuer: "https://tts.example.com", TrustDomain: "trust.example.com"}, []string{"https://tts.example.com", "trust.example.com"}},
+		{"ShouldReturnTheTransactionTokenIssuerAndTrustDomain", &TxnTokenType{Domains: map[string]*TxnTokenTrustDomain{"trust.example.com": {Issuer: "https://tts.example.com"}}}, []string{"https://tts.example.com", "trust.example.com"}},
+		{"ShouldReturnEveryTrustDomainAndIssuerOnce", &TxnTokenType{Domains: map[string]*TxnTokenTrustDomain{"b.example.com": {Issuer: "https://tts.example.com"}, "a.example.com": {Issuer: "https://tts.example.com"}, "c.example.com": {}, "d.example.com": nil}}, []string{"a.example.com", "b.example.com", "c.example.com", "https://tts.example.com"}},
+		{"ShouldReturnNothingForATransactionTokenTypeWithoutDomains", &TxnTokenType{}, nil},
 		{"ShouldReturnNothingForANilTransactionTokenType", (*TxnTokenType)(nil), nil},
 		{"ShouldReturnTheSelfSignedIdentifier", &SelfSignedTokenType{Identifier: "https://tts.example.com"}, []string{"https://tts.example.com"}},
 		{"ShouldReturnNothingForANilSelfSignedType", (*SelfSignedTokenType)(nil), nil},

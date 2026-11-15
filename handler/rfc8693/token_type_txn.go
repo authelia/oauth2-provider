@@ -27,18 +27,24 @@ const (
 	defaultTxnTokenMaxChainLength = 8
 )
 
-// TxnTokenType issues a Transaction Token. It is usable as a 'requested_token_type', and as a 'subject_token_type' only
-// when Replacement is set.
+// TxnTokenType issues a Transaction Token for one of its Trust Domains, chosen by the 'audience' parameter. It must be
+// registered under 'urn:ietf:params:oauth:token-type:txn_token', and is usable as a 'requested_token_type', and as a
+// 'subject_token_type' only when the Trust Domain sets Replacement.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-9
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.3
 type TxnTokenType struct {
 	Name string `json:"name"`
 
-	// TrustDomain is the single Trust Domain of the issued tokens, which is required.
+	// Domains are the Trust Domains tokens are issued for, keyed by the Trust Domain name, which is the 'audience' of a
+	// request and the 'aud' claim of the token. At least one is required.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-10
-	TrustDomain string `json:"trust_domain"`
+	Domains map[string]*TxnTokenTrustDomain `json:"domains"`
+}
 
+// TxnTokenTrustDomain configures the Transaction Tokens issued for a Trust Domain.
+type TxnTokenTrustDomain struct {
 	// Issuer is the 'iss' claim of an issued token when not empty. It must not equal the issuer of this server.
 	Issuer string `json:"iss"`
 
@@ -92,18 +98,19 @@ type TxnTokenType struct {
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-9.2.1
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-13.6
-	MapScopes func(ctx context.Context, request oauth2.AccessRequester, scopes []string) (mapped []string, err error) `json:"-"`
+	MapScopes func(ctx context.Context, request oauth2.AccessRequester, trustDomain string, scopes []string) (mapped []string, err error) `json:"-"`
 
-	// Replacement permits a client implementing TxnTokenReplacementClient to exchange a Transaction Token for another.
-	// Nil refuses a Transaction Token as a subject token.
+	// Replacement permits a client implementing TxnTokenReplacementClient to exchange a Transaction Token of this Trust
+	// Domain for another. Nil refuses a Transaction Token as a subject token.
 	Replacement *TxnTokenReplacement `json:"-"`
 }
 
 // TxnTokenReplacement configures the exchange of a Transaction Token for a replacement, which keeps 'txn', 'sub', 'aud'
-// and every other claim of the presented token except 'exp', 'iat', 'jti', 'iss', 'scope' and 'req_wl'. The
-// 'req_wl' is the new requester and 'req_wl_chain' gains the previous one, oldest first. The 'scope' is limited to that
-// of the presented token and is not given to TxnTokenType.MapScopes, and 'exp' never exceeds that of the presented token.
-// TxnTokenType.TranscribeClaims may narrow 'scope' and add a claim, and cannot change or remove a carried claim.
+// and every other claim of the presented token except 'exp', 'iat', 'jti', 'iss', 'scope' and 'req_wl'. The presented
+// token's 'aud' must be exactly the requested Trust Domain. The 'req_wl' is the new requester and 'req_wl_chain' gains the
+// previous one, oldest first. The 'scope' is limited to that of the presented token and is not given to
+// TxnTokenTrustDomain.MapScopes, and 'exp' never exceeds that of the presented token. TxnTokenTrustDomain.TranscribeClaims
+// may narrow 'scope' and add a claim, and cannot change or remove a carried claim.
 //
 // The draft leaves how the Call Chain is maintained to the implementation, so 'req_wl_chain' is specific to this library.
 //
@@ -124,8 +131,11 @@ type TxnTokenReplacementClient interface {
 	GetAllowTxnTokenReplacement() bool
 }
 
-// TxnTokenClaimsInput is the input of TxnTokenType.TranscribeClaims.
+// TxnTokenClaimsInput is the input of TxnTokenTrustDomain.TranscribeClaims.
 type TxnTokenClaimsInput struct {
+	// TrustDomain is the name of the Trust Domain the token is issued for, which is its 'aud' claim.
+	TrustDomain string
+
 	// RequestContext is the parsed 'request_context' parameter, nil when absent. A number is a json.Number.
 	RequestContext map[string]any
 
@@ -142,7 +152,7 @@ type TxnTokenClaimsInput struct {
 	Replacement bool
 }
 
-// CopyTxnTokenRequestParameters is a TxnTokenType.TranscribeClaims function which copies 'request_context' to 'rctx' and
+// CopyTxnTokenRequestParameters is a TxnTokenTrustDomain.TranscribeClaims function which copies 'request_context' to 'rctx' and
 // 'request_details' to 'tctx'. A parameter that is present replaces the claim, and one that is absent leaves it. A hook
 // that also sets these claims can call it, and the later write wins. It copies nothing for a replacement, as those claims
 // are immutable through the Call Chain and a replacing workload is not where they originate.
@@ -170,7 +180,7 @@ func CopyTxnTokenRequestParameters(_ context.Context, _ oauth2.AccessRequester, 
 
 // SelfSignedTokenType validates a self-signed JWT subject token. Its 'sub' becomes the 'sub' of the issued token as
 // presented, and the draft requires it to be unique within the Trust Domain, so a deployer whose workloads do not share one
-// namespace must rewrite it in TxnTokenType.TranscribeClaims.
+// namespace must rewrite it in TxnTokenTrustDomain.TranscribeClaims.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.2.1
 type SelfSignedTokenType struct {
@@ -195,7 +205,7 @@ type SelfSignedTokenType struct {
 
 // UnsignedJSONTokenType validates an unsigned JSON subject token. Its 'sub' becomes the 'sub' of the issued token as
 // presented, and the draft requires it to be unique within the Trust Domain, so a deployer whose workloads do not share one
-// namespace must rewrite it in TxnTokenType.TranscribeClaims.
+// namespace must rewrite it in TxnTokenTrustDomain.TranscribeClaims.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.2.2
 type UnsignedJSONTokenType struct {
@@ -210,18 +220,32 @@ type TxnTokenClient interface {
 
 // TxnTokenStorage resolves the scopes of a subject token that carries none.
 type TxnTokenStorage interface {
-	// GetTxnTokenSubjectScopes returns the scopes the client may obtain in a Txn-Token for the subject named by a token
-	// that carries no scope. An empty result refuses the request.
-	GetTxnTokenSubjectScopes(ctx context.Context, client oauth2.Client, subjectTokenType, subject string, claims map[string]any) (scopes []string, err error)
+	// GetTxnTokenSubjectScopes returns the scopes the client may obtain in a Txn-Token of the Trust Domain for the subject
+	// named by a token that carries no scope. An empty result refuses the request.
+	GetTxnTokenSubjectScopes(ctx context.Context, client oauth2.Client, trustDomain, subjectTokenType, subject string, claims map[string]any) (scopes []string, err error)
 }
 
-// GetIdentifiers returns the issuer and Trust Domain of the Transaction Tokens this type issues.
+// GetIdentifiers returns the Trust Domains and issuers of the Transaction Tokens this type issues.
 func (c *TxnTokenType) GetIdentifiers(_ context.Context) (identifiers []string) {
 	if c == nil {
 		return nil
 	}
 
-	return []string{c.Issuer, c.TrustDomain}
+	for name, domain := range c.Domains {
+		if domain == nil {
+			continue
+		}
+
+		identifiers = append(identifiers, name)
+
+		if domain.Issuer != "" {
+			identifiers = append(identifiers, domain.Issuer)
+		}
+	}
+
+	slices.Sort(identifiers)
+
+	return slices.Compact(identifiers)
 }
 
 // GetName returns the name of the token type.
@@ -242,8 +266,25 @@ func (c *TxnTokenReplacement) maxChainLength() int {
 	return c.MaxChainLength
 }
 
-func allowsTxnTokenReplacement(client oauth2.Client, tokenType *TxnTokenType) bool {
-	if tokenType.Replacement == nil {
+func (c *TxnTokenType) trustDomain(request oauth2.Requester) (name string, domain *TxnTokenTrustDomain, err error) {
+	if c == nil || len(c.Domains) == 0 {
+		return "", nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("The Transaction Token type has no Trust Domain configured."))
+	}
+
+	audience := request.GetRequestedAudience()
+
+	switch {
+	case len(audience) == 0:
+		return "", nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' parameter is required.", consts.FormParameterAudience))
+	case len(audience) != 1 || c.Domains[audience[0]] == nil:
+		return "", nil, errorsx.WithStack(oauth2.ErrInvalidTarget.WithHintf("The '%s' parameter must be exactly one Trust Domain.", consts.FormParameterAudience))
+	}
+
+	return audience[0], c.Domains[audience[0]], nil
+}
+
+func allowsTxnTokenReplacement(client oauth2.Client, domain *TxnTokenTrustDomain) bool {
+	if domain.Replacement == nil {
 		return false
 	}
 
@@ -262,7 +303,7 @@ func isTxnTokenReplacement(ctx context.Context, request oauth2.Requester, config
 	return isTxnTokenSubject(ctx, request, config) && isTxnTokenRequest(ctx, request, config)
 }
 
-func (c *TxnTokenType) expiry() time.Duration {
+func (c *TxnTokenTrustDomain) expiry() time.Duration {
 	if c.Expiry <= 0 {
 		return defaultTxnTokenWindow
 	}
@@ -270,7 +311,7 @@ func (c *TxnTokenType) expiry() time.Duration {
 	return c.Expiry
 }
 
-func (c *TxnTokenType) signingAlg() string {
+func (c *TxnTokenTrustDomain) signingAlg() string {
 	if c.SigningAlg == "" {
 		return string(jose.RS256)
 	}
@@ -334,46 +375,46 @@ func validateTxnTokenRequest(ctx context.Context, request oauth2.AccessRequester
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' parameter is required and must be '%s'.", consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693TxnToken))
 	}
 
-	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.5
-	if len(tokenType.ClientAuthenticationMethods) != 0 {
-		if method := oauth2.GetClientAuthenticationMethod(request); method == "" || !slices.Contains(tokenType.ClientAuthenticationMethods, method) {
-			return errorsx.WithStack(oauth2.ErrInvalidClient.WithHintf("The OAuth 2.0 Client authenticated with the method '%s' which is not permitted when the '%s' is '%s'.", method, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693TxnToken))
-		}
+	// The type is identified only by this URN (section 11.1), so it cannot be registered under another identifier.
+	if form.Get(consts.FormParameterRequestedTokenType) != consts.TokenTypeRFC8693TxnToken {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The '%s' token type is registered as '%s' but must be registered as '%s'.", tokenType.Name, form.Get(consts.FormParameterRequestedTokenType), consts.TokenTypeRFC8693TxnToken))
 	}
 
-	// A refresh token must not be exchanged for a Txn-Token (section 11.2, section 13.3), and a Txn-Token is exchanged
-	// for another only if both the type and the client permit it (section 13.15).
+	// A refresh token must not be exchanged for a Txn-Token (section 11.2, section 13.3).
 	subjectTokenType := form.Get(consts.FormParameterSubjectTokenType)
-	replacing := isTxnTokenSubject(ctx, request, config)
-
-	// A different type has its own Trust Domain, so its token cannot be replaced by one of this type.
-	refused := replacing && (config.GetRFC8693TokenTypes(ctx)[subjectTokenType] != oauth2.RFC8693TokenType(tokenType) || !allowsTxnTokenReplacement(request.GetClient(), tokenType))
 
 	if form.Get(consts.FormParameterActorTokenType) == consts.TokenTypeRFC8693RefreshToken {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s' when the '%s' is '%s'.", consts.TokenTypeRFC8693RefreshToken, consts.FormParameterActorTokenType, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693TxnToken))
 	}
 
-	if subjectTokenType == consts.TokenTypeRFC8693RefreshToken || refused {
+	if subjectTokenType == consts.TokenTypeRFC8693RefreshToken {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s' when the '%s' is '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693TxnToken))
 	}
+
+	replacing := isTxnTokenSubject(ctx, request, config)
 
 	// The 'act' of the presented token is carried, and a new actor would rewrite the delegation it records.
 	if replacing && form.Get(consts.FormParameterActorToken) != "" {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' parameter is not supported when the '%s' is '%s'.", consts.FormParameterActorToken, consts.FormParameterSubjectTokenType, consts.TokenTypeRFC8693TxnToken))
 	}
 
-	if tokenType.TrustDomain == "" {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The '%s' token type has no Trust Domain configured.", tokenType.Name))
+	// The 'audience' is exactly one Trust Domain, and 'resource' is not used (section 11.1).
+	var domain *TxnTokenTrustDomain
+
+	if _, domain, err = tokenType.trustDomain(request); err != nil {
+		return err
 	}
 
-	// The 'audience' is exactly the Trust Domain, and 'resource' is not used (section 11.1).
-	audience := request.GetRequestedAudience()
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.5
+	if len(domain.ClientAuthenticationMethods) != 0 {
+		if method := oauth2.GetClientAuthenticationMethod(request); method == "" || !slices.Contains(domain.ClientAuthenticationMethods, method) {
+			return errorsx.WithStack(oauth2.ErrInvalidClient.WithHintf("The OAuth 2.0 Client authenticated with the method '%s' which is not permitted when the '%s' is '%s'.", method, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693TxnToken))
+		}
+	}
 
-	switch {
-	case len(audience) == 0:
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' parameter is required.", consts.FormParameterAudience))
-	case len(audience) != 1 || audience[0] != tokenType.TrustDomain:
-		return errorsx.WithStack(oauth2.ErrInvalidTarget.WithHintf("The '%s' parameter must be exactly the Trust Domain.", consts.FormParameterAudience))
+	// A Txn-Token is exchanged for another only if the Trust Domain and the client permit it (section 13.15).
+	if replacing && (subjectTokenType != consts.TokenTypeRFC8693TxnToken || !allowsTxnTokenReplacement(request.GetClient(), domain)) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not supported as a '%s' when the '%s' is '%s'.", subjectTokenType, consts.FormParameterSubjectTokenType, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693TxnToken))
 	}
 
 	if len(request.GetRequestedResource()) != 0 {

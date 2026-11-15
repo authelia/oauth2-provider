@@ -46,7 +46,7 @@ func txnSignedClaims(extra map[string]any) map[string]any {
 func (f *txnIssueFixture) signTxnToken(t *testing.T, extra map[string]any) string {
 	t.Helper()
 
-	f.txnType.Replacement.KeyFunc = func(*jwt.Token) (any, error) { return &f.workloadKey.PublicKey, nil }
+	f.txnDomain.Replacement.KeyFunc = func(*jwt.Token) (any, error) { return &f.workloadKey.PublicKey, nil }
 
 	return signToken(t, jose.ES256, f.workloadKey, txnKeyID, txnSignedClaims(extra), map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeTxnToken})
 }
@@ -72,52 +72,65 @@ func TestTxnTokenRefusesRefreshTokenActor(t *testing.T) {
 	assert.Contains(t, oauth2.ErrorToRFC6749Error(err).HintField, consts.FormParameterActorTokenType)
 }
 
-// A type under another key is not the requested type, so its token cannot become one of this Trust Domain.
-func TestTxnTokenReplacementRefusesAnotherType(t *testing.T) {
-	const alias = "urn:example:txn-b"
+func TestTxnTokenReplacementRefusesAnotherTrustDomain(t *testing.T) {
+	const other = "domain-b.example"
 
-	f := newTxnIssueFixture(t, storage.NewExampleStore())
-	f.enableReplacement()
-
-	f.cfg.RFC8693TokenTypes[alias] = &TxnTokenType{
-		Name:        alias,
-		TrustDomain: "domain-b.example",
-		Replacement: &TxnTokenReplacement{KeyFunc: func(*jwt.Token) (any, error) { return &f.workloadKey.PublicKey, nil }},
+	testCases := []struct {
+		name     string
+		audience any
+	}{
+		{"ShouldRefuseATokenOfAnotherTrustDomain", other},
+		{"ShouldRefuseATokenOfSeveralTrustDomains", []any{txnTrustDomain, other}},
 	}
 
-	token := signToken(t, jose.ES256, f.workloadKey, txnKeyID, txnSignedClaims(map[string]any{consts.ClaimAudience: "domain-b.example"}), map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeTxnToken})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newTxnIssueFixture(t, storage.NewExampleStore())
+			f.enableReplacement()
 
-	response, err := f.exchange(t, txnExchange{subjectType: alias, subjectToken: token, scopes: []string{"trade.stocks"}})
+			f.txnType.Domains[other] = &TxnTokenTrustDomain{Replacement: &TxnTokenReplacement{KeyFunc: func(*jwt.Token) (any, error) { return &f.workloadKey.PublicKey, nil }}}
 
-	require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
-	assert.Nil(t, response)
+			token := f.signTxnToken(t, map[string]any{consts.ClaimAudience: tc.audience})
+
+			response, err := f.exchange(t, txnExchange{subjectType: consts.TokenTypeRFC8693TxnToken, subjectToken: token, scopes: []string{"trade.stocks"}})
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+			assert.Nil(t, response)
+		})
+	}
 }
 
-// The same type under a second key is still a replacement, so every safeguard applies.
-func TestTxnTokenReplacementAppliesUnderAnAlias(t *testing.T) {
+func TestTxnTokenTypeRefusesAnotherIdentifier(t *testing.T) {
 	const alias = "urn:example:txn-alias"
 
-	f := newTxnIssueFixture(t, storage.NewExampleStore())
-	f.enableReplacement()
+	t.Run("ShouldRefuseItAsTheSubjectTokenType", func(t *testing.T) {
+		f := newTxnIssueFixture(t, storage.NewExampleStore())
+		f.enableReplacement()
 
-	f.cfg.RFC8693TokenTypes[alias] = f.txnType
+		f.cfg.RFC8693TokenTypes[alias] = f.txnType
 
-	first := f.issueForReplacement(t, nil)
-	firstClaims := txnPayload(t, &oauth2.AccessResponse{AccessToken: first})
+		response, err := f.exchange(t, txnExchange{subjectType: alias, subjectToken: f.issueForReplacement(t, nil), scopes: []string{"trade.stocks"}})
 
-	response, err := f.exchange(t, txnExchange{subjectType: alias, subjectToken: first, scopes: []string{"trade.stocks"}})
-	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+		require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+		assert.Nil(t, response)
+	})
 
-	claims := txnPayload(t, response)
+	t.Run("ShouldRefuseItAsTheRequestedTokenType", func(t *testing.T) {
+		f := newTxnIssueFixture(t, storage.NewExampleStore())
 
-	assert.Equal(t, firstClaims[consts.ClaimTransaction], claims[consts.ClaimTransaction])
-	assert.Equal(t, []any{txnClientID}, claims[consts.ClaimRequestingWorkloadChain])
+		f.cfg.RFC8693TokenTypes[alias] = f.txnType
+
+		response, err := f.exchange(t, txnExchange{subjectToken: f.mint(t, txnMint{scopes: []string{"trade.stocks"}}), requested: alias, scopes: []string{"trade.stocks"}})
+
+		require.ErrorIs(t, err, oauth2.ErrServerError)
+		assert.Nil(t, response)
+	})
 }
 
 func TestTxnTokenMayAct(t *testing.T) {
 	t.Run("ShouldNotBeSetByAHook", func(t *testing.T) {
 		f := newTxnIssueFixture(t, storage.NewExampleStore())
-		f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+		f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 			input.Claims[consts.ClaimAuthorizedActor] = map[string]any{consts.ClaimSubject: "bob"}
 
 			return nil
@@ -146,7 +159,7 @@ func TestTxnTokenMayAct(t *testing.T) {
 func TestCopyTxnTokenRequestParametersSkipsAReplacement(t *testing.T) {
 	f := newTxnIssueFixture(t, storage.NewExampleStore())
 	f.enableReplacement()
-	f.txnType.TranscribeClaims = CopyTxnTokenRequestParameters
+	f.txnDomain.TranscribeClaims = CopyTxnTokenRequestParameters
 
 	first := f.issueForReplacement(t, nil)
 
@@ -184,7 +197,7 @@ func TestTxnTokenMissingJTIStorageIsFoundFirst(t *testing.T) {
 	f.scopes.scopes = []string{"trade.stocks"}
 	f.cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693SelfSigned].(*SelfSignedTokenType).ValidateJTI = true
 
-	f.txnType.TranscribeClaims = func(context.Context, oauth2.AccessRequester, *TxnTokenClaimsInput) error {
+	f.txnDomain.TranscribeClaims = func(context.Context, oauth2.AccessRequester, *TxnTokenClaimsInput) error {
 		t.Error("the hook ran")
 
 		return nil

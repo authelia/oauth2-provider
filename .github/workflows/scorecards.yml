@@ -11,7 +11,7 @@ on:
   push:
     branches:
       - 'master'
-permissions: 'read-all'
+permissions: {}
 jobs:
   analysis:
     name: 'Analysis'

@@ -300,7 +300,7 @@ func getClientSecretEncryptedJWTAlg(ctx context.Context, config any, assertion s
 		return "", false
 	}
 
-	keyAlgs, encs := jwt.EncryptionKeyAlgorithms, jwt.ContentEncryptionAlgorithms
+	keyAlgs, encs := jwt.GetEncryptionKeyAlgorithms(ctx, config), jwt.ContentEncryptionAlgorithms
 
 	if provider, has := config.(ClientAssertionAlgorithmsProvider); has {
 		keyAlgs, encs = jwt.ToKeyAlgorithms(provider.GetClientAssertionEncryptionAlgValues(ctx)), jwt.ToContentEncryptions(provider.GetClientAssertionEncryptionEncValues(ctx))

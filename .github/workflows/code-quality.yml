@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+---
 name: 'Code Quality'
 on:
   pull_request:
@@ -73,3 +74,4 @@ jobs:
       - name: 'Feedback'
         run: |
           git diff HEAD --exit-code --color
+...

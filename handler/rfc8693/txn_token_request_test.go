@@ -166,6 +166,42 @@ func TestTxnTokenRequestRules(t *testing.T) {
 	}
 }
 
+func TestTxnTokenClientAuthenticationMethods(t *testing.T) {
+	testCases := []struct {
+		name    string
+		allowed []string
+		method  string
+		err     error
+	}{
+		{"ShouldPassAnyMethodWhenUnset", nil, consts.ClientAuthMethodClientSecretBasic, nil},
+		{"ShouldPassUnrecordedMethodWhenUnset", nil, "", nil},
+		{"ShouldPassPermittedMethod", []string{consts.ClientAuthMethodPrivateKeyJWT, consts.ClientAuthMethodTLSClientAuth}, consts.ClientAuthMethodTLSClientAuth, nil},
+		{"ShouldRefuseOtherMethod", []string{consts.ClientAuthMethodPrivateKeyJWT}, consts.ClientAuthMethodClientSecretBasic, oauth2.ErrInvalidClient},
+		{"ShouldRefuseUnrecordedMethod", []string{consts.ClientAuthMethodPrivateKeyJWT}, "", oauth2.ErrInvalidClient},
+		{"ShouldRefuseUnrecordedMethodWhenAnEmptyMethodIsPermitted", []string{"", consts.ClientAuthMethodPrivateKeyJWT}, "", oauth2.ErrInvalidClient},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newTxnFixture(t)
+			f.config.RFC8693TokenTypes[consts.TokenTypeRFC8693TxnToken].(*TxnTokenType).ClientAuthenticationMethods = tc.allowed
+
+			request := f.request(txnRequest{})
+			request.SetClientAuthenticationMethod(tc.method)
+
+			err := f.handler.HandleTokenEndpointRequest(t.Context(), request)
+
+			if tc.err == nil {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			assert.ErrorIs(t, err, tc.err)
+		})
+	}
+}
+
 type txnRefreshStore interface {
 	hoauth2.RefreshTokenStorage
 	Storage

@@ -911,7 +911,7 @@ func TestToken_AssignJWE(t *testing.T) {
 		token.AssignJWE(jwe)
 
 		assert.Equal(t, "enc-kid", token.EncryptionKeyID)
-		assert.Equal(t, jose.KeyAlgorithm(jose.RSA_OAEP_256), token.KeyAlgorithm)
+		assert.Equal(t, jose.RSA_OAEP_256, token.KeyAlgorithm)
 		assert.Equal(t, jose.A128CBC_HS256, token.ContentEncryption)
 		assert.Equal(t, jose.DEFLATE, token.CompressionAlgorithm)
 		assert.Equal(t, "value", token.HeaderJWE["custom"])

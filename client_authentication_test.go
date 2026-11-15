@@ -80,7 +80,7 @@ func TestAuthenticateClient(t *testing.T) {
 		},
 	}
 
-	complexSecretRaw := "foo %66%6F%6F@$<§!✓" //nolint:gosec
+	complexSecretRaw := "foo %66%6F%6F@$<§!✓"
 
 	testCases := []struct {
 		name          string

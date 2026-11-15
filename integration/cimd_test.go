@@ -67,7 +67,7 @@ func TestClientIDMetadataDocumentPublicClientAuthorizationCodeFlow(t *testing.T)
 				consts.FormParameterCodeChallenge: {verifier},
 			}.Encode()
 
-			response, err := http.Get(authorize) //nolint:gosec
+			response, err := http.Get(authorize)
 			require.NoError(t, err)
 
 			defer response.Body.Close()
@@ -113,7 +113,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTClientCredentialsFlow(t *testing.T
 
 			id := env.documents.URL + "/confidential.json"
 
-			env.setDocument("/confidential.json", map[string]any{ //nolint:gosec
+			env.setDocument("/confidential.json", map[string]any{
 				"client_id":                       id,
 				"client_name":                     "Confidential Example",
 				"token_endpoint_auth_method":      "private_key_jwt",
@@ -149,7 +149,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTAuthorizationCodeFlow(t *testing.T
 			id := env.documents.URL + "/confidential.json"
 			callback := env.provider.URL + "/callback"
 
-			env.setDocument("/confidential.json", map[string]any{ //nolint:gosec
+			env.setDocument("/confidential.json", map[string]any{
 				"client_id":                       id,
 				"client_name":                     "Confidential Example",
 				"application_type":                "native",
@@ -173,7 +173,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTAuthorizationCodeFlow(t *testing.T
 				consts.FormParameterCodeChallenge: {verifier},
 			}.Encode()
 
-			response, err := http.Get(authorize) //nolint:gosec
+			response, err := http.Get(authorize)
 			require.NoError(t, err)
 
 			defer response.Body.Close()
@@ -226,7 +226,7 @@ func TestClientIDMetadataDocumentJWKSURIFailsClosedWithoutGuardedFetcher(t *test
 
 	id := env.documents.URL + "/confidential.json"
 
-	env.setDocument("/confidential.json", map[string]any{ //nolint:gosec
+	env.setDocument("/confidential.json", map[string]any{
 		"client_id":                       id,
 		"token_endpoint_auth_method":      "private_key_jwt",
 		"token_endpoint_auth_signing_alg": "ES256",
@@ -269,7 +269,7 @@ func TestClientIDMetadataDocumentDisabled(t *testing.T) {
 		consts.FormParameterState:        {testState},
 	}.Encode()
 
-	response, err := http.Get(authorize) //nolint:gosec
+	response, err := http.Get(authorize)
 	require.NoError(t, err)
 
 	defer response.Body.Close()
@@ -302,7 +302,7 @@ func TestClientIDMetadataDocumentRefusedByAllowedDomainSuffixes(t *testing.T) {
 		consts.FormParameterState:        {testState},
 	}.Encode()
 
-	response, err := http.Get(authorize) //nolint:gosec
+	response, err := http.Get(authorize)
 	require.NoError(t, err)
 
 	defer response.Body.Close()
@@ -323,7 +323,7 @@ func TestClientIDMetadataDocumentUnknownDocumentIsAnInvalidClient(t *testing.T) 
 		consts.FormParameterState:        {testState},
 	}.Encode()
 
-	response, err := http.Get(authorize) //nolint:gosec
+	response, err := http.Get(authorize)
 	require.NoError(t, err)
 
 	defer response.Body.Close()

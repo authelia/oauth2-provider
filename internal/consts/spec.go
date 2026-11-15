@@ -23,7 +23,7 @@ const (
 
 const (
 	// ClientAssertionTypeJWTBearer is the JWT bearer client assertion type from RFC 7523.
-	ClientAssertionTypeJWTBearer = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" //nolint:gosec
+	ClientAssertionTypeJWTBearer = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 )
 
 const (

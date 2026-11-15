@@ -46,12 +46,12 @@ const (
 	// JSONWebTokenTypeLogoutToken represents the JWT type value for OpenID Connect Back-Channel Logout 1.0.
 	//
 	// See: https://openid.net/specs/openid-connect-backchannel-1_0.html#Security
-	JSONWebTokenTypeLogoutToken = "logout+jwt" //nolint:gosec // This is a credential type, not a credential.
+	JSONWebTokenTypeLogoutToken = "logout+jwt"
 
 	// JSONWebTokenTypeJWTSecuredAuthorizationRequest represents the JWT type value for JWT Secured Authorization Requests.
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc9101.html#section-4
-	JSONWebTokenTypeJWTSecuredAuthorizationRequest = "oauth-authz-req+jwt" //nolint:gosec // This is a credential type, not a credential.
+	JSONWebTokenTypeJWTSecuredAuthorizationRequest = "oauth-authz-req+jwt"
 
 	// JSONWebTokenTypeClientAuthentication represents the JWT type value for Client Assertions.
 	//
@@ -76,12 +76,12 @@ const (
 	// JSONWebTokenTypeIDJAG represents the JWT type value for an Identity Assertion JWT Authorization Grant.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-3.1
-	JSONWebTokenTypeIDJAG = "oauth-id-jag+jwt" //nolint:gosec // This is a credential type, not a credential.
+	JSONWebTokenTypeIDJAG = "oauth-id-jag+jwt"
 
 	// JSONWebTokenTypeTxnToken represents the JWT type value for a Transaction Token.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-9.1
-	JSONWebTokenTypeTxnToken = "txntoken+jwt" //nolint:gosec // This is a credential type, not a credential.
+	JSONWebTokenTypeTxnToken = "txntoken+jwt"
 
 	// JSONWebTokenTypeSecurityEventToken represents the JWT type value for a Security Event Token.
 	//

@@ -316,7 +316,7 @@ func TestLocalValidator(t *testing.T) {
 		},
 		{
 			name: "ShouldAcceptAnAlgInURIForm",
-			metadata: &oauth2.ClientRegistrationMetadata{ //nolint:gosec
+			metadata: &oauth2.ClientRegistrationMetadata{
 				RedirectURIs:             []string{"https://example.com/cb"},
 				IDTokenSignedResponseAlg: "https://example.com/alg#custom",
 			},

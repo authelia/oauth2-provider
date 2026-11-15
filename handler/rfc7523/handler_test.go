@@ -1061,7 +1061,7 @@ func (f *jwtBearerFixture) createRandomTestJWK() jose.JSONWebKey {
 		panic(fmt.Sprintf("failed to generate RSA private key: %s", err))
 	}
 
-	return f.createJWK(privateKey.Public(), strconv.Itoa(mrand.Int())) //nolint:gosec
+	return f.createJWK(privateKey.Public(), strconv.Itoa(mrand.Int()))
 }
 
 func (f *jwtBearerFixture) createJWK(key any, keyID string) jose.JSONWebKey {

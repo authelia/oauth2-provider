@@ -14,11 +14,11 @@ const (
 	// SecurityEventTypeCAEPSessionRevoked is the event type URI of the CAEP session revoked security event.
 	SecurityEventTypeCAEPSessionRevoked = "https://schemas.openid.net/secevent/caep/event-type/session-revoked"
 	// SecurityEventTypeCAEPTokenClaimsChange is the event type URI of the CAEP token claims change security event.
-	SecurityEventTypeCAEPTokenClaimsChange = "https://schemas.openid.net/secevent/caep/event-type/token-claims-change"
+	SecurityEventTypeCAEPTokenClaimsChange = "https://schemas.openid.net/secevent/caep/event-type/token-claims-change" //nolint:gosec // G101: event type URI, not a credential.
 	// SecurityEventTypeCAEPCredentialChange is the event type URI of the CAEP credential change security event.
-	SecurityEventTypeCAEPCredentialChange = "https://schemas.openid.net/secevent/caep/event-type/credential-change"
+	SecurityEventTypeCAEPCredentialChange = "https://schemas.openid.net/secevent/caep/event-type/credential-change" //nolint:gosec // G101: event type URI, not a credential.
 	// SecurityEventTypeCAEPAssuranceLevelChange is the event type URI of the CAEP assurance level change security event.
-	SecurityEventTypeCAEPAssuranceLevelChange = "https://schemas.openid.net/secevent/caep/event-type/assurance-level-change"
+	SecurityEventTypeCAEPAssuranceLevelChange = "https://schemas.openid.net/secevent/caep/event-type/assurance-level-change" //nolint:gosec // G101: event type URI, not a credential.
 	// SecurityEventTypeCAEPDeviceComplianceChange is the event type URI of the CAEP device compliance change security event.
 	SecurityEventTypeCAEPDeviceComplianceChange = "https://schemas.openid.net/secevent/caep/event-type/device-compliance-change"
 	// SecurityEventTypeCAEPSessionEstablished is the event type URI of the CAEP session established security event.

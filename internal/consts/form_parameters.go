@@ -98,7 +98,7 @@ const (
 	// FormParameterRequestedTokenType is the requested_token_type parameter from RFC 8693.
 	FormParameterRequestedTokenType = "requested_token_type"
 	// FormParameterIssuedTokenType is the issued_token_type parameter from RFC 8693.
-	FormParameterIssuedTokenType = "issued_token_type" //nolint:gosec // This is a credential type, not a credential.
+	FormParameterIssuedTokenType = "issued_token_type"
 	// FormParameterSubjectTokenType is the subject_token_type parameter from RFC 8693.
 	FormParameterSubjectTokenType = "subject_token_type"
 	// FormParameterSubjectToken is the subject_token parameter from RFC 8693.
@@ -124,7 +124,7 @@ const (
 	// FormParameterLoginHint is the login_hint parameter from OpenID Connect Core 1.0.
 	FormParameterLoginHint = "login_hint"
 	// FormParameterLoginHintToken is the login_hint_token parameter from OpenID Connect Client-Initiated Backchannel Authentication Flow - Core 1.0.
-	FormParameterLoginHintToken = "login_hint_token" //nolint:gosec // This is a parameter name, not a credential.
+	FormParameterLoginHintToken = "login_hint_token"
 	// FormParameterRequestContext is the request_context parameter, a non-standard extension.
 	FormParameterRequestContext = "request_context"
 	// FormParameterRequestDetails is the request_details parameter, a non-standard extension.

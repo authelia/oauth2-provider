@@ -58,6 +58,15 @@ linters:
       - linters:
           - godoclint
         path: _test\.go$
+      # Test fixtures carry example credentials and write raw responses by design.
+      - linters:
+          - gosec
+        path: _test\.go$
+      # Protocol parameter, metadata and claim names trip the hardcoded credential heuristic.
+      - linters:
+          - gosec
+        path: internal/consts/
+        text: G101
       - path: (.+)\.go$
         text: Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush). is not checked
       - path: (.+)\.go$

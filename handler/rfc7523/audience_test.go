@@ -18,7 +18,7 @@ import (
 
 const (
 	issuer   = "https://as.example.com"
-	tokenURL = "https://as.example.com/token" //nolint:gosec
+	tokenURL = "https://as.example.com/token"
 	mtlsURL  = "https://mtls.as.example.com/token"
 	parURL   = "https://as.example.com/par"
 	listed   = "https://legacy.example.com"

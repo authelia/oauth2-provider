@@ -27,7 +27,7 @@ import (
 
 const (
 	audienceTestIssuer   = "https://as.example.com"
-	audienceTestTokenURL = "https://as.example.com/token" //nolint:gosec
+	audienceTestTokenURL = "https://as.example.com/token"
 	audienceTestMTLSURL  = "https://mtls.as.example.com/token"
 	audienceTestPARURL   = "https://as.example.com/par"
 	audienceTestRevURL   = "https://as.example.com/revoke"

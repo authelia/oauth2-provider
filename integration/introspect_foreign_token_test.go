@@ -44,7 +44,7 @@ func TestIntrospectForeignTokenReachesTheNextIntrospector(t *testing.T) {
 	}{
 		{name: "ShouldReachItWithoutSegments", token: introspectForeignToken},
 		{name: "ShouldReachItWithAThreeSegmentToken", token: introspectJWTShapedToken},
-		{name: "ShouldReachItWithAForeignPrefix", token: "ext_at_token"}, //nolint:gosec
+		{name: "ShouldReachItWithAForeignPrefix", token: "ext_at_token"},
 	}
 
 	for _, tc := range testCases {

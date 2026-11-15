@@ -84,7 +84,7 @@ func runAuthorizeCodeGrantWithPublicClientAndPKCETest(t *testing.T, strategy any
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setup()
 
-			resp, err := http.Get(authCodeUrl) //nolint:gosec
+			resp, err := http.Get(authCodeUrl)
 			require.NoError(t, err)
 			require.Equal(t, resp.StatusCode, tc.authStatusCode)
 

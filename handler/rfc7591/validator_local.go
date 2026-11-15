@@ -541,7 +541,7 @@ func validateGrantResponseTypeCoherence(metadata *oauth2.ClientRegistrationMetad
 		}
 	}
 
-	var responseTypeTokens []string
+	responseTypeTokens := make([]string, 0, len(responseTypes))
 
 	for _, responseType := range responseTypes {
 		responseTypeTokens = append(responseTypeTokens, strings.Fields(responseType)...)

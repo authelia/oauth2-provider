@@ -614,17 +614,14 @@ func UnsafeParseSignedAny(tokenString string, dest any) (token *jwt.JSONWebToken
 }
 
 func newError(message string, err error, more ...error) error {
-	var (
-		format string
-		args   []any
-	)
+	format := "%w"
+	args := make([]any, 0, 2+len(more))
+	args = append(args, err)
 
 	if message != "" {
-		format = "%w: %s"
-		args = []any{err, message}
-	} else {
-		format = "%w"
-		args = []any{err}
+		format += ": %s"
+
+		args = append(args, message)
 	}
 
 	for _, e := range more {

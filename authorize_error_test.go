@@ -26,7 +26,7 @@ func TestWriteAuthorizeError(t *testing.T) {
 			"https://foobar.com/",
 			"https://foobar.com/?foo=bar",
 		}
-		purls = []*url.URL{}
+		purls = make([]*url.URL, 0, len(urls))
 	)
 
 	for _, u := range urls {

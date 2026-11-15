@@ -579,7 +579,7 @@ func newMTLSClientStore() *mtlsClientStore {
 }
 
 func newMTLSJWKSClient(certs []*x509.Certificate, uri string) *mtlsJWKSClient {
-	var keys []jose.JSONWebKey
+	keys := make([]jose.JSONWebKey, 0, len(certs))
 
 	for _, cert := range certs {
 		keys = append(keys, jose.JSONWebKey{Key: cert.PublicKey, Certificates: []*x509.Certificate{cert}, KeyID: cert.Subject.CommonName})

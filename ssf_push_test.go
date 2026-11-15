@@ -480,6 +480,53 @@ func TestPushSecurityEventTokenShouldUseSSFHTTPClient(t *testing.T) {
 	})
 }
 
+func TestPushSecurityEventTokenShouldApplySpecialUseAddressGuard(t *testing.T) {
+	testCases := []struct {
+		name    string
+		disable bool
+		ssf     bool
+		outcome oauth2.SSFPushOutcome
+	}{
+		{name: "ShouldDeliverWhenDisabled", disable: true, outcome: oauth2.SSFPushDelivered},
+		{name: "ShouldDeliverWithSSFHTTPClientWhenDisabled", disable: true, ssf: true, outcome: oauth2.SSFPushDelivered},
+		{name: "ShouldRefuseByDefault", outcome: oauth2.SSFPushRetryable},
+		{name: "ShouldRefuseWithSSFHTTPClientByDefault", ssf: true, outcome: oauth2.SSFPushRetryable},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var hits int32
+
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				atomic.AddInt32(&hits, 1)
+				w.WriteHeader(http.StatusAccepted)
+			}))
+			defer server.Close()
+
+			provider := newSSFPushProvider(server)
+			config := provider.Config.(*oauth2.Config)
+			config.DisableSpecialUseAddressGuard = tc.disable
+
+			if tc.ssf {
+				config.SSF.HTTPClient = config.HTTPClient
+				config.HTTPClient = nil
+			}
+
+			result := provider.PushSecurityEventToken(context.Background(), ssfPushClient, oauth2.SSFDelivery{EndpointURL: server.URL}, "t")
+
+			assert.Equal(t, tc.outcome, result.Outcome)
+
+			if !tc.disable {
+				assert.ErrorIs(t, result.Err, oauth2.ErrSpecialUseAddress)
+				assert.Zero(t, atomic.LoadInt32(&hits))
+			} else {
+				assert.NoError(t, result.Err)
+				assert.Equal(t, int32(1), atomic.LoadInt32(&hits))
+			}
+		})
+	}
+}
+
 func TestSSFDeliveryShouldRedactAuthorizationHeader(t *testing.T) {
 	delivery := oauth2.SSFDelivery{Method: "urn:ietf:rfc:8935", EndpointURL: "https://example.com/push", AuthorizationHeader: ssfPushSecret}
 
@@ -492,7 +539,7 @@ func TestSSFDeliveryShouldRedactAuthorizationHeader(t *testing.T) {
 }
 
 func newSSFPushProvider(server *httptest.Server) *oauth2.Fosite {
-	config := &oauth2.Config{Issuer: ssfHandlerIssuer, SSF: &oauth2.SSFConfig{EndpointValidator: ssfHandlerValidator{}}}
+	config := &oauth2.Config{Issuer: ssfHandlerIssuer, SSF: &oauth2.SSFConfig{EndpointValidator: ssfHandlerValidator{}}, DisableSpecialUseAddressGuard: true}
 
 	client := retryablehttp.NewClient()
 	client.Logger = nil

@@ -35,7 +35,7 @@ func TestHTTPClientForClient(t *testing.T) {
 	document := &documentTestClient{DefaultRegisteredClient: &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "https://client.example.com/c"}}}
 
 	t.Run("ShouldUseBaseForRegisteredClient", func(t *testing.T) {
-		hc, err := httpClientForClient(t.Context(), &Config{ClientIDMetadataDocumentHTTPClient: guarded}, base, registered)
+		hc, err := httpClientForClient(t.Context(), &Config{ClientIDMetadataDocumentHTTPClient: guarded, DisableSpecialUseAddressGuard: true}, base, registered)
 
 		require.NoError(t, err)
 		assert.Same(t, base, hc)
@@ -70,14 +70,14 @@ func TestHTTPClientForClient(t *testing.T) {
 	})
 
 	t.Run("ShouldUseBaseForWrappedDocumentClientWhenDisabled", func(t *testing.T) {
-		hc, err := httpClientForClient(t.Context(), &Config{ClientIDMetadataDocumentHTTPClient: guarded}, base, &wrappedTestClient{Client: document})
+		hc, err := httpClientForClient(t.Context(), &Config{ClientIDMetadataDocumentHTTPClient: guarded, DisableSpecialUseAddressGuard: true}, base, &wrappedTestClient{Client: document})
 
 		require.NoError(t, err)
 		assert.Same(t, base, hc)
 	})
 
 	t.Run("ShouldUseBaseForRegisteredClientWhenEnabled", func(t *testing.T) {
-		hc, err := httpClientForClient(t.Context(), &Config{ClientIDMetadataDocumentResolver: &stubResolver{}, ClientIDMetadataDocumentHTTPClient: guarded}, base, registered)
+		hc, err := httpClientForClient(t.Context(), &Config{ClientIDMetadataDocumentResolver: &stubResolver{}, ClientIDMetadataDocumentHTTPClient: guarded, DisableSpecialUseAddressGuard: true}, base, registered)
 
 		require.NoError(t, err)
 		assert.Same(t, base, hc)
@@ -95,7 +95,7 @@ func TestConfigGetClientJWKSFetcherStrategy(t *testing.T) {
 	guarded := NewDefaultJWKSFetcherStrategy()
 	document := &documentTestClient{DefaultRegisteredClient: &DefaultRegisteredClient{DefaultClient: &DefaultClient{}}}
 
-	config := &Config{ClientIDMetadataDocumentJWKSFetcherStrategy: guarded}
+	config := &Config{ClientIDMetadataDocumentJWKSFetcherStrategy: guarded, DisableSpecialUseAddressGuard: true}
 
 	var provider jwt.ClientJWKSFetcherStrategyProvider = config
 
@@ -175,8 +175,9 @@ func TestAuthorizeRequestFetchesTheRequestURIOfADocumentClientOverTheGuardedClie
 			}
 
 			config := &Config{
-				HTTPClient: shared,
-				Issuer:     issuer,
+				HTTPClient:                    shared,
+				Issuer:                        issuer,
+				DisableSpecialUseAddressGuard: true,
 			}
 
 			config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{})}

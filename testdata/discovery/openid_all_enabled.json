@@ -5,10 +5,7 @@
   "jwks_uri": "https://auth.example.com/jwks.json",
   "registration_endpoint": "https://auth.example.com/register",
   "scopes_supported": ["email", "offline_access", "openid", "profile"],
-  "response_types_supported": [
-    "code",
-    "none"
-  ],
+  "response_types_supported": ["code", "none"],
   "response_modes_supported": ["form_post", "form_post.jwt", "fragment", "fragment.jwt", "jwt", "query", "query.jwt"],
   "grant_types_supported": [
     "authorization_code",

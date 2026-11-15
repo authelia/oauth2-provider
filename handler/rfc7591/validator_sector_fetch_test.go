@@ -33,7 +33,7 @@ func TestSectorIdentifierValidatorBoundsTheFetch(t *testing.T) {
 		client.RetryWaitMax = 10 * time.Millisecond
 		client.HTTPClient = &http.Client{Transport: transport}
 
-		return NewSectorIdentifierValidator(&oauth2.Config{HTTPClient: client})
+		return NewSectorIdentifierValidator(&oauth2.Config{HTTPClient: client, DisableSpecialUseAddressGuard: true})
 	}
 
 	t.Run("ShouldApplyTheFetchTimeout", func(t *testing.T) {

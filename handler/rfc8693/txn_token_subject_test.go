@@ -12,13 +12,17 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -357,6 +361,56 @@ func TestTxnTokenSelfSignedClientKeys(t *testing.T) {
 
 			if tc.fetcher != nil && tc.fetcher.err != nil {
 				assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), refusal.Error())
+			}
+		})
+	}
+}
+
+func TestTxnTokenSelfSignedClientKeysSpecialUseAddressGuard(t *testing.T) {
+	testCases := []struct {
+		name    string
+		disable bool
+	}{
+		{name: "ShouldFetchWhenDisabled", disable: true},
+		{name: "ShouldRefuseByDefault"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newTxnSubjectFixture(t)
+
+			var hits atomic.Int64
+
+			server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+				hits.Add(1)
+				require.NoError(t, json.NewEncoder(rw).Encode(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &f.key.PublicKey, KeyID: txnKeyID}}}))
+			}))
+			defer server.Close()
+
+			httpClient := retryablehttp.NewClient()
+			httpClient.Logger = nil
+			httpClient.RetryMax = 0
+
+			f.config.DisableSpecialUseAddressGuard = tc.disable
+			f.config.JWKSFetcherStrategy = oauth2.NewDefaultJWKSFetcherStrategy(oauth2.JWKSFetcherWithHTTPClient(httpClient))
+
+			client := f.uriClient()
+			client.JSONWebKeysURI = server.URL
+
+			session, err := f.exchange(t, client, consts.TokenTypeRFC8693SelfSigned, f.selfSigned(t, selfSignedClaims(), nil))
+
+			if !tc.disable {
+				assertSubjectRefused(t, session, err)
+				assert.Zero(t, hits.Load())
+
+				_, err = jwt.ClientJWKSFetcherStrategy(t.Context(), f.config, client).Resolve(t.Context(), server.URL, false)
+
+				assert.ErrorIs(t, err, oauth2.ErrSpecialUseAddress)
+				assert.Zero(t, hits.Load())
+			} else {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				assert.Equal(t, "alice", session.GetSubject())
+				assert.Equal(t, int64(1), hits.Load())
 			}
 		})
 	}

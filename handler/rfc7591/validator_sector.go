@@ -68,6 +68,10 @@ func (v *SectorIdentifierValidator) ValidateClientRegistrationMetadata(ctx conte
 		httpClient = retryablehttp.NewClient()
 	}
 
+	if httpClient, err = oauth2.SpecialUseAddressGuardHTTPClient(ctx, v.config, httpClient); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
 	var response *http.Response
 
 	// Redirects are not followed, so a registrant-controlled server cannot steer the fetch to an internal address

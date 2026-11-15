@@ -366,7 +366,11 @@ func isClientIDMetadataDocumentFetchClient(ctx context.Context, config any, clie
 
 func httpClientForClient(ctx context.Context, config any, base *retryablehttp.Client, client any) (hc *retryablehttp.Client, err error) {
 	if !isClientIDMetadataDocumentFetchClient(ctx, config, client) {
-		return base, nil
+		if hc, err = SpecialUseAddressGuardHTTPClient(ctx, config, base); err != nil {
+			return nil, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugError(err))
+		}
+
+		return hc, nil
 	}
 
 	if provider, ok := config.(ClientIDMetadataDocumentConfigProvider); ok {

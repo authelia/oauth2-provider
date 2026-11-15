@@ -371,7 +371,7 @@ func postOIDCKBToken(t *testing.T, ts *httptest.Server, clientID, clientSecret s
 func decodeOIDCKBIDToken(t *testing.T, raw string, pub *rsa.PublicKey) oidckbIDToken {
 	t.Helper()
 
-	sig, err := jose.ParseSigned(raw, []jose.SignatureAlgorithm{jose.RS256})
+	sig, err := jose.ParseSignedCompact(raw, []jose.SignatureAlgorithm{jose.RS256})
 	require.NoError(t, err)
 	require.Len(t, sig.Signatures, 1)
 

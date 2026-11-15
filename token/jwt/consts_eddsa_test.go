@@ -69,7 +69,7 @@ func TestSignatureAlgorithmsEdDSARoundTrip(t *testing.T) {
 			serialized, err := object.CompactSerialize()
 			require.NoError(t, err)
 
-			parsed, err := jose.ParseSigned(serialized, SignatureAlgorithms)
+			parsed, err := jose.ParseSignedCompact(serialized, SignatureAlgorithms)
 			require.NoError(t, err, "the signer accepts %s so the parser must too", alg)
 
 			payload, err := parsed.Verify(public)

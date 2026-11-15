@@ -169,7 +169,7 @@ func TestIssueHandlerWithABoundIDTokenSubject(t *testing.T) {
 			response, err := provider.NewAccessResponse(ctx, request)
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 
-			issued, err := jose.ParseSigned(response.GetAccessToken(), []jose.SignatureAlgorithm{jose.RS256})
+			issued, err := jose.ParseSignedCompact(response.GetAccessToken(), []jose.SignatureAlgorithm{jose.RS256})
 			require.NoError(t, err)
 
 			var result map[string]any

@@ -20,7 +20,6 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
-	"authelia.com/provider/oauth2/handler/rfc8628"
 	. "authelia.com/provider/oauth2/handler/rfc8628"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
@@ -30,7 +29,7 @@ import (
 )
 
 func TestDeviceAuthorizeTokenEndpointHandlerGrantTypesSupported(t *testing.T) {
-	h := &rfc8628.DeviceAuthorizeTokenEndpointHandler{}
+	h := &DeviceAuthorizeTokenEndpointHandler{}
 
 	assert.Equal(t, []string{consts.GrantTypeOAuthDeviceCode}, h.GrantTypesSupported(context.Background()))
 }
@@ -504,8 +503,8 @@ func TestDeviceAuthorizeCode_HandleTokenEndpointRequest(t *testing.T) {
 				assert.Equal(t, time.Now().Add(time.Minute).UTC().Truncate(jwt.TimePrecision), requester.GetSession().GetExpiresAt(oauth2.AccessToken))
 				assert.Equal(t, time.Now().Add(time.Minute).UTC().Truncate(jwt.TimePrecision), requester.GetSession().GetExpiresAt(oauth2.RefreshToken))
 			},
-			setup: func(t *testing.T, requester *oauth2.AccessRequest, deviceRequester *oauth2.DeviceAuthorizeRequest) {
-				deviceRequester = oauth2.NewDeviceAuthorizeRequest()
+			setup: func(t *testing.T, requester *oauth2.AccessRequest, _ *oauth2.DeviceAuthorizeRequest) {
+				deviceRequester := oauth2.NewDeviceAuthorizeRequest()
 				deviceRequester.RequestedAt = time.Now().UTC().Add(-time.Minute)
 				deviceRequester.SetSession(openid.NewDefaultSession())
 				deviceRequester.GetSession().SetExpiresAt(oauth2.UserCode, expiredAt)

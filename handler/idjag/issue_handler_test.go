@@ -875,7 +875,7 @@ func newIssueRequest(t *testing.T, session oauth2.Session, extra url.Values) *oa
 func parseIssued(t *testing.T, token string, key *jose.JSONWebKey) (typ string, claims map[string]any) {
 	t.Helper()
 
-	signed, err := jose.ParseSigned(token, []jose.SignatureAlgorithm{jose.RS256})
+	signed, err := jose.ParseSignedCompact(token, []jose.SignatureAlgorithm{jose.RS256})
 	require.NoError(t, err)
 
 	payload, err := signed.Verify(key.Public())

@@ -14,18 +14,21 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
+// AuthorizationDetailsTypePaymentInitiation is the RFC 9396 authorization details type of the payment initiation example.
 const AuthorizationDetailsTypePaymentInitiation = "payment_initiation"
 
-// PaymentInitiationTypeHandler is a test oauth2.AuthorizationDetailsTypeHandler modelled on the RFC 9396 Section 2
+// PaymentInitiationTypeHandler is a test oauth2.AuthorizationDetailsTypeHandler modeled on the RFC 9396 Section 2
 // 'payment_initiation' example. A requested detail of a token request selects a distinct granted detail: each member it
 // carries must be within that of the granted detail, and the assigned detail is the granted detail narrowed to the
 // common members it carries.
 type PaymentInitiationTypeHandler struct{}
 
+// Type returns the authorization details type handled.
 func (PaymentInitiationTypeHandler) Type() string {
 	return AuthorizationDetailsTypePaymentInitiation
 }
 
+// Validate returns an error when the detail has no actions or a member that is not permitted.
 func (PaymentInitiationTypeHandler) Validate(_ context.Context, _ oauth2.Requester, detail oauth2.AuthorizationDetail) error {
 	if len(detail.Actions) == 0 {
 		return errors.New("actions is required")
@@ -34,6 +37,7 @@ func (PaymentInitiationTypeHandler) Validate(_ context.Context, _ oauth2.Request
 	return validatePaymentInitiationMembers(detail)
 }
 
+// Assign returns the granted details when none are requested, otherwise the granted details narrowed by the requested ones.
 func (PaymentInitiationTypeHandler) Assign(_ context.Context, _ oauth2.AccessRequester, granted, requested oauth2.AuthorizationDetails) (assigned oauth2.AuthorizationDetails, err error) {
 	if len(requested) == 0 {
 		return granted, nil
@@ -127,6 +131,7 @@ type AuthorizationDetailsClient struct {
 	AuthorizationDetailsTypes []string
 }
 
+// GetAuthorizationDetailsTypes returns the authorization details types of the client.
 func (c *AuthorizationDetailsClient) GetAuthorizationDetailsTypes() []string {
 	return c.AuthorizationDetailsTypes
 }
@@ -140,6 +145,7 @@ type DisclosingPaymentInitiationTypeHandler struct {
 	Err error
 }
 
+// Disclose returns the details with a location in the audience of the recipient or equal to its client identifier.
 func (h DisclosingPaymentInitiationTypeHandler) Disclose(_ context.Context, _ oauth2.Requester, recipient oauth2.AuthorizationDetailsRecipient, details oauth2.AuthorizationDetails) (disclosed oauth2.AuthorizationDetails, err error) {
 	if h.Err != nil {
 		return nil, h.Err

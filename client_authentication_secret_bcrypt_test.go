@@ -82,6 +82,7 @@ func TestNewBCryptClientSecretPlain(t *testing.T) {
 			if tc.err {
 				require.Error(t, err)
 				assert.Nil(t, actual)
+
 				return
 			}
 
@@ -123,6 +124,7 @@ func TestBCryptClientSecretCompare(t *testing.T) {
 				assert.Error(t, actual)
 				return
 			}
+
 			assert.NoError(t, actual)
 		})
 	}

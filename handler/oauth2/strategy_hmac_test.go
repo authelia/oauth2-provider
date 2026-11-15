@@ -461,12 +461,15 @@ func TestClientRegistrationTokenUsesItsOwnSecret(t *testing.T) {
 	require.NoError(t, strategy.ValidateClientRegistrationToken(ctx, request, token))
 
 	config.GlobalSecret = []byte("an-entirely-new-global-secret-at-least-32b")
+
 	assert.NoError(t, strategy.ValidateClientRegistrationToken(ctx, request, token))
 
 	config.RFC7591ClientRegistrationGlobalSecret = []byte("yet-another-registration-secret-32-bytes!")
+
 	assert.Error(t, strategy.ValidateClientRegistrationToken(ctx, request, token))
 
 	config.RFC7591ClientRegistrationRotatedGlobalSecrets = [][]byte{[]byte("a-completely-different-secret-at-least-32b")}
+
 	assert.NoError(t, strategy.ValidateClientRegistrationToken(ctx, request, token))
 }
 

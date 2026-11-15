@@ -50,7 +50,7 @@ func (c *AuthorizeImplicitGrantTypeHandler) ValidateAuthorizeRequest(ctx context
 // client to be registered for the 'implicit' grant type, validates the requested scopes, audience and resources against
 // the client, and then issues the access token.
 func (c *AuthorizeImplicitGrantTypeHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
-	// This let's us define multiple response types, for example open id connect's id_token
+	// This let's us define multiple response types, for example open id connect's id_token.
 	if !request.GetResponseTypes().ExactOne(consts.ResponseTypeImplicitFlowToken) {
 		return nil
 	}
@@ -100,7 +100,7 @@ func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context
 		request.GetSession().SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Truncate(jwt.TimePrecision))
 	}
 
-	// Generate the code
+	// Generate the code.
 	token, signature, err := c.AccessTokenStrategy.GenerateAccessToken(ctx, request)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
@@ -113,9 +113,11 @@ func (c *AuthorizeImplicitGrantTypeHandler) IssueImplicitAccessToken(ctx context
 	response.AddParameter(consts.AccessResponseAccessToken, token)
 	response.AddParameter(consts.AccessResponseExpiresIn, strconv.FormatInt(int64(getExpiresIn(request, oauth2.AccessToken, atLifespan, time.Now().UTC())/time.Second), 10))
 	response.AddParameter(consts.AccessResponseTokenType, oauth2.BearerAccessToken)
+
 	if state := request.GetState(); len(state) != 0 {
 		response.AddParameter(consts.FormParameterState, state)
 	}
+
 	response.AddParameter(consts.AccessResponseScope, strings.Join(request.GetGrantedScopes(), " "))
 
 	request.SetResponseTypeHandled(consts.ResponseTypeImplicitFlowToken)

@@ -71,18 +71,22 @@ func TestRuneSequenceIsPseudoUnique(t *testing.T) {
 	for i := 0; i < times; i++ {
 		k, err := RuneSequence(length, runes)
 		assert.Nil(t, err)
+
 		ks := string(k)
 		_, ok := s[ks]
 		assert.False(t, ok)
+
 		if ok {
 			return
 		}
+
 		s[ks] = true
 	}
 }
 
 func BenchmarkTestInt64(b *testing.B) {
 	length := 25
+
 	pattern := []rune("abcdefghijklmnopqrstuvwxyz")
 	for i := 0; i < b.N; i++ {
 		_, _ = RuneSequence(length, pattern)

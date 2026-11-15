@@ -32,6 +32,7 @@ func TestFosite_WriteRFC8628UserAuthorizeResponse(t *testing.T) {
 			setup: func() *RFC8628UserAuthorizeResponse {
 				responder := NewRFC8628UserAuthorizeResponse()
 				responder.SetStatus(DeviceAuthorizeStatusToString(DeviceAuthorizeStatusApproved))
+
 				return responder
 			},
 			expected: map[string]any{
@@ -49,6 +50,7 @@ func TestFosite_WriteRFC8628UserAuthorizeResponse(t *testing.T) {
 				responder := NewRFC8628UserAuthorizeResponse()
 				responder.SetStatus(DeviceAuthorizeStatusToString(DeviceAuthorizeStatusDenied))
 				responder.AddHeader("X-Custom-Header", "custom-value")
+
 				return responder
 			},
 			expected: map[string]any{
@@ -67,6 +69,7 @@ func TestFosite_WriteRFC8628UserAuthorizeResponse(t *testing.T) {
 				responder := NewRFC8628UserAuthorizeResponse()
 				responder.SetStatus(DeviceAuthorizeStatusToString(DeviceAuthorizeStatusNew))
 				responder.AddHeader(consts.HeaderContentType, "text/plain")
+
 				return responder
 			},
 			expected: map[string]any{
@@ -84,6 +87,7 @@ func TestFosite_WriteRFC8628UserAuthorizeResponse(t *testing.T) {
 				responder := NewRFC8628UserAuthorizeResponse()
 				responder.SetStatus(DeviceAuthorizeStatusToString(DeviceAuthorizeStatusApproved))
 				responder.SetExtra("custom_field", "custom_value")
+
 				return responder
 			},
 			expected: map[string]any{
@@ -127,6 +131,7 @@ func TestFosite_WriteRFC8628UserAuthorizeResponseMarshalError(t *testing.T) {
 			setup: func() *RFC8628UserAuthorizeResponse {
 				responder := NewRFC8628UserAuthorizeResponse()
 				responder.SetExtra("bad", make(chan int))
+
 				return responder
 			},
 			contains: "json: unsupported type",

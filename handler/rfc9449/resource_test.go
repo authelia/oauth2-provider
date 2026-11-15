@@ -37,6 +37,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			request: func() *http.Request {
 				r := &http.Request{Header: http.Header{}}
 				r.Header.Set(consts.HeaderAuthorization, "DPoP dpop-token")
+
 				return r
 			},
 			token: "dpop-token",
@@ -47,6 +48,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			request: func() *http.Request {
 				r := &http.Request{Header: http.Header{}}
 				r.Header.Set(consts.HeaderAuthorization, "dpop dpop-token")
+
 				return r
 			},
 			token: "dpop-token",
@@ -57,6 +59,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			request: func() *http.Request {
 				r := &http.Request{Header: http.Header{}}
 				r.Header.Set(consts.HeaderAuthorization, "DPoP   dpop-token")
+
 				return r
 			},
 			token: "dpop-token",
@@ -67,6 +70,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			request: func() *http.Request {
 				r := &http.Request{Header: http.Header{}}
 				r.Header.Set(consts.HeaderAuthorization, "DPoP   ")
+
 				return r
 			},
 			token: "",
@@ -77,6 +81,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			request: func() *http.Request {
 				r := &http.Request{Header: http.Header{}}
 				r.Header.Set(consts.HeaderAuthorization, "Bearer bearer-token")
+
 				return r
 			},
 			token: "bearer-token",
@@ -95,6 +100,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			request: func() *http.Request {
 				r := httptest.NewRequest(http.MethodPost, "https://rs.example.com/userinfo", strings.NewReader("access_token=form-token"))
 				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
 				return r
 			},
 			token: "form-token",
@@ -128,7 +134,7 @@ func TestValidateResourceAccessHappyPath(t *testing.T) {
 		jwt.ClaimJWTID: "ra-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: resourceURL, jwt.ClaimIssuedAt: time.Now().Unix(), "ath": athClaim(token),
 	})
 
-	r := newResourceRequest(http.MethodPost, resourceURL, token, proof)
+	r := newResourceRequest(resourceURL, token, proof)
 
 	parsed, err := s.ValidateResourceAccess(context.Background(), r, token, thumbprint(t, key), false)
 	require.NoError(t, err)
@@ -169,7 +175,7 @@ func TestValidateResourceAccessAlternates(t *testing.T) {
 				jwt.ClaimJWTID: "ra-alt", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: tc.htu, jwt.ClaimIssuedAt: time.Now().Unix(), "ath": athClaim(token),
 			})
 
-			_, err := s.ValidateResourceAccess(context.Background(), newResourceRequest(http.MethodPost, internalURL, token, proof), token, thumbprint(t, key), false, tc.alternates...)
+			_, err := s.ValidateResourceAccess(context.Background(), newResourceRequest(internalURL, token, proof), token, thumbprint(t, key), false, tc.alternates...)
 
 			if tc.err == "" {
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -200,7 +206,8 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				proof := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 					jwt.ClaimJWTID: "e1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: resourceURL, jwt.ClaimIssuedAt: time.Now().Unix(), "ath": athClaim(token),
 				})
-				return newResourceRequest(http.MethodPost, resourceURL, token, proof)
+
+				return newResourceRequest(resourceURL, token, proof)
 			},
 			boundJKT: func(t *testing.T, key *jose.JSONWebKey) string { return "" },
 			wantErr:  oauth2.ErrInvalidToken,
@@ -212,8 +219,9 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				proof := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 					jwt.ClaimJWTID: "e2", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: resourceURL, jwt.ClaimIssuedAt: time.Now().Unix(), "ath": athClaim(token),
 				})
-				r := newResourceRequest(http.MethodPost, resourceURL, "", proof)
+				r := newResourceRequest(resourceURL, "", proof)
 				r.Header.Set(consts.HeaderAuthorization, "Bearer "+token)
+
 				return r
 			},
 			wantErr:  oauth2.ErrInvalidToken,
@@ -225,7 +233,8 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				proof := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 					jwt.ClaimJWTID: "e3", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: resourceURL, jwt.ClaimIssuedAt: time.Now().Unix(), "ath": athClaim(token),
 				})
-				return newResourceRequest(http.MethodPost, resourceURL, "some-other-token", proof)
+
+				return newResourceRequest(resourceURL, "some-other-token", proof)
 			},
 			wantErr:  oauth2.ErrInvalidToken,
 			expected: "The access token provided is expired, revoked, malformed, or invalid for other reasons. The DPoP-bound access token was not presented using the DPoP authentication scheme. The access token must be presented via the DPoP scheme and match the introspected token (dpop scheme used: true, token matches: false).",
@@ -236,8 +245,9 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				proof := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 					jwt.ClaimJWTID: "e4", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: resourceURL, jwt.ClaimIssuedAt: time.Now().Unix(), "ath": athClaim(token),
 				})
-				r := newResourceRequest(http.MethodPost, resourceURL, token, proof)
+				r := newResourceRequest(resourceURL, token, proof)
 				r.Header.Add(consts.HeaderDPoP, proof)
+
 				return r
 			},
 			wantErr:  oauth2.ErrInvalidDPoPProof,
@@ -246,7 +256,7 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 		{
 			name: "MissingProof",
 			request: func(t *testing.T, key *jose.JSONWebKey) *http.Request {
-				return newResourceRequest(http.MethodPost, resourceURL, token, "")
+				return newResourceRequest(resourceURL, token, "")
 			},
 			wantErr:  oauth2.ErrInvalidDPoPProof,
 			expected: "The DPoP proof is missing or invalid. The request to the protected resource requires a DPoP proof but none was provided.",
@@ -257,7 +267,8 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				proof := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 					jwt.ClaimJWTID: "e5", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: resourceURL, jwt.ClaimIssuedAt: time.Now().Unix(),
 				})
-				return newResourceRequest(http.MethodPost, resourceURL, token, proof)
+
+				return newResourceRequest(resourceURL, token, proof)
 			},
 			wantErr:  oauth2.ErrInvalidDPoPProof,
 			expected: "The DPoP proof is missing or invalid. The DPoP proof is missing the required 'ath' claim.",
@@ -268,7 +279,8 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				proof := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 					jwt.ClaimJWTID: "e6", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: resourceURL, jwt.ClaimIssuedAt: time.Now().Unix(), "ath": athClaim("a-different-token"),
 				})
-				return newResourceRequest(http.MethodPost, resourceURL, token, proof)
+
+				return newResourceRequest(resourceURL, token, proof)
 			},
 			wantErr:  oauth2.ErrInvalidDPoPProof,
 			expected: "The DPoP proof is missing or invalid. The DPoP proof 'ath' claim does not match the access token.",
@@ -279,7 +291,8 @@ func TestValidateResourceAccessRejects(t *testing.T) {
 				proof := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 					jwt.ClaimJWTID: "e7", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: resourceURL, jwt.ClaimIssuedAt: time.Now().Unix(), "ath": athClaim(token),
 				})
-				return newResourceRequest(http.MethodPost, resourceURL, token, proof)
+
+				return newResourceRequest(resourceURL, token, proof)
 			},
 			boundJKT: func(t *testing.T, key *jose.JSONWebKey) string { return thumbprint(t, newTestProofKey(t)) },
 			wantErr:  oauth2.ErrInvalidDPoPProof,
@@ -313,7 +326,7 @@ func TestValidateResourceAccessRequiresNonce(t *testing.T) {
 		jwt.ClaimJWTID: "nonce-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: resourceURL, jwt.ClaimIssuedAt: time.Now().Unix(), "ath": athClaim(token),
 	})
 
-	r := newResourceRequest(http.MethodPost, resourceURL, token, proof)
+	r := newResourceRequest(resourceURL, token, proof)
 
 	_, err := s.ValidateResourceAccess(context.Background(), r, token, thumbprint(t, key), true)
 	assert.ErrorIs(t, err, oauth2.ErrUseDPoPNonce)
@@ -334,10 +347,10 @@ func thumbprint(t *testing.T, key *jose.JSONWebKey) string {
 	return jkt
 }
 
-func newResourceRequest(method, rawURL, token, proof string) *http.Request {
+func newResourceRequest(rawURL, token, proof string) *http.Request {
 	u, _ := url.Parse(rawURL)
 
-	r := &http.Request{Method: method, Header: http.Header{}, URL: u, Host: u.Host}
+	r := &http.Request{Method: http.MethodPost, Header: http.Header{}, URL: u, Host: u.Host}
 
 	if u.Scheme == consts.SchemeHTTPS {
 		r.Header.Set(consts.HeaderXForwardedProto, consts.SchemeHTTPS)

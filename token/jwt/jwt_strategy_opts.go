@@ -11,6 +11,7 @@ import (
 	"authelia.com/provider/jose/jwt"
 )
 
+// StrategyOpts holds the options used by the JWT strategy when encoding and decoding tokens.
 type StrategyOpts struct {
 	client Client
 
@@ -29,8 +30,11 @@ type StrategyOpts struct {
 }
 
 type (
-	KeyFuncJWS  func(ctx context.Context, token *jwt.JSONWebToken, claims MapClaims) (jwk *jose.JSONWebKey, err error)
-	KeyFuncJWE  func(ctx context.Context, jwe *jose.JSONWebEncryption, kid, alg string) (jwk *jose.JSONWebKey, err error)
+	// KeyFuncJWS resolves the JSON Web Key used to verify a JWS.
+	KeyFuncJWS func(ctx context.Context, token *jwt.JSONWebToken, claims MapClaims) (jwk *jose.JSONWebKey, err error)
+	// KeyFuncJWE resolves the JSON Web Key used to decrypt a JWE.
+	KeyFuncJWE func(ctx context.Context, jwe *jose.JSONWebEncryption, kid, alg string) (jwk *jose.JSONWebKey, err error)
+	// StrategyOpt configures StrategyOpts.
 	StrategyOpt func(opts *StrategyOpts) (err error)
 )
 

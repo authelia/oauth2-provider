@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Authelia
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package rfc9449
 
 import (
@@ -108,7 +112,7 @@ func normalizePercentEncoding(path string) string {
 }
 
 // removeDotSegments implements the RFC 3986 Section 5.2.4 algorithm used by the path segment normalization of Section
-// 6.2.2.3. Unlike path.Clean it preserves a trailing slash and empty segments, both of which are significant.
+// 6.2.2.3. Unlike [path.Clean] it preserves a trailing slash and empty segments, both of which are significant.
 func removeDotSegments(path string) string {
 	out := make([]byte, 0, len(path))
 

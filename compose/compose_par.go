@@ -9,7 +9,7 @@ import (
 	"authelia.com/provider/oauth2/handler/par"
 )
 
-// PushedAuthorizeHandlerFactory creates the basic PAR handler
+// PushedAuthorizeHandlerFactory creates the basic PAR handler.
 func PushedAuthorizeHandlerFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &par.PushedAuthorizeHandler{
 		Storage: storage,

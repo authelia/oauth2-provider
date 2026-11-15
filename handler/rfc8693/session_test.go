@@ -91,8 +91,8 @@ func TestNewDefaultSession(t *testing.T) {
 
 	require.NotNil(t, session.Extra)
 	require.NotNil(t, session.DefaultSession)
-	require.NotNil(t, session.DefaultSession.Claims)
-	require.NotNil(t, session.DefaultSession.Headers)
+	require.NotNil(t, session.Claims)
+	require.NotNil(t, session.Headers)
 }
 
 func TestDefaultSessionClone(t *testing.T) {

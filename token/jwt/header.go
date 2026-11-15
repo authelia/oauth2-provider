@@ -8,7 +8,7 @@ import (
 	"authelia.com/provider/oauth2/internal/clone"
 )
 
-// Headers is the jwt headers
+// Headers is the jwt headers.
 type Headers struct {
 	Extra map[string]any `json:"extra"`
 }
@@ -27,10 +27,12 @@ func (h *Headers) Clone() *Headers {
 	return &Headers{Extra: clone.Map(h.Extra)}
 }
 
-// ToMap will transform the headers to a map structure
+// ToMap will transform the headers to a map structure.
 func (h *Headers) ToMap() map[string]any {
-	var filter = map[string]bool{JSONWebTokenHeaderAlgorithm: true}
-	var extra = map[string]any{}
+	var (
+		filter = map[string]bool{JSONWebTokenHeaderAlgorithm: true}
+		extra  = map[string]any{}
+	)
 
 	// filter known values from extra.
 	for k, v := range h.Extra {
@@ -42,7 +44,7 @@ func (h *Headers) ToMap() map[string]any {
 	return extra
 }
 
-// Add will add a key-value pair to the extra field
+// Add will add a key-value pair to the extra field.
 func (h *Headers) Add(key string, value any) {
 	if h.Extra == nil {
 		h.Extra = make(map[string]any)
@@ -51,7 +53,7 @@ func (h *Headers) Add(key string, value any) {
 	h.Extra[key] = value
 }
 
-// Get will get a value from the extra field based on a given key
+// Get will get a value from the extra field based on a given key.
 func (h *Headers) Get(key string) any {
 	return h.Extra[key]
 }
@@ -81,7 +83,7 @@ func (h *Headers) SetDefaultString(key, value string) {
 	h.Extra[key] = value
 }
 
-// ToMapClaims will return a jwt-go MapClaims representation
+// ToMapClaims will return a jwt-go MapClaims representation.
 func (h Headers) ToMapClaims() MapClaims {
 	return h.ToMap()
 }

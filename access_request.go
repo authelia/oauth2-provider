@@ -4,6 +4,7 @@
 
 package oauth2
 
+// AccessRequest is the default implementation of AccessRequester.
 type AccessRequest struct {
 	GrantTypes       Arguments `json:"grantTypes" gorethink:"grantTypes"`
 	HandledGrantType Arguments `json:"handledGrantType" gorethink:"handledGrantType"`
@@ -33,6 +34,7 @@ func NewAccessRequest(session Session) *AccessRequest {
 		Request:          *NewRequest(),
 	}
 	r.Session = session
+
 	return r
 }
 

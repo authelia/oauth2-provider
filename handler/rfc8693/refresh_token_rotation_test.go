@@ -115,7 +115,9 @@ func TestTokenExchangeConcurrentRefreshTokenSubjectRevokesTheIssuedToken(t *test
 				}
 
 				winner := <-results
+
 				close(barrier.release)
+
 				loser := <-results
 
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(winner.err))

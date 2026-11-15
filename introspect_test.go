@@ -41,6 +41,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			setup: func() *http.Request {
 				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test", nil)
 				req.Header.Add(consts.HeaderAuthorization, "Bearer TokenFromHeader")
+
 				return req
 			},
 			expected: "TokenFromHeader",
@@ -50,6 +51,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			setup: func() *http.Request {
 				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test", nil)
 				req.Header.Add(consts.HeaderAuthorization, "bearer TokenFromHeader")
+
 				return req
 			},
 			expected: "TokenFromHeader",
@@ -67,6 +69,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			setup: func() *http.Request {
 				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test?access_token=TokenFromQueryParam", nil)
 				req.Header.Add(consts.HeaderAuthorization, "Basic abc")
+
 				return req
 			},
 			expected: "TokenFromQueryParam",
@@ -76,6 +79,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			setup: func() *http.Request {
 				req, _ := http.NewRequest(http.MethodGet, "http://example.com/test?access_token=TokenFromQueryParam", nil)
 				req.Header.Add(consts.HeaderAuthorization, "Bearer")
+
 				return req
 			},
 			expected: "TokenFromQueryParam",
@@ -85,6 +89,7 @@ func TestAccessTokenFromRequest(t *testing.T) {
 			setup: func() *http.Request {
 				req, _ := http.NewRequest(http.MethodPost, "http://example.com/test", io.NopCloser(strings.NewReader("not a real multipart body")))
 				req.Header.Set(consts.HeaderContentType, "multipart/form-data; boundary=foo")
+
 				return req
 			},
 			expected: "",

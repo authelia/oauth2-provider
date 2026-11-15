@@ -7,7 +7,10 @@ package jwt
 import "time"
 
 var (
+	// MarshalSingleStringAsArray controls whether a ClaimStrings with a single value marshals as an array rather than a string.
 	MarshalSingleStringAsArray = true
-	TimePrecision              = time.Second
-	TimeFunc                   = time.Now
+	// TimePrecision is the precision used when converting times to a NumericDate.
+	TimePrecision = time.Second
+	// TimeFunc returns the current time when validating claims.
+	TimeFunc = time.Now
 )

@@ -38,7 +38,7 @@ const (
 	ClaimTokenIntrospection                  = "token_introspection"
 	ClaimAccessTokenHash                     = "at_hash"
 	ClaimCIBAAuthReqID                       = "urn:openid:params:jwt:claim:auth_req_id"
-	ClaimRefreshTokenHash                    = "urn:openid:params:jwt:claim:rt_hash" //nolint:gosec // This is a claim name, not a credential.
+	ClaimRefreshTokenHash                    = "urn:openid:params:jwt:claim:rt_hash"
 	ClaimCodeHash                            = "c_hash"
 	ClaimStateHash                           = "s_hash"
 	ClaimNonce                               = valueNonce
@@ -62,5 +62,6 @@ const (
 )
 
 const (
+	// ClaimEventBackChannelLogout is the back-channel logout event identifier from OpenID Connect Back-Channel Logout 1.0.
 	ClaimEventBackChannelLogout = "http://schemas.openid.net/event/backchannel-logout"
 )

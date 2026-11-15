@@ -12,6 +12,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// OpenIDConnectExplicitHandler handles the OpenID Connect authorization code flow at the authorization endpoint.
 type OpenIDConnectExplicitHandler struct {
 	// OpenIDConnectRequestStorage is the storage for open id connect sessions.
 	OpenIDConnectRequestStorage   OpenIDConnectRequestStorage
@@ -30,7 +31,7 @@ type OpenIDConnectExplicitHandler struct {
 // the OpenID Connect 1.0 session under the authorization code, which must already have been issued. A 'nonce' the client
 // already used while the authorization code issued for it could still be redeemed is rejected.
 func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
-	if !(request.GetGrantedScopes().Has(consts.ScopeOpenID) && request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow)) {
+	if !request.GetGrantedScopes().Has(consts.ScopeOpenID) || !request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
 	}
 
@@ -68,7 +69,7 @@ func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 // ValidateAuthorizeRequest validates the 'redirect_uri', 'prompt', and 'max_age' parameters of an authorize request whose
 // 'response_type' is exactly 'code' and which requests the 'openid' scope.
 func (c *OpenIDConnectExplicitHandler) ValidateAuthorizeRequest(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
-	if !(request.GetRequestedScopes().Has(consts.ScopeOpenID) && request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow)) {
+	if !request.GetRequestedScopes().Has(consts.ScopeOpenID) || !request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
 	}
 

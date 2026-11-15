@@ -107,7 +107,7 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 			return err
 		}
 
-		// Get the subject and populate session
+		// Get the subject and populate session.
 		session.SetSubject(unpacked[consts.ClaimSubject].(string))
 		session.SetSubjectToken(unpacked)
 

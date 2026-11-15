@@ -85,6 +85,8 @@ func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWr
 // WriteIntrospectionResponse writes the introspection response.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
+//
+//nolint:gocyclo
 func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, r IntrospectionResponder) {
 	var (
 		caller   Client
@@ -183,18 +185,23 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	if r.GetAccessRequester().GetClient().GetID() != "" {
 		response[jwt.ClaimClientIdentifier] = r.GetAccessRequester().GetClient().GetID()
 	}
+
 	if len(r.GetAccessRequester().GetGrantedScopes()) > 0 {
 		response[jwt.ClaimScope] = strings.Join(r.GetAccessRequester().GetGrantedScopes(), " ")
 	}
+
 	if !r.GetAccessRequester().GetRequestedAt().IsZero() {
 		response[jwt.ClaimIssuedAt] = r.GetAccessRequester().GetRequestedAt().Unix()
 	}
+
 	if r.GetAccessRequester().GetSession().GetSubject() != "" {
 		response[jwt.ClaimSubject] = r.GetAccessRequester().GetSession().GetSubject()
 	}
+
 	if aud := JoinGrantedAudienceAndResource(r.GetAccessRequester().GetGrantedAudience(), r.GetAccessRequester().GetGrantedResource()); len(aud) > 0 {
 		response[jwt.ClaimAudience] = aud
 	}
+
 	if r.GetAccessRequester().GetSession().GetUsername() != "" {
 		response[jwt.ClaimUsername] = r.GetAccessRequester().GetSession().GetUsername()
 	}

@@ -202,6 +202,7 @@ func (r *decoratedJARClient) IsClientSigned() (is bool) {
 	return true
 }
 
+// IDTokenClient is a client that provides ID Token related metadata.
 type IDTokenClient interface {
 	// GetIDTokenSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements of the ID
 	// Token specifications. If unspecified the other available parameters will be utilized to select an appropriate
@@ -263,6 +264,7 @@ func (r *decoratedIDTokenClient) IsClientSigned() (is bool) {
 	return false
 }
 
+// JARMClient is a client that provides JWT Secured Authorization Response Mode (JARM) related metadata.
 type JARMClient interface {
 	// GetAuthorizationSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements of the
 	// JWT-secured Authorization Response Method (JARM) specifications. If unspecified the other available parameters
@@ -329,6 +331,7 @@ func (r *decoratedJARMClient) IsClientSigned() (is bool) {
 	return false
 }
 
+// UserInfoClient is a client that provides UserInfo response related metadata.
 type UserInfoClient interface {
 	// GetUserinfoSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements of the User
 	// Info specifications. If unspecified the other available parameters will be utilized to select an appropriate
@@ -389,6 +392,7 @@ func (r *decoratedUserInfoClient) IsClientSigned() (is bool) {
 	return false
 }
 
+// JWTProfileAccessTokenClient is a client that provides JWT Profile for OAuth 2.0 Access Tokens (RFC 9068) related metadata.
 type JWTProfileAccessTokenClient interface {
 	// GetAccessTokenSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements for
 	// JWT Profile for OAuth 2.0 Access Tokens specifications. If unspecified the other available parameters will be
@@ -453,6 +457,7 @@ func (r *decoratedJWTProfileAccessTokenClient) IsClientSigned() (is bool) {
 	return false
 }
 
+// IntrospectionClient is a client that provides token introspection response related metadata.
 type IntrospectionClient interface {
 	// GetIntrospectionSignedResponseKeyID returns the specific key identifier used to satisfy JWS requirements for
 	// OAuth 2.0 JWT introspection response specifications. If unspecified the other available parameters will be

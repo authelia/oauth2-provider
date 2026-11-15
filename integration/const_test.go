@@ -41,7 +41,7 @@ const (
 	firstJWTBearerSubject  = "first-service-client"
 	secondJWTBearerSubject = "second-service-client"
 
-	tokenURL          = "https://www.authelia.com/api" //nolint:gosec
+	tokenURL          = "https://www.authelia.com/api"
 	tokenRelativePath = "/token"
 )
 
@@ -55,7 +55,7 @@ const (
 	idjagACR               = "urn:example:acr:mfa"
 	idjagAMR               = "otp"
 	idjagAuthAge           = 2 * time.Minute
-	idjagSecretHash        = "$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y" //nolint:gosec
+	idjagSecretHash        = "$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y"
 	idjagStoreMemory       = "MemoryStore"
 	idjagStoreHydrate      = "HydratingMemoryStore"
 	idjagOtherScope        = "chat.write"

@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 Authelia
+#
+# SPDX-License-Identifier: Apache-2.0
+
+[default]
+locale = "en-us"
+extend-ignore-re = [
+    # reuse annotate flag
+    "--skip-unrecognised",
+    # shell shebang pattern
+    "\\(ba\\|da\\|a\\|k\\|z\\)\\?sh",
+]
+
+[default.extend-words]
+# CBOR Object Signing and Encryption
+COSE = "COSE"
+# go-jose Encrypter interface
+Encrypter = "Encrypter"
+encrypter = "encrypter"
+# Abbreviation of strategy in test variable names
+Strat = "Strat"
+# PAR followed by DPoP in test names
+PARD = "PARD"
+# Mixed case test inputs
+Fo = "Fo"
+fo = "fo"
+Ba = "Ba"
+# Fragments inside base64, tokens, hashes, and encoded test data
+AAS = "AAS"
+BA = "BA"
+ba = "ba"
+Byt = "Byt"
+FND = "FND"
+Iy = "Iy"
+Iz = "Iz"
+Knw = "Knw"
+OT = "OT"
+Ot = "Ot"
+Pn = "Pn"
+Stik = "Stik"
+WYA = "WYA"
+YOR = "YOR"
+Iif = "Iif"
+
+[files]
+ignore-hidden = false
+extend-exclude = [
+    ".git/",
+    ".claude/",
+    "graphify-out/",
+    "node_modules/",
+    "*.svg",
+    "go.sum",
+    "*-lock.yaml",
+    "*.pem",
+]

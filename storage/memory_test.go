@@ -434,7 +434,7 @@ func TestMemoryStoreClientRegistrationTokenSessions(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 }
 
-func TestMemoryStore_RevokeRefreshTokenSynchronisesRefreshTokens(t *testing.T) {
+func TestMemoryStore_RevokeRefreshTokenSynchronizesRefreshTokens(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()
 
@@ -761,7 +761,7 @@ func TestMemoryStoreDetectsReusedAuthorizationRequestValues(t *testing.T) {
 				assert.ErrorIs(t, tc.set(s, t.Context(), "client-a", "value", future), tc.reused)
 			})
 
-			t.Run("ShouldInitialiseAnUnsetMap", func(t *testing.T) {
+			t.Run("ShouldInitializeAnUnsetMap", func(t *testing.T) {
 				s := &MemoryStore{}
 
 				require.NoError(t, tc.set(s, t.Context(), "client-a", "value", future))
@@ -928,7 +928,7 @@ func TestMemoryStorePrunesExpiredEntriesAtAnInterval(t *testing.T) {
 	}
 }
 
-func TestExampleStoreInitialisesEveryMap(t *testing.T) {
+func TestExampleStoreInitializesEveryMap(t *testing.T) {
 	s := NewExampleStore()
 
 	require.NoError(t, s.CreateClientRegistrationTokenSession(t.Context(), "cr-sig", &oauth2.Request{ID: "cr-req", Session: &oauth2.DefaultSession{}}))

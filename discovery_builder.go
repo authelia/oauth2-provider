@@ -89,6 +89,8 @@ func (f *Fosite) NewOAuth2AuthorizationServerMetadata(ctx context.Context) (meta
 
 // newOAuth2AuthorizationServerMetadata builds the OAuth 2.0 Authorization Server Metadata document before the
 // DiscoveryMetadataHooks run and before it is signed.
+//
+//nolint:gocyclo
 func (f *Fosite) newOAuth2AuthorizationServerMetadata(ctx context.Context, capabilities *discoveryCapabilities) (metadata *OAuth2AuthorizationServerMetadata, err error) {
 	config := f.Config
 
@@ -683,7 +685,7 @@ func validateDiscoveryIssuer(issuer string) (err error) {
 		return fmt.Errorf("the authorization server metadata requires a valid issuer: %w", err)
 	}
 
-	if u.Scheme != "https" {
+	if u.Scheme != consts.SchemeHTTPS {
 		return fmt.Errorf("the authorization server metadata requires an issuer using the 'https' scheme but the issuer '%s' uses the '%s' scheme", issuer, u.Scheme)
 	}
 
@@ -753,7 +755,7 @@ func isClaimsParameterEnforced(ctx context.Context, config Configurator) bool {
 }
 
 // isRFC9470StepUpAuthenticationEnabled reports whether 'acr_values_supported' is advertised in the OAuth 2.0
-// Authorization Server Metadata, which signals that 'acr_values' and 'max_age' are honoured without the 'openid' scope.
+// Authorization Server Metadata, which signals that 'acr_values' and 'max_age' are honored without the 'openid' scope.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc9470#section-7
 func isRFC9470StepUpAuthenticationEnabled(ctx context.Context, config Configurator) bool {

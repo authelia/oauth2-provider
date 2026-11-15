@@ -219,15 +219,24 @@ type EndpointURLs struct {
 type EndpointName string
 
 const (
-	EndpointToken                      EndpointName = "token"
-	EndpointRevocation                 EndpointName = "revocation"
-	EndpointIntrospection              EndpointName = "introspection"
+	// EndpointToken is the token endpoint.
+	EndpointToken EndpointName = "token"
+	// EndpointRevocation is the revocation endpoint.
+	EndpointRevocation EndpointName = "revocation"
+	// EndpointIntrospection is the introspection endpoint.
+	EndpointIntrospection EndpointName = "introspection"
+	// EndpointPushedAuthorizationRequest is the pushed authorization request endpoint.
 	EndpointPushedAuthorizationRequest EndpointName = "pushed_authorization_request"
-	EndpointDeviceAuthorization        EndpointName = "device_authorization"
-	EndpointUserInfo                   EndpointName = "userinfo"
-	EndpointRegistration               EndpointName = "registration"
-	EndpointEndSession                 EndpointName = "end_session"
-	EndpointBackChannelAuthentication  EndpointName = "backchannel_authentication"
+	// EndpointDeviceAuthorization is the device authorization endpoint.
+	EndpointDeviceAuthorization EndpointName = "device_authorization"
+	// EndpointUserInfo is the userinfo endpoint.
+	EndpointUserInfo EndpointName = "userinfo"
+	// EndpointRegistration is the client registration endpoint.
+	EndpointRegistration EndpointName = "registration"
+	// EndpointEndSession is the end session endpoint.
+	EndpointEndSession EndpointName = "end_session"
+	// EndpointBackChannelAuthentication is the backchannel authentication endpoint.
+	EndpointBackChannelAuthentication EndpointName = "backchannel_authentication"
 )
 
 // URLs returns the URL of the endpoint followed by its RFC 8705 mutual TLS alias, omitting empty values, or nil for
@@ -391,7 +400,6 @@ type PostLogoutRedirectWithoutIDTokenHintProvider interface {
 	GetAllowPostLogoutRedirectWithoutIDTokenHint(ctx context.Context) (allow bool)
 }
 
-// OmitRedirectScopeParamProvider returns the provider for configuring the omit redirect scope param.
 // RedirectFragmentGuardProvider returns the provider for configuring whether an arbitrary fragment is appended to
 // authorization response redirects in the query response modes.
 type RedirectFragmentGuardProvider interface {
@@ -400,9 +408,10 @@ type RedirectFragmentGuardProvider interface {
 	GetEnableRedirectFragmentGuard(ctx context.Context) (enable bool)
 }
 
+// OmitRedirectScopeParamProvider returns the provider for configuring the omit redirect scope param.
 type OmitRedirectScopeParamProvider interface {
 	// GetOmitRedirectScopeParam must be set to true if the scope query param is to be omitted
-	// in the authorization's redirect URI
+	// in the authorization's redirect URI.
 	GetOmitRedirectScopeParam(ctx context.Context) (omit bool)
 }
 
@@ -434,7 +443,7 @@ type ClaimsParameterEnforcementProvider interface {
 // See: https://datatracker.ietf.org/doc/html/rfc9470#section-7
 type RFC9470StepUpAuthenticationProvider interface {
 	// GetRFC9470StepUpAuthenticationEnabled returns true if the 'acr_values' and 'max_age' authorization request
-	// parameters are honoured for requests which do not grant the 'openid' scope.
+	// parameters are honored for requests which do not grant the 'openid' scope.
 	GetRFC9470StepUpAuthenticationEnabled(ctx context.Context) (enabled bool)
 }
 
@@ -817,8 +826,6 @@ type RFC7591ClientRegistrationTokenSecretProvider interface {
 	GetRFC7591ClientRegistrationRotatedGlobalSecrets(ctx context.Context) (secrets [][]byte, err error)
 }
 
-// RFC7591ClientRegistrationConfigProvider is the configuration provider for RFC 7591, RFC 7592, and OpenID Connect
-// Dynamic Client Registration 1.0.
 // RFC7591ClientRegistrationGrantTypesProvider returns the provider for the grant types a client may register for.
 type RFC7591ClientRegistrationGrantTypesProvider interface {
 	// GetRFC7591ClientRegistrationGrantTypes returns the grant types a client may register for. A registered grant
@@ -836,6 +843,8 @@ type RFC7591AllowNativeImplicitGrantProvider interface {
 	GetRFC7591AllowNativeImplicitGrant(ctx context.Context) (allow bool)
 }
 
+// RFC7591ClientRegistrationConfigProvider is the configuration provider for RFC 7591, RFC 7592, and OpenID Connect
+// Dynamic Client Registration 1.0.
 type RFC7591ClientRegistrationConfigProvider interface {
 	RFC7591ClientRegistrationTokenSecretProvider
 	RFC7591ClientRegistrationGrantTypesProvider
@@ -867,7 +876,7 @@ type RFC7591ClientRegistrationConfigProvider interface {
 	// GetRFC7591ClientRegistrationEndpointAudiences returns the audiences a client creation token may carry to be
 	// accepted at the client registration endpoint. The token must carry at least one of them. An empty value means
 	// the configured registration endpoint URL is expected, falling back to the URL the request was made to. A
-	// deployment authorises a client to obtain such a token by adding one of these values to that client's
+	// deployment authorizes a client to obtain such a token by adding one of these values to that client's
 	// registered audience.
 	GetRFC7591ClientRegistrationEndpointAudiences(ctx context.Context) (audiences []string)
 
@@ -1046,7 +1055,7 @@ type PushedAuthorizeRequestConfigProvider interface {
 	// GetPushedAuthorizeContextLifespan is the lifespan of the short-lived PAR context.
 	GetPushedAuthorizeContextLifespan(ctx context.Context) (lifespan time.Duration)
 
-	// GetRequirePushedAuthorizationRequests indicates if the use of Pushed Authorization Requests is gobally required.
+	// GetRequirePushedAuthorizationRequests indicates if the use of Pushed Authorization Requests is globally required.
 	// In this mode, a client cannot pass authorize parameters at the 'authorize' endpoint. The 'authorize' endpoint
 	// must contain the PAR request_uri.
 	GetRequirePushedAuthorizationRequests(ctx context.Context) (enforce bool)

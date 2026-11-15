@@ -125,12 +125,12 @@ func TestDefaultAudienceMatchingStrategy(t *testing.T) {
 			needle:   []string{"7c4b39f4-9c5b-4e6d-9b34-5a3f6e6c3f0b"},
 		},
 		{
-			name:     "ShouldPassUnparseableNeedleWhenExactlyInHaystack",
+			name:     "ShouldPassUnparsableNeedleWhenExactlyInHaystack",
 			haystack: []string{"\x7f"},
 			needle:   []string{"\x7f"},
 		},
 		{
-			name:     "ShouldFailUnparseableNeedleMissingFromHaystack",
+			name:     "ShouldFailUnparsableNeedleMissingFromHaystack",
 			haystack: []string{"https://example.com/api"},
 			needle:   []string{"\x7f"},
 			expected: debugPrefix + "Requested audience '\x7f' has not been whitelisted by the OAuth 2.0 Client.",

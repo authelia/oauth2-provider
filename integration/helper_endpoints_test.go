@@ -23,10 +23,12 @@ import (
 func tokenRevocationHandler(t *testing.T, oauth2 oauth2.Provider, session oauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		ctx := context.Background()
+
 		err := oauth2.NewRevocationRequest(ctx, req)
 		if err != nil {
 			t.Logf("Revoke request failed because %+v", err)
 		}
+
 		oauth2.WriteRevocationResponse(req.Context(), rw, err)
 	}
 }
@@ -34,10 +36,12 @@ func tokenRevocationHandler(t *testing.T, oauth2 oauth2.Provider, session oauth2
 func tokenIntrospectionHandler(t *testing.T, oauth2 oauth2.Provider, session oauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		ctx := context.Background()
+
 		ar, err := oauth2.NewIntrospectionRequest(ctx, req, session)
 		if err != nil {
 			t.Logf("Introspection request failed because: %+v", err)
 			oauth2.WriteIntrospectionError(req.Context(), rw, err)
+
 			return
 		}
 
@@ -48,12 +52,14 @@ func tokenIntrospectionHandler(t *testing.T, oauth2 oauth2.Provider, session oau
 func tokenInfoHandler(t *testing.T, provider oauth2.Provider, session oauth2.Session) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		ctx := context.Background()
+
 		_, resp, err := provider.IntrospectToken(ctx, oauth2.AccessTokenFromRequest(req), oauth2.AccessToken, session)
 		if err != nil {
 			t.Logf("Info request failed because: %+v", err)
 			e, ok := errors.AsType[*oauth2.RFC6749Error](err)
 			require.True(t, ok)
 			http.Error(rw, e.DescriptionField, e.CodeField)
+
 			return
 		}
 
@@ -74,6 +80,7 @@ func authEndpointHandler(t *testing.T, provider oauth2.Provider, session oauth2.
 			t.Logf("Access request failed because: %+v", err)
 			t.Logf("Request: %+v", ar)
 			provider.WriteAuthorizeError(req.Context(), rw, ar, err)
+
 			return
 		}
 
@@ -100,6 +107,7 @@ func authEndpointHandler(t *testing.T, provider oauth2.Provider, session oauth2.
 			t.Logf("Access request failed because: %+v", err)
 			t.Logf("Request: %+v", ar)
 			provider.WriteAuthorizeError(req.Context(), rw, ar, err)
+
 			return
 		}
 
@@ -118,6 +126,7 @@ func authCallbackHandler(t *testing.T) func(rw http.ResponseWriter, req *http.Re
 		if q.Get("code") != "" {
 			_, _ = rw.Write([]byte("code: ok"))
 		}
+
 		if q.Get("error") != "" {
 			rw.WriteHeader(http.StatusNotAcceptable)
 			_, _ = rw.Write([]byte("error: " + q.Get("error")))

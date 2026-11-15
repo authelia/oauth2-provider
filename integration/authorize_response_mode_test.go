@@ -39,6 +39,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		GlobalSecret:                          []byte("some-secret-thats-random-some-secret-thats-random-"),
 		RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
 	}, store, gen.MustRSAKey())
+
 	ts := mockServer(t, provider, session)
 	defer ts.Close()
 
@@ -53,6 +54,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 	oauthClient.ClientID = testClientIDResponseMode
 
 	var state string
+
 	testCases := []struct {
 		name         string
 		setup        func()
@@ -119,6 +121,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			},
 			check: func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string) {
 				provider.(*oauth2.Fosite).Config.(*oauth2.Config).UseLegacyErrorFormat = true
+
 				assert.Equal(t, "unsupported_response_mode", err["ErrorField"])
 				assert.Equal(t, "The authorization server does not support obtaining a response using this response mode. The 'response_mode' requested was 'form_post', but the Authorization Server or registered OAuth 2.0 client doesn't allow or support this mode.", err["DescriptionField"])
 				assert.Empty(t, err["HintField"])
@@ -271,6 +274,7 @@ func getParameters(t *testing.T, param url.Values) (code, state, iDToken string,
 		code = param.Get(consts.FormParameterAuthorizationCode)
 		state = param.Get(consts.FormParameterState)
 		iDToken = param.Get(consts.AccessResponseIDToken)
+
 		token = xoauth2.Token{
 			AccessToken:  param.Get(consts.AccessResponseAccessToken),
 			TokenType:    param.Get(consts.AccessResponseTokenType),
@@ -279,8 +283,10 @@ func getParameters(t *testing.T, param url.Values) (code, state, iDToken string,
 		if param.Get(consts.AccessResponseExpiresIn) != "" {
 			expires, err := strconv.Atoi(param.Get(consts.AccessResponseExpiresIn))
 			require.NoError(t, err)
+
 			token.Expiry = time.Now().UTC().Add(time.Duration(expires) * time.Second)
 		}
 	}
+
 	return
 }

@@ -139,6 +139,7 @@ func (c *RefreshTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Cont
 	}
 
 	form := request.GetRequestForm()
+
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 	if requestedTokenType == "" {
 		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
@@ -155,12 +156,12 @@ func (c *RefreshTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Cont
 	return nil
 }
 
-// CanSkipClientAuth indicates if client auth can be skipped
+// CanSkipClientAuth indicates if client auth can be skipped.
 func (c *RefreshTokenTypeHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) bool {
 	return false
 }
 
-// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
+// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled.
 func (c *RefreshTokenTypeHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) bool {
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
@@ -384,6 +385,7 @@ func (c *RefreshTokenTypeHandler) ownAudience(ctx context.Context, request oauth
 	return []string{issuer}, nil
 }
 
+//nolint:gocyclo
 func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if err = requireSubjectToken(request); err != nil {
 		return err

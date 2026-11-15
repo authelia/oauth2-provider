@@ -13,7 +13,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// NewPushedAuthorizeResponse executes the handlers and builds the response
+// NewPushedAuthorizeResponse executes the handlers and builds the response.
 func (f *Fosite) NewPushedAuthorizeResponse(ctx context.Context, request AuthorizeRequester, session Session) (responder PushedAuthorizeResponder, err error) {
 	// Get handlers. If no handlers are defined, this is considered a misconfigured Fosite instance.
 	provider, ok := f.Config.(PushedAuthorizeRequestHandlersProvider)
@@ -45,7 +45,7 @@ func (f *Fosite) NewPushedAuthorizeResponse(ctx context.Context, request Authori
 	return response, nil
 }
 
-// WritePushedAuthorizeResponse writes the PAR response
+// WritePushedAuthorizeResponse writes the PAR response.
 func (f *Fosite) WritePushedAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, response PushedAuthorizeResponder) {
 	headers := response.GetHeader()
 	for header := range headers {
@@ -73,7 +73,7 @@ func (f *Fosite) WritePushedAuthorizeResponse(ctx context.Context, rw http.Respo
 	_, _ = rw.Write(data)
 }
 
-// WritePushedAuthorizeError writes the PAR error
+// WritePushedAuthorizeError writes the PAR error.
 func (f *Fosite) WritePushedAuthorizeError(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, err error) {
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)

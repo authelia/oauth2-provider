@@ -69,6 +69,7 @@ func TestResponseModeHandlersAppend(t *testing.T) {
 			for _, h := range tc.appends {
 				actual.Append(h)
 			}
+
 			assert.Len(t, actual, tc.length)
 			assert.Equal(t, tc.appends[0], actual[0])
 		})
@@ -99,6 +100,7 @@ func TestResponseModeParameterHandlersAppend(t *testing.T) {
 			for _, h := range tc.appends {
 				actual.Append(h)
 			}
+
 			assert.Len(t, actual, tc.length)
 			assert.Equal(t, tc.appends[0], actual[0])
 		})
@@ -136,6 +138,7 @@ func TestAuthorizeEndpointHandlersAppend(t *testing.T) {
 			for _, h := range tc.appends {
 				actual.Append(h)
 			}
+
 			assert.Len(t, actual, tc.length)
 			assert.Equal(t, first, actual[0])
 		})
@@ -176,6 +179,7 @@ func TestTokenEndpointHandlersAppend(t *testing.T) {
 			for _, h := range tc.appends {
 				actual.Append(h)
 			}
+
 			require.Len(t, actual, tc.length)
 			assert.Equal(t, first, actual[0])
 		})
@@ -213,6 +217,7 @@ func TestTokenIntrospectionHandlersAppend(t *testing.T) {
 			for _, h := range tc.appends {
 				actual.Append(h)
 			}
+
 			require.Len(t, actual, tc.length)
 			assert.Equal(t, first, actual[0])
 		})
@@ -250,6 +255,7 @@ func TestRevocationHandlersAppend(t *testing.T) {
 			for _, h := range tc.appends {
 				actual.Append(h)
 			}
+
 			require.Len(t, actual, tc.length)
 			assert.Equal(t, first, actual[0])
 		})
@@ -287,6 +293,7 @@ func TestPushedAuthorizeEndpointHandlersAppend(t *testing.T) {
 			for _, h := range tc.appends {
 				actual.Append(h)
 			}
+
 			require.Len(t, actual, tc.length)
 			assert.Equal(t, first, actual[0])
 		})
@@ -324,6 +331,7 @@ func TestRFC8628DeviceAuthorizeEndpointHandlersAppend(t *testing.T) {
 			for _, h := range tc.appends {
 				actual.Append(h)
 			}
+
 			require.Len(t, actual, tc.length)
 			assert.Equal(t, first, actual[0])
 		})
@@ -361,6 +369,7 @@ func TestRFC8628UserAuthorizeEndpointHandlersAppend(t *testing.T) {
 			for _, h := range tc.appends {
 				actual.Append(h)
 			}
+
 			require.Len(t, actual, tc.length)
 			assert.Equal(t, first, actual[0])
 		})

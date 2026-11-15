@@ -15,6 +15,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// TokenIntrospector introspects a token and reports its use.
 type TokenIntrospector interface {
 	IntrospectToken(ctx context.Context, token string, tokenUseHint TokenUse, request AccessRequester, scopes []string) (tokenUse TokenUse, err error)
 }
@@ -41,13 +42,12 @@ func AuthorizationCredentialFromRequest(r *http.Request) (scheme, token string, 
 // token can be located.
 func AccessTokenFromRequest(r *http.Request) string {
 	// RFC 6750: the Authorization header is tried first, then the 'access_token' parameter.
-
 	auth := r.Header.Get(consts.HeaderAuthorization)
 	split := strings.SplitN(auth, " ", 2)
 
 	if len(split) != 2 || !strings.EqualFold(split[0], BearerAccessToken) {
 		// Nothing in Authorization header, try access_token
-		// Empty string returned if there's no such parameter
+		// Empty string returned if there's no such parameter.
 		if err := r.ParseForm(); err != nil {
 			return ""
 		}
@@ -63,8 +63,10 @@ func AccessTokenFromRequest(r *http.Request) string {
 // ErrRequestUnauthorized if no introspector recognizes the token. The tokenUse argument is treated as a hint that
 // introspectors may use to short-circuit when the token type is known in advance.
 func (f *Fosite) IntrospectToken(ctx context.Context, token string, tokenUse TokenUse, session Session, scopes ...string) (TokenUse, AccessRequester, error) {
-	var found = false
-	var foundTokenUse TokenUse = ""
+	var (
+		found                  = false
+		foundTokenUse TokenUse = ""
+	)
 
 	ar := NewAccessRequest(session)
 	for _, validator := range f.Config.GetTokenIntrospectionHandlers(ctx) {

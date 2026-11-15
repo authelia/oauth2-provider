@@ -483,7 +483,7 @@ func TestCoreValidatorRoutesForeignPrefixedTokens(t *testing.T) {
 			token:    "aaa.bbb.ccc",
 			expected: oauth2.ErrUnknownRequest,
 		},
-		{ //nolint:gosec
+		{
 			name:     "ShouldRejectAnEncryptedJWT",
 			token:    "aaa.bbb.ccc.ddd.eee",
 			expected: oauth2.ErrRequestUnauthorized,

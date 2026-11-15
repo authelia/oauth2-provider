@@ -174,7 +174,7 @@ func TestBackChannelNotificationBuildersRequireAnHTTPSEndpoint(t *testing.T) {
 		{"ShouldRejectHTTP", "http://client.example.com/cb"},
 		{"ShouldRejectARelativeURL", "/cb"},
 		{"ShouldRejectAnHTTPSURLWithoutAHost", "https:///cb"},
-		{"ShouldRejectAnUnparseableURL", "https://client.example.com/%zz"},
+		{"ShouldRejectAnUnparsableURL", "https://client.example.com/%zz"},
 	}
 
 	for _, tc := range testCases {

@@ -37,7 +37,7 @@ func Slice[T any](value any) (values []T, ok bool) {
 	}
 }
 
-// Number returns value as a T. A JSON number decodes to a float64 or a json.Number, and a claim set in process may hold
+// Number returns value as a T. A JSON number decodes to a float64 or a [json.Number], and a claim set in process may hold
 // any Go integer or floating point type. Converting a fractional value to int64 truncates it.
 //
 //nolint:gocyclo

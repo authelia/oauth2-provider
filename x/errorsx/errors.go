@@ -25,6 +25,7 @@ func Cause(err error) error {
 		if !ok || cause.Cause() == nil {
 			break
 		}
+
 		err = cause.Cause()
 	}
 
@@ -83,10 +84,12 @@ type IDCarrier interface {
 	ID() string
 }
 
+// StackTracer is implemented by errors that carry a stack trace.
 type StackTracer interface {
 	StackTrace() errors.StackTrace
 }
 
+// Causer is implemented by errors that wrap a cause.
 type Causer interface {
 	Cause() error
 }

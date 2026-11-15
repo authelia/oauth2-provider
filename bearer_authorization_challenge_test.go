@@ -212,7 +212,7 @@ func TestWriteBearerAuthorizationChallengeIncludesScope(t *testing.T) {
 
 	rw := httptest.NewRecorder()
 
-	f.WriteBearerAuthorizationChallenge(ctx, rw, r, errorsx.WithStack(rfc))
+	_ = f.WriteBearerAuthorizationChallenge(ctx, rw, r, errorsx.WithStack(rfc))
 
 	assert.Contains(t, rw.Header().Get("WWW-Authenticate"), `scope="urn:a urn:b"`)
 	assert.Contains(t, rw.Header().Get("WWW-Authenticate"), `error="insufficient_scope"`)
@@ -257,7 +257,7 @@ func TestWriteBearerAuthorizationChallengeIncludesAuthenticationRequirements(t *
 
 			rw := httptest.NewRecorder()
 
-			f.WriteBearerAuthorizationChallenge(ctx, rw, r, errorsx.WithStack(tc.err))
+			_ = f.WriteBearerAuthorizationChallenge(ctx, rw, r, errorsx.WithStack(tc.err))
 
 			assert.Equal(t, tc.expected, rw.Header().Get("WWW-Authenticate"))
 		})
@@ -290,15 +290,16 @@ func TestWriteBearerAuthorizationChallengeNonce(t *testing.T) {
 		rw := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodPost, "https://as.example.com/introspect", nil)
 
-		f.WriteBearerAuthorizationChallenge(ctx, rw, r, errorsx.WithStack(ErrUseDPoPNonce))
+		_ = f.WriteBearerAuthorizationChallenge(ctx, rw, r, errorsx.WithStack(ErrUseDPoPNonce))
 		assert.Equal(t, `DPoP error="use_dpop_nonce", error_description="Authorization server requires nonce in DPoP proof.", algs="ES256"`, rw.Header().Get("WWW-Authenticate"))
 		assert.Equal(t, "fixed-nonce", rw.Header().Get("DPoP-Nonce"))
 	})
 
 	t.Run("ShouldBeIdenticalForAnyCredential", func(t *testing.T) {
-		var headers []string
+		auths := []string{"", "DPoP garbage", "DPoP a-perfectly-good-token"}
+		headers := make([]string, 0, len(auths))
 
-		for _, auth := range []string{"", "DPoP garbage", "DPoP a-perfectly-good-token"} {
+		for _, auth := range auths {
 			rw := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodPost, "https://as.example.com/introspect", nil)
 
@@ -306,7 +307,7 @@ func TestWriteBearerAuthorizationChallengeNonce(t *testing.T) {
 				r.Header.Set("Authorization", auth)
 			}
 
-			f.WriteBearerAuthorizationChallenge(ctx, rw, r, errorsx.WithStack(ErrUseDPoPNonce))
+			_ = f.WriteBearerAuthorizationChallenge(ctx, rw, r, errorsx.WithStack(ErrUseDPoPNonce))
 
 			headers = append(headers, rw.Header().Get("WWW-Authenticate"))
 			require.NotEmpty(t, rw.Header().Get("DPoP-Nonce"))

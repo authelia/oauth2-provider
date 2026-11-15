@@ -42,6 +42,8 @@ func IsClientIdentifierURL(id string) (ok bool) {
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-3
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-4
+//
+//nolint:gocyclo
 func ValidateClientIdentifierURL(id string) (err error) {
 	if !strings.HasPrefix(id, consts.SchemeHTTPS+"://") {
 		return errClientIdentifierURL("The client identifier '%s' does not use the 'https' scheme.", id)
@@ -88,7 +90,7 @@ func ValidateClientIdentifierURL(id string) (err error) {
 			return errClientIdentifierURL("The client identifier '%s' contains a path segment which could not be decoded: %v.", id, err)
 		}
 
-		if decoded == "." || decoded == ".." {
+		if decoded == pathSegmentCurrent || decoded == pathSegmentParent {
 			return errClientIdentifierURL("The client identifier '%s' contains a single-dot or double-dot path segment.", id)
 		}
 	}

@@ -325,6 +325,7 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 				require.NoError(t, err)
 
 				areq.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
+
 				require.NoError(t, s.CreateAuthorizeCodeSession(t.Context(), signature, authreq))
 			},
 			nil,
@@ -369,6 +370,7 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
 				token, _, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 				require.NoError(t, err)
+
 				r.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 			},
 			nil,
@@ -409,6 +411,7 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
 				token, signature, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 				require.NoError(t, err)
+
 				r.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 
 				require.NoError(t, s.CreateAuthorizeCodeSession(t.Context(), signature, ar))
@@ -436,6 +439,7 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 			func(t *testing.T, s CoreStorage, r *oauth2.AccessRequest, ar *oauth2.AuthorizeRequest) {
 				token, signature, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 				require.NoError(t, err)
+
 				r.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 
 				require.NoError(t, s.CreateAuthorizeCodeSession(t.Context(), signature, ar))
@@ -614,6 +618,7 @@ func TestAuthorizeExplicitGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
 			} else {
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
 				if tc.check != nil {
 					tc.check(t, s, tc.r, tc.ar)
 				}
@@ -888,6 +893,7 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 	}
 	token, _, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
 	require.NoError(t, err)
+
 	request.Form = url.Values{consts.FormParameterAuthorizationCode: {token}}
 	propagatedContext := context.Background()
 
@@ -1097,6 +1103,7 @@ func TestAuthorizeCodeTransactional_HandleTokenEndpointRequest(t *testing.T) {
 			}
 
 			response := oauth2.NewAccessResponse()
+
 			err := handler.PopulateTokenEndpointResponse(propagatedContext, request, response)
 			if tc.err != "" {
 				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)

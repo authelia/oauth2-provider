@@ -19,6 +19,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
+// JWTBearer is a client for the RFC 7523 JWT bearer grant.
 type JWTBearer struct {
 	tokenURL string
 	header   *Header //nolint:unused
@@ -27,6 +28,7 @@ type JWTBearer struct {
 	Signer jose.Signer
 }
 
+// Token is a token endpoint response.
 type Token struct {
 	AccessToken  string `json:"access_token"`
 	TokenType    string `json:"token_type,omitempty"`
@@ -34,12 +36,14 @@ type Token struct {
 	ExpiresIn    int64  `json:"expires_in,omitempty"`
 }
 
+// Header is the header of a JWT.
 type Header struct {
 	Algorithm string `json:"alg"`
 	Typ       string `json:"typ"`
 	KeyID     string `json:"kid,omitempty"`
 }
 
+// JWTBearerPayload is the payload of a JWT bearer assertion.
 type JWTBearerPayload struct {
 	*jwt.Claims
 
@@ -48,6 +52,7 @@ type JWTBearerPayload struct {
 	RequestedAudience []string
 }
 
+// SetPrivateKey configures the signer with the RS256 private key.
 func (c *JWTBearer) SetPrivateKey(keyID string, privateKey *rsa.PrivateKey) error {
 	jwk := jose.JSONWebKey{Key: privateKey, KeyID: keyID, Algorithm: string(jose.RS256)}
 	signingKey := jose.SigningKey{
@@ -67,6 +72,7 @@ func (c *JWTBearer) SetPrivateKey(keyID string, privateKey *rsa.PrivateKey) erro
 	return nil
 }
 
+// GetToken signs an assertion and requests a token with it.
 func (c *JWTBearer) GetToken(ctx context.Context, payloadData *JWTBearerPayload, scope []string) (*Token, error) {
 	builder := jwt.Signed(c.Signer).
 		Claims(payloadData.Claims).
@@ -134,6 +140,7 @@ func (c *JWTBearer) getRequestBodyReader(assertion string, scope, audience []str
 	return strings.NewReader(data.Encode()), nil
 }
 
+// NewJWTBearer returns a JWTBearer client for the given token URL.
 func NewJWTBearer(tokenURL string) *JWTBearer {
 	return &JWTBearer{
 		client:   &http.Client{},

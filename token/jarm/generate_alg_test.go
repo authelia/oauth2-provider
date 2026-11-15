@@ -65,7 +65,7 @@ func TestGenerateSigningAlgorithm(t *testing.T) {
 
 			require.NoError(t, err)
 
-			signed, err := jose.ParseSigned(token, []jose.SignatureAlgorithm{jose.RS256, jose.ES256})
+			signed, err := jose.ParseSignedCompact(token, []jose.SignatureAlgorithm{jose.RS256, jose.ES256})
 			require.NoError(t, err)
 			require.Len(t, signed.Signatures, 1)
 

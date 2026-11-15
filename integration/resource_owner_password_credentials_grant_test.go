@@ -73,10 +73,13 @@ func runResourceOwnerPasswordCredentialsGrantTest(t *testing.T, strategy hoauth2
 			check: func(t *testing.T, token *xoauth2.Token) {
 				s, err := store.GetAccessTokenSession(t.Context(), strings.Split(token.AccessToken, ".")[1], nil)
 				require.NoError(t, err)
+
 				atExp := s.GetSession().GetExpiresAt(oauth2.AccessToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.PasswordGrantAccessTokenLifespan), atExp, time.Minute)
+
 				atExpIn := time.Duration(token.Extra(consts.AccessResponseExpiresIn).(float64)) * time.Second
 				internal.RequireEqualDuration(t, *internal.TestLifespans.PasswordGrantAccessTokenLifespan, atExpIn, time.Minute)
+
 				rtExp := s.GetSession().GetExpiresAt(oauth2.RefreshToken)
 				internal.RequireEqualTime(t, time.Now().UTC().Add(*internal.TestLifespans.PasswordGrantRefreshTokenLifespan), rtExp, time.Minute)
 			},

@@ -219,7 +219,7 @@ func parseUnverified(t *testing.T, raw any) (claims map[string]any) {
 	value, ok := raw.(string)
 	require.True(t, ok, "the response has no ID Token")
 
-	signed, err := jose.ParseSigned(value, []jose.SignatureAlgorithm{jose.RS256})
+	signed, err := jose.ParseSignedCompact(value, []jose.SignatureAlgorithm{jose.RS256})
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(signed.UnsafePayloadWithoutVerification(), &claims))
 

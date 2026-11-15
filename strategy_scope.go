@@ -49,6 +49,7 @@ func HierarchicScopeStrategy(haystack []string, needle string) bool {
 
 		needles := strings.Split(needle, ".")
 		haystack := strings.Split(this, ".")
+
 		haystackLen := len(haystack) - 1
 		for k, needle := range needles {
 			if haystackLen < k {

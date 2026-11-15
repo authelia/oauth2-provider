@@ -9,8 +9,10 @@ import (
 	"time"
 )
 
+// ClaimValidationOption configures ClaimValidationOptions.
 type ClaimValidationOption func(opts *ClaimValidationOptions)
 
+// ClaimValidationOptions holds the options used when validating claims.
 type ClaimValidationOptions struct {
 	timef          func() time.Time
 	clockSkew      time.Duration
@@ -207,7 +209,7 @@ func validLifetime(nbf, exp *NumericDate, now int64, lifetime time.Duration) boo
 
 	seconds, n := uint64(lifetime/time.Second), nbf.Int64()
 
-	if now > n && uint64(now)-uint64(n) > seconds {
+	if now > n && uint64(now)-uint64(n) > seconds { //nolint:gosec // G115: now > n, so the unsigned difference is exact.
 		return false
 	}
 
@@ -217,7 +219,7 @@ func validLifetime(nbf, exp *NumericDate, now int64, lifetime time.Duration) boo
 
 	e := exp.Int64()
 
-	return e <= n || uint64(e)-uint64(n) <= seconds
+	return e <= n || uint64(e)-uint64(n) <= seconds //nolint:gosec // G115: e > n, so the unsigned difference is exact.
 }
 
 func validString(value, cmp string, required bool) bool {

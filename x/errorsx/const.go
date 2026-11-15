@@ -11,6 +11,7 @@ const (
 	fieldStatusCode       = "status_code"
 )
 
+// RFCError is an error that carries the members of an RFC 6749 error response.
 type RFCError interface {
 	GetDescription() string
 	Error() string

@@ -81,6 +81,7 @@ func TestIntrospectionResponseTokenUse(t *testing.T) {
 			provider := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
 
 			tc.setup(config, validator, ctx)
+
 			res, err := provider.NewIntrospectionRequest(t.Context(), httpreq, &DefaultSession{})
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedATT, res.GetAccessTokenType())
@@ -126,6 +127,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
+
 				r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, nil)
 				r.Header.Set(consts.HeaderAuthorization, "bearer some-token")
 				r.PostForm = url.Values{consts.FormParameterTokenTypeHint: []string{string(AccessToken)}}
@@ -166,6 +168,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), newErr)
+
 				r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, nil)
 				r.Header.Set(consts.HeaderAuthorization, "bearer some-token")
 				r.PostForm = url.Values{"token": []string{"introspect-token"}}
@@ -181,6 +184,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+
 				r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, nil)
 				r.Header.Set(consts.HeaderAuthorization, "bearer some-token")
 				r.PostForm = url.Values{"token": []string{"introspect-token"}}
@@ -194,6 +198,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+
 				return &http.Request{
 					Method: http.MethodPost,
 					Header: http.Header{
@@ -211,6 +216,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+
 				return &http.Request{
 					Method: http.MethodPost,
 					Header: http.Header{
@@ -228,6 +234,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(TokenUse(""), nil)
+
 				return &http.Request{
 					Method: http.MethodPost,
 					Header: http.Header{

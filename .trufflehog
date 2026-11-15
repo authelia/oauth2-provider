@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 Authelia
+#
+# SPDX-License-Identifier: Apache-2.0
+
+^.git\/
+^.claude\/
+^.github\/workflows\/.*\.yml
+^.idea\/
+^.*\/node_modules/.*$
+^graphify-out\/
+^testdata\/
+^.*_test\.go$
+^pnpm-lock\.yaml$

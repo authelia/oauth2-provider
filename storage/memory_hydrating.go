@@ -14,7 +14,7 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
-// HydratingMemoryStore is a MemoryStore which honours the documented session hydration contract: it marshals a
+// HydratingMemoryStore is a MemoryStore which honors the documented session hydration contract: it marshals a
 // request's session on write and unmarshals it into the caller-supplied session on read, returning a requester
 // carrying that caller-supplied value. MemoryStore does neither, so use this store for any test whose subject is the
 // session a Get*Session call returns.
@@ -111,7 +111,7 @@ func (s *HydratingMemoryStore) CreateAccessTokenSession(ctx context.Context, sig
 }
 
 // GetAccessTokenSession returns the request stored against the access token signature, carrying the caller-supplied
-// session hydrated from the marshalled session.
+// session hydrated from the marshaled session.
 func (s *HydratingMemoryStore) GetAccessTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {
 	if request, err = s.MemoryStore.GetAccessTokenSession(ctx, signature, session); err != nil {
 		return nil, err
@@ -131,7 +131,7 @@ func (s *HydratingMemoryStore) CreateClientRegistrationTokenSession(ctx context.
 }
 
 // GetClientRegistrationTokenSession returns the request stored against the client registration token signature,
-// carrying the caller-supplied session hydrated from the marshalled session.
+// carrying the caller-supplied session hydrated from the marshaled session.
 func (s *HydratingMemoryStore) GetClientRegistrationTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {
 	if request, err = s.MemoryStore.GetClientRegistrationTokenSession(ctx, signature, session); err != nil {
 		return nil, err
@@ -151,7 +151,7 @@ func (s *HydratingMemoryStore) CreateRefreshTokenSession(ctx context.Context, si
 }
 
 // UpdateRefreshTokenSession replaces the request stored against the refresh token signature and, when the request has a
-// session, the marshalled session stored with it.
+// session, the marshaled session stored with it.
 func (s *HydratingMemoryStore) UpdateRefreshTokenSession(ctx context.Context, signature string, request oauth2.Requester) (err error) {
 	var data []byte
 
@@ -175,7 +175,7 @@ func (s *HydratingMemoryStore) UpdateRefreshTokenSession(ctx context.Context, si
 }
 
 // GetRefreshTokenSession returns the request stored against the refresh token signature, carrying the caller-supplied
-// session hydrated from the marshalled session. When the refresh token has been deactivated it returns the hydrated
+// session hydrated from the marshaled session. When the refresh token has been deactivated it returns the hydrated
 // request alongside oauth2.ErrInactiveToken.
 func (s *HydratingMemoryStore) GetRefreshTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {
 	if request, err = s.MemoryStore.GetRefreshTokenSession(ctx, signature, session); err != nil && !errors.Is(err, oauth2.ErrInactiveToken) {
@@ -194,7 +194,7 @@ func (s *HydratingMemoryStore) GetRefreshTokenSession(ctx context.Context, signa
 	return hydrated, err
 }
 
-// CreateCIBASession stores a copy of the request against the 'auth_req_id' signature. The marshalled session is
+// CreateCIBASession stores a copy of the request against the 'auth_req_id' signature. The marshaled session is
 // published under the same lock as the write and only once it succeeds, so a failed write leaves no session behind.
 func (s *HydratingMemoryStore) CreateCIBASession(ctx context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) (err error) {
 	var data []byte
@@ -220,12 +220,12 @@ func (s *HydratingMemoryStore) CreateCIBASession(ctx context.Context, signature 
 }
 
 // UpdateCIBASession writes the polling state of the request onto the stored request, as MemoryStore does. The
-// marshalled session is not republished.
+// marshaled session is not republished.
 func (s *HydratingMemoryStore) UpdateCIBASession(ctx context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) (err error) {
 	return s.MemoryStore.UpdateCIBASession(ctx, signature, request)
 }
 
-// DecideCIBASession stores the request only while the stored request is pending. The marshalled session is published
+// DecideCIBASession stores the request only while the stored request is pending. The marshaled session is published
 // under the same lock as the decision and only once it succeeds, so a reader never sees a decided request with another
 // decider's session and a rejected decision never overwrites the blob.
 func (s *HydratingMemoryStore) DecideCIBASession(ctx context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) (err error) {
@@ -252,7 +252,7 @@ func (s *HydratingMemoryStore) DecideCIBASession(ctx context.Context, signature 
 }
 
 // GetCIBASession returns the request stored against the 'auth_req_id' signature, carrying the caller-supplied session
-// hydrated from the marshalled session. The request is returned alongside oauth2.ErrInvalidatedCIBASession.
+// hydrated from the marshaled session. The request is returned alongside oauth2.ErrInvalidatedCIBASession.
 func (s *HydratingMemoryStore) GetCIBASession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.BackChannelAuthenticationRequester, err error) {
 	s.sessionsMutex.RLock()
 	defer s.sessionsMutex.RUnlock()

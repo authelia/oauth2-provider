@@ -750,6 +750,7 @@ func TestRedeemHandlerProofRequired(t *testing.T) {
 
 			if !tc.noHTTP {
 				r := httptest.NewRequest(http.MethodPost, redeemEndpoint, nil)
+
 				switch {
 				case tc.header:
 					r.Header.Set(consts.HeaderDPoP, "proof")

@@ -645,7 +645,7 @@ func TestDefaultStrategy_EncodeWithIssuerSigningAlg(t *testing.T) {
 			token, _, err := strategy.Encode(context.Background(), MapClaims{"sub": "a"}, WithIssuerSigningAlg(tc.alg))
 			require.NoError(t, err)
 
-			parsed, err := jose.ParseSigned(token, []jose.SignatureAlgorithm{jose.RS256, jose.ES256})
+			parsed, err := jose.ParseSignedCompact(token, []jose.SignatureAlgorithm{jose.RS256, jose.ES256})
 			require.NoError(t, err)
 			assert.Equal(t, tc.kid, parsed.Signatures[0].Header.KeyID)
 		})

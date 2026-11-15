@@ -59,7 +59,7 @@ func TestClientIDMetadataDocumentCeilingDocumentClientCanNotRegisterClients(t *t
 			form := url.Values{
 				consts.FormParameterGrantType:           {consts.GrantTypeClientCredentials},
 				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-				consts.FormParameterClientAssertion:     {env.documents.assertion(t, id, cimdIssuer)},
+				consts.FormParameterClientAssertion:     {env.documents.assertion(t, id)},
 			}
 
 			if tc.scope != nil {
@@ -98,7 +98,7 @@ func TestClientIDMetadataDocumentCeilingDocumentClientCanNotRegisterClients(t *t
 			consts.FormParameterGrantType:           {consts.GrantTypeClientCredentials},
 			consts.FormParameterScope:               {"openid admin"},
 			consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-			consts.FormParameterClientAssertion:     {env.documents.assertion(t, id, cimdIssuer)},
+			consts.FormParameterClientAssertion:     {env.documents.assertion(t, id)},
 		})
 
 		require.Equal(t, http.StatusOK, status)
@@ -127,7 +127,7 @@ func TestClientIDMetadataDocumentCeilingDefaultGrantTypesRefuseClientCredentials
 				consts.FormParameterGrantType:           {consts.GrantTypeClientCredentials},
 				consts.FormParameterScope:               {"openid"},
 				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-				consts.FormParameterClientAssertion:     {env.documents.assertion(t, id, cimdIssuer)},
+				consts.FormParameterClientAssertion:     {env.documents.assertion(t, id)},
 			})
 
 			assert.GreaterOrEqual(t, status, http.StatusBadRequest)
@@ -215,6 +215,7 @@ func newCIMDCeilingEnv(t *testing.T, resolver cimd.Config) *cimdCeilingEnv {
 
 	env.config.ClientIDMetadataDocumentResolver, err = cimd.NewResolver(resolver)
 	env.config.Issuer = cimdIssuer
+
 	require.NoError(t, err)
 
 	env.config.ClientIDMetadataDocumentHTTPClient = client

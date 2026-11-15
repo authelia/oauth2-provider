@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package compose provides functions to build a Provider from a configuration, a storage, and a set of handler factories.
 package compose
 
 import (
@@ -11,6 +12,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+// Factory is the signature of the functions that build a handler from a configurator, a storage, and a strategy.
 type Factory func(config oauth2.Configurator, storage any, strategy any) any
 
 // Compose takes a config, a storage, a strategy and handlers to instantiate an Provider:
@@ -38,6 +40,8 @@ type Factory func(config oauth2.Configurator, storage any, strategy any) any
 //
 // Compose also registers the RFC9207ResponseModeParameterHandler, so the 'iss' authorization response parameter is
 // returned whenever Issuer is set and DisableAuthorizationServerIdentification is not.
+//
+//nolint:gocyclo
 func Compose(config *oauth2.Config, storage any, strategy any, factories ...Factory) oauth2.Provider {
 	f := oauth2.New(storage.(oauth2.Storage), config)
 	for _, factory := range factories {
@@ -45,45 +49,59 @@ func Compose(config *oauth2.Config, storage any, strategy any, factories ...Fact
 		if ah, ok := res.(oauth2.AuthorizeEndpointHandler); ok {
 			config.AuthorizeEndpointHandlers.Append(ah)
 		}
+
 		if abh, ok := res.(oauth2.AuthorizeEndpointBindingHandler); ok {
 			config.AuthorizeEndpointBindingHandlers.Append(abh)
 		}
+
 		if th, ok := res.(oauth2.TokenEndpointHandler); ok {
 			config.TokenEndpointHandlers.Append(th)
 		}
+
 		if tbh, ok := res.(oauth2.TokenEndpointBindingHandler); ok {
 			config.TokenEndpointBindingHandlers.Append(tbh)
 		}
+
 		if tv, ok := res.(oauth2.TokenIntrospector); ok {
 			config.TokenIntrospectionHandlers.Append(tv)
 		}
+
 		if rh, ok := res.(oauth2.RevocationHandler); ok {
 			config.RevocationHandlers.Append(rh)
 		}
+
 		if ph, ok := res.(oauth2.PushedAuthorizeEndpointHandler); ok {
 			config.PushedAuthorizeEndpointHandlers.Append(ph)
 		}
+
 		if dh, ok := res.(oauth2.RFC8628DeviceAuthorizeEndpointHandler); ok {
 			config.RFC8628DeviceAuthorizeEndpointHandlers.Append(dh)
 		}
+
 		if dbh, ok := res.(oauth2.RFC8628DeviceAuthorizeEndpointBindingHandler); ok {
 			config.RFC8628DeviceAuthorizeEndpointBindingHandlers.Append(dbh)
 		}
+
 		if bh, ok := res.(oauth2.BackChannelAuthenticationEndpointHandler); ok {
 			config.BackChannelAuthenticationEndpointHandlers.Append(bh)
 		}
+
 		if bbh, ok := res.(oauth2.BackChannelAuthenticationEndpointBindingHandler); ok {
 			config.BackChannelAuthenticationEndpointBindingHandlers.Append(bbh)
 		}
+
 		if bdh, ok := res.(oauth2.BackChannelAuthenticationDecisionHandler); ok {
 			config.BackChannelAuthenticationDecisionHandlers.Append(bdh)
 		}
+
 		if uh, ok := res.(oauth2.RFC8628UserAuthorizeEndpointHandler); ok {
 			config.RFC8628UserAuthorizeEndpointHandlers.Append(uh)
 		}
+
 		if rh, ok := res.(oauth2.RFC7591ClientRegistrationEndpointHandler); ok {
 			config.RFC7591ClientRegistrationEndpointHandlers.Append(rh)
 		}
+
 		if ch, ok := res.(oauth2.RFC7592ClientConfigurationEndpointHandler); ok {
 			config.RFC7592ClientConfigurationEndpointHandlers.Append(ch)
 		}

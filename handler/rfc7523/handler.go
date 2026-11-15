@@ -85,7 +85,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return err
 	}
 
-	// Check fo required claims in token, so we can later find public key based on them.
+	// Check for required claims in token, so we can later find public key based on them.
 	if err = c.validateTokenPreRequisites(token); err != nil {
 		return err
 	}
@@ -235,7 +235,7 @@ func (c *Handler) CheckRequest(ctx context.Context, request oauth2.AccessRequest
 	// Client authentication is optional.
 	// See: https://www.rfc-editor.org/rfc/rfc7523#section-2.1
 
-	// if client is authenticated, check grant types
+	// if client is authenticated, check grant types.
 	if (!c.CanSkipClientAuth(ctx, request) || isAuthenticatedClient(request.GetClient())) && !request.GetClient().GetGrantTypes().Has(consts.GrantTypeOAuthJWTBearer) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", consts.GrantTypeOAuthJWTBearer))
 	}
@@ -296,6 +296,7 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 	}
 
 	var keyID string
+
 	for _, header := range token.Headers {
 		if header.KeyID != "" {
 			keyID = header.KeyID
@@ -313,6 +314,7 @@ func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebT
 
 			return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebugf("%s %s", keyNotFound, oauth2.ErrorToDebugRFC6749Error(err).Error()))
 		}
+
 		return key, nil
 	}
 
@@ -410,6 +412,7 @@ verify:
 		if err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
+
 		if used {
 			return errorsx.WithStack(errJWTUsed)
 		}

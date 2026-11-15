@@ -14,7 +14,7 @@ import (
 // ClientRegistrationTokenStorage handles storage requests related to RFC 7592 client management tokens.
 //
 // An implementation MUST NOT satisfy these methods from the same namespace it uses for access tokens. A management
-// token never expires and authorises full control of the client it names, and DefaultEndpointAuthStrategy relies on the
+// token never expires and authorizes full control of the client it names, and DefaultEndpointAuthStrategy relies on the
 // separation to keep a management token and a client creation token from being presented at the other's endpoint.
 type ClientRegistrationTokenStorage interface {
 	// CreateClientRegistrationTokenSession stores the request for a given client registration token signature.

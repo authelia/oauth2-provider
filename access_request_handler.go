@@ -22,8 +22,6 @@ import (
 // See: https://www.rfc-editor.org/rfc/rfc6749#section-2.3.1 and https://www.rfc-editor.org/rfc/rfc6749#section-3.2.1
 //
 // TODO: Refactor time permitting.
-//
-//nolint:gocyclo
 func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session Session) (ar AccessRequester, err error) {
 	requester := NewAccessRequest(session)
 	requester.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)

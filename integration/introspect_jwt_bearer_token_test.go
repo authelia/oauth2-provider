@@ -40,6 +40,7 @@ func TestIntrospectJWTBearerTokenSuite(t *testing.T) {
 		compose.RFC7523AssertionGrantFactory,
 		compose.OAuth2TokenIntrospectionFactory,
 	)
+
 	testServer := mockServer(t, provider, &oauth2.DefaultSession{})
 	defer testServer.Close()
 

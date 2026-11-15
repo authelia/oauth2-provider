@@ -232,6 +232,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 
 				gomock.InOrder(
@@ -264,6 +265,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = false
 				config.EnforcePKCE = true
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 
 				gomock.InOrder(
@@ -296,6 +298,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
 				config.EnforcePKCE = false
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 
 				gomock.InOrder(
@@ -328,6 +331,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
 				config.EnforcePKCE = false
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 			},
 			oauth2.ErrInvalidRequest,
@@ -349,6 +353,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
 				config.EnforcePKCE = false
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 			},
 			oauth2.ErrInvalidRequest,
@@ -369,6 +374,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
 				config.EnforcePKCE = false
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 
 				gomock.InOrder(
@@ -400,6 +406,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123.sig")
 
 				gomock.InOrder(
@@ -431,6 +438,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 			},
 			oauth2.ErrInvalidRequest,
@@ -451,6 +459,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 			},
 			oauth2.ErrInvalidRequest,
@@ -471,6 +480,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 			},
 			oauth2.ErrInvalidRequest,
@@ -491,6 +501,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 			},
 			oauth2.ErrInvalidRequest,
@@ -511,6 +522,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 			},
 			oauth2.ErrInvalidRequest,
@@ -531,6 +543,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 			},
 			oauth2.ErrInvalidRequest,
@@ -551,6 +564,7 @@ func TestHandler_HandleAuthorizeEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage, responder oauth2.AuthorizeResponder) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				responder.AddParameter(consts.FormParameterAuthorizationCode, "abc123")
 
 				gomock.InOrder(
@@ -675,6 +689,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.EnforcePKCE = true
+
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -701,6 +716,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.EnforcePKCE = true
+
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -727,6 +743,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.EnforcePKCE = true
+
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -735,7 +752,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				)
 			},
 			oauth2.ErrServerError,
-			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Error occurred attempting get PKCE request session: bad connection.",
+			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Error occurred attempting to get the PKCE request session: bad connection.",
 		},
 		{
 			"ShouldFailMissingOriginalCodeChallenge",
@@ -753,6 +770,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.EnforcePKCE = true
+
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -779,6 +797,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.AllowPublicClientsWithoutPKCE = true
 				config.EnforcePKCE = false
+
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -964,6 +983,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.AllowPublicClientsWithoutPKCE = true
+
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -992,6 +1012,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.AllowPublicClientsWithoutPKCE = true
+
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -1020,6 +1041,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.AllowPublicClientsWithoutPKCE = true
+
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -1233,6 +1255,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -1264,6 +1287,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -1296,6 +1320,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -1327,6 +1352,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				gomock.InOrder(
 					store.
 						EXPECT().
@@ -1359,6 +1385,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 			nil,
 			func(t *testing.T, config *oauth2.Config, store *mock.MockPKCERequestStorage) {
 				config.EnablePKCEPlainChallengeMethod = true
+
 				gomock.InOrder(
 					store.
 						EXPECT().

@@ -61,11 +61,13 @@ func TestDefaultJWKSFetcherStrategyFetching(t *testing.T) {
 			name: "ShouldReturnCachedKeySetWhenRemoteChanges",
 			check: func(t *testing.T, s jwt.JWKSFetcherStrategy, ts *httptest.Server, served *atomic.Pointer[jose.JSONWebKeySet]) {
 				served.Store(fooKeySet)
+
 				_, err := s.Resolve(context.Background(), ts.URL, false)
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
 				s.(*DefaultJWKSFetcherStrategy).WaitForCache()
 
 				served.Store(barKeySet)
+
 				actual, err := s.Resolve(context.Background(), ts.URL, false)
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
 
@@ -77,10 +79,12 @@ func TestDefaultJWKSFetcherStrategyFetching(t *testing.T) {
 			name: "ShouldBypassCacheWithIgnoreCache",
 			check: func(t *testing.T, s jwt.JWKSFetcherStrategy, ts *httptest.Server, served *atomic.Pointer[jose.JSONWebKeySet]) {
 				served.Store(fooKeySet)
+
 				_, err := s.Resolve(context.Background(), ts.URL, false)
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
 
 				served.Store(barKeySet)
+
 				actual, err := s.Resolve(context.Background(), ts.URL, true)
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
 
@@ -248,6 +252,7 @@ func TestDefaultJWKSFetcherStrategyResolveErrors(t *testing.T) {
 					w.WriteHeader(http.StatusBadRequest)
 				}))
 				t.Cleanup(ts.Close)
+
 				return ts.URL
 			},
 			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
@@ -266,6 +271,7 @@ func TestDefaultJWKSFetcherStrategyResolveErrors(t *testing.T) {
 					_, _ = w.Write([]byte("[]"))
 				}))
 				t.Cleanup(ts.Close)
+
 				return ts.URL
 			},
 			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
@@ -297,6 +303,7 @@ func TestDefaultJWKSFetcherStrategyWaitForCache(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := NewDefaultJWKSFetcherStrategy().(*DefaultJWKSFetcherStrategy)
+
 			assert.NotPanics(t, func() {
 				s.WaitForCache()
 			})
@@ -371,10 +378,13 @@ func TestDefaultJWKSFetcherStrategyHardening(t *testing.T) {
 }
 
 func initServerWithKey(t *testing.T) *httptest.Server {
-	var set *jose.JSONWebKeySet
-	var h http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
-		require.NoError(t, json.NewEncoder(w).Encode(set))
-	}
+	var (
+		set *jose.JSONWebKeySet
+		h   http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
+			require.NoError(t, json.NewEncoder(w).Encode(set))
+		}
+	)
+
 	ts := httptest.NewServer(h)
 
 	set = &jose.JSONWebKeySet{
@@ -388,6 +398,7 @@ func initServerWithKey(t *testing.T) *httptest.Server {
 	}
 
 	t.Cleanup(ts.Close)
+
 	return ts
 }
 

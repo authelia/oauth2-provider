@@ -53,7 +53,7 @@ func RFC7591ClientRegistrationTokenIntrospectionFactory(config oauth2.Configurat
 // mustClientRegistrationSecret panics when no client registration token secret of sufficient length is configured,
 // or when that secret is identical to the global secret, so a misconfiguration fails at compose time.
 //
-// Every call site passes context.Background(), so the secret getters run with no deadline and no cancellation.
+// Every call site passes [context.Background](), so the secret getters run with no deadline and no cancellation.
 func mustClientRegistrationSecret(ctx context.Context, config oauth2.Configurator) {
 	secret, err := config.GetRFC7591ClientRegistrationGlobalSecret(ctx)
 

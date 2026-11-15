@@ -201,59 +201,77 @@ func GetAuthRequestID(r BackChannelAuthenticationRequester) (id string) {
 	return ""
 }
 
+// GetDeliveryMode returns the requested token delivery mode.
 func (r *BackChannelAuthenticationRequest) GetDeliveryMode() string { return r.DeliveryMode }
 
+// GetHint returns the kind and value of the user hint.
 func (r *BackChannelAuthenticationRequest) GetHint() (kind CIBAHintKind, value string) {
 	return r.HintKind, r.HintValue
 }
 
+// GetIDTokenHintClaims returns the claims of the id_token_hint.
 func (r *BackChannelAuthenticationRequest) GetIDTokenHintClaims() jwt.MapClaims {
 	return r.IDTokenHintClaims
 }
 
+// GetBindingMessage returns the binding message.
 func (r *BackChannelAuthenticationRequest) GetBindingMessage() string { return r.BindingMessage }
 
+// GetUserCode returns the user code.
 func (r *BackChannelAuthenticationRequest) GetUserCode() string { return r.UserCode }
 
+// GetRequestedExpiry returns the requested expiry.
 func (r *BackChannelAuthenticationRequest) GetRequestedExpiry() time.Duration {
 	return r.RequestedExpiry
 }
 
+// GetRequestContext returns the request context.
 func (r *BackChannelAuthenticationRequest) GetRequestContext() json.RawMessage {
 	return r.RequestContext
 }
 
+// GetAuthRequestIDSignature returns the signature of the auth_req_id.
 func (r *BackChannelAuthenticationRequest) GetAuthRequestIDSignature() string {
 	return r.AuthRequestIDSignature
 }
 
+// SetAuthRequestIDSignature sets the signature of the auth_req_id.
 func (r *BackChannelAuthenticationRequest) SetAuthRequestIDSignature(signature string) {
 	r.AuthRequestIDSignature = signature
 }
 
+// GetStatus returns the status of the request.
 func (r *BackChannelAuthenticationRequest) GetStatus() CIBAStatus { return r.Status }
 
+// SetStatus sets the status of the request.
 func (r *BackChannelAuthenticationRequest) SetStatus(status CIBAStatus) { r.Status = status }
 
+// GetLastPolled returns the time of the most recent poll.
 func (r *BackChannelAuthenticationRequest) GetLastPolled() time.Time { return r.LastPolled }
 
 // SetLastPolled records the time of the most recent poll, normalized to UTC.
 func (r *BackChannelAuthenticationRequest) SetLastPolled(t time.Time) { r.LastPolled = t.UTC() }
 
+// GetPollingInterval returns the minimum polling interval.
 func (r *BackChannelAuthenticationRequest) GetPollingInterval() time.Duration {
 	return r.PollingInterval
 }
 
+// SetPollingInterval sets the minimum polling interval.
 func (r *BackChannelAuthenticationRequest) SetPollingInterval(d time.Duration) {
 	r.PollingInterval = d
 }
 
+// GetSlowDownCount returns the number of slow_down responses issued.
 func (r *BackChannelAuthenticationRequest) GetSlowDownCount() int { return r.SlowDownCount }
 
+// SetSlowDownCount sets the number of slow_down responses issued.
 func (r *BackChannelAuthenticationRequest) SetSlowDownCount(n int) { r.SlowDownCount = n }
 
+// GetFailureCause returns the cause of failure of the request.
 func (r *BackChannelAuthenticationRequest) GetFailureCause() string { return r.FailureCause }
 
+// SetFailureCause sets the cause of failure of the request.
 func (r *BackChannelAuthenticationRequest) SetFailureCause(cause string) { r.FailureCause = cause }
 
 // Merge copies the requester data into this request. When requester is a *BackChannelAuthenticationRequest every CIBA

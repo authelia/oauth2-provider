@@ -90,6 +90,7 @@ func TestNewPushedAuthorizeResponse(t *testing.T) {
 			ar := mock.NewMockAuthorizeRequester(ctrl)
 
 			handlers := make([]*mock.MockPushedAuthorizeEndpointHandler, tc.count)
+
 			endpointHandlers := make(PushedAuthorizeEndpointHandlers, tc.count)
 			for i := 0; i < tc.count; i++ {
 				handlers[i] = mock.NewMockPushedAuthorizeEndpointHandler(ctrl)

@@ -95,6 +95,7 @@ func mustClientRegistrationTokenStrategy(strategy any) (resolved rfc7591.ClientR
 	return resolved
 }
 
+// HMACSHAStrategyConfigurator is the configuration the HMAC-SHA token strategy requires.
 type HMACSHAStrategyConfigurator interface {
 	oauth2.AccessTokenLifespanProvider
 	oauth2.RefreshTokenLifespanProvider

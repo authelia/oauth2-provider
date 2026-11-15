@@ -68,7 +68,7 @@ func TestExpiredAccessTokenIsNotSilentlyDowngradedToUnknown(t *testing.T) {
 	_, _, err = provider.IntrospectToken(context.Background(), tokenString, oauth2.AccessToken, &oauth2.DefaultSession{})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, oauth2.ErrTokenExpired), "an expired access token must still report its real failure")
-	assert.False(t, errors.Is(err, oauth2.ErrUnknownRequest), "an expired-but-present access token must not be silently reported as unrecognised")
+	assert.False(t, errors.Is(err, oauth2.ErrUnknownRequest), "an expired-but-present access token must not be silently reported as unrecognized")
 }
 
 func TestExpiredRefreshTokenIsNotSilentlyDowngradedToUnknown(t *testing.T) {
@@ -91,7 +91,7 @@ func TestExpiredRefreshTokenIsNotSilentlyDowngradedToUnknown(t *testing.T) {
 	_, _, err = provider.IntrospectToken(context.Background(), tokenString, "", &oauth2.DefaultSession{})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, oauth2.ErrTokenExpired), "an expired refresh token must still report its real failure")
-	assert.False(t, errors.Is(err, oauth2.ErrUnknownRequest), "an expired-but-present refresh token must not be silently reported as unrecognised")
+	assert.False(t, errors.Is(err, oauth2.ErrUnknownRequest), "an expired-but-present refresh token must not be silently reported as unrecognized")
 }
 
 func newRegistrationTokenIntrospectionFixture(t *testing.T, includeIntrospection bool) (provider oauth2.Provider, config *oauth2.Config, memory *storage.MemoryStore) {

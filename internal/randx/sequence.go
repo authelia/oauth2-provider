@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package randx generates random sequences.
 package randx
 
 import (
@@ -9,7 +10,7 @@ import (
 	"math/big"
 )
 
-var rander = rand.Reader // random function
+var rander = rand.Reader // random function.
 
 var (
 	// AlphaNum contains runes [abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789].

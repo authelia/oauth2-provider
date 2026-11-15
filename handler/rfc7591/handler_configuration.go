@@ -113,6 +113,8 @@ func setRegistrationTimes(client oauth2.Client, responder oauth2.ClientConfigura
 // update implements the PUT case, RFC 7592 Section 2.2's full replacement semantics. The replacement registration
 // access token is minted before the old one's session is deleted, so a failed mint leaves the client holding a working
 // token.
+//
+//nolint:gocyclo
 func (h *ClientConfigurationHandler) update(ctx context.Context, id string, client oauth2.Client, requester oauth2.ClientConfigurationRequester, responder oauth2.ClientConfigurationResponder) (err error) {
 	strategy := h.Config.GetRFC7591ClientRegistrationStrategy(ctx)
 	if strategy == nil {
@@ -153,7 +155,7 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return err
 	}
 
-	dropUnrecognisedMetadata(ctx, h.Config, metadata)
+	dropUnrecognizedMetadata(ctx, h.Config, metadata)
 
 	for _, validator := range validators(ctx, h.Config) {
 		if err = validator.ValidateClientRegistrationMetadata(ctx, client, metadata); err != nil {
@@ -235,7 +237,7 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		grantableResource := oauth2.Arguments(nil)
 
 		// The authenticated requester carries the client registration token's own grant; a custom
-		// oauth2.ClientRegistrationEndpointAuthStrategy must honour the same contract.
+		// oauth2.ClientRegistrationEndpointAuthStrategy must honor the same contract.
 		if authenticated != nil {
 			grantable = authenticated.GetGrantedScopes()
 			grantableAudience = authenticated.GetGrantedAudience()

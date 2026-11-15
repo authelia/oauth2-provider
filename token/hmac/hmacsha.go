@@ -22,6 +22,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// HMACStrategyConfigurator is the configuration the HMAC strategy requires.
 type HMACStrategyConfigurator interface {
 	oauth2.TokenEntropyProvider
 	oauth2.GlobalSecretProvider
@@ -95,12 +96,14 @@ func (c *HMACStrategy) GenerateHMACForString(ctx context.Context, text string) (
 	if len(secrets) < minimumSecretLength {
 		return "", errors.Errorf("secret for signing HMAC-SHA512/256 is expected to be 32 byte long, got %d byte", len(secrets))
 	}
+
 	copy(signingKey[:], secrets)
 
 	bytes := []byte(text)
 	hashBytes := c.generateHMAC(ctx, bytes, &signingKey)
 
 	b64 := base64.RawURLEncoding.EncodeToString(hashBytes)
+
 	return b64, nil
 }
 
@@ -153,6 +156,7 @@ func (c *HMACStrategy) validate(ctx context.Context, secret []byte, token string
 	}
 
 	tokenKey := split[0]
+
 	tokenSignature := split[1]
 	if tokenKey == "" || tokenSignature == "" {
 		return errorsx.WithStack(oauth2.ErrInvalidTokenFormat)
@@ -170,7 +174,7 @@ func (c *HMACStrategy) validate(ctx context.Context, secret []byte, token string
 
 	expectedMAC := c.generateHMAC(ctx, decodedTokenKey, &signingKey)
 	if !hmac.Equal(expectedMAC, decodedTokenSignature) {
-		// Hash is invalid
+		// Hash is invalid.
 		return errorsx.WithStack(oauth2.ErrTokenSignatureMismatch)
 	}
 
@@ -194,11 +198,13 @@ func (c *HMACStrategy) generateHMAC(ctx context.Context, data []byte, key *[32]b
 	if hasher == nil {
 		hasher = sha512.New512_256
 	}
+
 	h := hmac.New(hasher, key[:])
-	// sha512.digest.Write() always returns nil for err, the panic should never happen
+	// sha512.digest.Write() always returns nil for err, the panic should never happen.
 	_, err := h.Write(data)
 	if err != nil {
 		panic(err)
 	}
+
 	return h.Sum(nil)
 }

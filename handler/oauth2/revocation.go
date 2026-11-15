@@ -14,6 +14,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// TokenRevocationHandler handles requests to the token revocation endpoint.
 type TokenRevocationHandler struct {
 	TokenRevocationStorage TokenRevocationStorage
 	RefreshTokenStrategy   RefreshTokenStrategy
@@ -35,6 +36,8 @@ type TokenRevocationHandler struct {
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
 // See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+//
+//nolint:gocyclo
 func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, tokenType oauth2.TokenType, client oauth2.Client) (err error) {
 	var handlers []RevocationTokenLookupFunc
 
@@ -47,7 +50,6 @@ func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, 
 		handlers = []RevocationTokenLookupFunc{r.handleGetRefreshTokenRequester, r.handleGetAccessTokenRequester}
 	}
 
-	//nolint:prealloc
 	var (
 		request, inactive oauth2.Requester
 		tt                oauth2.TokenType
@@ -103,6 +105,7 @@ func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, 
 	return r.handleErrors(errs)
 }
 
+// RevocationTokenLookupFunc looks up the request a token was issued for and the type of the token.
 type RevocationTokenLookupFunc func(ctx context.Context, token string) (request oauth2.Requester, tokenType oauth2.TokenType, err error)
 
 func (r *TokenRevocationHandler) getRevokeRefreshTokensExplicitly(ctx context.Context, client oauth2.Client) bool {

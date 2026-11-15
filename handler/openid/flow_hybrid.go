@@ -15,6 +15,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// OpenIDConnectHybridHandler handles the OpenID Connect hybrid flow.
 type OpenIDConnectHybridHandler struct {
 	AuthorizeImplicitGrantTypeHandler *hoauth2.AuthorizeImplicitGrantTypeHandler
 	AuthorizeExplicitGrantHandler     *hoauth2.AuthorizeExplicitGrantHandler
@@ -41,7 +42,7 @@ func (c *OpenIDConnectHybridHandler) HandleAuthorizeEndpointRequest(ctx context.
 		return nil
 	}
 
-	if !(request.GetResponseTypes().Matches(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow) || request.GetResponseTypes().Matches(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow) || request.GetResponseTypes().Matches(consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow)) {
+	if !request.GetResponseTypes().Matches(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow) && !request.GetResponseTypes().Matches(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow) && !request.GetResponseTypes().Matches(consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
 	}
 
@@ -237,7 +238,7 @@ func (c *OpenIDConnectHybridHandler) getNonceExpiresAt(ctx context.Context, requ
 func (c *OpenIDConnectHybridHandler) ValidateAuthorizeRequest(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
 	types := request.GetResponseTypes()
 
-	if len(types) < 2 || !(types.Matches(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow) || types.Matches(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow) || types.Matches(consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow)) {
+	if len(types) < 2 || (!types.Matches(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow) && !types.Matches(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow) && !types.Matches(consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeAuthorizationCodeFlow)) {
 		return nil
 	}
 

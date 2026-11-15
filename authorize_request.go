@@ -10,20 +10,29 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
+// ResponseModeType is a response mode a client may request for an authorization response.
 type ResponseModeType string
 
 const (
-	ResponseModeDefault     = ResponseModeType("")
-	ResponseModeFormPost    = ResponseModeType(consts.ResponseModeFormPost)
-	ResponseModeQuery       = ResponseModeType(consts.ResponseModeQuery)
-	ResponseModeFragment    = ResponseModeType(consts.ResponseModeFragment)
+	// ResponseModeDefault is the unset response mode, which selects the default for the response type.
+	ResponseModeDefault = ResponseModeType("")
+	// ResponseModeFormPost is the form_post response mode.
+	ResponseModeFormPost = ResponseModeType(consts.ResponseModeFormPost)
+	// ResponseModeQuery is the query response mode.
+	ResponseModeQuery = ResponseModeType(consts.ResponseModeQuery)
+	// ResponseModeFragment is the fragment response mode.
+	ResponseModeFragment = ResponseModeType(consts.ResponseModeFragment)
+	// ResponseModeFormPostJWT is the form_post.jwt response mode.
 	ResponseModeFormPostJWT = ResponseModeType(consts.ResponseModeFormPostJWT)
-	ResponseModeQueryJWT    = ResponseModeType(consts.ResponseModeQueryJWT)
+	// ResponseModeQueryJWT is the query.jwt response mode.
+	ResponseModeQueryJWT = ResponseModeType(consts.ResponseModeQueryJWT)
+	// ResponseModeFragmentJWT is the fragment.jwt response mode.
 	ResponseModeFragmentJWT = ResponseModeType(consts.ResponseModeFragmentJWT)
-	ResponseModeJWT         = ResponseModeType(consts.ResponseModeJWT)
+	// ResponseModeJWT is the jwt response mode, which selects the JWT variant for the response type.
+	ResponseModeJWT = ResponseModeType(consts.ResponseModeJWT)
 )
 
-// AuthorizeRequest is an implementation of AuthorizeRequester
+// AuthorizeRequest is an implementation of AuthorizeRequester.
 type AuthorizeRequest struct {
 	ResponseTypes        Arguments        `json:"responseTypes" gorethink:"responseTypes"`
 	RedirectURI          *url.URL         `json:"redirectUri" gorethink:"redirectUri"`
@@ -44,8 +53,7 @@ func NewAuthorizeRequest() *AuthorizeRequest {
 		HandledResponseTypes: Arguments{},
 		Request:              *NewRequest(),
 		ResponseMode:         ResponseModeDefault,
-		// The redirect URL must be unset / nil for redirect detection to work properly:
-		// RedirectURI:          &url.URL{},
+		// The redirect URL must be unset / nil for redirect detection to work properly.
 	}
 }
 
@@ -66,6 +74,7 @@ func (d *AuthorizeRequest) IsRedirectURIValid() bool {
 	if err != nil {
 		return false
 	}
+
 	return IsValidRedirectURI(redirectURI)
 }
 
@@ -114,6 +123,7 @@ func (d *AuthorizeRequest) SetDefaultResponseMode(defaultResponseMode ResponseMo
 	if d.ResponseMode == ResponseModeDefault {
 		d.ResponseMode = defaultResponseMode
 	}
+
 	d.DefaultResponseMode = defaultResponseMode
 }
 

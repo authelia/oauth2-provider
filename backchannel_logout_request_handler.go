@@ -97,7 +97,7 @@ func (f *Fosite) SendBackChannelLogout(ctx context.Context, requester BackChanne
 
 			defer func() { <-sem }()
 
-			// Each goroutine writes its own index, so no synchronisation of results is required and the order
+			// Each goroutine writes its own index, so no synchronization of results is required and the order
 			// always matches the order the clients were supplied in.
 			httpClient := client
 

@@ -229,7 +229,7 @@ func TestEndpointAuthSigningAlgValuesReplaceAllowList(t *testing.T) {
 	}
 }
 
-func TestIntrospectionBearerCredentialHonoursAuthMethods(t *testing.T) {
+func TestIntrospectionBearerCredentialHonorsAuthMethods(t *testing.T) {
 	testCases := []struct {
 		name    string
 		methods []string

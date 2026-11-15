@@ -53,7 +53,7 @@ func TestSpec_4_1_ActClaim_DelegationAddsActorSub(t *testing.T) {
 	assert.Equal(t, "bob", act[consts.ClaimSubject], "the 'act' claim's 'sub' must come from the actor_token")
 }
 
-// §4.1: The act claim should carry every identifying claim of the actor that the AS recognises (sub + client_id).
+// §4.1: The act claim should carry every identifying claim of the actor that the AS recognizes (sub + client_id).
 func TestSpec_4_1_ActClaim_IncludesClientIDWhenPresent(t *testing.T) {
 	cfg := newSpecConfig(t)
 	session := newSpecSession("alice")
@@ -70,7 +70,7 @@ func TestSpec_4_1_ActClaim_IncludesClientIDWhenPresent(t *testing.T) {
 	assert.Equal(t, "client-bob", act[consts.ClaimClientIdentifier])
 }
 
-// §4.1: "A nested act claim within an act claim MAY be used to express a chain of delegation."
+// §4.1: "A nested act claim within an act claim MAY be used to express a chain of delegation".
 func TestSpec_4_1_ActClaim_ChainsDelegationViaNestedAct(t *testing.T) {
 	cfg := newSpecConfig(t)
 	session := newSpecSession("alice")
@@ -115,6 +115,7 @@ func TestSpec_4_1_ActClaim_DoesNotMutateSubjectTokenMap(t *testing.T) {
 	act := session.Extra[consts.ClaimActor].(map[string]any)
 	nested := act[consts.ClaimActor].(map[string]any)
 	nested["injected"] = true
+
 	assert.NotContains(t, priorAct, "injected", "mutating the issued nested 'act' must not leak into the subject_token's act map")
 }
 
@@ -215,6 +216,7 @@ func TestSpec_2_1_CustomJWT_AudienceReplacesSessionAudience(t *testing.T) {
 	require.NoError(t, cjt.PopulateTokenEndpointResponse(context.Background(), req, resp))
 
 	var rawClaims map[string]any
+
 	_, err := jwt.UnsafeParseSignedAny(resp.AccessToken, &rawClaims)
 	require.NoError(t, err)
 
@@ -239,6 +241,7 @@ func TestSpec_4_1_ActClaim_AppearsInIssuedCustomJWT(t *testing.T) {
 	require.NotEmpty(t, resp.AccessToken, "exchange must produce a custom JWT in access_token")
 
 	var rawClaims map[string]any
+
 	_, err := jwt.UnsafeParseSignedAny(resp.AccessToken, &rawClaims)
 	require.NoError(t, err, "issued JWT must be parseable")
 

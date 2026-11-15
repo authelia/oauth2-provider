@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -20,6 +19,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// Handler implements RFC 7636 Proof Key for Code Exchange for the authorization and token endpoints.
 type Handler struct {
 	AuthorizeCodeStrategy hoauth2.AuthorizeCodeStrategy
 	Storage               Storage
@@ -188,8 +188,6 @@ func (c *Handler) validate(ctx context.Context, challenge, method string, client
 // HandleTokenEndpointRequest implements oauth2.TokenEndpointHandler.
 //
 // TODO: Refactor time permitting.
-//
-//nolint:gocyclo
 func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -215,7 +213,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to find initial PKCE data tied to this request.").WithWrap(err).WithDebugError(err))
 		}
 
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(fmt.Errorf("Error occurred attempting get PKCE request session: %w.", err)))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Error occurred attempting to get the PKCE request session: %s.", oauth2.ErrorToDebugRFC6749Error(err)))
 	}
 
 	challenge := requesterPKCE.GetRequestForm().Get(consts.FormParameterCodeChallenge)
@@ -238,7 +236,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	// The code verifier must have enough entropy to make it impractical to guess.
 	// See: https://www.rfc-editor.org/rfc/rfc7636#section-4.1
 
-	// Validation
+	// Validation.
 	switch {
 	case nv < 43:
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must be at least 43 characters."))

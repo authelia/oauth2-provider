@@ -44,6 +44,7 @@ const (
 	defaultCIBAMaximumBindingMessageLen   = 64
 )
 
+// Config is the default configuration, implementing the configuration provider interfaces.
 type Config struct {
 	// AccessTokenLifespan sets how long an access token is going to be valid. Defaults to one hour.
 	AccessTokenLifespan time.Duration
@@ -61,7 +62,7 @@ type Config struct {
 	// IDTokenLifespan sets the default id token lifetime. Defaults to one hour.
 	IDTokenLifespan time.Duration
 
-	// Sets how long a device user/device code pair is valid for
+	// Sets how long a device user/device code pair is valid for.
 	RFC8628CodeLifespan time.Duration
 
 	// Issuer is the canonical issuer identifier of the authorization server. It is the issuer of every token and
@@ -211,7 +212,7 @@ type Config struct {
 	EnforceAuthenticationRequirements bool
 
 	// RFC9470StepUpAuthenticationEnabled advertises 'acr_values_supported' in the OAuth 2.0 Authorization Server
-	// Metadata, which signals that the 'acr_values' and 'max_age' authorization request parameters are honoured for
+	// Metadata, which signals that the 'acr_values' and 'max_age' authorization request parameters are honored for
 	// requests which do not grant the 'openid' scope. Defaults to false.
 	RFC9470StepUpAuthenticationEnabled bool
 
@@ -253,10 +254,10 @@ type Config struct {
 	// Defaults to 32.
 	TokenEntropy int
 
-	// RFC8628UserVerificationURL is the URL of the device verification endpoint, this is is included with the device code request responses
+	// RFC8628UserVerificationURL is the URL of the device verification endpoint, this is is included with the device code request responses.
 	RFC8628UserVerificationURL string
 
-	// RFC8628TokenPollingInterval sets the interval that clients should check for device code grants
+	// RFC8628TokenPollingInterval sets the interval that clients should check for device code grants.
 	RFC8628TokenPollingInterval time.Duration
 
 	// CIBATokenDeliveryModes are the supported CIBA token delivery modes. Defaults to poll, ping and push. A value
@@ -362,7 +363,7 @@ type Config struct {
 	// GrantTypeJWTBearerMaxDuration sets the maximum time after JWT issued date, during which the JWT is considered valid.
 	GrantTypeJWTBearerMaxDuration time.Duration
 
-	// ClientAuthenticationStrategy indicates the Strategy to authenticate client requests
+	// ClientAuthenticationStrategy indicates the Strategy to authenticate client requests.
 	ClientAuthenticationStrategy ClientAuthenticationStrategy
 
 	// TokenEndpointClientAuthStrategy indicates the EndpointClientAuthStrategy used to authenticate clients at the token
@@ -398,14 +399,14 @@ type Config struct {
 	// ResponseModeParameterHandlers provides handlers for injecting additional parameters into the authorize responses.
 	ResponseModeParameterHandlers ResponseModeParameterHandlers
 
-	// MessageCatalog is the message bundle used for i18n
+	// MessageCatalog is the message bundle used for i18n.
 	MessageCatalog i18n.MessageCatalog
 
 	// FormPostHTMLTemplate sets html template for rendering the authorization response when the request has response_mode=form_post.
 	FormPostHTMLTemplate *template.Template
 
 	// FormPostResponseWriter is the FormPostResponseWriter used for writing the form post response. Useful for
-	// overwriting the behaviour of this element.
+	// overwriting the behavior of this element.
 	FormPostResponseWriter FormPostResponseWriter
 
 	// OmitRedirectScopeParam indicates whether the "scope" parameter should be omitted from the redirect URL.
@@ -571,10 +572,10 @@ type Config struct {
 	// This is defaulted to 'urn:ietf:params:oauth:request_uri:'.
 	PushedAuthorizeRequestURIPrefix string
 
-	// PushedAuthorizeContextLifespan is the lifespan of the PAR context
+	// PushedAuthorizeContextLifespan is the lifespan of the PAR context.
 	PushedAuthorizeContextLifespan time.Duration
 
-	// RequirePushedAuthorizationRequests requires pushed authorization request for /authorize
+	// RequirePushedAuthorizationRequests requires pushed authorization request for /authorize.
 	RequirePushedAuthorizationRequests bool
 
 	// RequireRedirectURIPushedAuthorizationRequests requires the 'redirect_uri' parameter in Pushed Authorization
@@ -1637,7 +1638,7 @@ func (c *Config) GetJWTClockSkew(_ context.Context) time.Duration {
 // GetClientAuthenticationStrategy returns the configured client authentication strategy.
 // Defaults to nil.
 // Note that on a nil strategy `oauth2.Fosite` fallbacks to its default client authentication strategy
-// `oauth2.Fosite.DefaultClientAuthenticationStrategy`
+// `oauth2.Fosite.DefaultClientAuthenticationStrategy`.
 func (c *Config) GetClientAuthenticationStrategy(_ context.Context) ClientAuthenticationStrategy {
 	return c.ClientAuthenticationStrategy
 }

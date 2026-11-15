@@ -27,6 +27,7 @@ func ptr(d time.Duration) *time.Duration {
 	return &d
 }
 
+// TestLifespans is a client lifespan configuration with a distinct value for each lifespan.
 var TestLifespans = oauth2.ClientLifespanConfig{
 	AuthorizationCodeGrantAccessTokenLifespan:  ptr(31 * time.Hour),
 	AuthorizationCodeGrantIDTokenLifespan:      ptr(32 * time.Hour),
@@ -44,14 +45,17 @@ var TestLifespans = oauth2.ClientLifespanConfig{
 	TokenExchangeGrantRefreshTokenLifespan:     ptr(44 * time.Hour),
 }
 
+// RequireEqualDuration fails the test unless the durations differ by less than the precision.
 func RequireEqualDuration(t *testing.T, expected time.Duration, actual time.Duration, precision time.Duration) {
 	delta := expected - actual
 	if delta < 0 {
 		delta = -delta
 	}
+
 	require.Less(t, delta, precision, fmt.Sprintf("expected %s; got %s", expected, actual))
 }
 
+// RequireEqualTime fails the test unless the times differ by less than the precision.
 func RequireEqualTime(t *testing.T, expected time.Time, actual time.Time, precision time.Duration) {
 	t.Helper()
 
@@ -59,6 +63,7 @@ func RequireEqualTime(t *testing.T, expected time.Time, actual time.Time, precis
 	if delta < 0 {
 		delta = -delta
 	}
+
 	require.Less(t, delta, precision, fmt.Sprintf(
 		"expected %s; got %s",
 		expected.Format(time.RFC3339Nano),
@@ -66,6 +71,7 @@ func RequireEqualTime(t *testing.T, expected time.Time, actual time.Time, precis
 	))
 }
 
+// ExtractJwtExpClaim returns the exp claim of the token without verifying its signature.
 func ExtractJwtExpClaim(t *testing.T, token string) *time.Time {
 	claims := &jwt.IDTokenClaims{}
 
@@ -96,7 +102,7 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 
 	body := findElement(doc, "body")
 	if body == nil {
-		return "", "", "", token, customParameters, rFC6749Error, errors.New("Malformed html")
+		return "", "", "", token, customParameters, rFC6749Error, errors.New("malformed html")
 	}
 
 	onLoadFunc, ok := getAttr(body, "onload")
@@ -147,6 +153,7 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 			if err != nil {
 				return "", "", "", token, customParameters, rFC6749Error, err
 			}
+
 			token.Expiry = time.Now().UTC().Add(time.Duration(expires) * time.Second)
 		case consts.AccessResponseTokenType:
 			token.TokenType = v

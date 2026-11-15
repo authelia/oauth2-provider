@@ -306,7 +306,7 @@ func TestSendBackChannelLogout_RespectsConcurrencyLimit(t *testing.T) {
 	assert.LessOrEqual(t, observed, 2)
 }
 
-func TestSendBackChannelLogout_HonoursContextCancellation(t *testing.T) {
+func TestSendBackChannelLogout_HonorsContextCancellation(t *testing.T) {
 	f, _ := newBCLProvider(t)
 
 	release := make(chan struct{})
@@ -499,6 +499,7 @@ func bclServer(t *testing.T, status int) (server *httptest.Server, tokens *[]str
 		require.NoError(t, r.ParseForm())
 
 		mu.Lock()
+
 		collected = append(collected, r.PostForm.Get("logout_token"))
 		mu.Unlock()
 

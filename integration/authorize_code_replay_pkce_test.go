@@ -28,6 +28,7 @@ func TestAuthorizeCodeReplayByAPublicClientRequiresTheCodeVerifier(t *testing.T)
 
 	config := &oauth2.Config{EnforcePKCE: true}
 	provider := compose.Compose(config, store, hmacStrategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2PKCEFactory, compose.OAuth2TokenIntrospectionFactory, compose.OAuth2TokenRevocationFactory)
+
 	ts := mockServer(t, provider, &oauth2.DefaultSession{})
 	defer ts.Close()
 
@@ -124,6 +125,7 @@ func testAuthorizeCodeReplayWithoutThePKCEHandler(t *testing.T, config *oauth2.C
 	const challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
 
 	provider := compose.Compose(config, store, hmacStrategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+
 	ts := mockServer(t, provider, &oauth2.DefaultSession{})
 	defer ts.Close()
 

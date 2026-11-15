@@ -108,10 +108,12 @@ func TestIntrospectJWT(t *testing.T) {
 				token := jwtValidCase(oauth2.AccessToken)
 				tokenString, _, err := strategy.GenerateAccessToken(t.Context(), token)
 				require.NoError(t, err)
+
 				parts := strings.Split(tokenString, ".")
 				require.Len(t, parts, 3, "%s - %v", tokenString, parts)
 				dec, err := base64.RawURLEncoding.DecodeString(parts[1])
 				require.NoError(t, err)
+
 				s := strings.ReplaceAll(string(dec), "peter", "piper")
 				parts[1] = base64.RawURLEncoding.EncodeToString([]byte(s))
 
@@ -389,6 +391,7 @@ func BenchmarkIntrospectJWT(b *testing.B) {
 	jwt := jwtValidCase(oauth2.AccessToken)
 	token, _, err := strategy.GenerateAccessToken(b.Context(), jwt)
 	assert.NoError(b, err)
+
 	areq := oauth2.NewAccessRequest(nil)
 
 	for n := 0; n < b.N; n++ {
@@ -412,10 +415,10 @@ func TestStatelessJWTValidatorTokenFormat(t *testing.T) {
 		{name: "ShouldSkipAnUnprefixedOpaqueToken", token: "key.signature"},
 		{name: "ShouldSkipATokenWithoutSegments", token: "token"},
 		{name: "ShouldSkipAnEmptyToken", token: ""},
-		{name: "ShouldSkipAPrefixedAccessToken", prefix: prefix, token: "authelia_at_key.signature"},       //nolint:gosec
-		{name: "ShouldSkipAPrefixedRegistrationToken", prefix: prefix, token: "authelia_cr_key.signature"}, //nolint:gosec
+		{name: "ShouldSkipAPrefixedAccessToken", prefix: prefix, token: "authelia_at_key.signature"},
+		{name: "ShouldSkipAPrefixedRegistrationToken", prefix: prefix, token: "authelia_cr_key.signature"},
 		{name: "ShouldRejectAMalformedSignedJWT", token: "header.payload.signature", definite: true},
-		{name: "ShouldRejectAMalformedEncryptedJWT", token: "header.key.iv.ciphertext.tag", definite: true}, //nolint:gosec
+		{name: "ShouldRejectAMalformedEncryptedJWT", token: "header.key.iv.ciphertext.tag", definite: true},
 	}
 
 	for _, tc := range testCases {

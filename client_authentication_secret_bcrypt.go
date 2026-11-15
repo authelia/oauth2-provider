@@ -13,6 +13,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// DefaultBCryptWorkFactor is the default bcrypt cost used to hash client secrets.
 const DefaultBCryptWorkFactor = 12
 
 // NewBCryptClientSecret returns a new BCryptClientSecret given a hash.
@@ -30,6 +31,7 @@ func NewBCryptClientSecretPlain(rawSecret string, cost int) (secret *BCryptClien
 	return &BCryptClientSecret{value: hashed}, nil
 }
 
+// BCryptClientSecret is a ClientSecret stored as a bcrypt hash.
 type BCryptClientSecret struct {
 	value []byte
 }

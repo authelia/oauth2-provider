@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package rfc8705 implements RFC 8705 OAuth 2.0 Mutual-TLS certificate-bound access tokens.
 package rfc8705
 
 import (
@@ -36,6 +37,8 @@ type Handler struct {
 // tokens of public clients only. A certificate is still required. The grant of a client for which
 // oauth2.MTLSStrictRefreshTokenBindingProvider or oauth2.MTLSStrictRefreshTokenBindingClient requires strict binding
 // keeps its certificate.
+//
+//nolint:gocyclo
 func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.Config.GetMTLSEnabled(ctx) {
 		return nil

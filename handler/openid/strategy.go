@@ -11,6 +11,7 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
+// OpenIDConnectTokenStrategy generates ID Tokens.
 type OpenIDConnectTokenStrategy interface {
 	GenerateIDToken(ctx context.Context, lifespan time.Duration, request oauth2.Requester) (token string, err error)
 }

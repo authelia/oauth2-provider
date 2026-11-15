@@ -8,13 +8,13 @@ import "authelia.com/provider/oauth2"
 
 // Client is a representation of a client that may support RFC8693.
 type Client interface {
-	// GetSupportedSubjectTokenTypes indicates the token types allowed for subject_token
+	// GetSupportedSubjectTokenTypes indicates the token types allowed for subject_token.
 	GetSupportedSubjectTokenTypes() (types []string)
 
-	// GetSupportedActorTokenTypes indicates the token types allowed for subject_token
+	// GetSupportedActorTokenTypes indicates the token types allowed for subject_token.
 	GetSupportedActorTokenTypes() (types []string)
 
-	// GetSupportedRequestTokenTypes indicates the token types allowed for requested_token_type
+	// GetSupportedRequestTokenTypes indicates the token types allowed for requested_token_type.
 	GetSupportedRequestTokenTypes() (types []string)
 
 	// GetSupportedSubjectTokenIssuers indicates the JWT 'iss' claim values this client is permitted

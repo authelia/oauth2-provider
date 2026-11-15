@@ -23,13 +23,13 @@ import (
 // See: https://datatracker.ietf.org/doc/html/rfc3986#section-4.3
 // See: https://datatracker.ietf.org/doc/html/rfc6819#section-5.1.1
 func IsValidRedirectURI(uri *url.URL) bool {
-	// We need to explicitly check for a scheme
+	// We need to explicitly check for a scheme.
 	if !urls.IsRequestURL(uri.String()) {
 		return false
 	}
 
 	if uri.Fragment != "" {
-		// "The endpoint URI MUST NOT include a fragment component."
+		// "The endpoint URI MUST NOT include a fragment component".
 		return false
 	}
 
@@ -40,7 +40,7 @@ func IsValidRedirectURI(uri *url.URL) bool {
 // non-HTTP schemes and HTTP URIs that resolve to localhost are considered secure. Use IsRedirectURISecureStrict for
 // stricter handling that rejects custom-scheme URIs.
 func IsRedirectURISecure(ctx context.Context, uri *url.URL) bool {
-	return !(uri.Scheme == consts.SchemeHTTP && !IsLocalhost(uri))
+	return uri.Scheme != consts.SchemeHTTP || IsLocalhost(uri)
 }
 
 // IsRedirectURISecureForClient reports whether the given URI is acceptable as a redirect target for the client. It
@@ -270,6 +270,7 @@ func isMatchingRedirectURI(needle string, haystack []string, strategy URICompari
 	return "", false
 }
 
+// RedirectURICustomComparisonClient is implemented by a client that selects its own redirect URI comparison strategy.
 type RedirectURICustomComparisonClient interface {
 	GetRedirectURIComparisonStrategy() URIComparisonStrategy
 }

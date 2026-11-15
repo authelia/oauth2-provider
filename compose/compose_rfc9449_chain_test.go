@@ -250,8 +250,8 @@ func TestMTLSIsEnforcedWhenAnAccessTokenAuthenticatesIntrospection(t *testing.T)
 
 	provider, _, config := newDPoPChainProviderCertBound(t)
 
-	caller := chainCertBoundToken(t, provider, cert, "mtls-caller")
-	subject := chainCertBoundToken(t, provider, cert, "mtls-subject")
+	caller := chainCertBoundToken(t, provider, cert)
+	subject := chainCertBoundToken(t, provider, cert)
 
 	t.Run("ShouldAcceptTheBoundCertificate", func(t *testing.T) {
 		body, err := chainIntrospectAsWithCert(t, provider, subject, "Bearer", caller, "", cert)
@@ -318,7 +318,7 @@ func TestBothBindingsAreEnforcedIndependentlyAtIntrospection(t *testing.T) {
 	key := newPARProofKey(t)
 
 	caller := chainBothBoundToken(t, provider, key, cert, "both-caller")
-	subject := chainCertBoundToken(t, provider, cert, "both-subject")
+	subject := chainCertBoundToken(t, provider, cert)
 
 	t.Run("ShouldAcceptWhenBothAreSatisfied", func(t *testing.T) {
 		body, err := chainIntrospectAsWithCert(t, provider, subject, "DPoP", caller,
@@ -609,7 +609,7 @@ func TestBindingIsRequiredAtIntrospectionWhenEnforced(t *testing.T) {
 
 		store.Clients[chainClientID].(*oauth2.DefaultClient).TLSClientCertificateBoundAccessTokens = true
 
-		bound := chainCertBoundToken(t, provider, cert, "enforce-cert-bound")
+		bound := chainCertBoundToken(t, provider, cert)
 
 		config.MTLSEnforce = true
 
@@ -713,7 +713,7 @@ func TestDPoPAuthorizeStepEnforcement(t *testing.T) {
 		require.Len(t, store.AuthorizeCodes, 1)
 
 		for _, stored := range store.AuthorizeCodes {
-			bound, ok := stored.Requester.GetSession().(oauth2.DPoPBoundSession)
+			bound, ok := stored.GetSession().(oauth2.DPoPBoundSession)
 			require.True(t, ok)
 
 			assert.Equal(t, thumbprintOf(t, key), bound.GetDPoPJWKThumbprint(),
@@ -1051,7 +1051,7 @@ func confirmationJKT(t *testing.T, body map[string]any) (jkt string, present boo
 	return jkt, true
 }
 
-func chainCertBoundToken(t *testing.T, provider oauth2.Provider, cert *x509.Certificate, jti string) (token string) {
+func chainCertBoundToken(t *testing.T, provider oauth2.Provider, cert *x509.Certificate) (token string) {
 	t.Helper()
 
 	requestURI, _ := chainPushedRequestURI(t, provider, chainPARForm())

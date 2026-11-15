@@ -35,11 +35,13 @@ func AddLocalizerToErrWithLang(catalog i18n.MessageCatalog, lang language.Tag, e
 	} else if e, ok = errors.AsType[*RFC6749Error](errorsx.Cause(err)); ok {
 		return e.WithLocalizer(catalog, lang)
 	}
+
 	return err
 }
 
 func getLangFromRequester(requester Requester) language.Tag {
 	lang := language.English
+
 	g11nContext, ok := requester.(G11NContext)
 	if ok {
 		lang = g11nContext.GetLang()

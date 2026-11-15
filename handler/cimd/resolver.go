@@ -514,6 +514,7 @@ func (r *Resolver) refresh(ctx context.Context, id string, stale bool) (record *
 	}
 }
 
+//nolint:gocyclo
 func (r *Resolver) fetch(ctx context.Context, id string) (record *oauth2.ClientIDMetadataDocumentRecord, err error) {
 	requestCtx, cancel := context.WithTimeout(ctx, r.config.FetchTimeout)
 	defer cancel()

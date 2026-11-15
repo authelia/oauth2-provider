@@ -47,8 +47,20 @@ func decoyKey(alg jose.SignatureAlgorithm) any {
 
 func decoyECDSAKey(curve elliptic.Curve) *ecdsa.PublicKey {
 	params := curve.Params()
+	size := (params.BitSize + 7) / 8
 
-	return &ecdsa.PublicKey{Curve: curve, X: params.Gx, Y: params.Gy}
+	point := make([]byte, 1+2*size)
+	point[0] = 4
+
+	params.Gx.FillBytes(point[1 : 1+size])
+	params.Gy.FillBytes(point[1+size:])
+
+	key, err := ecdsa.ParseUncompressedPublicKey(curve, point)
+	if err != nil {
+		return nil
+	}
+
+	return key
 }
 
 var decoyRSAKey = sync.OnceValue(func() *rsa.PublicKey {

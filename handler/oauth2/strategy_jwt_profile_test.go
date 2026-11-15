@@ -102,6 +102,7 @@ func TestAccessToken(t *testing.T) {
 					require.True(t, ok)
 					assert.Equal(t, []any{consts.ScopeEmail, consts.ScopeOffline}, scope)
 				}
+
 				if scopeField.field == jwt.JWTScopeFieldString || scopeField.field == jwt.JWTScopeFieldBoth {
 					scope, ok := payload[consts.ClaimScope]
 					require.True(t, ok)
@@ -110,6 +111,7 @@ func TestAccessToken(t *testing.T) {
 
 				rawHeader, err := base64.RawURLEncoding.DecodeString(parts[0])
 				require.NoError(t, err)
+
 				var header map[string]any
 
 				require.NoError(t, json.Unmarshal(rawHeader, &header))
@@ -118,6 +120,7 @@ func TestAccessToken(t *testing.T) {
 
 				extraClaimsSession, ok := tc.r.GetSession().(oauth2.ExtraClaimsSession)
 				require.True(t, ok)
+
 				claims := extraClaimsSession.GetExtraClaims()
 				assert.Equal(t, "bar", claims["foo"])
 				assert.Equal(t, "peter", claims[consts.ClaimSubject])

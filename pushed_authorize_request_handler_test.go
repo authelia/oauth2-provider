@@ -710,6 +710,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			defer ctrl.Finish()
 
 			store := mock.NewMockStorage(ctrl)
+
 			config := &Config{
 				ScopeStrategy:    ExactScopeStrategy,
 				AudienceStrategy: DefaultAudienceStrategy,
@@ -717,6 +718,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			if tc.config != nil {
 				tc.config(config)
 			}
+
 			provider := &Fosite{
 				Store:  store,
 				Config: config,
@@ -725,6 +727,7 @@ func TestNewPushedAuthorizeRequest(t *testing.T) {
 			ctx := NewContext()
 
 			tc.mock(store)
+
 			r := tc.r
 			if r == nil {
 				r = &http.Request{

@@ -1156,7 +1156,7 @@ func unsecuredToken(t *testing.T, claims map[string]any) string {
 func tamperPayload(t *testing.T, token string) string {
 	t.Helper()
 
-	object, err := jose.ParseSigned(token, []jose.SignatureAlgorithm{jose.ES256})
+	object, err := jose.ParseSignedCompact(token, []jose.SignatureAlgorithm{jose.ES256})
 	require.NoError(t, err)
 
 	var claims map[string]any

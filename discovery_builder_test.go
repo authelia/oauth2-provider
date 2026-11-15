@@ -471,7 +471,7 @@ func TestOAuth2MetadataRegistrationIntrospectorIgnored(t *testing.T) {
 func TestOAuth2MetadataECOnlyKeys(t *testing.T) {
 	config := &oauth2.Config{
 		Issuer: "https://auth.example.com",
-		EndpointURLs: oauth2.EndpointURLs{ //nolint:gosec
+		EndpointURLs: oauth2.EndpointURLs{
 			Authorization: "https://auth.example.com/authorize",
 			Token:         "https://auth.example.com/token",
 		},
@@ -503,13 +503,13 @@ func TestOAuth2MetadataRequiredMembers(t *testing.T) {
 	}{
 		{
 			name:      "ShouldRejectNoResponseTypes",
-			urls:      oauth2.EndpointURLs{Token: "https://auth.example.com/token"}, //nolint:gosec
+			urls:      oauth2.EndpointURLs{Token: "https://auth.example.com/token"},
 			factories: []compose.Factory{compose.OAuth2ClientCredentialsGrantFactory},
 			expected:  "the authorization server metadata requires 'response_types_supported' but no handler supports a response type",
 		},
 		{
 			name:      "ShouldRejectAuthorizationCodeWithoutAuthorizationEndpoint",
-			urls:      oauth2.EndpointURLs{Token: "https://auth.example.com/token"}, //nolint:gosec
+			urls:      oauth2.EndpointURLs{Token: "https://auth.example.com/token"},
 			factories: []compose.Factory{compose.OAuth2AuthorizeExplicitFactory},
 			expected:  "the authorization server metadata requires an 'authorization_endpoint' as a supported grant type uses the authorization endpoint",
 		},

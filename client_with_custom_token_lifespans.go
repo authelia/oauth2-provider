@@ -53,6 +53,7 @@ type ClientLifespanConfig struct {
 	// Hybrid grant tokens are not independently configurable, see the comment above.
 }
 
+// DefaultClientWithCustomTokenLifespans is a client with custom token lifespans.
 type DefaultClientWithCustomTokenLifespans struct {
 	*DefaultClient
 	TokenLifespans *ClientLifespanConfig `json:"token_lifespans"`
@@ -77,6 +78,7 @@ func (c *DefaultClientWithCustomTokenLifespans) GetEffectiveLifespan(gt GrantTyp
 	if c.TokenLifespans == nil {
 		return fallback
 	}
+
 	var cl *time.Duration
 
 	switch gt {

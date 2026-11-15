@@ -71,7 +71,7 @@ func TestNewBackChannelAuthenticationResponse(t *testing.T) {
 		{name: "ShouldIssuePushWithoutInterval", mode: consts.CIBAModePush, subject: "john", expiresIn: 300, rawID: true},
 		{name: "ShouldClampRequestedExpiryUp", mode: consts.CIBAModePoll, subject: "john", requested: 10 * time.Second, expiresIn: 30, interval: 5},
 		{name: "ShouldClampRequestedExpiryDown", mode: consts.CIBAModePoll, subject: "john", requested: 99999 * time.Second, expiresIn: 1800, interval: 5},
-		{name: "ShouldHonourRequestedExpiry", mode: consts.CIBAModePoll, subject: "john", requested: 120 * time.Second, expiresIn: 120, interval: 5},
+		{name: "ShouldHonorRequestedExpiry", mode: consts.CIBAModePoll, subject: "john", requested: 120 * time.Second, expiresIn: 120, interval: 5},
 	}
 
 	for _, sc := range stores {

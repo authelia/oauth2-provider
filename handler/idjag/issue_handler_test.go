@@ -351,6 +351,7 @@ func TestIssueHandlerStorageClaimsCannotOverrideRegisteredClaims(t *testing.T) {
 	handler, _, key := newIssueFixture(t, false)
 
 	session := newIssueSession(time.Now().Add(time.Hour))
+
 	setIssueClaims(handler, map[string]any{consts.ClaimAudience: redeemEvil, consts.ClaimClientIdentifier: "evil", consts.ClaimConfirmation: map[string]any{"jkt": "x"}, consts.ClaimTenant: "acme"})
 
 	request := newIssueRequest(t, session, nil)
@@ -450,6 +451,7 @@ func TestIssueHandlerAuthenticationClaims(t *testing.T) {
 			handler, _, key := newIssueFixture(t, false)
 
 			session := newIssueSession(time.Now().Add(time.Hour))
+
 			setIssueClaims(handler, tc.extra)
 
 			maps.Copy(session.SubjectToken, tc.subject)
@@ -873,7 +875,7 @@ func newIssueRequest(t *testing.T, session oauth2.Session, extra url.Values) *oa
 func parseIssued(t *testing.T, token string, key *jose.JSONWebKey) (typ string, claims map[string]any) {
 	t.Helper()
 
-	signed, err := jose.ParseSigned(token, []jose.SignatureAlgorithm{jose.RS256})
+	signed, err := jose.ParseSignedCompact(token, []jose.SignatureAlgorithm{jose.RS256})
 	require.NoError(t, err)
 
 	payload, err := signed.Verify(key.Public())

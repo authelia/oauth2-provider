@@ -16,6 +16,8 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+const jsonNull = "null"
+
 // GetClaimsParameterMaxLength returns the maximum from config when it implements ClaimsParameterMaxLengthProvider
 // with a positive value, and the default of 8192 otherwise.
 func GetClaimsParameterMaxLength(ctx context.Context, config any) int {
@@ -252,7 +254,7 @@ func cloneClaimValue(value any) any {
 }
 
 func isJSONNull(raw json.RawMessage) bool {
-	return string(bytes.TrimSpace(raw)) == "null"
+	return string(bytes.TrimSpace(raw)) == jsonNull
 }
 
 const (

@@ -135,6 +135,7 @@ func TestNewAccessRequest(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.ClientSecret = testClientSecretFoo
+
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(ErrServerError)
 			},
 			handlers: func(handler *mock.MockTokenEndpointHandler) TokenEndpointHandlers {
@@ -154,6 +155,7 @@ func TestNewAccessRequest(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.ClientSecret = testClientSecretFoo
+
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			handlers: func(handler *mock.MockTokenEndpointHandler) TokenEndpointHandlers {
@@ -180,6 +182,7 @@ func TestNewAccessRequest(t *testing.T) {
 			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, client *DefaultClient) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = true
+
 				handler.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			handlers: func(handler *mock.MockTokenEndpointHandler) TokenEndpointHandlers {
@@ -204,6 +207,7 @@ func TestNewAccessRequest(t *testing.T) {
 			handler := mock.NewMockTokenEndpointHandler(ctrl)
 			handler.EXPECT().CanHandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 			handler.EXPECT().CanSkipClientAuth(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+
 			defer ctrl.Finish()
 
 			ctx := gomock.AssignableToTypeOf(context.WithValue(t.Context(), ContextKey("test"), nil))
@@ -378,6 +382,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 			if handlers == nil {
 				handlers = TokenEndpointHandlers{handler}
 			}
+
 			config.TokenEndpointHandlers = handlers
 
 			r := &http.Request{
@@ -428,6 +433,7 @@ func TestNewAccessRequestEdgeCases(t *testing.T) {
 			name: "ShouldFailWhenSessionIsNil",
 			req: func() *http.Request {
 				form := url.Values{consts.FormParameterGrantType: {"foo"}}
+
 				return &http.Request{
 					Method:   http.MethodPost,
 					Header:   http.Header{},
@@ -443,6 +449,7 @@ func TestNewAccessRequestEdgeCases(t *testing.T) {
 			name: "ShouldFailWhenGrantTypeMissing",
 			req: func() *http.Request {
 				form := url.Values{consts.FormParameterClientID: {"bar"}}
+
 				return &http.Request{
 					Method:   http.MethodPost,
 					Header:   http.Header{},
@@ -517,6 +524,7 @@ func TestNewAccessRequestWithMixedClientAuth(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Eq("foo")).Return(client, nil)
 				client.Public = false
 				client.ClientSecret = testClientSecretBar
+
 				handlerWithoutClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 				handlerWithClientAuth.EXPECT().HandleTokenEndpointRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
@@ -783,7 +791,6 @@ func (h *authorizationDetailsTokenEndpointHandler) CanHandleAuthorizationDetails
 	return h.accepts
 }
 
-//nolint:unparam
 func basicAuth(username, password string) string {
 	return prefixSchemeBasic + base64.StdEncoding.EncodeToString(fmt.Appendf(nil, "%s:%s", username, password))
 }

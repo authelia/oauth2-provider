@@ -90,6 +90,7 @@ func TestRFC6749ErrorUnwrap(t *testing.T) {
 				assert.Nil(t, actual)
 				return
 			}
+
 			assert.Same(t, tc.cause, actual)
 		})
 	}

@@ -30,7 +30,7 @@ const (
 	DeviceAuthorizeStatusClaimed
 )
 
-// DeviceAuthorizeRequest is an implementation of DeviceAuthorizeRequester
+// DeviceAuthorizeRequest is an implementation of DeviceAuthorizeRequester.
 type DeviceAuthorizeRequest struct {
 	Request
 	DeviceCodeSignature string
@@ -46,22 +46,22 @@ func NewDeviceAuthorizeRequest() *DeviceAuthorizeRequest {
 	}
 }
 
-// SetDeviceCodeSignature set the device code signature
+// SetDeviceCodeSignature set the device code signature.
 func (d *DeviceAuthorizeRequest) SetDeviceCodeSignature(signature string) {
 	d.DeviceCodeSignature = signature
 }
 
-// GetDeviceCodeSignature returns the device code signature
+// GetDeviceCodeSignature returns the device code signature.
 func (d *DeviceAuthorizeRequest) GetDeviceCodeSignature() string {
 	return d.DeviceCodeSignature
 }
 
-// SetUserCodeSignature set the user code signature
+// SetUserCodeSignature set the user code signature.
 func (d *DeviceAuthorizeRequest) SetUserCodeSignature(signature string) {
 	d.UserCodeSignature = signature
 }
 
-// GetUserCodeSignature returns the user code signature
+// GetUserCodeSignature returns the user code signature.
 func (d *DeviceAuthorizeRequest) GetUserCodeSignature() string {
 	return d.UserCodeSignature
 }

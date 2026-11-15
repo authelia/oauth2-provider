@@ -101,7 +101,6 @@ func TestStrategyFetchesTheJWKSURIOfADocumentClientOnlyWithItsOwnFetcher(t *test
 
 	encode := func(strategy *DefaultStrategy, client any) error {
 		token, _, err := strategy.Encode(t.Context(), MapClaims{"sub": "peter"}, WithIDTokenClient(client))
-
 		if err == nil {
 			assert.True(t, IsEncryptedJWT(token))
 		}

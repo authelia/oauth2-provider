@@ -172,6 +172,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			},
 			check: func(t *testing.T, r *http.Response) {
 				var b oauth2.AccessRequest
+
 				b.Client = new(oauth2.DefaultClient)
 				b.Session = newDefaultSession()
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&b))
@@ -230,6 +231,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			data.Set(consts.FormParameterState, state)
 			data.Set(consts.FormParameterScope, strings.Join(oauthClient.Scopes, " "))
 			data.Set(consts.FormParameterRedirectURI, oauthClient.RedirectURL)
+
 			for k, v := range tc.params {
 				data.Set(k, v)
 			}
@@ -277,6 +279,7 @@ func runPushedAuthorizeCodeGrantTest(t *testing.T, strategy any) {
 			resp, err = http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			require.Equal(t, tc.authStatusCode, resp.StatusCode)
+
 			if resp.StatusCode != http.StatusOK {
 				return
 			}

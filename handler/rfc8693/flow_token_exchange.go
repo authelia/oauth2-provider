@@ -26,7 +26,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// TokenExchangeGrantHandler is the grant handler for RFC8693
+// TokenExchangeGrantHandler is the grant handler for RFC8693.
 type TokenExchangeGrantHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 
@@ -59,7 +59,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		return errors.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client is marked as public and is thus not allowed to use authorization grant 'urn:ietf:params:oauth:grant-type:token-exchange'."))
 	}
 
-	// Check whether client is allowed to use token exchange
+	// Check whether client is allowed to use token exchange.
 	if !client.GetGrantTypes().Has(consts.GrantTypeOAuthTokenExchange) {
 		return errors.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", consts.GrantTypeOAuthTokenExchange))
 	}
@@ -145,7 +145,7 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' is not empty even though the '%s' is empty.", consts.FormParameterActorTokenType, consts.FormParameterActorToken))
 	}
 
-	// check if supported
+	// check if supported.
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 	if requestedTokenType == "" {
 		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
@@ -323,6 +323,8 @@ func (c *TokenExchangeGrantHandler) GetResourceStrategy(ctx context.Context, cli
 // 'invalid_request' per RFC 8693 Section 2.2.2.
 //
 // See https://datatracker.ietf.org/doc/html/rfc8693#section-4.1.
+//
+//nolint:gocyclo
 func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -334,6 +336,7 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 	}
 
 	form := request.GetRequestForm()
+
 	requestedTokenType := form.Get(consts.FormParameterRequestedTokenType)
 	if requestedTokenType == "" {
 		requestedTokenType = c.Config.GetDefaultRFC8693RequestedTokenType(ctx)
@@ -684,6 +687,8 @@ func errExchangeTokenValidation(err error) error {
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.2
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-10.4
+//
+//nolint:gocyclo
 func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, store oauth2.ClientGetter, strategy oauth2.ScopeStrategy, original oauth2.Requester, role tokenRole, refresh bool) (err error) {
 	client := request.GetClient()
 	originalClientID := original.GetClient().GetID()
@@ -1016,12 +1021,12 @@ func copyClaimMap(src map[string]any) map[string]any {
 	return dst
 }
 
-// CanSkipClientAuth indicates if client auth can be skipped
+// CanSkipClientAuth indicates if client auth can be skipped.
 func (c *TokenExchangeGrantHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return false
 }
 
-// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
+// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled.
 func (c *TokenExchangeGrantHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
 	// grant_type REQUIRED.
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)

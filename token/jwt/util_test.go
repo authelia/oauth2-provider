@@ -241,7 +241,7 @@ func TestDefaultStrategyRefusesSymmetricEncryptionWithAKeyIDForAPublicClient(t *
 	assert.ErrorContains(t, err, "must not use symmetric algorithms")
 }
 
-func TestNewClientSecretJWKFromClientHonoursTheSecretExpiry(t *testing.T) {
+func TestNewClientSecretJWKFromClientHonorsTheSecretExpiry(t *testing.T) {
 	secret := []byte("super-secret-value-padded-to-thirty-two-octets")
 
 	testCases := []struct {
@@ -377,7 +377,7 @@ func TestNewClientSecretJWK(t *testing.T) {
 			alg:     string(jose.DIRECT),
 			enc:     "unknown",
 			use:     JSONWebTokenUseEncryption,
-			wantErr: "Unsupported content encryption for the direct key algorthm 'unknown'",
+			wantErr: "Unsupported content encryption for the direct key algorithm 'unknown'",
 		},
 		{
 			name:    "ShouldErrorUnsupportedEncryptionAlg",
@@ -633,7 +633,7 @@ func TestNewMapClaims(t *testing.T) {
 	type sample struct {
 		Sub      string `json:"sub"`
 		Skip     string `json:"-"`
-		Untagged string //nolint:unused
+		Untagged string
 		Empty    string `json:"empty,omitempty"`
 		Set      string `json:"set,omitempty"`
 		Nested   nested `json:"nested"`
@@ -646,6 +646,7 @@ func TestNewMapClaims(t *testing.T) {
 	assert.Equal(t, "value", mc["set"])
 	_, hasSkip := mc["-"]
 	assert.False(t, hasSkip, "fields with json:\"-\" must be skipped")
+
 	_, hasEmpty := mc["empty"]
 	assert.False(t, hasEmpty, "omitempty fields with zero value must be skipped")
 	require.NotNil(t, mc["nested"])

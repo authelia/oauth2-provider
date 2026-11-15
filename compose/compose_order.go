@@ -163,6 +163,7 @@ func handlerFollows[Later, Earlier, Handler any](handlers []Handler) bool {
 	return false
 }
 
+//nolint:gocyclo
 func validateRFC8693HandlerOrder(config *oauth2.Config) (err error) {
 	var grant, typed, validator, txn, grantUnordered, validatorUnordered, txnUnordered bool
 

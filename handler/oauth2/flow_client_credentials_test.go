@@ -29,6 +29,7 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := mock.NewMockClientCredentialsGrantStorage(ctrl)
 	chgen := mock.NewMockAccessTokenStrategy(ctrl)
+
 	areq := mock.NewMockAccessRequester(ctrl)
 	defer ctrl.Finish()
 
@@ -118,6 +119,7 @@ func TestClientCredentials_HandleTokenEndpointRequest(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.mock(areq)
+
 			err := h.HandleTokenEndpointRequest(t.Context(), areq)
 			if tc.err != "" {
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
@@ -185,6 +187,7 @@ func TestClientCredentials_PopulateTokenEndpointResponse(t *testing.T) {
 			}
 
 			tc.mock(areq, store, chgen)
+
 			err := h.PopulateTokenEndpointResponse(t.Context(), areq, aresp)
 			if tc.err != "" {
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
@@ -366,7 +369,7 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 						DefaultClient: &oauth2.DefaultClient{
 							ID:         "test",
 							GrantTypes: []string{consts.GrantTypeClientCredentials},
-							Audience:   []string{"https://exmaple.com"},
+							Audience:   []string{"https://example.com"},
 							Scopes:     []string{"openid"},
 						},
 						scopes: true,
@@ -392,7 +395,7 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 						DefaultClient: &oauth2.DefaultClient{
 							ID:         "test",
 							GrantTypes: []string{consts.GrantTypeClientCredentials},
-							Audience:   []string{"https://exmaple.com"},
+							Audience:   []string{"https://example.com"},
 							Scopes:     []string{"openid"},
 						},
 						scopes:   true,
@@ -404,9 +407,9 @@ func TestClientCredentialsGrantHandler_HandleTokenEndpointRequest(t *testing.T) 
 				GrantTypes: oauth2.Arguments{consts.GrantTypeClientCredentials},
 				Request: oauth2.Request{
 					RequestedScope:    []string{"openid"},
-					RequestedAudience: []string{"https://exmaple.com"},
+					RequestedAudience: []string{"https://example.com"},
 					GrantedScope:      []string{"openid"},
-					GrantedAudience:   []string{"https://exmaple.com"},
+					GrantedAudience:   []string{"https://example.com"},
 				},
 			},
 			"",

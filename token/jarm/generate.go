@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package jarm generates JWT Secured Authorization Responses (JARM).
 package jarm
 
 import (
@@ -18,7 +19,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// EncodeParameters takes the result from jarm.Generate and turns it into parameters in the form of url.Values.
+// EncodeParameters takes the result from jarm.Generate and turns it into parameters in the form of [url.Values].
 func EncodeParameters(token, _ string, tErr error) (parameters url.Values, err error) {
 	if tErr != nil {
 		return nil, tErr
@@ -30,6 +31,8 @@ func EncodeParameters(token, _ string, tErr error) (parameters url.Values, err e
 // Generate generates the token and signature for a JARM response. The issuer is always the configured issuer, and
 // the session argument is not used. Per JARM Section 2.1 the numeric 'expires_in' parameter is encoded as a JSON number
 // and all other parameters as JSON strings.
+//
+//nolint:gocyclo
 func Generate(ctx context.Context, config Configurator, client Client, _ any, parameters url.Values) (token, signature string, err error) {
 	headers := map[string]any{}
 
@@ -95,7 +98,7 @@ func Generate(ctx context.Context, config Configurator, client Client, _ any, pa
 	var strategy jwt.Strategy
 
 	if strategy = config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx); strategy == nil {
-		return "", "", errors.New("The JARM response modes require the JWTSecuredAuthorizeResponseModeSignerProvider to return a jwt.Strategy but it didn't.")
+		return "", "", errors.New("the JARM response modes require the JWTSecuredAuthorizeResponseModeSignerProvider to return a jwt.Strategy but it didn't")
 	}
 
 	return strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(&jwt.Headers{Extra: headers}), jwt.WithJARMClient(signer))

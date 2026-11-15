@@ -962,10 +962,12 @@ func TestNewAuthorizeRequest(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
+
 			store := mock.NewMockStorage(ctrl)
 			defer ctrl.Finish()
 
 			tc.mock(store)
+
 			if tc.r == nil {
 				tc.r = &http.Request{Header: http.Header{}, Method: http.MethodGet}
 				if tc.query != nil {

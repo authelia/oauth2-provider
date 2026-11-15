@@ -26,6 +26,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// IDTokenHandleHelper generates ID Tokens on behalf of the OpenID Connect handlers.
 type IDTokenHandleHelper struct {
 	IDTokenStrategy OpenIDConnectTokenStrategy
 }

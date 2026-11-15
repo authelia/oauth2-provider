@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+---
 version: '2'
 linters:
   enable:
@@ -10,6 +11,8 @@ linters:
     - goconst
     - gocritic
     - gocyclo
+    - godoclint
+    - godot
     - gosec
     - misspell
     - nolintlint
@@ -18,6 +21,7 @@ linters:
     - unconvert
     - unparam
     - whitespace
+    - wsl_v5
   settings:
     forbidigo:
       forbid:
@@ -30,17 +34,43 @@ linters:
     goconst:
       min-len: 2
       min-occurrences: 2
+      ignore-tests: true
+      ignore-string-values:
+        # JOSE algorithm identifiers read clearer as literals in the default algorithm lists.
+        - '^((HS|RS|PS|ES)(256|384|512)|EdDSA|Ed25519)$'
     gocyclo:
       min-complexity: 15
+    godoclint:
+      enable:
+        - no-unused-link
+        - require-doc
+        - require-pkg-doc
+        - require-stdlib-doclink
+    godot:
+      scope: all
+      exclude:
+        - '^\s*SPDX-'
     revive:
       confidence: 0.8
   exclusions:
     generated: lax
     rules:
+      - linters:
+          - godoclint
+        path: _test\.go$
+      # Test fixtures carry example credentials and write raw responses by design.
+      - linters:
+          - gosec
+        path: _test\.go$
+      # Protocol parameter, metadata and claim names trip the hardcoded credential heuristic.
+      - linters:
+          - gosec
+        path: internal/consts/
+        text: G101
       - path: (.+)\.go$
-        text:
-          Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*printf?|os\.(Un)?Setenv).
-          is not checked
+        text: Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush). is not checked
+      - path: (.+)\.go$
+        text: Error return value of .(os\.Remove(All)?|.*printf?|os\.(Un)?Setenv). is not checked
       - path: (.+)\.go$
         text: func name will be used as test\.Test.* by other packages, and that stutters; consider calling this
       - path: (.+)\.go$
@@ -61,14 +91,24 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - internal/mock
+      - testing/mock
+      - node_modules
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
 formatters:
   enable:
+    - gci
     - gofmt
     - goimports
   settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(authelia.com,github.com/authelia)
+        - localmodule
     goimports:
       local-prefixes:
         - authelia.com/provider/oauth2
@@ -78,3 +118,5 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+      - node_modules
+...

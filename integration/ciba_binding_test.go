@@ -65,7 +65,7 @@ func TestPollDPoPJKTEnforcedAtTokenEndpoint(t *testing.T) {
 
 				flow.approve(t)
 
-				status, body := flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, other, http.MethodPost, flow.ts.URL+tokenRelativePath, nil)})
+				status, body := flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, other, flow.ts.URL+tokenRelativePath, nil)})
 				assert.Equal(t, http.StatusBadRequest, status)
 				assert.Equal(t, "invalid_dpop_proof", body["error"])
 
@@ -73,7 +73,7 @@ func TestPollDPoPJKTEnforcedAtTokenEndpoint(t *testing.T) {
 				assert.Equal(t, http.StatusBadRequest, status)
 				assert.Equal(t, "invalid_dpop_proof", body["error"])
 
-				status, body = flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, bound, http.MethodPost, flow.ts.URL+tokenRelativePath, nil)})
+				status, body = flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, bound, flow.ts.URL+tokenRelativePath, nil)})
 				require.Equal(t, http.StatusOK, status, "token error: %+v", body)
 				assert.Equal(t, oauth2.DPoPAccessToken, body["token_type"])
 			})
@@ -81,15 +81,15 @@ func TestPollDPoPJKTEnforcedAtTokenEndpoint(t *testing.T) {
 			t.Run("ShouldBindToTheProofPresentedAtTheBackChannelEndpoint", func(t *testing.T) {
 				bound, other := newDPoPProofKey(t), newDPoPProofKey(t)
 
-				id := flow.authenticate(t, cibaClientID, &cibaRequestOptions{dpop: signDPoPProof(t, bound, http.MethodPost, flow.ts.URL+"/bc-authorize", nil)})
+				id := flow.authenticate(t, cibaClientID, &cibaRequestOptions{dpop: signDPoPProof(t, bound, flow.ts.URL+"/bc-authorize", nil)})
 
 				flow.approve(t)
 
-				status, body := flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, other, http.MethodPost, flow.ts.URL+tokenRelativePath, nil)})
+				status, body := flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, other, flow.ts.URL+tokenRelativePath, nil)})
 				assert.Equal(t, http.StatusBadRequest, status)
 				assert.Equal(t, "invalid_dpop_proof", body["error"])
 
-				status, body = flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, bound, http.MethodPost, flow.ts.URL+tokenRelativePath, nil)})
+				status, body = flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, bound, flow.ts.URL+tokenRelativePath, nil)})
 				require.Equal(t, http.StatusOK, status, "token error: %+v", body)
 				assert.Equal(t, oauth2.DPoPAccessToken, body["token_type"])
 
@@ -102,14 +102,14 @@ func TestPollDPoPJKTEnforcedAtTokenEndpoint(t *testing.T) {
 			})
 
 			t.Run("ShouldRejectAProofForTheTokenEndpointAtTheBackChannelEndpoint", func(t *testing.T) {
-				status, body := flow.backchannel(t, cibaClientID, &cibaRequestOptions{dpop: signDPoPProof(t, newDPoPProofKey(t), http.MethodPost, flow.ts.URL+tokenRelativePath, nil)})
+				status, body := flow.backchannel(t, cibaClientID, &cibaRequestOptions{dpop: signDPoPProof(t, newDPoPProofKey(t), flow.ts.URL+tokenRelativePath, nil)})
 				assert.Equal(t, http.StatusBadRequest, status)
 				assert.Equal(t, "invalid_dpop_proof", body["error"])
 			})
 
 			t.Run("ShouldRejectADPoPJKTThatDisagreesWithTheProof", func(t *testing.T) {
 				status, body := flow.backchannel(t, cibaClientID, &cibaRequestOptions{
-					dpop: signDPoPProof(t, newDPoPProofKey(t), http.MethodPost, flow.ts.URL+"/bc-authorize", nil),
+					dpop: signDPoPProof(t, newDPoPProofKey(t), flow.ts.URL+"/bc-authorize", nil),
 					form: url.Values{consts.FormParameterDPoPJKT: {thumbprint(t, newDPoPProofKey(t))}},
 				})
 				assert.Equal(t, http.StatusBadRequest, status)
@@ -165,13 +165,13 @@ func TestPollKeyBoundIDToken(t *testing.T) {
 				key = newDPoPProofKey(t)
 
 				id := flow.authenticate(t, cibaKeyBindingClientID, &cibaRequestOptions{
-					dpop: signDPoPProof(t, key, http.MethodPost, flow.ts.URL+"/bc-authorize", nil),
+					dpop: signDPoPProof(t, key, flow.ts.URL+"/bc-authorize", nil),
 					form: url.Values{consts.FormParameterScope: {scope}},
 				})
 
 				flow.approveScopes(t, withheld)
 
-				status, body := flow.poll(t, cibaKeyBindingClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, key, http.MethodPost, flow.ts.URL+tokenRelativePath, nil)})
+				status, body := flow.poll(t, cibaKeyBindingClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, key, flow.ts.URL+tokenRelativePath, nil)})
 				require.Equal(t, http.StatusOK, status, "token error: %+v", body)
 				require.NotEmpty(t, body["id_token"])
 
@@ -291,7 +291,7 @@ func TestPollLongPollingWithDPoP(t *testing.T) {
 
 				start := time.Now()
 
-				status, body := flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, key, http.MethodPost, flow.ts.URL+tokenRelativePath, nil)})
+				status, body := flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, key, flow.ts.URL+tokenRelativePath, nil)})
 				assert.Equal(t, http.StatusBadRequest, status)
 				assert.Equal(t, "authorization_pending", body["error"])
 				assert.Less(t, time.Since(start), 3*time.Second)
@@ -300,7 +300,7 @@ func TestPollLongPollingWithDPoP(t *testing.T) {
 
 				time.Sleep(time.Second)
 
-				status, body = flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, key, http.MethodPost, flow.ts.URL+tokenRelativePath, nil)})
+				status, body = flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, key, flow.ts.URL+tokenRelativePath, nil)})
 				require.Equal(t, http.StatusOK, status, "token error: %+v", body)
 				assert.Equal(t, oauth2.DPoPAccessToken, body["token_type"])
 			})
@@ -315,7 +315,7 @@ func TestPollLongPollingWithDPoP(t *testing.T) {
 
 				start := time.Now()
 
-				status, body := flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, newDPoPProofKey(t), http.MethodPost, flow.ts.URL+tokenRelativePath, nil)})
+				status, body := flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, newDPoPProofKey(t), flow.ts.URL+tokenRelativePath, nil)})
 				assert.Equal(t, http.StatusBadRequest, status)
 				assert.Contains(t, []any{"authorization_pending", "use_dpop_nonce"}, body["error"])
 				assert.Less(t, time.Since(start), time.Second)

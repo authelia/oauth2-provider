@@ -18,7 +18,7 @@ import (
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1" //nolint:gosec
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/subtle"
@@ -901,7 +901,7 @@ func unwrapCEKIndependently(t *testing.T, header map[string]any, alg jose.KeyAlg
 	case jose.RSA1_5:
 		cek, err = rsa.DecryptPKCS1v15(rand.Reader, private.(*rsa.PrivateKey), encryptedKey) //nolint:staticcheck
 	case jose.RSA_OAEP:
-		cek, err = rsa.DecryptOAEP(sha1.New(), rand.Reader, private.(*rsa.PrivateKey), encryptedKey, nil) //nolint:gosec
+		cek, err = rsa.DecryptOAEP(sha1.New(), rand.Reader, private.(*rsa.PrivateKey), encryptedKey, nil)
 	case jose.RSA_OAEP_256:
 		cek, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, private.(*rsa.PrivateKey), encryptedKey, nil)
 	case jose.DIRECT:
@@ -1006,7 +1006,7 @@ func aesKeyUnwrap(t *testing.T, kek, wrapped []byte) []byte {
 
 	for j := 5; j >= 0; j-- {
 		for i := n; i >= 1; i-- {
-			binary.BigEndian.PutUint64(buffer[:8], a^uint64(n*j+i)) //nolint:gosec
+			binary.BigEndian.PutUint64(buffer[:8], a^uint64(n*j+i))
 			copy(buffer[8:], r[(i-1)*8:i*8])
 			block.Decrypt(buffer, buffer)
 
@@ -1059,7 +1059,7 @@ func concatKDF(t *testing.T, header map[string]any, private *ecdsa.PrivateKey, a
 		otherInfo = append(otherInfo, lengthPrefixed(value)...)
 	}
 
-	otherInfo = binary.BigEndian.AppendUint32(otherInfo, uint32(size)*8) //nolint:gosec
+	otherInfo = binary.BigEndian.AppendUint32(otherInfo, uint32(size)*8)
 
 	var output []byte
 
@@ -1075,7 +1075,7 @@ func concatKDF(t *testing.T, header map[string]any, private *ecdsa.PrivateKey, a
 }
 
 func lengthPrefixed(value []byte) []byte {
-	return append(binary.BigEndian.AppendUint32(nil, uint32(len(value))), value...) //nolint:gosec
+	return append(binary.BigEndian.AppendUint32(nil, uint32(len(value))), value...)
 }
 
 func leftPad(value []byte, size int) []byte {

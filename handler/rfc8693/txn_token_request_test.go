@@ -109,33 +109,34 @@ func (f *txnFixture) request(r txnRequest) *oauth2.AccessRequest {
 }
 
 func TestTxnTokenRequestRules(t *testing.T) {
-	testCases := []struct {
+	type testCase struct {
 		name     string
 		have     txnRequest
 		defaults bool
 		err      error
 		hint     string
-	}{
-		{"ShouldPassValid", txnRequest{}, false, nil, ""},
-		{"ShouldRefuseDefaultedRequestedType", txnRequest{omitRequestedType: true}, true, oauth2.ErrInvalidRequest, "requested_token_type"},
-		{"ShouldRefuseMissingAudience", txnRequest{omitAud: true}, false, oauth2.ErrInvalidRequest, "audience"},
-		{"ShouldRefuseTwoAudiences", txnRequest{audience: []string{txnTrustDomain, "https://other.example"}}, false, oauth2.ErrInvalidTarget, "audience"},
-		{"ShouldRefuseOtherAudience", txnRequest{audience: []string{"https://other.example"}}, false, oauth2.ErrInvalidTarget, "audience"},
-		{"ShouldRefuseResource", txnRequest{resource: []string{"https://res.example"}}, false, oauth2.ErrInvalidTarget, "resource"},
-		{"ShouldRefuseMissingScope", txnRequest{omitScope: true}, false, oauth2.ErrInvalidRequest, "scope"},
-		{"ShouldRefuseTxnTokenSubject", txnRequest{subjectTokenType: consts.TokenTypeRFC8693TxnToken}, false, oauth2.ErrInvalidRequest, "subject_token_type"},
-		{"ShouldPassEmptyObjectContext", txnRequest{form: url.Values{consts.FormParameterRequestContext: {"{}"}, consts.FormParameterRequestDetails: {"{}"}}}, false, nil, ""},
 	}
 
-	for _, name := range []string{consts.FormParameterRequestContext, consts.FormParameterRequestDetails} {
-		for _, value := range []string{"null", "[]", `"x"`, "1", "", "{", `{"a":1} x`} {
-			testCases = append(testCases, struct {
-				name     string
-				have     txnRequest
-				defaults bool
-				err      error
-				hint     string
-			}{"ShouldRefuse/" + name + "/" + value, txnRequest{form: url.Values{name: {value}}}, false, oauth2.ErrInvalidRequest, name})
+	contextNames := []string{consts.FormParameterRequestContext, consts.FormParameterRequestDetails}
+	invalidValues := []string{"null", "[]", `"x"`, "1", "", "{", `{"a":1} x`}
+
+	testCases := make([]testCase, 0, 9+len(contextNames)*len(invalidValues))
+
+	testCases = append(testCases,
+		testCase{"ShouldPassValid", txnRequest{}, false, nil, ""},
+		testCase{"ShouldRefuseDefaultedRequestedType", txnRequest{omitRequestedType: true}, true, oauth2.ErrInvalidRequest, "requested_token_type"},
+		testCase{"ShouldRefuseMissingAudience", txnRequest{omitAud: true}, false, oauth2.ErrInvalidRequest, "audience"},
+		testCase{"ShouldRefuseTwoAudiences", txnRequest{audience: []string{txnTrustDomain, "https://other.example"}}, false, oauth2.ErrInvalidTarget, "audience"},
+		testCase{"ShouldRefuseOtherAudience", txnRequest{audience: []string{"https://other.example"}}, false, oauth2.ErrInvalidTarget, "audience"},
+		testCase{"ShouldRefuseResource", txnRequest{resource: []string{"https://res.example"}}, false, oauth2.ErrInvalidTarget, "resource"},
+		testCase{"ShouldRefuseMissingScope", txnRequest{omitScope: true}, false, oauth2.ErrInvalidRequest, "scope"},
+		testCase{"ShouldRefuseTxnTokenSubject", txnRequest{subjectTokenType: consts.TokenTypeRFC8693TxnToken}, false, oauth2.ErrInvalidRequest, "subject_token_type"},
+		testCase{"ShouldPassEmptyObjectContext", txnRequest{form: url.Values{consts.FormParameterRequestContext: {"{}"}, consts.FormParameterRequestDetails: {"{}"}}}, false, nil, ""},
+	)
+
+	for _, name := range contextNames {
+		for _, value := range invalidValues {
+			testCases = append(testCases, testCase{"ShouldRefuse/" + name + "/" + value, txnRequest{form: url.Values{name: {value}}}, false, oauth2.ErrInvalidRequest, name})
 		}
 	}
 

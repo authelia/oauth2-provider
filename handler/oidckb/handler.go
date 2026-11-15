@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package oidckb implements the OpenID Connect Key Binding 1.0 token endpoint handlers.
 package oidckb
 
 import (
@@ -30,6 +31,8 @@ type Handler struct {
 // The authorization code and device code grants grant their scopes after the binding handlers run, so the Section 2.3
 // 'c_s256' claim is the signal rather than the granted scopes. The 'bound_key' gate is applied at issuance by
 // oauth2.ApplyIDTokenConfirmation.
+//
+//nolint:gocyclo
 func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.Config.GetOIDCKeyBindingEnabled(ctx) || !h.Config.GetDPoPEnabled(ctx) {
 		return nil

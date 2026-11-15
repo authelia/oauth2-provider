@@ -163,19 +163,21 @@ func headerValidateJWE(header jose.Header, minimum, maximum int) (kid, alg, enc,
 	return header.KeyID, header.Algorithm, enc, cty, nil
 }
 
-// PrivateKey properly describes crypto.PrivateKey.
+// PrivateKey properly describes [crypto.PrivateKey].
 type PrivateKey interface {
 	Public() crypto.PublicKey
 	Equal(x crypto.PrivateKey) bool
 }
 
 const (
+	// JWKLookupErrorClientNoJWKS is the JWKLookupError bit set when the client has no JSON Web Key Set.
 	JWKLookupErrorClientNoJWKS uint32 = 1 << iota
 )
 
+// JWKLookupError is returned when a JSON Web Key cannot be found or used.
 type JWKLookupError struct {
 	Description string
-	Errors      uint32 // bitfield.  see JWKLookupError... constants
+	Errors      uint32 // bitfield.  see JWKLookupError... constants.
 }
 
 // GetDescription returns the description of the error.
@@ -488,7 +490,7 @@ func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use s
 			case jose.A256GCM:
 				bits = aes.BlockSize * 2
 			default:
-				return nil, &JWKLookupError{Description: fmt.Sprintf("Unsupported content encryption for the direct key algorthm '%s'", enc)}
+				return nil, &JWKLookupError{Description: fmt.Sprintf("Unsupported content encryption for the direct key algorithm '%s'", enc)}
 			}
 
 			// OpenID Connect Core 1.0 Section 10.2: SHA-256 for keys of 256 or fewer bits, SHA-384 for 257-384 bits and
@@ -571,6 +573,7 @@ func assign(a, b map[string]any) {
 		if _, ok := a[k]; ok {
 			continue
 		}
+
 		a[k] = w
 	}
 }
@@ -610,21 +613,20 @@ func UnsafeParseSignedAny(tokenString string, dest any) (token *jwt.JSONWebToken
 	return token, nil
 }
 
-//nolint:unparam
 func newError(message string, err error, more ...error) error {
-	var format string
-	var args []any
+	format := "%w"
+	args := make([]any, 0, 2+len(more))
+	args = append(args, err)
 
 	if message != "" {
-		format = "%w: %s"
-		args = []any{err, message}
-	} else {
-		format = "%w"
-		args = []any{err}
+		format += ": %s"
+
+		args = append(args, message)
 	}
 
 	for _, e := range more {
 		format += ": %w"
+
 		args = append(args, e)
 	}
 
@@ -643,12 +645,13 @@ func toMap(obj any) (result map[string]any) {
 	reflectValue := reflect.ValueOf(obj)
 	reflectValue = reflect.Indirect(reflectValue)
 
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
 	for i := 0; i < v.NumField(); i++ {
 		tag, opts := parseTag(v.Field(i).Tag.Get("json"))
+
 		field := reflectValue.Field(i).Interface()
 		if tag != "" && tag != "-" {
 			if opts.Contains("omitempty") && isEmptyValue(reflect.ValueOf(field)) {
@@ -682,6 +685,7 @@ func (o tagOptionsJSON) Contains(optionName string) bool {
 
 	for s != "" {
 		var name string
+
 		name, s, _ = strings.Cut(s, ",")
 		if name == optionName {
 			return true

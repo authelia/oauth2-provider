@@ -83,6 +83,7 @@ func TestClientCredentialsFlowWithAuthorizationDetails(t *testing.T) {
 			}
 
 			f := compose.Compose(config, s, hmacStrategy, compose.OAuth2ClientCredentialsGrantFactory, compose.OAuth2TokenIntrospectionFactory)
+
 			ts := mockServer(t, f, &openid.DefaultSession{Subject: testSubject})
 			defer ts.Close()
 

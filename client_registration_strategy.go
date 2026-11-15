@@ -37,7 +37,7 @@ type ClientRegistrationValidator interface {
 
 // ClientRegistrationMetadataStrategy normalizes client registration metadata before it reaches
 // ClientRegistrationStrategy, and before metadata rendered from a client is returned to that client. It is the seam
-// a deployment uses to decide which client metadata it is willing to honour, such as withholding the RFC 8705
+// a deployment uses to decide which client metadata it is willing to honor, such as withholding the RFC 8705
 // mutual-TLS values when mutual-TLS handling is disabled.
 type ClientRegistrationMetadataStrategy interface {
 	// FilterClientRegistrationMetadata adjusts metadata in place. client is nil on a client registration request,
@@ -48,7 +48,7 @@ type ClientRegistrationMetadataStrategy interface {
 }
 
 // ClientRegistrationCustomMetadataStrategy is an optional interface a ClientRegistrationMetadataStrategy implements to
-// declare the custom client metadata attribute names it recognises. RFC 7591 Section 2 permits extension parameters, and
+// declare the custom client metadata attribute names it recognizes. RFC 7591 Section 2 permits extension parameters, and
 // a registration policy may constrain a declared name.
 type ClientRegistrationCustomMetadataStrategy interface {
 	// GetClientRegistrationCustomMetadata returns the declared custom client metadata attribute names.

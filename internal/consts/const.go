@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package consts defines the protocol string constants shared across the provider.
 package consts
 
 const (

@@ -49,6 +49,7 @@ func TestAuthorizeCodeFlowWithAuthorizationDetails(t *testing.T) {
 			}
 
 			f := compose.Compose(config, s, hmacStrategy, compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2RefreshTokenGrantFactory, compose.OAuth2TokenIntrospectionFactory)
+
 			ts := mockServer(t, f, &openid.DefaultSession{Subject: testSubject})
 			defer ts.Close()
 
@@ -78,6 +79,7 @@ func TestAuthorizeCodeFlowWithAuthorizationDetails(t *testing.T) {
 			t.Run("ShouldRejectUnknownTypeAtAuthorize", func(t *testing.T) {
 				resp, err := http.Get(client.AuthCodeURL(testState, xoauth2.SetAuthURLParam("authorization_details", `[{"type":"account_information"}]`)))
 				require.NoError(t, err)
+
 				defer resp.Body.Close()
 
 				assert.Equal(t, http.StatusNotAcceptable, resp.StatusCode)

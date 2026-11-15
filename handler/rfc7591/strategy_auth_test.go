@@ -185,7 +185,7 @@ func TestDefaultEndpointAuthStrategy(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("ShouldRejectMissingHeader", func(t *testing.T) {
-		auth, _, _, _ := newTestAuthStrategy(t)
+		auth, _, _ := newTestAuthStrategy(t)
 
 		_, err := auth.AuthenticateClientRegistrationRequest(ctx, request(http.MethodPost, testEndpoint, ""), "")
 		require.Error(t, err)
@@ -193,7 +193,7 @@ func TestDefaultEndpointAuthStrategy(t *testing.T) {
 	})
 
 	t.Run("ShouldRejectDuplicateHeader", func(t *testing.T) {
-		auth, _, store, tokens := newTestAuthStrategy(t)
+		auth, store, tokens := newTestAuthStrategy(t)
 
 		token := mintToken(t, ctx, tokens, store, testEndpoint, "", time.Time{})
 
@@ -206,7 +206,7 @@ func TestDefaultEndpointAuthStrategy(t *testing.T) {
 	})
 
 	t.Run("ShouldRejectNonBearerScheme", func(t *testing.T) {
-		auth, _, store, tokens := newTestAuthStrategy(t)
+		auth, store, tokens := newTestAuthStrategy(t)
 
 		token := mintToken(t, ctx, tokens, store, testEndpoint, "", time.Time{})
 
@@ -758,7 +758,7 @@ func TestAuthenticateClientRegistrationErrorCodes(t *testing.T) {
 	})
 }
 
-func newTestAuthStrategy(t *testing.T) (*DefaultEndpointAuthStrategy, *oauth2.Config, *storage.MemoryStore, *hoauth2.HMACCoreStrategy) {
+func newTestAuthStrategy(t *testing.T) (*DefaultEndpointAuthStrategy, *storage.MemoryStore, *hoauth2.HMACCoreStrategy) {
 	t.Helper()
 
 	config := &oauth2.Config{
@@ -770,7 +770,7 @@ func newTestAuthStrategy(t *testing.T) (*DefaultEndpointAuthStrategy, *oauth2.Co
 	tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
 	store := storage.NewMemoryStore()
 
-	return NewDefaultEndpointAuthStrategy(config, store, tokens, tokens), config, store, tokens
+	return NewDefaultEndpointAuthStrategy(config, store, tokens, tokens), store, tokens
 }
 
 func mintToken(t *testing.T, ctx context.Context, tokens ClientRegistrationTokenStrategy, store Storage, audience, subject string, exp time.Time) string {

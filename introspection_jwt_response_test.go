@@ -114,7 +114,7 @@ func TestIntrospectionJWTResponseNegotiation(t *testing.T) {
 				return
 			}
 
-			signed, err := jose.ParseSigned(recorder.Body.String(), []jose.SignatureAlgorithm{jose.RS256})
+			signed, err := jose.ParseSignedCompact(recorder.Body.String(), []jose.SignatureAlgorithm{jose.RS256})
 			require.NoError(t, err)
 			require.Len(t, signed.Signatures, 1)
 

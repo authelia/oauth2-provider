@@ -9,5 +9,6 @@ import (
 )
 
 var (
+	// ErrInvalidSession is returned when a session is not the expected type.
 	ErrInvalidSession = errors.New("Session type mismatch")
 )

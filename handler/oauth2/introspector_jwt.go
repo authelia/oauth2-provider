@@ -15,12 +15,14 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// StatelessJWTStrategy is a strategy that can validate JWT access tokens and refresh tokens.
 type StatelessJWTStrategy interface {
 	jwt.Strategy
 	AccessTokenStrategy
 	RefreshTokenStrategy
 }
 
+// StatelessJWTValidator introspects JWT access tokens without consulting storage.
 type StatelessJWTValidator struct {
 	StatelessJWTStrategy
 	Config interface {
@@ -91,6 +93,7 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 	claims.FromMapClaims(mapClaims)
 
 	requestedAt := claims.IssuedAt
+
 	requestedAtClaim, ok := mapClaims[consts.ClaimRequestedAt]
 	if ok {
 		switch rat := requestedAtClaim.(type) {
@@ -102,6 +105,7 @@ func AccessTokenJWTToRequest(token *jwt.Token) oauth2.Requester {
 	}
 
 	clientId := ""
+
 	clientIdClaim, ok := mapClaims[consts.ClaimClientIdentifier]
 	if ok {
 		if id, ok := clientIdClaim.(string); ok {

@@ -11,6 +11,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+// Configurator is the configuration required to generate JWT Secured Authorization Responses.
 type Configurator interface {
 	GetIssuer(ctx context.Context) (issuer string)
 	GetJWTSecuredAuthorizeResponseModeStrategy(ctx context.Context) jwt.Strategy
@@ -25,6 +26,7 @@ type SignedResponseAlgValuesProvider interface {
 	GetAuthorizationSignedResponseAlgValues(ctx context.Context) (algs []string)
 }
 
+// Client is the client metadata required to generate JWT Secured Authorization Responses.
 type Client interface {
 	// GetID returns the client ID.
 	GetID() (id string)
@@ -63,11 +65,13 @@ type Client interface {
 	GetAuthorizationEncryptedResponseEnc() (alg string)
 }
 
+// OpenIDSession is a session that carries ID Token headers and claims.
 type OpenIDSession interface {
 	IDTokenHeaders() *jwt.Headers
 	IDTokenClaims() *jwt.IDTokenClaims
 }
 
+// JWTSessionContainer is a session that carries JWT headers and claims.
 type JWTSessionContainer interface {
 	GetJWTHeader() *jwt.Headers
 	GetJWTClaims() jwt.JWTClaimsContainer

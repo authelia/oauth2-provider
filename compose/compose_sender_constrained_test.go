@@ -272,6 +272,7 @@ func newSenderConstrainedProvider(t *testing.T, bindingFirst, mtlsFirst, enforce
 	if mtlsFirst {
 		bindings = []Factory{RFC8705Factory, DPoPAuthorizeFactory, DPoPTokenFactory}
 	}
+
 	grants := []Factory{OAuth2AuthorizeExplicitFactory, OAuth2RefreshTokenGrantFactory, OAuth2PKCEFactory}
 
 	factories := append(append([]Factory{}, grants...), bindings...)

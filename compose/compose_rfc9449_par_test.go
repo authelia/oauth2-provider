@@ -75,7 +75,7 @@ func TestPARDPoPProofIsTreatedAsDPoPJKT(t *testing.T) {
 	require.Len(t, store.AuthorizeCodes, 1)
 
 	for _, code := range store.AuthorizeCodes {
-		bound, ok := code.Requester.GetSession().(oauth2.DPoPBoundSession)
+		bound, ok := code.GetSession().(oauth2.DPoPBoundSession)
 		require.True(t, ok)
 		assert.Equal(t, jkt, bound.GetDPoPJWKThumbprint())
 	}

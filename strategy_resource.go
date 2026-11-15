@@ -59,6 +59,7 @@ func PrefixResourceStrategy(haystack, needle []string) (err error) {
 		}
 
 		var found bool
+
 		for _, h := range haystack {
 			if hu, err = url.Parse(h); err != nil {
 				continue

@@ -25,7 +25,7 @@ import (
 //
 // Full RFC 4517 distinguishedNameMatch is not implemented. Insignificant whitespace around each relative distinguished
 // name is ignored, attribute types are compared without regard to case, and the sequence is compared in both
-// directions because Go's pkix.Name.String and OpenSSL emit relative distinguished names in opposite orders.
+// directions because Go's [pkix.Name.String] and OpenSSL emit relative distinguished names in opposite orders.
 // Attribute values are compared with case significance, which is stricter than RFC 4517 requires.
 //
 // See: https://www.rfc-editor.org/rfc/rfc8705#section-2.1
@@ -66,7 +66,7 @@ func normalizeDistinguishedName(dn string) (rdns []string) {
 }
 
 // trimUnescapedSpace trims leading and trailing ASCII space (U+0020) characters from s. It is deliberately narrower
-// than strings.TrimSpace, which strips the full unicode.IsSpace set (tab, newline, U+00A0, ...): every other
+// than [strings.TrimSpace], which strips the full [unicode.IsSpace] set (tab, newline, U+00A0, ...): every other
 // whitespace character is part of the value. A trailing space escaped with a backslash is also part of the value and
 // is not trimmed.
 //
@@ -166,7 +166,7 @@ func matchTLSClientAuthSubject(client TLSClientAuthClient, cert *x509.Certificat
 	}
 
 	if ip := client.GetTLSClientAuthSANIP(); ip != "" {
-		count, parameter = count+1, "tls_client_auth_san_ip"
+		count, parameter = count+1, consts.ClientMetadataTLSClientAuthSANIP
 		match = func() bool { return matchCertificateIPAddress(cert, ip) }
 	}
 
@@ -190,9 +190,9 @@ func matchTLSClientAuthSubject(client TLSClientAuthClient, cert *x509.Certificat
 			WithDebugf("The registered client with id '%s' has a 'tls_client_auth_subject_dn' value of '%s' which contains no relative distinguished names.", client.GetID(), client.GetTLSClientAuthSubjectDN()))
 	}
 
-	// Checked ahead of the match so an unparseable registered value is reported as the registration error it is,
+	// Checked ahead of the match so an unparsable registered value is reported as the registration error it is,
 	// rather than as a certificate that failed to match.
-	if parameter == "tls_client_auth_san_ip" && net.ParseIP(client.GetTLSClientAuthSANIP()) == nil {
+	if parameter == consts.ClientMetadataTLSClientAuthSANIP && net.ParseIP(client.GetTLSClientAuthSANIP()) == nil {
 		return errorsx.WithStack(ErrInvalidClient.
 			WithHint(hintClientCredentialsInvalid).
 			WithDebugf("The registered client with id '%s' has a 'tls_client_auth_san_ip' value of '%s' which is not a valid IP address.", client.GetID(), client.GetTLSClientAuthSANIP()))

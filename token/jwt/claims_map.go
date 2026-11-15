@@ -30,7 +30,7 @@ func (m MapClaims) GetIssuer() (iss string, err error) {
 }
 
 // VerifyIssuer compares the iss claim against cmp.
-// If required is false, this method will return true if the value matches or is unset
+// If required is false, this method will return true if the value matches or is unset.
 func (m MapClaims) VerifyIssuer(cmp string, required bool) (ok bool) {
 	var (
 		iss string
@@ -78,7 +78,7 @@ func (m MapClaims) GetSubject() (sub string, err error) {
 }
 
 // VerifySubject compares the syv claim against cmp.
-// If required is false, this method will return true if the value matches or is unset
+// If required is false, this method will return true if the value matches or is unset.
 func (m MapClaims) VerifySubject(cmp string, required bool) (ok bool) {
 	var (
 		sub string
@@ -102,7 +102,7 @@ func (m MapClaims) GetAudience() (aud ClaimStrings, err error) {
 }
 
 // VerifyAudience compares the aud claim against cmp.
-// If required is false, this method will return true if the value matches or is unset
+// If required is false, this method will return true if the value matches or is unset.
 func (m MapClaims) VerifyAudience(cmp string, required bool) (ok bool) {
 	var (
 		aud ClaimStrings
@@ -166,7 +166,7 @@ func (m MapClaims) GetExpirationTime() (exp *NumericDate, err error) {
 }
 
 // VerifyExpirationTime compares the exp claim against cmp, which RFC 7519 Section 4.1.4 requires be before exp.
-// If required is false, this method will return true if the value matches or is unset
+// If required is false, this method will return true if the value matches or is unset.
 func (m MapClaims) VerifyExpirationTime(cmp int64, required bool) (ok bool) {
 	var (
 		exp *NumericDate
@@ -190,7 +190,7 @@ func (m MapClaims) GetIssuedAt() (iat *NumericDate, err error) {
 }
 
 // VerifyIssuedAt compares the iat claim against cmp.
-// If required is false, this method will return true if the value matches or is unset
+// If required is false, this method will return true if the value matches or is unset.
 func (m MapClaims) VerifyIssuedAt(cmp int64, required bool) (ok bool) {
 	var (
 		iat *NumericDate
@@ -214,7 +214,7 @@ func (m MapClaims) GetNotBefore() (nbf *NumericDate, err error) {
 }
 
 // VerifyNotBefore compares the nbf claim against cmp.
-// If required is false, this method will return true if the value matches or is unset
+// If required is false, this method will return true if the value matches or is unset.
 func (m MapClaims) VerifyNotBefore(cmp int64, required bool) (ok bool) {
 	var (
 		nbf *NumericDate
@@ -249,6 +249,8 @@ func (m MapClaims) ToMap() map[string]any {
 // Valid validates the given claims. By default it only validates time based claims "exp, iat, nbf"; there is no
 // accounting for clock skew, and if any of the above claims are not in the token, the claims will still be considered
 // valid. However all of these options can be tuned by the opts.
+//
+//nolint:gocyclo
 func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	vopts := &ClaimValidationOptions{}
 

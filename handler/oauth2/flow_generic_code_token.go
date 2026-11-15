@@ -17,6 +17,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// CodeTokenEndpointHandler is the grant specific behavior GenericCodeTokenEndpointHandler delegates to.
 type CodeTokenEndpointHandler interface {
 	ValidateGrantTypes(ctx context.Context, request oauth2.AccessRequester) (err error)
 	ValidateCodeAndSession(ctx context.Context, request oauth2.AccessRequester, authorizeRequest oauth2.Requester, code string) (err error)
@@ -28,6 +29,7 @@ type CodeTokenEndpointHandler interface {
 	DeviceCodeSignature(ctx context.Context, code string) (signature string, err error)
 }
 
+// GenericCodeTokenEndpointHandler handles token endpoint requests for grants that exchange a code for tokens.
 type GenericCodeTokenEndpointHandler struct {
 	CodeTokenEndpointHandler
 
@@ -252,7 +254,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	} else if err = c.ValidateCodeAndSession(ctx, request, ar, code); err != nil {
-		// This needs to happen after store retrieval for the session to be hydrated properly
+		// This needs to happen after store retrieval for the session to be hydrated properly.
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
 	}
 
@@ -341,6 +343,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 
 	response.SetAccessToken(access)
 	response.SetTokenType(oauth2.BearerAccessToken)
+
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), gt, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx))
 	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, atLifespan, time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())

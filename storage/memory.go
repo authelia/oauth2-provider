@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package storage provides in-memory implementations of the storage interfaces.
 package storage
 
 import (
@@ -24,21 +25,25 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// MemoryUserRelation is the credentials of a user in the memory store.
 type MemoryUserRelation struct {
 	Username string
 	Password string
 }
 
+// IssuerPublicKeys holds the public keys of an issuer by subject.
 type IssuerPublicKeys struct {
 	Issuer    string
 	KeysBySub map[string]SubjectPublicKeys
 }
 
+// SubjectPublicKeys holds the public keys of a subject by key identifier.
 type SubjectPublicKeys struct {
 	Subject string
 	Keys    map[string]PublicKeyScopes
 }
 
+// PublicKeyScopes is a public key with the scopes and audience it is permitted.
 type PublicKeyScopes struct {
 	Key      *jose.JSONWebKey
 	Scopes   []string
@@ -140,7 +145,7 @@ type IDJAGResourceKey struct {
 // The used 'jti' values are kept in a separate map per purpose: ClientAssertionJTIs for client assertions,
 // RFC7523JTIs for RFC 7523 authorization grants, TokenExchangeJTIs for RFC 8693 custom JWT subject and actor
 // tokens, and IDJAGJTIs for ID-JAG redemptions. Expired 'jti' values, DPoP proof markers and DPoP nonces are no
-// longer recognised once they expire, and are removed by the next insert into the same map once the prune interval
+// longer recognized once they expire, and are removed by the next insert into the same map once the prune interval
 // has elapsed. Expired Client ID Metadata Document records are removed by DeleteExpiredClientIDMetadataDocuments.
 //
 // AccessTokenRequestIDs indexes every access token signature issued for a request ID, as one request may own several
@@ -269,6 +274,7 @@ type StoreClientIDMetadataDocument struct {
 	ExpiresAt time.Time
 }
 
+// StoreAuthorizeCode is a stored authorization code request and whether it is active.
 type StoreAuthorizeCode struct {
 	active bool
 	oauth2.Requester
@@ -290,6 +296,7 @@ func (s StoreAuthorizeCode) SetClaims(claims *oauth2.ClaimsRequest) {
 	}
 }
 
+// StoreRefreshToken is a stored refresh token request and whether it is active.
 type StoreRefreshToken struct {
 	active               bool
 	accessTokenSignature string
@@ -316,52 +323,45 @@ func (s StoreRefreshToken) SetClaims(claims *oauth2.ClaimsRequest) {
 func NewExampleStore() *MemoryStore {
 	store := NewMemoryStore()
 
-	example := &MemoryStore{
-		Clients: map[string]oauth2.Client{
-			"my-client": &oauth2.DefaultClient{
-				ID:                   "my-client",
-				ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`),                        // = "foobar"
-				RotatedClientSecrets: []oauth2.ClientSecret{oauth2.NewBCryptClientSecret(`$2a$04$4X4/mCFdQ9tmfjSBBk6RNOhg0MtKE0ql7BPyMHDuiuq7YeY6wGlh.`)}, // = "foobaz"
-				RedirectURIs:         []string{"http://localhost:3846/callback"},
-				ResponseTypes:        []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
-				GrantTypes:           []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials", "urn:ietf:params:oauth:grant-type:token-exchange"},
-				Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
-			},
-			"custom-lifespan-client": &oauth2.DefaultClientWithCustomTokenLifespans{
-				DefaultClient: &oauth2.DefaultClient{
-					ID:                   "custom-lifespan-client",
-					ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`),                        // = "foobar"
-					RotatedClientSecrets: []oauth2.ClientSecret{oauth2.NewBCryptClientSecret(`$2a$04$4X4/mCFdQ9tmfjSBBk6RNOhg0MtKE0ql7BPyMHDuiuq7YeY6wGlh.`)}, // = "foobaz"
-					RedirectURIs:         []string{"http://localhost:3846/callback"},
-					ResponseTypes:        []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
-					GrantTypes:           []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-					Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
-				},
-				TokenLifespans: exampleLifespans(),
-			},
-			"encoded:client": &oauth2.DefaultClient{
-				ID:                   "encoded:client",
-				ClientSecret:         oauth2.NewBCryptClientSecret(`$2a$04$8FzF6Ig9KHbTD8Q4VLOb5eIH8vbg.Lz3TXb2vAkDeP/XEDHmqCHGi`), // = "encoded&password"
-				RotatedClientSecrets: nil,
-				RedirectURIs:         []string{"http://localhost:3846/callback"},
-				ResponseTypes:        []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
-				GrantTypes:           []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-				Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
-			},
-		},
-		Users: map[string]MemoryUserRelation{
-			"peter": {
-				// This store simply checks for equality, a real storage implementation would obviously use
-				// a hashing algorithm for encrypting the user password.
-				Username: "peter",
-				Password: "secret",
-			},
-		},
+	foobar := oauth2.NewBCryptClientSecret(`$2a$04$6i/O2OM9CcEVTRLq9uFDtOze4AtISH79iYkZeEUsos4WzWtCnJ52y`) // = "foobar".
+	foobaz := oauth2.NewBCryptClientSecret(`$2a$04$4X4/mCFdQ9tmfjSBBk6RNOhg0MtKE0ql7BPyMHDuiuq7YeY6wGlh.`) // = "foobaz".
+
+	myClient := newExampleClient("my-client", foobar, []oauth2.ClientSecret{foobaz}, consts.GrantTypeOAuthTokenExchange)
+
+	customLifespanClient := &oauth2.DefaultClientWithCustomTokenLifespans{
+		DefaultClient:  newExampleClient("custom-lifespan-client", foobar, []oauth2.ClientSecret{foobaz}),
+		TokenLifespans: exampleLifespans(),
 	}
 
-	store.Clients, store.Users = example.Clients, example.Users
+	encodedClient := newExampleClient("encoded:client", oauth2.NewBCryptClientSecret(`$2a$04$8FzF6Ig9KHbTD8Q4VLOb5eIH8vbg.Lz3TXb2vAkDeP/XEDHmqCHGi`), nil) // = "encoded&password".
+
+	// This store simply checks for equality, a real storage implementation would obviously use a hashing algorithm for
+	// encrypting the user password.
+	user := MemoryUserRelation{Username: "peter", Password: "secret"}
+
+	store.Clients = map[string]oauth2.Client{
+		myClient.ID:                  myClient,
+		customLifespanClient.GetID(): customLifespanClient,
+		encodedClient.ID:             encodedClient,
+	}
+
+	store.Users = map[string]MemoryUserRelation{
+		user.Username: user,
+	}
 
 	return store
+}
+
+func newExampleClient(id string, secret oauth2.ClientSecret, rotated []oauth2.ClientSecret, grantTypes ...string) *oauth2.DefaultClient {
+	return &oauth2.DefaultClient{
+		ID:                   id,
+		ClientSecret:         secret,
+		RotatedClientSecrets: rotated,
+		RedirectURIs:         []string{"http://localhost:3846/callback"},
+		ResponseTypes:        []string{"id_token", "code", "token", "id_token token", "code id_token", "code token", "code id_token token"},
+		GrantTypes:           append([]string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"}, grantTypes...),
+		Scopes:               []string{"oauth2", consts.ScopeOpenID, "photos", consts.ScopeOffline},
+	}
 }
 
 func exampleLifespans() *oauth2.ClientLifespanConfig {
@@ -393,6 +393,7 @@ func (s *MemoryStore) CreateOpenIDConnectSession(_ context.Context, authorizeCod
 	defer s.idSessionsMutex.Unlock()
 
 	s.IDSessions[authorizeCode] = request
+
 	return nil
 }
 
@@ -406,6 +407,7 @@ func (s *MemoryStore) GetOpenIDConnectSession(_ context.Context, authorizeCode s
 	if !ok {
 		return nil, oauth2.ErrNotFound
 	}
+
 	return cl, nil
 }
 
@@ -432,6 +434,7 @@ func (s *MemoryStore) DeleteOpenIDConnectSession(_ context.Context, authorizeCod
 	defer s.idSessionsMutex.Unlock()
 
 	delete(s.IDSessions, authorizeCode)
+
 	return nil
 }
 
@@ -444,6 +447,7 @@ func (s *MemoryStore) GetClient(_ context.Context, id string) (oauth2.Client, er
 	if !ok {
 		return nil, oauth2.ErrNotFound
 	}
+
 	return cl, nil
 }
 
@@ -693,6 +697,7 @@ func (s *MemoryStore) CreateAuthorizeCodeSession(_ context.Context, code string,
 	defer s.authorizeCodesMutex.Unlock()
 
 	s.AuthorizeCodes[code] = StoreAuthorizeCode{active: true, Requester: req}
+
 	return nil
 }
 
@@ -707,6 +712,7 @@ func (s *MemoryStore) GetAuthorizeCodeSession(_ context.Context, code string, _ 
 	if !ok {
 		return nil, oauth2.ErrNotFound
 	}
+
 	if !rel.active {
 		return rel, oauth2.ErrInvalidatedAuthorizeCode
 	}
@@ -742,6 +748,7 @@ func (s *MemoryStore) CreatePKCERequestSession(_ context.Context, code string, r
 	defer s.pkcesMutex.Unlock()
 
 	s.PKCES[code] = req
+
 	return nil
 }
 
@@ -755,6 +762,7 @@ func (s *MemoryStore) GetPKCERequestSession(_ context.Context, code string, _ oa
 	if !ok {
 		return nil, oauth2.ErrNotFound
 	}
+
 	return rel, nil
 }
 
@@ -782,6 +790,7 @@ func (s *MemoryStore) DeletePKCERequestSession(_ context.Context, code string) e
 	defer s.pkcesMutex.Unlock()
 
 	delete(s.PKCES, code)
+
 	return nil
 }
 
@@ -792,6 +801,7 @@ func (s *MemoryStore) CreateAccessTokenSession(_ context.Context, signature stri
 	// locking happens in RevokeAccessToken and using the same order prevents deadlocks.
 	s.accessTokenRequestIDsMutex.Lock()
 	defer s.accessTokenRequestIDsMutex.Unlock()
+
 	s.accessTokensMutex.Lock()
 	defer s.accessTokensMutex.Unlock()
 
@@ -818,6 +828,7 @@ func (s *MemoryStore) GetAccessTokenSession(_ context.Context, signature string,
 	if !ok {
 		return nil, oauth2.ErrNotFound
 	}
+
 	return rel, nil
 }
 
@@ -826,6 +837,7 @@ func (s *MemoryStore) GetAccessTokenSession(_ context.Context, signature string,
 func (s *MemoryStore) DeleteAccessTokenSession(_ context.Context, signature string) error {
 	s.accessTokenRequestIDsMutex.Lock()
 	defer s.accessTokenRequestIDsMutex.Unlock()
+
 	s.accessTokensMutex.Lock()
 	defer s.accessTokensMutex.Unlock()
 
@@ -886,11 +898,13 @@ func (s *MemoryStore) CreateRefreshTokenSession(_ context.Context, signature, ac
 	// locking happens in RevokeRefreshToken and using the same order prevents deadlocks.
 	s.refreshTokenRequestIDsMutex.Lock()
 	defer s.refreshTokenRequestIDsMutex.Unlock()
+
 	s.refreshTokensMutex.Lock()
 	defer s.refreshTokensMutex.Unlock()
 
 	s.RefreshTokens[signature] = StoreRefreshToken{active: true, accessTokenSignature: accessTokenSignature, Requester: req}
 	s.RefreshTokenRequestIDs[req.GetID()] = signature
+
 	return nil
 }
 
@@ -905,9 +919,11 @@ func (s *MemoryStore) GetRefreshTokenSession(_ context.Context, signature string
 	if !ok {
 		return nil, oauth2.ErrNotFound
 	}
+
 	if !rel.active {
 		return rel, oauth2.ErrInactiveToken
 	}
+
 	return rel, nil
 }
 
@@ -936,6 +952,7 @@ func (s *MemoryStore) DeleteRefreshTokenSession(_ context.Context, signature str
 	defer s.refreshTokensMutex.Unlock()
 
 	delete(s.RefreshTokens, signature)
+
 	return nil
 }
 
@@ -975,9 +992,11 @@ func (s *MemoryStore) deactivateRefreshToken(requestID string) error {
 		if !ok {
 			return oauth2.ErrNotFound
 		}
+
 		rel.active = false
 		s.RefreshTokens[signature] = rel
 	}
+
 	return nil
 }
 
@@ -1020,6 +1039,7 @@ func (s *MemoryStore) rotateRefreshToken(requestID, signature string) error {
 func (s *MemoryStore) RevokeAccessToken(_ context.Context, requestID string) error {
 	s.accessTokenRequestIDsMutex.Lock()
 	defer s.accessTokenRequestIDsMutex.Unlock()
+
 	s.accessTokensMutex.Lock()
 	defer s.accessTokensMutex.Unlock()
 
@@ -1366,7 +1386,7 @@ func (s *MemoryStore) UpdateDeviceCodeSession(ctx context.Context, signature str
 	s.deviceCodesMutex.Lock()
 	defer s.deviceCodesMutex.Unlock()
 
-	// Only update if exist
+	// Only update if exist.
 	if _, exists := s.DeviceCodes[signature]; exists {
 		s.DeviceCodes[signature] = request
 		s.UserCodes[request.GetUserCodeSignature()] = request

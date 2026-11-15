@@ -12,18 +12,30 @@ import (
 )
 
 const (
-	SubjectIdentifierFormatEmail           = "email"
-	SubjectIdentifierFormatIssuerSubject   = "iss_sub"
-	SubjectIdentifierFormatOpaque          = "opaque"
-	SubjectIdentifierFormatPhoneNumber     = "phone_number"
-	SubjectIdentifierFormatAccount         = "account"
-	SubjectIdentifierFormatDID             = "did"
-	SubjectIdentifierFormatURI             = "uri"
-	SubjectIdentifierFormatAliases         = "aliases"
-	SubjectIdentifierFormatComplex         = "complex"
-	SubjectIdentifierFormatJWTID           = "jwt_id"
+	// SubjectIdentifierFormatEmail is the subject identifier format for an email address.
+	SubjectIdentifierFormatEmail = "email"
+	// SubjectIdentifierFormatIssuerSubject is the subject identifier format for an issuer and subject pair.
+	SubjectIdentifierFormatIssuerSubject = "iss_sub"
+	// SubjectIdentifierFormatOpaque is the subject identifier format for an opaque identifier.
+	SubjectIdentifierFormatOpaque = "opaque"
+	// SubjectIdentifierFormatPhoneNumber is the subject identifier format for a phone number.
+	SubjectIdentifierFormatPhoneNumber = "phone_number"
+	// SubjectIdentifierFormatAccount is the subject identifier format for an account URI.
+	SubjectIdentifierFormatAccount = "account"
+	// SubjectIdentifierFormatDID is the subject identifier format for a decentralized identifier.
+	SubjectIdentifierFormatDID = "did"
+	// SubjectIdentifierFormatURI is the subject identifier format for a URI.
+	SubjectIdentifierFormatURI = "uri"
+	// SubjectIdentifierFormatAliases is the subject identifier format for a list of aliases.
+	SubjectIdentifierFormatAliases = "aliases"
+	// SubjectIdentifierFormatComplex is the subject identifier format for a complex identifier.
+	SubjectIdentifierFormatComplex = "complex"
+	// SubjectIdentifierFormatJWTID is the subject identifier format for a JWT identifier.
+	SubjectIdentifierFormatJWTID = "jwt_id"
+	// SubjectIdentifierFormatSAMLAssertionID is the subject identifier format for a SAML assertion identifier.
 	SubjectIdentifierFormatSAMLAssertionID = "saml_assertion_id"
-	SubjectIdentifierFormatIPAddresses     = "ip-addresses"
+	// SubjectIdentifierFormatIPAddresses is the subject identifier format for a list of IP addresses.
+	SubjectIdentifierFormatIPAddresses = "ip-addresses"
 )
 
 // ErrInvalidSubjectIdentifier is returned for a subject identifier that is missing a required member.
@@ -45,7 +57,8 @@ type SubjectIdentifierComplexMembers struct {
 type SubjectIdentifier struct {
 	Format string `json:"format"`
 
-	Email       string              `json:"email,omitempty"`
+	Email string `json:"email,omitempty"`
+	// Issuer provides the JSON Web Keys and algorithms used to issue tokens.
 	Issuer      string              `json:"iss,omitempty"`
 	Subject     string              `json:"sub,omitempty"`
 	ID          string              `json:"id,omitempty"`
@@ -132,6 +145,8 @@ func subjectRequire(format, member, value string) (err error) {
 }
 
 // Validate checks the members required by the format (RFC 9493 §3.2, SSF 1.0 §3.3 and §3.5).
+//
+//nolint:gocyclo
 func (s *SubjectIdentifier) Validate() (err error) {
 	if s == nil {
 		return fmt.Errorf("%w: the subject is nil", ErrInvalidSubjectIdentifier)

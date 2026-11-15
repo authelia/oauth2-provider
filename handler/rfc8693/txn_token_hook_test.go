@@ -386,7 +386,7 @@ func TestTxnTokenHookAllowedChanges(t *testing.T) {
 	}
 }
 
-func TestTxnTokenHookScopeIsNormalised(t *testing.T) {
+func TestTxnTokenHookScopeIsNormalized(t *testing.T) {
 	testCases := []struct {
 		name  string
 		scope string

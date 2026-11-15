@@ -56,9 +56,16 @@ type SSFStreamStatusRequest struct {
 	Body     *SSFStreamStatusRequestBody
 }
 
+// GetMethod returns the HTTP method of the request.
 func (r *SSFStreamStatusRequest) GetMethod() (method string) { return r.Method }
+
+// GetClient returns the authenticated client.
 func (r *SSFStreamStatusRequest) GetClient() (client Client) { return r.Client }
-func (r *SSFStreamStatusRequest) GetStreamID() (id string)   { return r.StreamID }
+
+// GetStreamID returns the stream identifier of the request.
+func (r *SSFStreamStatusRequest) GetStreamID() (id string) { return r.StreamID }
+
+// GetBody returns the decoded request body.
 func (r *SSFStreamStatusRequest) GetBody() (body *SSFStreamStatusRequestBody) {
 	return r.Body
 }
@@ -109,6 +116,8 @@ func (f *Fosite) NewSSFStreamStatusRequest(ctx context.Context, r *http.Request,
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.5
+//
+//nolint:gocyclo
 func (f *Fosite) NewSSFStreamStatusResponse(ctx context.Context, requester SSFStreamStatusRequester) (responder SSFStreamResponder, err error) {
 	var (
 		config  *SSFConfig

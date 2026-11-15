@@ -129,6 +129,7 @@ func TestDefaultSessionSetters(t *testing.T) {
 				s := &DefaultSession{}
 				accessExpiry := time.Now().Add(time.Hour).Truncate(time.Second)
 				refreshExpiry := time.Now().Add(24 * time.Hour).Truncate(time.Second)
+
 				s.SetExpiresAt(AccessToken, accessExpiry)
 				s.SetExpiresAt(RefreshToken, refreshExpiry)
 				assert.Equal(t, accessExpiry, s.GetExpiresAt(AccessToken))

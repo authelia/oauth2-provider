@@ -27,7 +27,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// maxUnsignedExpiry is the last second of the year 9999, well inside the range of a time.Time.
+// maxUnsignedExpiry is the last second of the year 9999, well inside the range of a [time.Time].
 const maxUnsignedExpiry = 253402300799
 
 var txnTokenProtectedClaims = []string{
@@ -126,12 +126,12 @@ func (c *TxnTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context,
 	return c.issue(ctx, request, tokenType, response)
 }
 
-// CanSkipClientAuth indicates if client auth can be skipped
+// CanSkipClientAuth indicates if client auth can be skipped.
 func (c *TxnTokenTypeHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) bool {
 	return false
 }
 
-// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
+// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled.
 func (c *TxnTokenTypeHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) bool {
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
@@ -888,7 +888,7 @@ func validateSelfSignedType(token *jwt.Token) error {
 }
 
 // A value that is missing or not a number is read as zero by toInt64, and so is refused as too old or as expired. The
-// comparison is of seconds so that no value can overflow a time.Time.
+// comparison is of seconds so that no value can overflow a [time.Time].
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.2.1
 func validateSelfSignedWindow(claims map[string]any, window, skew time.Duration) error {

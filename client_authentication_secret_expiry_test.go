@@ -22,7 +22,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-func TestCompareClientSecretHonoursTheSecretExpiry(t *testing.T) {
+func TestCompareClientSecretHonorsTheSecretExpiry(t *testing.T) {
 	const secret = "foobarfoobarfoobarfoobar"
 
 	newClient := func(expires time.Time) *oauth2.DefaultRegisteredClient {
@@ -61,7 +61,7 @@ func TestCompareClientSecretHonoursTheSecretExpiry(t *testing.T) {
 	}
 }
 
-func TestClientSecretJWTHonoursTheSecretExpiry(t *testing.T) {
+func TestClientSecretJWTHonorsTheSecretExpiry(t *testing.T) {
 	const secret = "foobarfoobarfoobarfoobarfoobarfoobar"
 
 	testCases := []struct {

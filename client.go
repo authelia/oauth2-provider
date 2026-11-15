@@ -461,7 +461,7 @@ type DefaultACRValuesClient interface {
 	Client
 }
 
-// ResponseModeClient represents a client capable of handling response_mode
+// ResponseModeClient represents a client capable of handling response_mode.
 type ResponseModeClient interface {
 	// GetResponseModes returns the response modes that client is allowed to send. When it returns any, a request which
 	// omits the 'response_mode' parameter must have a default response mode among them. When it returns none, the client
@@ -786,6 +786,7 @@ type DefaultClient struct {
 	TLSClientCertificateBoundAccessTokens bool           `json:"tls_client_certificate_bound_access_tokens"`
 }
 
+// DefaultJARClient is a client with the JWT-secured authorization request (JAR) and client authentication metadata.
 type DefaultJARClient struct {
 	JSONWebKeysURI                      string              `json:"jwks_uri"`
 	JSONWebKeys                         *jose.JSONWebKeySet `json:"jwks"`
@@ -809,18 +810,21 @@ type DefaultJARClient struct {
 	*DefaultClient
 }
 
+// DefaultResponseModeClient is a client with registered response modes.
 type DefaultResponseModeClient struct {
 	ResponseModes []ResponseModeType `json:"response_modes"`
 
 	*DefaultClient
 }
 
+// DefaultRPInitiatedLogoutClient is a client with registered post logout redirect URIs.
 type DefaultRPInitiatedLogoutClient struct {
 	PostLogoutRedirectURIs []string `json:"post_logout_redirect_uris"`
 
 	*DefaultClient
 }
 
+// DefaultBackChannelLogoutClient is a client with back-channel logout metadata.
 type DefaultBackChannelLogoutClient struct {
 	BackChannelLogoutURI             string `json:"backchannel_logout_uri"`
 	BackChannelLogoutSessionRequired bool   `json:"backchannel_logout_session_required"`
@@ -828,6 +832,7 @@ type DefaultBackChannelLogoutClient struct {
 	*DefaultClient
 }
 
+// DefaultCIBAClient is a client with CIBA metadata.
 type DefaultCIBAClient struct {
 	BackChannelTokenDeliveryMode               string   `json:"backchannel_token_delivery_mode"`
 	BackChannelClientNotificationEndpoint      string   `json:"backchannel_client_notification_endpoint"`

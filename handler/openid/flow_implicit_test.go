@@ -48,6 +48,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 			setup: func(requester *oauth2.AuthorizeRequest, responder *oauth2.AuthorizeResponse) (handler OpenIDConnectImplicitHandler) {
 				requester.Form.Set(consts.FormParameterRedirectURI, "http://example.com")
 				requester.RedirectURI, _ = url.Parse("http://example.com")
+
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			expected:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Redirect URL is using an insecure protocol, http is only allowed for native clients using a loopback redirect URI, for example: http://127.0.0.1:8080/callback.",
@@ -58,6 +59,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 			setup: func(requester *oauth2.AuthorizeRequest, responder *oauth2.AuthorizeResponse) (handler OpenIDConnectImplicitHandler) {
 				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}
 				requester.State = "foostate"
+
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
@@ -73,6 +75,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 			setup: func(requester *oauth2.AuthorizeRequest, responder *oauth2.AuthorizeResponse) (handler OpenIDConnectImplicitHandler) {
 				requester.ResponseTypes = oauth2.Arguments{}
 				requester.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
@@ -86,6 +89,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 					ResponseTypes: oauth2.Arguments{},
 					Scopes:        []string{consts.ScopeOpenID, "oauth2"},
 				}
+
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			expected:      "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 Client is not allowed to use the authorization grant 'implicit'.",
@@ -102,6 +106,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 					ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken},
 					Scopes:        []string{consts.ScopeOpenID, "oauth2"},
 				}
+
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			expected:      "The request used a security parameter (e.g., anti-replay, anti-csrf) with insufficient entropy. Parameter 'nonce' is set but does not satisfy the minimum entropy of 8 characters.",
@@ -138,6 +143,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 				}
 				requester.Form.Add(consts.FormParameterNonce, "some-random-foo-nonce-wow")
 				requester.Form.Add(consts.FormParameterRedirectURI, "https://example.com")
+
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 		},
@@ -159,7 +165,6 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "ShouldPassWithCustomLifespan",
 			setup: func(requester *oauth2.AuthorizeRequest, responder *oauth2.AuthorizeResponse) (handler OpenIDConnectImplicitHandler) {
-				responder = oauth2.NewAuthorizeResponse()
 				requester.Session = &DefaultSession{
 					Claims: &jwt.IDTokenClaims{
 						Subject: testSubjectPeter,
@@ -176,6 +181,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 					},
 				}
 				requester.Client.(*oauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
+
 				return makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
 			},
 			check: func(t *testing.T, requester *oauth2.AuthorizeRequest, responder *oauth2.AuthorizeResponse) {
@@ -190,7 +196,6 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 		{
 			name: "should pass",
 			setup: func(requester *oauth2.AuthorizeRequest, responder *oauth2.AuthorizeResponse) (handler OpenIDConnectImplicitHandler) {
-				responder = oauth2.NewAuthorizeResponse()
 				requester.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken}
 
 				requester.Client.(*oauth2.DefaultClientWithCustomTokenLifespans).SetTokenLifespans(&internal.TestLifespans)
@@ -293,6 +298,7 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 				assert.Equal(t, tc.expectedField, e.ErrorField)
 			} else {
 				assert.NoError(t, err)
+
 				if tc.check != nil {
 					tc.check(t, requester, responder)
 				}

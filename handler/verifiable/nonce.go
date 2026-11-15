@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// NonceManager creates and validates nonces bound to access tokens.
 type NonceManager interface {
 	// NewNonce creates a new nonce bound to the access token valid until the given expiry time.
 	NewNonce(ctx context.Context, accessToken string, expiresAt time.Time) (string, error)

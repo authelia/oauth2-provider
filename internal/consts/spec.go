@@ -5,9 +5,13 @@
 package consts
 
 const (
-	PromptTypeNone          = valueNone
-	PromptTypeLogin         = "login"
-	PromptTypeConsent       = "consent"
+	// PromptTypeNone is the none prompt value from OpenID Connect Core 1.0.
+	PromptTypeNone = valueNone
+	// PromptTypeLogin is the login prompt value from OpenID Connect Core 1.0.
+	PromptTypeLogin = "login"
+	// PromptTypeConsent is the consent prompt value from OpenID Connect Core 1.0.
+	PromptTypeConsent = "consent"
+	// PromptTypeSelectAccount is the select_account prompt value from OpenID Connect Core 1.0.
 	PromptTypeSelectAccount = "select_account"
 )
 
@@ -18,14 +22,18 @@ const (
 )
 
 const (
-	ClientAssertionTypeJWTBearer = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" //nolint:gosec
+	// ClientAssertionTypeJWTBearer is the JWT bearer client assertion type from RFC 7523.
+	ClientAssertionTypeJWTBearer = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 )
 
 const (
+	// PrefixRequestURI is the request_uri prefix for pushed authorization requests from RFC 9126.
 	PrefixRequestURI = "urn:ietf:params:oauth:request_uri:"
 )
 
 const (
+	// CodeDevice is the device_code value.
 	CodeDevice = valueDeviceCode
-	CodeUser   = "user_code"
+	// CodeUser is the user_code value.
+	CodeUser = "user_code"
 )

@@ -15,14 +15,21 @@ import (
 )
 
 const (
-	ErrorPARNotSupported           = "The OAuth 2.0 provider does not support Pushed Authorization Requests"
-	DebugPARStorageInvalid         = "The Pushed Authorization Request storage is not implemented"
-	DebugPARConfigMissing          = "'PushedAuthorizeRequestConfigProvider' not implemented"
+	// ErrorPARNotSupported is the error description for a provider without Pushed Authorization Request support.
+	ErrorPARNotSupported = "The OAuth 2.0 provider does not support Pushed Authorization Requests"
+	// DebugPARStorageInvalid is the debug message for storage lacking Pushed Authorization Request support.
+	DebugPARStorageInvalid = "The Pushed Authorization Request storage is not implemented"
+	// DebugPARConfigMissing is the debug message for a missing PushedAuthorizeRequestConfigProvider.
+	DebugPARConfigMissing = "'PushedAuthorizeRequestConfigProvider' not implemented"
+	// DebugPARRequestsHandlerMissing is the debug message for a missing PushedAuthorizeRequestHandlersProvider.
 	DebugPARRequestsHandlerMissing = "'PushedAuthorizeRequestHandlersProvider' not implemented"
-	DebugPARRequestURIMissing      = "No pushed authorize endpoint handler stored the request and set the 'request_uri'."
+	// DebugPARRequestURIMissing is the debug message for when no handler set the request_uri.
+	DebugPARRequestURIMissing = "No pushed authorize endpoint handler stored the request and set the 'request_uri'."
 )
 
-// NewPushedAuthorizeRequest validates the request and produces an AuthorizeRequester object that can be stored
+// NewPushedAuthorizeRequest validates the request and produces an AuthorizeRequester object that can be stored.
+//
+//nolint:gocyclo
 func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request) (requester AuthorizeRequester, err error) {
 	request := NewAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)

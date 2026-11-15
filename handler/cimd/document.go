@@ -48,6 +48,7 @@ var (
 	privateJWKParameters = []string{"d", "p", "q", "dp", "dq", "qi", "oth", "k"}
 )
 
+//nolint:gocyclo
 func parseDocument(id string, body []byte) (metadata *oauth2.ClientRegistrationMetadata, err error) {
 	var raw map[string]json.RawMessage
 
@@ -128,6 +129,7 @@ func buildKnownMembers() (members []string) {
 	return members
 }
 
+//nolint:gocyclo
 func validateRawDocument(id string, raw map[string]json.RawMessage) (err error) {
 	var clientID string
 

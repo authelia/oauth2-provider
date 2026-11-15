@@ -21,6 +21,7 @@ type openIDConnectRequestValidatorConfigProvider interface {
 	oauth2.AllowedPromptsProvider
 }
 
+// OpenIDConnectRequestValidator validates the OpenID Connect parameters of authorization requests.
 type OpenIDConnectRequestValidator struct {
 	Strategy jwt.Strategy
 	Config   openIDConnectRequestValidatorConfigProvider
@@ -130,7 +131,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect 1.0 request because the session subject is empty."))
 	}
 
-	// Adds a bit of wiggle room for timing issues
+	// Adds a bit of wiggle room for timing issues.
 	if claims.GetAuthTimeSafe().After(time.Now().UTC().Add(time.Second * 5)) {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect 1.0 request because authentication time is in the future."))
 	}
@@ -155,7 +156,6 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		}
 
 		if !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().After(rat) {
-			// !claims.AuthTime.Truncate(time.Second).Equal(claims.RequestedAt) && claims.AuthTime.Truncate(time.Second).Before(claims.RequestedAt) {
 			return nil, errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), rat))
 		}
 	}
@@ -176,7 +176,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 	tokenHint, err = v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenHintClient(request.GetClient()))
 
 	if ve, ok := errors.AsType[*jwt.ValidationError](err); ok && ve.Has(jwt.ValidationErrorExpired) {
-		// Expired tokens are ok
+		// Expired tokens are ok.
 	} else if err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding ID Token from id_token_hint parameter failed.").WithWrap(err).WithDebugError(err))
 	}
@@ -218,7 +218,6 @@ func (v *OpenIDConnectRequestValidator) validatePromptParameters(ctx context.Con
 		// Client Impersonation: a request is not processed without user interaction unless the client's identity is
 		// assured.
 		// See: https://datatracker.ietf.org/doc/html/rfc8252#section-8.6
-
 		if slices.Contains(requiredPrompt, consts.PromptTypeNone) && !v.getPublicClientIdentityChecker(ctx)(ctx, request) {
 			return errorsx.WithStack(oauth2.ErrConsentRequired.WithHint("OAuth 2.0 Client is marked public and the redirect uri does not assure the identity of the client, but 'prompt' type 'none' was requested."))
 		}
@@ -237,5 +236,6 @@ func isWhitelisted(items []string, whiteList []string) bool {
 			return false
 		}
 	}
+
 	return true
 }

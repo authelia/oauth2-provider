@@ -10,7 +10,7 @@ import (
 	"golang.org/x/text/language"
 )
 
-// MessageCatalog declares the interface to get globalized messages
+// MessageCatalog declares the interface to get globalized messages.
 type MessageCatalog interface {
 	GetMessage(ID string, tag language.Tag, v ...any) string
 	GetLangFromRequest(r *http.Request) language.Tag

@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	pemArmourBegin = "-----BEGIN"
-	pemArmourEnd   = "-----END"
-	pemArmourDelim = "-----"
+	pemArmorBegin = "-----BEGIN"
+	pemArmorEnd   = "-----END"
+	pemArmorDelim = "-----"
 )
 
 // X509CertificateSHA256Thumbprint returns the RFC 8705 Section 3.1 'x5t#S256' confirmation value for cert, being the
@@ -99,7 +99,7 @@ func ClientCertificateChainVerified(r *http.Request, header string) (verified bo
 // ParseClientCertificateHeader decodes a client certificate forwarded by a TLS terminating proxy.
 //
 // No encoding is prescribed for this header, and the proxies that emit one disagree: Traefik v2 and nginx
-// (ssl_client_escaped_cert) URL-escape a PEM document, Traefik v3 sends the bare base64 DER with the armour and line
+// (ssl_client_escaped_cert) URL-escape a PEM document, Traefik v3 sends the bare base64 DER with the armor and line
 // breaks stripped, and HAProxy sends base64 DER. The parser therefore accepts all of them rather than requiring a
 // deployment to declare which one it has, since a mismatch would present as mutual TLS silently failing.
 //
@@ -124,7 +124,7 @@ func ParseClientCertificateHeader(value string) (cert *x509.Certificate, err err
 		value = value[:index]
 	}
 
-	value = stripPEMArmour(value)
+	value = stripPEMArmor(value)
 
 	var der []byte
 
@@ -139,22 +139,22 @@ func ParseClientCertificateHeader(value string) (cert *x509.Certificate, err err
 	return cert, nil
 }
 
-// stripPEMArmour returns the body of the first PEM document in value, or value unchanged when it carries no armour.
-// It is used in preference to pem.Decode because pem.Decode requires the line breaks that several proxies strip.
-func stripPEMArmour(value string) string {
-	begin := strings.Index(value, pemArmourBegin)
+// stripPEMArmor returns the body of the first PEM document in value, or value unchanged when it carries no armor.
+// It is used in preference to [pem.Decode] because [pem.Decode] requires the line breaks that several proxies strip.
+func stripPEMArmor(value string) string {
+	begin := strings.Index(value, pemArmorBegin)
 	if begin < 0 {
 		return value
 	}
 
-	body := value[begin+len(pemArmourBegin):]
+	body := value[begin+len(pemArmorBegin):]
 
-	// Skip the remainder of the BEGIN armour, which carries the label and the closing delimiter.
-	if index := strings.Index(body, pemArmourDelim); index >= 0 {
-		body = body[index+len(pemArmourDelim):]
+	// Skip the remainder of the BEGIN armor, which carries the label and the closing delimiter.
+	if index := strings.Index(body, pemArmorDelim); index >= 0 {
+		body = body[index+len(pemArmorDelim):]
 	}
 
-	if index := strings.Index(body, pemArmourEnd); index >= 0 {
+	if index := strings.Index(body, pemArmorEnd); index >= 0 {
 		body = body[:index]
 	}
 

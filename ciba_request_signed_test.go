@@ -224,7 +224,7 @@ func TestBackChannelSignedRequest(t *testing.T) {
 			hint: "'login_hint'",
 		},
 		{
-			name: "ShouldIgnoreAnUnrecognisedParameterOutsideTheRequest",
+			name: "ShouldIgnoreAnUnrecognizedParameterOutsideTheRequest",
 			form: func(form url.Values) {
 				form.Set("foo", "bar")
 				form.Set(consts.FormParameterPrompt, consts.PromptTypeNone)

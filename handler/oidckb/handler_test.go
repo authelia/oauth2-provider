@@ -46,7 +46,7 @@ func TestHandler_BindAccessRequest(t *testing.T) {
 			base[k] = v
 		}
 
-		return signProof(t, key, jwt.JSONWebTokenTypeDPoP, base)
+		return signProof(t, key, base)
 	}
 
 	t.Run("ShouldRecordKeyWhenCodeHashMatches", func(t *testing.T) {
@@ -323,7 +323,7 @@ func TestHandler_BindAccessRequestRejectsMismatchedProofKey(t *testing.T) {
 
 	key := newTestProofKey(t)
 
-	proof := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+	proof := signProof(t, key, map[string]any{
 		jwt.ClaimJWTID:        "mismatch-1",
 		jwt.ClaimHTTPMethod:   http.MethodPost,
 		jwt.ClaimHTTPURI:      "https://as.example.com/token",
@@ -377,7 +377,7 @@ func TestHandler_BindAccessRequestLeavesNoKeyWhenValidationFails(t *testing.T) {
 	assert.ErrorIs(t, handler.BindAccessRequest(ctx, newRequest()), oauth2.ErrServerError)
 	require.Empty(t, session.GetDPoPPublicKeyJWK(), "a rejected attempt must leave no key on the session")
 
-	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+	raw := signProof(t, key, map[string]any{
 		jwt.ClaimJWTID: "residual-2", jwt.ClaimHTTPMethod: http.MethodPost,
 		jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
@@ -418,7 +418,7 @@ func TestHandler_BindAccessRequestReportsAnUnrecordedDPoPJKT(t *testing.T) {
 
 	key := newTestProofKey(t)
 
-	proof := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
+	proof := signProof(t, key, map[string]any{
 		jwt.ClaimJWTID:        "unrecorded-1",
 		jwt.ClaimHTTPMethod:   http.MethodPost,
 		jwt.ClaimHTTPURI:      "https://as.example.com/token",
@@ -505,12 +505,12 @@ func testProofThumbprint(t *testing.T, key *jose.JSONWebKey) (jkt string) {
 	return jkt
 }
 
-func signProof(t *testing.T, key *jose.JSONWebKey, typ string, claims map[string]any) string {
+func signProof(t *testing.T, key *jose.JSONWebKey, claims map[string]any) string {
 	t.Helper()
 
 	signer, err := jose.NewSigner(
 		jose.SigningKey{Algorithm: jose.SignatureAlgorithm(key.Algorithm), Key: key},
-		(&jose.SignerOptions{EmbedJWK: true}).WithType(jose.ContentType(typ)),
+		(&jose.SignerOptions{EmbedJWK: true}).WithType(jose.ContentType(jwt.JSONWebTokenTypeDPoP)),
 	)
 	require.NoError(t, err)
 

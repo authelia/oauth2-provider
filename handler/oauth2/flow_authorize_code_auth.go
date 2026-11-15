@@ -54,7 +54,7 @@ func (c *AuthorizeExplicitGrantHandler) GetRedirectSecureChecker(ctx context.Con
 // insecure redirect URI, validates the requested scopes, audience and resources against the client,
 // and then issues the authorization code.
 func (c *AuthorizeExplicitGrantHandler) HandleAuthorizeEndpointRequest(ctx context.Context, request oauth2.AuthorizeRequester, response oauth2.AuthorizeResponder) (err error) {
-	// This let's us define multiple response types, for example open id connect's id_token
+	// This let's us define multiple response types, for example open id connect's id_token.
 	if !request.GetResponseTypes().ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
 	}
@@ -100,6 +100,7 @@ func (c *AuthorizeExplicitGrantHandler) IssueAuthorizeCode(ctx context.Context, 
 	}
 
 	response.AddParameter(consts.FormParameterAuthorizationCode, code)
+
 	if state := request.GetState(); len(state) != 0 {
 		response.AddParameter(consts.FormParameterState, state)
 	}

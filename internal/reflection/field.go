@@ -10,6 +10,7 @@ import (
 	"reflect"
 )
 
+// GetField returns the value of the named field of obj.
 func GetField(obj any, name string) (any, error) {
 	objValue := reflect.ValueOf(obj)
 

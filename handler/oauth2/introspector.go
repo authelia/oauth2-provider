@@ -13,11 +13,13 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// CoreValidatorConfigProvider is the configuration CoreValidator requires.
 type CoreValidatorConfigProvider interface {
 	oauth2.ScopeStrategyProvider
 	oauth2.DisableRefreshTokenValidationProvider
 }
 
+// CoreValidator introspects opaque access tokens and refresh tokens using the core strategy and storage.
 type CoreValidator struct {
 	CoreStrategy
 	CoreStorage
@@ -78,7 +80,7 @@ func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, token
 }
 
 // preferDefiniteIntrospectionError chooses which of two introspection failures IntrospectToken should return when
-// neither path succeeded. A rejection of a token one path recognised is preferred, as it holds whatever the other path
+// neither path succeeded. A rejection of a token one path recognized is preferred, as it holds whatever the other path
 // reports. Otherwise an oauth2.ErrServerError is preferred, as the path that failed could have been the one to accept
 // the token, followed by primary.
 func preferDefiniteIntrospectionError(primary, secondary error) error {
@@ -175,7 +177,7 @@ func (c *CoreValidator) introspectAccessToken(ctx context.Context, token string,
 }
 
 // introspectRefreshToken resolves and validates a refresh token for introspection. See introspectAccessToken for why
-// a not-found lookup, and an empty signature on a recognised client registration token, become
+// a not-found lookup, and an empty signature on a recognized client registration token, become
 // oauth2.ErrUnknownRequest while every other failure keeps returning oauth2.ErrRequestUnauthorized; the same
 // reasoning applies here. Both paths need the check: IntrospectToken calls each in turn and a definite rejection
 // from either aborts the dispatch loop.

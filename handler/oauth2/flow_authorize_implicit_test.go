@@ -130,6 +130,7 @@ func TestAuthorizeImplicit_EndpointHandler(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setup(areq, store, chgen, aresp)
+
 			err := h.HandleAuthorizeEndpointRequest(t.Context(), areq, aresp)
 			if tc.err != "" {
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)

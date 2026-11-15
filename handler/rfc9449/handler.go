@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package rfc9449 implements RFC 9449 OAuth 2.0 Demonstrating Proof of Possession (DPoP).
 package rfc9449
 
 import (
@@ -43,6 +44,8 @@ type Handler struct {
 // key. A proof is still required. A grant whose ID Tokens are key bound keeps its key, as OpenID Connect Key Binding
 // 1.0 Section 5 requires, and so does the grant of a client for which oauth2.DPoPStrictRefreshTokenBindingProvider or
 // oauth2.DPoPStrictRefreshTokenBindingClient requires strict binding.
+//
+//nolint:gocyclo
 func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.Config.GetDPoPEnabled(ctx) {
 		return nil

@@ -148,12 +148,12 @@ func (c *CustomJWTTypeHandler) PopulateTokenEndpointResponse(ctx context.Context
 	return nil
 }
 
-// CanSkipClientAuth indicates if client auth can be skipped
+// CanSkipClientAuth indicates if client auth can be skipped.
 func (c *CustomJWTTypeHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) bool {
 	return false
 }
 
-// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
+// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled.
 func (c *CustomJWTTypeHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) bool {
 	// The parameter 'grant_type' is REQUIRED. Value MUST be set to "urn:ietf:params:oauth:grant-type:token-exchange".
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
@@ -169,6 +169,7 @@ func (c *CustomJWTTypeHandler) inherit(ctx context.Context, request oauth2.Acces
 	return inheritTokenBinding(ctx, c.Config, request, incoming, role, bindingOf(request.GetSession()))
 }
 
+//nolint:gocyclo
 func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, tokenType oauth2.RFC8693TokenType, token string, role tokenRole) (map[string]any, error) {
 	jwtType, ok := tokenType.(*JWTType)
 	if !ok || jwtType == nil {
@@ -339,6 +340,7 @@ func (c *CustomJWTTypeHandler) validateIssuerIsNotIDTokenIssuer(ctx context.Cont
 	return nil
 }
 
+//nolint:gocyclo
 func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, tokenType oauth2.RFC8693TokenType, response oauth2.AccessResponder) (err error) {
 	if err = requireSubjectToken(request); err != nil {
 		return err

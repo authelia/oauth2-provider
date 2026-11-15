@@ -477,7 +477,7 @@ func TestTxnTokenExpiry(t *testing.T) {
 				want    time.Duration
 			}{
 				{name: "ShouldDefaultToFiveMinutes", subject: time.Hour, want: 5 * time.Minute},
-				{name: "ShouldHonourTheExpiry", expiry: time.Minute, subject: time.Hour, want: time.Minute},
+				{name: "ShouldHonorTheExpiry", expiry: time.Minute, subject: time.Hour, want: time.Minute},
 				{name: "ShouldCapToASubjectTokenExpiringSooner", expiry: time.Hour, subject: 2 * time.Minute, want: 2 * time.Minute},
 				{name: "ShouldCapTheDefaultToASubjectTokenExpiringSooner", subject: 2 * time.Minute, want: 2 * time.Minute},
 				{

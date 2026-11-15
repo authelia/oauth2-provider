@@ -50,7 +50,7 @@ func (f *Fosite) WriteBearerAuthorizationChallenge(ctx context.Context, rw http.
 
 	rw.Header().Set(consts.HeaderWWWAuthenticate, BearerAuthorizationChallenge(ctx, f.Config, "", rfc, schemes...))
 
-	// RFC 9449 Section 9: a resource server signalling that it requires a nonce must supply one, or the client has
+	// RFC 9449 Section 9: a resource server signaling that it requires a nonce must supply one, or the client has
 	// nothing to retry with and the handshake cannot complete.
 	if rfc.ErrorField == errUseDPoPNonceName && f.Config.GetDPoPEnabled(ctx) {
 		if strategy := f.Config.GetDPoPStrategy(ctx); strategy != nil {

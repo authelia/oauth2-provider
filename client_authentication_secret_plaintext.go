@@ -17,6 +17,7 @@ func NewPlainTextClientSecret(value string) *PlainTextClientSecret {
 	return &PlainTextClientSecret{value: []byte(value)}
 }
 
+// PlainTextClientSecret is a ClientSecret stored as plain text.
 type PlainTextClientSecret struct {
 	value []byte
 }

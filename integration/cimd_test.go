@@ -67,7 +67,7 @@ func TestClientIDMetadataDocumentPublicClientAuthorizationCodeFlow(t *testing.T)
 				consts.FormParameterCodeChallenge: {verifier},
 			}.Encode()
 
-			response, err := http.Get(authorize) //nolint:gosec
+			response, err := http.Get(authorize)
 			require.NoError(t, err)
 
 			defer response.Body.Close()
@@ -113,7 +113,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTClientCredentialsFlow(t *testing.T
 
 			id := env.documents.URL + "/confidential.json"
 
-			env.setDocument("/confidential.json", map[string]any{ //nolint:gosec
+			env.setDocument("/confidential.json", map[string]any{
 				"client_id":                       id,
 				"client_name":                     "Confidential Example",
 				"token_endpoint_auth_method":      "private_key_jwt",
@@ -127,7 +127,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTClientCredentialsFlow(t *testing.T
 				consts.FormParameterGrantType:           {consts.GrantTypeClientCredentials},
 				consts.FormParameterScope:               {"oauth2"},
 				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-				consts.FormParameterClientAssertion:     {env.assertion(t, id, cimdIssuer)},
+				consts.FormParameterClientAssertion:     {env.assertion(t, id)},
 			})
 
 			require.NotEmpty(t, token["access_token"])
@@ -149,7 +149,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTAuthorizationCodeFlow(t *testing.T
 			id := env.documents.URL + "/confidential.json"
 			callback := env.provider.URL + "/callback"
 
-			env.setDocument("/confidential.json", map[string]any{ //nolint:gosec
+			env.setDocument("/confidential.json", map[string]any{
 				"client_id":                       id,
 				"client_name":                     "Confidential Example",
 				"application_type":                "native",
@@ -173,7 +173,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTAuthorizationCodeFlow(t *testing.T
 				consts.FormParameterCodeChallenge: {verifier},
 			}.Encode()
 
-			response, err := http.Get(authorize) //nolint:gosec
+			response, err := http.Get(authorize)
 			require.NoError(t, err)
 
 			defer response.Body.Close()
@@ -190,7 +190,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTAuthorizationCodeFlow(t *testing.T
 				consts.FormParameterRedirectURI:         {callback},
 				consts.FormParameterCodeVerifier:        {verifier},
 				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-				consts.FormParameterClientAssertion:     {env.assertion(t, id, cimdIssuer)},
+				consts.FormParameterClientAssertion:     {env.assertion(t, id)},
 			})
 
 			require.NotEmpty(t, token["refresh_token"])
@@ -199,7 +199,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTAuthorizationCodeFlow(t *testing.T
 				consts.FormParameterGrantType:           {consts.GrantTypeRefreshToken},
 				consts.FormParameterRefreshToken:        {token["refresh_token"].(string)},
 				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-				consts.FormParameterClientAssertion:     {env.assertion(t, id, cimdIssuer)},
+				consts.FormParameterClientAssertion:     {env.assertion(t, id)},
 			})
 
 			require.NotEmpty(t, refreshed["access_token"])
@@ -207,7 +207,7 @@ func TestClientIDMetadataDocumentPrivateKeyJWTAuthorizationCodeFlow(t *testing.T
 			introspected := env.post(t, "/introspect", http.StatusOK, url.Values{
 				consts.FormParameterToken:               {refreshed["access_token"].(string)},
 				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-				consts.FormParameterClientAssertion:     {env.assertion(t, id, cimdIssuer)},
+				consts.FormParameterClientAssertion:     {env.assertion(t, id)},
 			})
 
 			assert.Equal(t, true, introspected["active"])
@@ -226,7 +226,7 @@ func TestClientIDMetadataDocumentJWKSURIFailsClosedWithoutGuardedFetcher(t *test
 
 	id := env.documents.URL + "/confidential.json"
 
-	env.setDocument("/confidential.json", map[string]any{ //nolint:gosec
+	env.setDocument("/confidential.json", map[string]any{
 		"client_id":                       id,
 		"token_endpoint_auth_method":      "private_key_jwt",
 		"token_endpoint_auth_signing_alg": "ES256",
@@ -239,7 +239,7 @@ func TestClientIDMetadataDocumentJWKSURIFailsClosedWithoutGuardedFetcher(t *test
 		consts.FormParameterGrantType:           {consts.GrantTypeClientCredentials},
 		consts.FormParameterScope:               {"oauth2"},
 		consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
-		consts.FormParameterClientAssertion:     {env.assertion(t, id, cimdIssuer)},
+		consts.FormParameterClientAssertion:     {env.assertion(t, id)},
 	}
 
 	token := env.token(t, http.StatusUnauthorized, form)
@@ -269,7 +269,7 @@ func TestClientIDMetadataDocumentDisabled(t *testing.T) {
 		consts.FormParameterState:        {testState},
 	}.Encode()
 
-	response, err := http.Get(authorize) //nolint:gosec
+	response, err := http.Get(authorize)
 	require.NoError(t, err)
 
 	defer response.Body.Close()
@@ -302,7 +302,7 @@ func TestClientIDMetadataDocumentRefusedByAllowedDomainSuffixes(t *testing.T) {
 		consts.FormParameterState:        {testState},
 	}.Encode()
 
-	response, err := http.Get(authorize) //nolint:gosec
+	response, err := http.Get(authorize)
 	require.NoError(t, err)
 
 	defer response.Body.Close()
@@ -323,7 +323,7 @@ func TestClientIDMetadataDocumentUnknownDocumentIsAnInvalidClient(t *testing.T) 
 		consts.FormParameterState:        {testState},
 	}.Encode()
 
-	response, err := http.Get(authorize) //nolint:gosec
+	response, err := http.Get(authorize)
 	require.NoError(t, err)
 
 	defer response.Body.Close()
@@ -519,7 +519,7 @@ func (e *cimdEnv) post(t *testing.T, path string, status int, form url.Values) m
 	return token
 }
 
-func (e *cimdEnv) assertion(t *testing.T, id, audience string) string {
+func (e *cimdEnv) assertion(t *testing.T, id string) string {
 	t.Helper()
 
 	signer, err := jose.NewSigner(
@@ -533,7 +533,7 @@ func (e *cimdEnv) assertion(t *testing.T, id, audience string) string {
 	payload, err := json.Marshal(map[string]any{
 		"iss": id,
 		"sub": id,
-		"aud": audience,
+		"aud": cimdIssuer,
 		"jti": fmt.Sprintf("jti-%d", now.UnixNano()),
 		"iat": now.Unix(),
 		"exp": now.Add(time.Minute).Unix(),

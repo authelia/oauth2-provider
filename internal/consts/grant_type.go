@@ -11,10 +11,10 @@ const (
 	GrantTypeAuthorizationCode                = "authorization_code"
 	GrantTypeClientCredentials                = "client_credentials"
 	GrantTypeResourceOwnerPasswordCredentials = valuePassword
-	GrantTypeOAuthJWTBearer                   = "urn:ietf:params:oauth:grant-type:jwt-bearer"     //nolint:gosec
-	GrantTypeOAuthJWTDPoP                     = "urn:ietf:params:oauth:grant-type:jwt-dpop"       //nolint:gosec
-	GrantTypeOAuthDeviceCode                  = "urn:ietf:params:oauth:grant-type:device_code"    //nolint:gosec
-	GrantTypeOAuthTokenExchange               = "urn:ietf:params:oauth:grant-type:token-exchange" //nolint:gosec
+	GrantTypeOAuthJWTBearer                   = "urn:ietf:params:oauth:grant-type:jwt-bearer"
+	GrantTypeOAuthJWTDPoP                     = "urn:ietf:params:oauth:grant-type:jwt-dpop"
+	GrantTypeOAuthDeviceCode                  = "urn:ietf:params:oauth:grant-type:device_code"
+	GrantTypeOAuthTokenExchange               = "urn:ietf:params:oauth:grant-type:token-exchange"
 	GrantTypeOpenIDCIBA                       = "urn:openid:params:grant-type:ciba"
 )
 

@@ -13,6 +13,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+// JWTSessionContainer is a session that carries the JWT claims and headers of a token.
 type JWTSessionContainer interface {
 	// GetJWTClaims returns the claims.
 	GetJWTClaims() jwt.JWTClaimsContainer
@@ -85,6 +86,7 @@ func (j *JWTSession) GetJWTClaims() jwt.JWTClaimsContainer {
 	if j.JWTClaims == nil {
 		j.JWTClaims = &jwt.JWTClaims{}
 	}
+
 	return j.JWTClaims
 }
 
@@ -109,6 +111,7 @@ func (j *JWTSession) SetExpiresAt(key oauth2.TokenType, exp time.Time) {
 	if j.ExpiresAt == nil {
 		j.ExpiresAt = make(map[oauth2.TokenType]time.Time)
 	}
+
 	j.ExpiresAt[key] = exp
 }
 
@@ -121,6 +124,7 @@ func (j *JWTSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 	if _, ok := j.ExpiresAt[key]; !ok {
 		return time.Time{}
 	}
+
 	return j.ExpiresAt[key]
 }
 
@@ -129,6 +133,7 @@ func (j *JWTSession) GetUsername() string {
 	if j == nil {
 		return ""
 	}
+
 	return j.Username
 }
 

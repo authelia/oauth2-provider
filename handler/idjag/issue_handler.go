@@ -154,6 +154,8 @@ func (h *IssueHandler) resourceOptional(ctx context.Context, client oauth2.Clien
 // PopulateTokenEndpointResponse issues the grant.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.4
+//
+//nolint:gocyclo
 func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !h.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)

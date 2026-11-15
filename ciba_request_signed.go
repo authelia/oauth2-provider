@@ -35,7 +35,7 @@ var (
 		consts.FormParameterClientSecret,
 	}
 
-	// cibaAuthenticationRequestParameters are the authentication request parameters this endpoint recognises, which a
+	// cibaAuthenticationRequestParameters are the authentication request parameters this endpoint recognizes, which a
 	// signed authentication request must only include within the JWT.
 	//
 	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.1.1

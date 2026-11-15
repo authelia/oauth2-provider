@@ -171,6 +171,7 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 				require.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
+
 				if tc.check != nil {
 					tc.check(t, areq)
 				}
@@ -352,11 +353,13 @@ func TestResourceOwnerFlow_PopulateTokenEndpointResponse(t *testing.T) {
 				RefreshTokenStrategy: rtstr, Config: config,
 			}
 			tc.setup(areq, store, chgen, rtstr, config)
+
 			err := h.PopulateTokenEndpointResponse(t.Context(), areq, aresp)
 			if tc.err != "" {
 				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				assert.NoError(t, err)
+
 				if tc.expect != nil {
 					tc.expect(t, aresp)
 				}

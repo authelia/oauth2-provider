@@ -22,6 +22,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// DefaultClientAuthenticationStrategy is the default implementation of ClientAuthenticationStrategy.
 type DefaultClientAuthenticationStrategy struct {
 	Store interface {
 		ClientManager
@@ -94,6 +95,7 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 	return s.authenticate(ctx, id, secretBasic, secretPost, assertion, cert, verified, hasBasic, hasPost, hasNone, strategy)
 }
 
+//nolint:gocyclo
 func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secretBasic, secretPost string, assertion *ClientAssertion, cert *x509.Certificate, verified bool, hasBasic, hasPost, hasNone bool, strategy EndpointClientAuthStrategy) (client Client, method string, err error) {
 	if assertion != nil && assertion.Client != nil {
 		client = assertion.Client
@@ -190,10 +192,10 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 // DefaultClientAuthenticationStrategy accepts such an assertion by resolving the client from the 'client_id'
 // parameter first. See ClientAssertionClientSecretEncryptionDisabledProvider.
 func NewClientAssertion(ctx context.Context, strategyJWT jwt.Strategy, store ClientManager, assertion, assertionType string, strategy EndpointClientAuthStrategy) (a *ClientAssertion, err error) {
-	return newClientAssertionWithConfig(ctx, nil, strategyJWT, store, assertion, assertionType, strategy)
+	return newClientAssertionWithConfig(ctx, nil, strategyJWT, store, assertion, assertionType)
 }
 
-func newClientAssertionWithConfig(ctx context.Context, config any, strategyJWT jwt.Strategy, store ClientManager, assertion, assertionType string, strategy EndpointClientAuthStrategy) (a *ClientAssertion, err error) {
+func newClientAssertionWithConfig(ctx context.Context, config any, strategyJWT jwt.Strategy, store ClientManager, assertion, assertionType string) (a *ClientAssertion, err error) {
 	var token *jwt.Token
 
 	switch assertionType {
@@ -220,7 +222,7 @@ func (s *DefaultClientAuthenticationStrategy) newClientAssertion(ctx context.Con
 	alg, ok := getClientSecretEncryptedJWTAlg(ctx, s.Config, assertion)
 
 	if !ok || assertionType != consts.ClientAssertionTypeJWTBearer {
-		return newClientAssertionWithConfig(ctx, s.Config, s.Config.GetJWTStrategy(ctx), s.Store, assertion, assertionType, strategy)
+		return newClientAssertionWithConfig(ctx, s.Config, s.Config.GetJWTStrategy(ctx), s.Store, assertion, assertionType)
 	}
 
 	a = &ClientAssertion{Assertion: assertion, Type: assertionType}

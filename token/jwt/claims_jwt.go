@@ -17,23 +17,30 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-// Enum for different types of scope encoding.
+// JWTScopeFieldEnum is the enum for different types of scope encoding.
 type JWTScopeFieldEnum int
 
 const (
+	// JWTScopeFieldUnset indicates the scope encoding is not set.
 	JWTScopeFieldUnset JWTScopeFieldEnum = iota
+	// JWTScopeFieldList encodes the scope as a list of strings.
 	JWTScopeFieldList
+	// JWTScopeFieldString encodes the scope as a single space delimited string.
 	JWTScopeFieldString
+	// JWTScopeFieldBoth encodes the scope as both a list and a string.
 	JWTScopeFieldBoth
 )
 
+// JWTClaimsDefaults holds default values applied to JWT claims when they are unset.
 type JWTClaimsDefaults struct {
 	ExpiresAt time.Time
 	IssuedAt  time.Time
-	Issuer    string
-	Scope     []string
+	// Issuer provides the JSON Web Keys and algorithms used to issue tokens.
+	Issuer string
+	Scope  []string
 }
 
+// JWTClaimsContainer is a container of JWT claims that can be sanitized and populated with defaults.
 type JWTClaimsContainer interface {
 	// Sanitize should clear the IssuedAt and NotBefore values.
 	Sanitize() JWTClaimsContainer
@@ -54,7 +61,8 @@ type JWTClaimsContainer interface {
 
 // JWTClaims represent a token's claims.
 type JWTClaims struct {
-	Subject    string
+	Subject string
+	// Issuer provides the JSON Web Keys and algorithms used to issue tokens.
 	Issuer     string
 	Audience   []string
 	JTI        string
@@ -86,6 +94,7 @@ func (c *JWTClaims) With(expiry time.Time, scope, audience []string) JWTClaimsCo
 	c.ExpiresAt = expiry
 	c.Scope = scope
 	c.Audience = audience
+
 	return c
 }
 
@@ -111,6 +120,7 @@ func (c *JWTClaims) WithDefaults(iat, nbf time.Time, issuer string) JWTClaimsCon
 	if c.Issuer == "" {
 		c.Issuer = issuer
 	}
+
 	return c
 }
 
@@ -120,7 +130,7 @@ func (c *JWTClaims) WithScopeField(scopeField JWTScopeFieldEnum) JWTClaimsContai
 	return c
 }
 
-// ToMap will transform the headers to a map structure
+// ToMap will transform the headers to a map structure.
 func (c *JWTClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
@@ -172,6 +182,7 @@ func (c *JWTClaims) ToMap() map[string]any {
 		if c.ScopeField == JWTScopeFieldUnset || c.ScopeField == JWTScopeFieldList || c.ScopeField == JWTScopeFieldBoth {
 			ret[ClaimScopeNonStandard] = c.Scope
 		}
+
 		if c.ScopeField == JWTScopeFieldString || c.ScopeField == JWTScopeFieldBoth {
 			ret[ClaimScope] = strings.Join(c.Scope, " ")
 		}
@@ -190,6 +201,7 @@ func (c *JWTClaims) ToMap() map[string]any {
 //nolint:gocyclo
 func (c *JWTClaims) FromMap(m map[string]any) {
 	c.Extra = make(map[string]any)
+
 	for k, v := range m {
 		switch k {
 		case consts.ClaimJWTID:
@@ -309,7 +321,7 @@ func toNumericDate(v any) (date *NumericDate, err error) {
 	return nil, newError("value has invalid type", ErrInvalidType)
 }
 
-// Add will add a key-value pair to the extra field
+// Add will add a key-value pair to the extra field.
 func (c *JWTClaims) Add(key string, value any) {
 	if c.Extra == nil {
 		c.Extra = make(map[string]any)
@@ -318,17 +330,17 @@ func (c *JWTClaims) Add(key string, value any) {
 	c.Extra[key] = value
 }
 
-// Get will get a value from the extra field based on a given key
+// Get will get a value from the extra field based on a given key.
 func (c JWTClaims) Get(key string) any {
 	return c.ToMap()[key]
 }
 
-// ToMapClaims will return a jwt-go MapClaims representation
+// ToMapClaims will return a jwt-go MapClaims representation.
 func (c JWTClaims) ToMapClaims() MapClaims {
 	return c.ToMap()
 }
 
-// FromMapClaims will populate claims from a jwt-go MapClaims representation
+// FromMapClaims will populate claims from a jwt-go MapClaims representation.
 func (c *JWTClaims) FromMapClaims(mc MapClaims) {
 	c.FromMap(mc)
 }

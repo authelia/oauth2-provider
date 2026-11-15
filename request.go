@@ -16,7 +16,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-// Request is an implementation of Requester
+// Request is an implementation of Requester.
 type Request struct {
 	ID                string       `json:"id" gorethink:"id"`
 	RequestedAt       time.Time    `json:"requestedAt" gorethink:"requestedAt"`
@@ -173,8 +173,8 @@ func (a *Request) GetRequestedAuthorizationDetails() AuthorizationDetails {
 	return a.RequestedAuthorizationDetails
 }
 
-// SetRequestedAuthorizationDetails stores a copy of the requested RFC 9396 authorization details. The copy normalises
-// Extra through JSON: numbers become json.Number and structs become maps.
+// SetRequestedAuthorizationDetails stores a copy of the requested RFC 9396 authorization details. The copy normalizes
+// Extra through JSON: numbers become [json.Number] and structs become maps.
 func (a *Request) SetRequestedAuthorizationDetails(details AuthorizationDetails) {
 	a.RequestedAuthorizationDetails = details.Clone()
 }
@@ -186,7 +186,7 @@ func (a *Request) GetGrantedAuthorizationDetails() AuthorizationDetails {
 
 // SetGrantedAuthorizationDetails stores a copy of the granted RFC 9396 authorization details. The granted set
 // replaces any previous value and may differ from the requested set, e.g. when enriched during consent. The copy
-// normalises Extra through JSON: numbers become json.Number and structs become maps.
+// normalizes Extra through JSON: numbers become [json.Number] and structs become maps.
 func (a *Request) SetGrantedAuthorizationDetails(details AuthorizationDetails) {
 	a.GrantedAuthorizationDetails = details.Clone()
 }
@@ -217,6 +217,7 @@ func (a *Request) GrantScope(scope string) {
 	if slices.Contains(a.GrantedScope, scope) {
 		return
 	}
+
 	a.GrantedScope = append(a.GrantedScope, scope)
 }
 
@@ -292,6 +293,7 @@ var alwaysAllowedParameters = []string{
 // credentials and other sensitive form fields before persisting the request to storage.
 func (a *Request) Sanitize(allowedParameters []string) Requester {
 	b := new(Request)
+
 	allowed := map[string]bool{}
 	for _, v := range allowedParameters {
 		allowed[v] = true
@@ -305,6 +307,7 @@ func (a *Request) Sanitize(allowedParameters []string) Requester {
 
 	*b = *a
 	b.ID = a.GetID()
+
 	b.Form = url.Values{}
 	for k := range a.Form {
 		if allowed[k] {

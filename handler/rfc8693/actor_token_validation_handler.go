@@ -16,6 +16,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// ActorTokenValidationHandler validates the actor of RFC 8693 delegation requests.
 type ActorTokenValidationHandler struct{}
 
 // HandleTokenEndpointRequest enforces RFC 8693 §4.4 'may_act' authorization for delegation requests.
@@ -33,6 +34,8 @@ type ActorTokenValidationHandler struct{}
 //     into externally-gated authorization via GetAllowActorTokenWithoutMayAct.
 //
 // See https://datatracker.ietf.org/doc/html/rfc8693#section-4.4.
+//
+//nolint:gocyclo
 func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -116,12 +119,12 @@ func (c *ActorTokenValidationHandler) PopulateTokenEndpointResponse(ctx context.
 	return nil
 }
 
-// CanSkipClientAuth indicates if client auth can be skipped
+// CanSkipClientAuth indicates if client auth can be skipped.
 func (c *ActorTokenValidationHandler) CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool {
 	return false
 }
 
-// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
+// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled.
 func (c *ActorTokenValidationHandler) CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool {
 	// The parameter 'grant_type' is REQUIRED. Value MUST be set to "urn:ietf:params:oauth:grant-type:token-exchange".
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)

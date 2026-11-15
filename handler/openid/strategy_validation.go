@@ -56,7 +56,7 @@ func (s *DefaultIDTokenValidationStrategy) ValidateIDToken(ctx context.Context, 
 
 	var decoded *jwt.Token
 
-	if decoded, err = s.Strategy.Decode(ctx, token, sopts...); err != nil {
+	if decoded, err = s.Decode(ctx, token, sopts...); err != nil {
 		return nil, err
 	}
 

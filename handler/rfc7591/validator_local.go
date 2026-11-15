@@ -39,7 +39,7 @@ func NewLocalValidator(config LocalValidatorConfig) (validator *LocalValidator) 
 }
 
 // validators returns the configured oauth2.ClientRegistrationValidator values, falling back to LocalValidator when
-// none are configured. An empty but non-nil slice is honoured and disables local validation.
+// none are configured. An empty but non-nil slice is honored and disables local validation.
 //
 // Network-dereferencing validators such as SectorIdentifierValidator are not included by default, as they perform
 // egress on a client supplied URI. OpenID Connect Dynamic Client Registration 1.0 Section 5 requires registration to
@@ -373,7 +373,7 @@ func validateURI(name, value string, secure bool) (err error) {
 }
 
 // isPrivateUseURIScheme reports whether scheme is a private-use URI scheme of the reverse-DNS form RFC 8252 Section
-// 7.1 requires of a native application, such as 'com.example.app'. The scheme must already be parsed by url.Parse;
+// 7.1 requires of a native application, such as 'com.example.app'. The scheme must already be parsed by [url.Parse];
 // only the domain shape is checked: at least one dot, and every label non-empty, composed of unreserved DNS
 // characters, and neither starting nor ending with a hyphen.
 //
@@ -541,7 +541,7 @@ func validateGrantResponseTypeCoherence(metadata *oauth2.ClientRegistrationMetad
 		}
 	}
 
-	var responseTypeTokens []string
+	responseTypeTokens := make([]string, 0, len(responseTypes))
 
 	for _, responseType := range responseTypes {
 		responseTypeTokens = append(responseTypeTokens, strings.Fields(responseType)...)

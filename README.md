@@ -81,7 +81,7 @@ finalized, so support for one may change in any release.
 | [JWT Secured Authorization Response Mode (JARM)](https://openid.net/specs/oauth-v2-jarm.html)                                                   |   ✅   |                          |                                                                                                                                                                                             |
 | [Multiple Response Type Encoding Practices](https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html)                                 |   ✅   |                          | Including the `none` response type                                                                                                                                                          |
 | [Form Post Response Mode](https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html)                                                   |   ✅   |                          | Custom response writer support                                                                                                                                                              |
-| [The OAuth 2.1 Authorization Framework](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17)                                         |   🟡   | `draft-17`               | PKCE enforcement is opt-in, the implicit grant is composed by default, and bearer tokens are accepted in the query string                                                                   |
+| [The OAuth 2.1 Authorization Framework](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17)                                         |   ✅   | `draft-17`               | Checked by `compose.ValidateOAuth21Profile` and applied by `compose.ApplyOAuth21Profile`; clients are not checked                                                                           |
 | [Identity Assertion JWT Authorization Grant (ID-JAG)](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06) |   ✅   | `draft-06`               | Issuing and redeeming through RFC 8693 and RFC 7523                                                                                                                                         |
 | [Identity and Authorization Chaining Across Domains](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17)               |   🟡   | `draft-17`               | Issuing grants in trust domain A; per-client opt-in                                                                                                                                         |
 | [JWT Authorization Grant with DPoP Binding](https://datatracker.ietf.org/doc/html/draft-parecki-oauth-jwt-dpop-grant-02)                        |   ✅   | `draft-02`               | Redeeming a DPoP-bound ID-JAG                                                                                                                                                               |
@@ -136,9 +136,11 @@ finalized, so support for one may change in any release.
 
 ### Model Context Protocol
 
-| Specification                                                                                                                                                                                                         | Status | Draft | Notes                                                                                                                           |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----: | ----- | ------------------------------------------------------------------------------------------------------------------------------- |
-| [MCP Enterprise-Managed Authorization (2026-07-28)](https://github.com/modelcontextprotocol/ext-auth/blob/main/specification/stable/enterprise-managed-authorization/2026-07-28/enterprise-managed-authorization.mdx) |   ✅   |       | The IdP and Resource Authorization Server roles through ID-JAG; the MCP client and MCP server roles are left to the application |
+| Specification                                                                                                                                                                                                         | Status | Draft | Notes                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----: | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [MCP Authorization (2026-07-28)](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)                                                                                                        |   ✅   |       | The Authorization Server role, with OAuth 2.1 applied by `compose.ApplyOAuth21Profile`; Protected Resource Metadata and the MCP client and MCP server roles are left to the application |
+| [MCP Enterprise-Managed Authorization (2026-07-28)](https://github.com/modelcontextprotocol/ext-auth/blob/main/specification/stable/enterprise-managed-authorization/2026-07-28/enterprise-managed-authorization.mdx) |   ✅   |       | The IdP and Resource Authorization Server roles through ID-JAG; the MCP client and MCP server roles are left to the application                                                         |
+| [MCP OAuth Client Credentials (2026-07-28)](https://github.com/modelcontextprotocol/ext-auth/blob/main/specification/stable/oauth-client-credentials/2026-07-28/oauth-client-credentials.mdx)                         |   ✅   |       | The Authorization Server role; the MCP client and MCP server roles are left to the application                                                                                          |
 
 ### Not Yet Supported: Drafts
 
@@ -407,6 +409,20 @@ For [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0
 signed authorization responses and signed introspection responses, and `compose.ValidateFAPI2MessageSigning` checks them
 once the provider is composed. A client is required to use JARM by registering only JWT response modes, and a resource
 server is permitted to introspect through `IntrospectionClient`.
+
+For [The OAuth 2.1 Authorization Framework](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17),
+`compose.ApplyOAuth21Profile` sets the options above that it requires on an `oauth2.Config`, and
+`compose.ValidateOAuth21Profile` checks any `oauth2.Configurator` once the provider is composed, returning every setting
+that does not meet it and every missing required handler. It refuses the resource owner password credentials grant and
+the authorize endpoint handlers which can issue an access token in the authorization response:
+`AuthorizeImplicitGrantTypeHandler`, `OpenIDConnectImplicitHandler`, and `OpenIDConnectHybridHandler`, which serves
+`code token` and `code id_token token` as well as `code id_token`. It requires PKCE with S256 from every client, the RFC
+9207 `iss` parameter, an authorization code lifetime of at most 10 minutes, `client_secret_post` wherever another client
+secret method is accepted at the token endpoint, `TokenRequestRedirectURIOptional` so a PKCE protected token request may
+omit `redirect_uri`, access tokens in the URI query ignored, and a `RefreshTokenMaximumLifespan`, which
+`compose.ApplyOAuth21Profile` caps at `RefreshTokenLifespan`, so a rotated refresh token never outlives the first. It
+does not set `Issuer`, and does not check the clients, such as their redirect URI comparison strategy or their own
+lifespans, or a custom `RedirectSecureChecker`.
 
 ## Thanks
 

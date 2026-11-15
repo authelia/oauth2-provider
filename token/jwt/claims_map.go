@@ -249,6 +249,8 @@ func (m MapClaims) ToMap() map[string]any {
 // Valid validates the given claims. By default it only validates time based claims "exp, iat, nbf"; there is no
 // accounting for clock skew, and if any of the above claims are not in the token, the claims will still be considered
 // valid. However all of these options can be tuned by the opts.
+//
+//nolint:gocyclo
 func (m MapClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	vopts := &ClaimValidationOptions{}
 

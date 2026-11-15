@@ -234,6 +234,8 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 }
 
 // PopulateTokenEndpointResponse implements https://datatracker.ietf.org/doc/html/rfc6749#section-6
+//
+//nolint:gocyclo
 func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)

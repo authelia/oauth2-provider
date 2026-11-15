@@ -140,6 +140,7 @@ func (v *fapi2Violations) cibaAuthorizationServer(ctx context.Context, config oa
 	}
 }
 
+//nolint:gocyclo
 func (v *fapi2Violations) cibaAlgorithms(ctx context.Context, config oauth2.Configurator) {
 	permitted := oauth2.FAPICIBASigningAlgValues
 

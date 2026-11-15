@@ -69,6 +69,8 @@ type ssfPollRequestBody struct {
 //
 // See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.2
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2.1
+//
+//nolint:gocyclo
 func (f *Fosite) NewSSFPollRequest(ctx context.Context, r *http.Request, session Session, streamID string) (request *SSFPollRequest, err error) {
 	if r.Method != http.MethodPost {
 		return nil, &ssfMethodNotAllowedError{

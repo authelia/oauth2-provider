@@ -145,6 +145,8 @@ func subjectRequire(format, member, value string) (err error) {
 }
 
 // Validate checks the members required by the format (RFC 9493 §3.2, SSF 1.0 §3.3 and §3.5).
+//
+//nolint:gocyclo
 func (s *SubjectIdentifier) Validate() (err error) {
 	if s == nil {
 		return fmt.Errorf("%w: the subject is nil", ErrInvalidSubjectIdentifier)

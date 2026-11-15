@@ -28,6 +28,8 @@ const (
 )
 
 // NewPushedAuthorizeRequest validates the request and produces an AuthorizeRequester object that can be stored.
+//
+//nolint:gocyclo
 func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request) (requester AuthorizeRequester, err error) {
 	request := NewAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)

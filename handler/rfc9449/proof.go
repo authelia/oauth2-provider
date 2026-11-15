@@ -40,6 +40,8 @@ const RSAMaximumKeySize = jwt.RSAMaximumKeySize
 // ParseProof parses a compact DPoP proof JWT, validates its structural requirements (typ, alg, embedded public jwk,
 // signature, and required claims), and returns the validated proof. Request-contextual checks (htm/htu/iat/nonce and
 // replay) are performed by the strategy.
+//
+//nolint:gocyclo
 func ParseProof(proof string, algorithms []jose.SignatureAlgorithm) (parsed *oauth2.DPoPProof, err error) {
 	if proof == "" {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The DPoP proof is missing."))

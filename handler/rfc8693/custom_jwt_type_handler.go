@@ -169,6 +169,7 @@ func (c *CustomJWTTypeHandler) inherit(ctx context.Context, request oauth2.Acces
 	return inheritTokenBinding(ctx, c.Config, request, incoming, role, bindingOf(request.GetSession()))
 }
 
+//nolint:gocyclo
 func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, tokenType oauth2.RFC8693TokenType, token string, role tokenRole) (map[string]any, error) {
 	jwtType, ok := tokenType.(*JWTType)
 	if !ok || jwtType == nil {
@@ -339,6 +340,7 @@ func (c *CustomJWTTypeHandler) validateIssuerIsNotIDTokenIssuer(ctx context.Cont
 	return nil
 }
 
+//nolint:gocyclo
 func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, tokenType oauth2.RFC8693TokenType, response oauth2.AccessResponder) (err error) {
 	if err = requireSubjectToken(request); err != nil {
 		return err

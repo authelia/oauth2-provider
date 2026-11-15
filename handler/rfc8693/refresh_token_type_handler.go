@@ -385,6 +385,7 @@ func (c *RefreshTokenTypeHandler) ownAudience(ctx context.Context, request oauth
 	return []string{issuer}, nil
 }
 
+//nolint:gocyclo
 func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if err = requireSubjectToken(request); err != nil {
 		return err

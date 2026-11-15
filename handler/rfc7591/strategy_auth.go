@@ -210,6 +210,8 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context
 // was issued by this server or by an issuer of GetRFC7591ClientRegistrationPatternIssuers.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9068#section-4
+//
+//nolint:gocyclo
 func (s *DefaultEndpointAuthStrategy) authenticateClientRegistrationJWT(ctx context.Context, r *http.Request, strategy jwt.Strategy, tokenString string) (requester oauth2.Requester, err error) {
 	var (
 		issuer string

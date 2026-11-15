@@ -441,6 +441,7 @@ func (j *DefaultStrategy) issuerStrictJWK(ctx context.Context, kid, alg, use str
 	return j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, use)
 }
 
+//nolint:gocyclo
 func (j *DefaultStrategy) validate(ctx context.Context, t *jwt.JSONWebToken, dest any, o *StrategyOpts) (err error) {
 	var (
 		key      *jose.JSONWebKey

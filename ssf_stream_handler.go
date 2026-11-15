@@ -382,6 +382,8 @@ func ptrString(p *string) (s string) {
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1.3
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1.4
+//
+//nolint:gocyclo
 func (f *Fosite) updateSSFStream(ctx context.Context, config *SSFConfig, storage SSFStreamStorage, requester SSFStreamRequester) (responder SSFStreamResponder, err error) {
 	client := requester.GetClient()
 	body := requester.GetBody()

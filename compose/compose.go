@@ -40,6 +40,8 @@ type Factory func(config oauth2.Configurator, storage any, strategy any) any
 //
 // Compose also registers the RFC9207ResponseModeParameterHandler, so the 'iss' authorization response parameter is
 // returned whenever Issuer is set and DisableAuthorizationServerIdentification is not.
+//
+//nolint:gocyclo
 func Compose(config *oauth2.Config, storage any, strategy any, factories ...Factory) oauth2.Provider {
 	f := oauth2.New(storage.(oauth2.Storage), config)
 	for _, factory := range factories {

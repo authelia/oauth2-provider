@@ -42,6 +42,8 @@ func IsClientIdentifierURL(id string) (ok bool) {
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-3
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-4
+//
+//nolint:gocyclo
 func ValidateClientIdentifierURL(id string) (err error) {
 	if !strings.HasPrefix(id, consts.SchemeHTTPS+"://") {
 		return errClientIdentifierURL("The client identifier '%s' does not use the 'https' scheme.", id)

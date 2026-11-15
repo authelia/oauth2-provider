@@ -43,6 +43,7 @@ func (r *Resolver) applyCeiling(ctx context.Context, metadata *oauth2.ClientRegi
 	return nil
 }
 
+//nolint:gocyclo
 func (r *Resolver) applyBounds(ctx context.Context, metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	var scopes []string
 

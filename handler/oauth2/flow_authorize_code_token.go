@@ -95,6 +95,8 @@ func validateAuthorizeCodeBinding(authorizeRequest oauth2.Requester, request oau
 
 // HandleTokenEndpointRequest implements
 // * https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3 (everything).
+//
+//nolint:gocyclo
 func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(errorsx.WithStack(oauth2.ErrUnknownRequest))

@@ -843,6 +843,7 @@ func validateDefaultResponseMode(request *AuthorizeRequest) error {
 	return nil
 }
 
+//nolint:gocyclo
 func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, request *AuthorizeRequest) (isPAR bool, err error) {
 	var (
 		config     PushedAuthorizeRequestConfigProvider

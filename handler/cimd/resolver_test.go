@@ -1497,6 +1497,7 @@ type resolverEnv struct {
 	release  chan struct{}
 }
 
+//nolint:gocyclo
 func newResolverEnv(t *testing.T, configure func(config *Config)) *resolverEnv {
 	t.Helper()
 

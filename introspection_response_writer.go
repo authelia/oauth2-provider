@@ -85,6 +85,8 @@ func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWr
 // WriteIntrospectionResponse writes the introspection response.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
+//
+//nolint:gocyclo
 func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.ResponseWriter, r IntrospectionResponder) {
 	var (
 		caller   Client

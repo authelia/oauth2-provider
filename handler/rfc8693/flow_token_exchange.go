@@ -323,6 +323,8 @@ func (c *TokenExchangeGrantHandler) GetResourceStrategy(ctx context.Context, cli
 // 'invalid_request' per RFC 8693 Section 2.2.2.
 //
 // See https://datatracker.ietf.org/doc/html/rfc8693#section-4.1.
+//
+//nolint:gocyclo
 func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -685,6 +687,8 @@ func errExchangeTokenValidation(err error) error {
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.2
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-10.4
+//
+//nolint:gocyclo
 func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, store oauth2.ClientGetter, strategy oauth2.ScopeStrategy, original oauth2.Requester, role tokenRole, refresh bool) (err error) {
 	client := request.GetClient()
 	originalClientID := original.GetClient().GetID()

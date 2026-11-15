@@ -95,6 +95,7 @@ func (s *DefaultClientAuthenticationStrategy) AuthenticateClient(ctx context.Con
 	return s.authenticate(ctx, id, secretBasic, secretPost, assertion, cert, verified, hasBasic, hasPost, hasNone, strategy)
 }
 
+//nolint:gocyclo
 func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, id, secretBasic, secretPost string, assertion *ClientAssertion, cert *x509.Certificate, verified bool, hasBasic, hasPost, hasNone bool, strategy EndpointClientAuthStrategy) (client Client, method string, err error) {
 	if assertion != nil && assertion.Client != nil {
 		client = assertion.Client

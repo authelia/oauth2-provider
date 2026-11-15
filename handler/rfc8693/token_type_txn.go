@@ -311,6 +311,8 @@ func isTxnTokenRequest(ctx context.Context, request oauth2.Requester, config oau
 // validateTxnTokenRequest applies the request rules of a Txn-Token exchange.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11
+//
+//nolint:gocyclo
 func validateTxnTokenRequest(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, tokenType *TxnTokenType) (err error) {
 	form := request.GetRequestForm()
 

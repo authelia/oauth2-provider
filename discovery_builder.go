@@ -89,6 +89,8 @@ func (f *Fosite) NewOAuth2AuthorizationServerMetadata(ctx context.Context) (meta
 
 // newOAuth2AuthorizationServerMetadata builds the OAuth 2.0 Authorization Server Metadata document before the
 // DiscoveryMetadataHooks run and before it is signed.
+//
+//nolint:gocyclo
 func (f *Fosite) newOAuth2AuthorizationServerMetadata(ctx context.Context, capabilities *discoveryCapabilities) (metadata *OAuth2AuthorizationServerMetadata, err error) {
 	config := f.Config
 

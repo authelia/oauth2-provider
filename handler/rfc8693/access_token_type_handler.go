@@ -212,6 +212,7 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.Ac
 	return original, claims, nil
 }
 
+//nolint:gocyclo
 func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if err = requireSubjectToken(request); err != nil {
 		return err

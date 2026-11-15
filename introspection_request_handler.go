@@ -23,6 +23,8 @@ import (
 // NewIntrospectionRequest initiates token introspection.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.1
+//
+//nolint:gocyclo
 func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, session Session) (responder IntrospectionResponder, err error) {
 	ctx = context.WithValue(ctx, RequestContextKey, r)
 
@@ -181,6 +183,8 @@ func isZeroQuality(value string) bool {
 //
 // See: https://www.rfc-editor.org/rfc/rfc7662#section-2.1
 // See: https://www.rfc-editor.org/rfc/rfc9449#section-6.2
+//
+//nolint:gocyclo
 func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.Context, r *http.Request, session Session, token string) (client Client, err error) {
 	var clientToken string
 

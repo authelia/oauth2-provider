@@ -51,6 +51,8 @@ type ClientRegistrationHandler struct {
 // When the authenticating token carries a registration policy, the policy replaces the token's granted scope, audience
 // and resource as the bound on the client, its 'max_registrations' slot is reserved immediately before the client is
 // persisted and released if persisting or minting fails, and the minted management token carries the policy.
+//
+//nolint:gocyclo
 func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointRequest(ctx context.Context, requester oauth2.ClientRegistrationRequester, responder oauth2.ClientRegistrationResponder) (err error) {
 	strategy := h.Config.GetRFC7591ClientRegistrationStrategy(ctx)
 	if strategy == nil {

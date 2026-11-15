@@ -116,6 +116,8 @@ func (f *Fosite) NewSSFStreamStatusRequest(ctx context.Context, r *http.Request,
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.5
+//
+//nolint:gocyclo
 func (f *Fosite) NewSSFStreamStatusResponse(ctx context.Context, requester SSFStreamStatusRequester) (responder SSFStreamResponder, err error) {
 	var (
 		config  *SSFConfig

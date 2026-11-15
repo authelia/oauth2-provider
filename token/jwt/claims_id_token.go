@@ -290,6 +290,8 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 }
 
 // ToMap will transform the headers to a map structure.
+//
+//nolint:gocyclo
 func (c *IDTokenClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 

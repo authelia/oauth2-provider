@@ -113,6 +113,8 @@ func setRegistrationTimes(client oauth2.Client, responder oauth2.ClientConfigura
 // update implements the PUT case, RFC 7592 Section 2.2's full replacement semantics. The replacement registration
 // access token is minted before the old one's session is deleted, so a failed mint leaves the client holding a working
 // token.
+//
+//nolint:gocyclo
 func (h *ClientConfigurationHandler) update(ctx context.Context, id string, client oauth2.Client, requester oauth2.ClientConfigurationRequester, responder oauth2.ClientConfigurationResponder) (err error) {
 	strategy := h.Config.GetRFC7591ClientRegistrationStrategy(ctx)
 	if strategy == nil {

@@ -749,6 +749,7 @@ func ssfPushBody(endpoint, header string) string {
 	return body + `}`
 }
 
+//nolint:gocyclo
 func TestSSFStreamUpdate(t *testing.T) {
 	const (
 		pushURL  = "https://rx.example.com/push"

@@ -31,6 +31,8 @@ func EncodeParameters(token, _ string, tErr error) (parameters url.Values, err e
 // Generate generates the token and signature for a JARM response. The issuer is always the configured issuer, and
 // the session argument is not used. Per JARM Section 2.1 the numeric 'expires_in' parameter is encoded as a JSON number
 // and all other parameters as JSON strings.
+//
+//nolint:gocyclo
 func Generate(ctx context.Context, config Configurator, client Client, _ any, parameters url.Values) (token, signature string, err error) {
 	headers := map[string]any{}
 

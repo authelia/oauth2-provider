@@ -107,6 +107,8 @@ func (f Fields) EncodeRFC6750() string {
 }
 
 // WriteRFC6750Error handles a RFC6750 error response.
+//
+//nolint:gocyclo
 func WriteRFC6750Error(w http.ResponseWriter, e any, extra Fields) {
 	var (
 		code   int

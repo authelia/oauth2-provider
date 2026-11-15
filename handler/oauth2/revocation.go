@@ -36,6 +36,8 @@ type TokenRevocationHandler struct {
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
 // See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+//
+//nolint:gocyclo
 func (r *TokenRevocationHandler) RevokeToken(ctx context.Context, token string, tokenType oauth2.TokenType, client oauth2.Client) (err error) {
 	var handlers []RevocationTokenLookupFunc
 

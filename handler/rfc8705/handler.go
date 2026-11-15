@@ -37,6 +37,8 @@ type Handler struct {
 // tokens of public clients only. A certificate is still required. The grant of a client for which
 // oauth2.MTLSStrictRefreshTokenBindingProvider or oauth2.MTLSStrictRefreshTokenBindingClient requires strict binding
 // keeps its certificate.
+//
+//nolint:gocyclo
 func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !h.Config.GetMTLSEnabled(ctx) {
 		return nil

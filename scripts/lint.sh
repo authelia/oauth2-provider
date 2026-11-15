@@ -152,6 +152,8 @@ if [[ $# -eq 0 ]]; then
   run_shellcheck || FAILED=1
   echo "==> Running typos"
   run_typos . || FAILED=1
+  echo "==> Running zizmor"
+  zizmor .github/workflows || FAILED=1
   echo "==> Running reuse"
   reuse lint --lines || FAILED=1
 

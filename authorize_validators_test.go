@@ -37,19 +37,19 @@ func TestValidateResponseTypes(t *testing.T) {
 			name:     "ShouldFailMissingResponseType",
 			rt:       "",
 			art:      []string{"token"},
-			expected: "The authorization server does not support obtaining a token using this method. The request is missing the 'response_type' parameter.",
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request is missing the 'response_type' parameter.",
 		},
 		{
 			name:     "ShouldFailWhitespaceResponseType",
 			rt:       "  ",
 			art:      []string{"token"},
-			expected: "The authorization server does not support obtaining a token using this method. The request is missing the 'response_type' parameter.",
+			expected: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request is missing the 'response_type' parameter.",
 		},
 		{
 			name:           "ShouldFailWhenResponseTypeFormKeyMissing",
 			omitResponseTy: true,
 			art:            []string{"token"},
-			expected:       "The authorization server does not support obtaining a token using this method. The request is missing the 'response_type' parameter.",
+			expected:       "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request is missing the 'response_type' parameter.",
 		},
 		{
 			name:     "ShouldFailClientNotAllowedCodeToken",

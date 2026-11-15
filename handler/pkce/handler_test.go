@@ -752,7 +752,7 @@ func TestHandler_HandleTokenEndpointRequest(t *testing.T) {
 				)
 			},
 			oauth2.ErrServerError,
-			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Error occurred attempting get PKCE request session: bad connection.",
+			"The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Error occurred attempting to get the PKCE request session: bad connection.",
 		},
 		{
 			"ShouldFailMissingOriginalCodeChallenge",

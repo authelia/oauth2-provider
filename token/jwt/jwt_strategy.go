@@ -185,7 +185,7 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 
 		if len(kid) == 0 && IsSignedJWTClientSecretAlgStr(alg) {
 			if keySig, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, "", JSONWebTokenUseSignature); err != nil {
-				return "", "", errorsx.WithStack(fmt.Errorf("Failed to sign the JWT using the client secret. %w", err))
+				return "", "", errorsx.WithStack(fmt.Errorf("failed to sign the JWT using the client secret: %w", err))
 			}
 		} else if keySig, err = j.issuerJWK(ctx, o.client.GetSigningKeyID(), o.client.GetSigningAlg(), JSONWebTokenUseSignature); err != nil {
 			return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
@@ -204,7 +204,7 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 
 	// See: https://openid.net/specs/openid-connect-core-1_0.html#Encryption
 	if o.client.IsPublic() && IsEncryptedJWTClientSecretAlgStr(alg) {
-		return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client configuration. %w", &JWKLookupError{Description: descriptionPublicClientSymmetric}))
+		return "", "", errorsx.WithStack(fmt.Errorf("failed to encrypt the JWT using the client configuration: %w", &JWKLookupError{Description: descriptionPublicClientSymmetric}))
 	}
 
 	if len(enc) == 0 {
@@ -215,10 +215,10 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 
 	if len(kid) == 0 && IsEncryptedJWTClientSecretAlgStr(alg) {
 		if keyEnc, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, enc, JSONWebTokenUseEncryption); err != nil {
-			return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client secret. %w", err))
+			return "", "", errorsx.WithStack(fmt.Errorf("failed to encrypt the JWT using the client secret: %w", err))
 		}
 	} else if keyEnc, err = FindClientPublicJWK(ctx, o.client, ClientJWKSFetcherStrategy(ctx, j.Config, o.client), kid, alg, JSONWebTokenUseEncryption, false); err != nil {
-		return "", "", errorsx.WithStack(fmt.Errorf("Failed to encrypt the JWT using the client configuration. %w", err))
+		return "", "", errorsx.WithStack(fmt.Errorf("failed to encrypt the JWT using the client configuration: %w", err))
 	}
 
 	if !IsKeyAlgorithmPermitted(ctx, j.Config, alg) || !IsKeyAlgorithmPermitted(ctx, j.Config, keyEnc.Algorithm) {

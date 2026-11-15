@@ -108,7 +108,7 @@ func TestGenerate(t *testing.T) {
 			},
 			client:  &stubClient{id: "client-id"},
 			session: struct{}{},
-			err:     "The JARM response modes require the JWTSecuredAuthorizeResponseModeSignerProvider to return a jwt.Strategy but it didn't.",
+			err:     "the JARM response modes require the JWTSecuredAuthorizeResponseModeSignerProvider to return a jwt.Strategy but it didn't",
 		},
 		{
 			name: "ShouldUseTheConfiguredIssuerWithoutASession",

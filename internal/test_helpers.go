@@ -102,7 +102,7 @@ func ParseFormPostResponse(redirectURL string, resp io.ReadCloser) (authorizatio
 
 	body := findElement(doc, "body")
 	if body == nil {
-		return "", "", "", token, customParameters, rFC6749Error, errors.New("Malformed html")
+		return "", "", "", token, customParameters, rFC6749Error, errors.New("malformed html")
 	}
 
 	onLoadFunc, ok := getAttr(body, "onload")

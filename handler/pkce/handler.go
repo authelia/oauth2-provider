@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -214,7 +213,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to find initial PKCE data tied to this request.").WithWrap(err).WithDebugError(err))
 		}
 
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(fmt.Errorf("Error occurred attempting get PKCE request session: %w.", err)))
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Error occurred attempting to get the PKCE request session: %s.", oauth2.ErrorToDebugRFC6749Error(err)))
 	}
 
 	challenge := requesterPKCE.GetRequestForm().Get(consts.FormParameterCodeChallenge)

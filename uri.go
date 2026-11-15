@@ -8,6 +8,7 @@ import (
 	"context"
 	"net"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -106,20 +107,22 @@ func IsLocalhost(uri *url.URL) bool {
 }
 
 // MatchRedirectURIWithClientRedirectURIs if the given uri is a registered redirect uri. Does not perform
-// uri validation. A native client may use a registered loopback redirect URI on any port. The client is native when it
+// uri validation, except that a redirect uri whose query component includes one of the AuthorizationResponseParameters
+// is rejected. A native client may use a registered loopback redirect URI on any port. The client is native when it
 // is an ApplicationTypeClient whose 'application_type' is 'native', or when it is not an ApplicationTypeClient and is
 // public.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1.2.3
 // See: https://datatracker.ietf.org/doc/html/rfc8252#section-7.3
 // See: https://datatracker.ietf.org/doc/html/rfc6819#section-4.4.1.7
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-2.3
 func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL, error) {
 	strategy := GetClientRedirectURIComparisonStrategy(client)
 
 	if raw == "" && len(client.GetRedirectURIs()) == 1 {
 		if redirectURIFromClient, err := url.Parse(client.GetRedirectURIs()[0]); err == nil && IsValidRedirectURI(redirectURIFromClient) {
 			// If no redirect_uri was given and the client has exactly one valid redirect_uri registered, use that instead.
-			return redirectURIFromClient, nil
+			return checkRedirectURIAuthorizationResponseParameters(redirectURIFromClient, client)
 		}
 
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'.").WithDebugf("The 'redirect_uris' registered with OAuth 2.0 Client with id '%s' did not match 'redirect_uri' value '%s' because the only registered 'redirect_uri' is not a valid value.", client.GetID(), raw))
@@ -127,11 +130,74 @@ func MatchRedirectURIWithClientRedirectURIs(raw string, client Client) (*url.URL
 		// If a redirect_uri was given and the clients knows it (simple string comparison!)
 		// return it.
 		if parsed, err := url.Parse(redirectTo); err == nil && IsValidRedirectURI(parsed) {
-			return parsed, nil
+			return checkRedirectURIAuthorizationResponseParameters(parsed, client)
 		}
 	}
 
 	return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'.").WithDebugf("The 'redirect_uris' registered with OAuth 2.0 Client with id '%s' did not match 'redirect_uri' value '%s'.", client.GetID(), raw))
+}
+
+func checkRedirectURIAuthorizationResponseParameters(uri *url.URL, client Client) (*url.URL, error) {
+	if name, found := GetRedirectURIAuthorizationResponseParameter(uri); found {
+		return nil, errorsx.WithStack(ErrInvalidRequest.WithHintf("The 'redirect_uri' parameter must not include the '%s' query parameter as it is defined for use in the authorization response.", name).WithDebugf("The 'redirect_uri' value '%s' registered with OAuth 2.0 Client with id '%s' includes the authorization response parameter '%s'.", uri, client.GetID(), name))
+	}
+
+	return uri, nil
+}
+
+// AuthorizationResponseParameters returns the names of the parameters defined for use in the authorization response,
+// none of which the query component of a redirect URI may include. They are the RFC 6749 Section 4.1.2, 4.1.2.1 and
+// 4.2.2 parameters, 'iss' from RFC 9207, 'id_token' from OpenID Connect Core 1.0, 'session_state' from OpenID Connect
+// Session Management 1.0, and 'response' from JARM.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-2.3
+func AuthorizationResponseParameters() (names []string) {
+	return []string{
+		consts.FormParameterAccessToken,
+		consts.FormParameterAuthorizationCode,
+		consts.FormParameterError,
+		consts.FormParameterErrorDescription,
+		consts.FormParameterErrorURI,
+		consts.AccessResponseExpiresIn,
+		consts.AccessResponseIDToken,
+		consts.FormParameterIssuer,
+		consts.FormParameterResponse,
+		consts.FormParameterScope,
+		consts.FormParameterSessionState,
+		consts.FormParameterState,
+		consts.AccessResponseTokenType,
+	}
+}
+
+// IsAuthorizationResponseParameter reports whether name is one of the AuthorizationResponseParameters. The comparison
+// is exact and case-sensitive.
+func IsAuthorizationResponseParameter(name string) bool {
+	return slices.Contains(AuthorizationResponseParameters(), name)
+}
+
+// GetRedirectURIAuthorizationResponseParameter returns the first name in the query component of the redirect URI which
+// is one of the AuthorizationResponseParameters. Names are compared after percent-decoding, and a name which cannot be
+// decoded is compared as is.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-2.3
+func GetRedirectURIAuthorizationResponseParameter(uri *url.URL) (name string, found bool) {
+	if uri == nil {
+		return "", false
+	}
+
+	for pair := range strings.SplitSeq(uri.RawQuery, "&") {
+		key, _, _ := strings.Cut(pair, "=")
+
+		if decoded, err := url.QueryUnescape(key); err == nil {
+			key = decoded
+		}
+
+		if IsAuthorizationResponseParameter(key) {
+			return key, true
+		}
+	}
+
+	return "", false
 }
 
 // IsMatchingRedirectURI matches a requested redirect URI against a pool of registered client URIs using the given

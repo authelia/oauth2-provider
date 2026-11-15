@@ -81,7 +81,7 @@ func TestClientRegistrationHandlerOmitsSecretForNoneAuthMethod(t *testing.T) {
 	assert.True(t, responder.ClientSecretExpiresAt.IsZero())
 }
 
-func TestClientRegistrationHandlerDropsUnrecognisedMetadata(t *testing.T) {
+func TestClientRegistrationHandlerDropsUnrecognizedMetadata(t *testing.T) {
 	ctx := context.Background()
 	handler, config, _ := newRegistrationHandler(t)
 
@@ -195,7 +195,7 @@ func TestClientRegistrationHandlerLeavesSectorIdentifierURIToConfiguredValidator
 	assert.Len(t, store.Clients, 1)
 }
 
-func TestClientRegistrationHandlerHonoursExplicitlyEmptyValidators(t *testing.T) {
+func TestClientRegistrationHandlerHonorsExplicitlyEmptyValidators(t *testing.T) {
 	ctx := context.Background()
 	handler, config, store := newRegistrationHandler(t)
 

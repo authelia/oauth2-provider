@@ -53,7 +53,7 @@ func TestSpec_4_1_ActClaim_DelegationAddsActorSub(t *testing.T) {
 	assert.Equal(t, "bob", act[consts.ClaimSubject], "the 'act' claim's 'sub' must come from the actor_token")
 }
 
-// §4.1: The act claim should carry every identifying claim of the actor that the AS recognises (sub + client_id).
+// §4.1: The act claim should carry every identifying claim of the actor that the AS recognizes (sub + client_id).
 func TestSpec_4_1_ActClaim_IncludesClientIDWhenPresent(t *testing.T) {
 	cfg := newSpecConfig(t)
 	session := newSpecSession("alice")

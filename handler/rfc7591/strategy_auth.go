@@ -48,7 +48,7 @@ type EndpointAuthStrategyConfig interface {
 //   - The client registration endpoint takes an ordinary access token, obtained through the token endpoint like any
 //     other and resolved from access token storage, or a JWT access token validated per RFC 9068 Section 4. A JWT from
 //     this server is also resolved from storage unless GetRFC7591ClientRegistrationStatelessAccessTokens is set, and a
-//     JWT from a trusted issuer never is. It is authorised by its granted audience containing this endpoint's audience exactly and its granted
+//     JWT from a trusted issuer never is. It is authorized by its granted audience containing this endpoint's audience exactly and its granted
 //     scopes containing the configured registration scope exactly.
 //   - The client configuration endpoint takes a client management token, which lives in its own storage namespace,
 //     never expires, and is audienced at exactly one client's registration_client_uri.
@@ -97,7 +97,7 @@ func NewDefaultEndpointAuthStrategy(config EndpointAuthStrategyConfig, store Sto
 //     wrongly audienced token cannot be told apart. Storage and token validation errors are never surfaced in the
 //     client-facing hint.
 //
-// The client configuration branch reports oauth2.ErrRequestUnauthorized (401) for every failure to resolve or authorise
+// The client configuration branch reports oauth2.ErrRequestUnauthorized (401) for every failure to resolve or authorize
 // the token itself, and the same codes as above for a malformed Authorization header: oauth2.ErrInvalidRequest (400)
 // when more than one is present, and oauth2.ErrInvalidToken (401) when none is present or the scheme is not Bearer. See
 // RFC 7592 Section 2.
@@ -120,7 +120,7 @@ func (s *DefaultEndpointAuthStrategy) AuthenticateClientRegistrationRequest(ctx 
 }
 
 // authenticateClientRegistration authenticates a client registration request (RFC 7591). The credential is an ordinary
-// access token, resolved from access token storage and authorised by oauth2.ValidateBearerAuthorization.
+// access token, resolved from access token storage and authorized by oauth2.ValidateBearerAuthorization.
 //
 // Any binding is read off the hydrated accessTokenSession, so a store that keeps sessions serialized and uses its own
 // session type only surfaces a thumbprint if that type's JSON keys match those of oauth2.DefaultSession or
@@ -486,7 +486,7 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientConfiguration(ctx contex
 		return nil, errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHintf("The provided Client Registration Token is not permitted to be used at '%s'.", audience))
 	}
 
-	// Defence in depth: Storage is a public interface, and a session persisted by a route other than
+	// Defense in depth: Storage is a public interface, and a session persisted by a route other than
 	// NewClientManagementToken may not keep the client and the granted audience in sync. A nil client is rejected for
 	// the same reason.
 	if client := requester.GetClient(); client == nil || client.GetID() != id {

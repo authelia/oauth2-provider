@@ -241,7 +241,7 @@ func TestDefaultStrategyRefusesSymmetricEncryptionWithAKeyIDForAPublicClient(t *
 	assert.ErrorContains(t, err, "must not use symmetric algorithms")
 }
 
-func TestNewClientSecretJWKFromClientHonoursTheSecretExpiry(t *testing.T) {
+func TestNewClientSecretJWKFromClientHonorsTheSecretExpiry(t *testing.T) {
 	secret := []byte("super-secret-value-padded-to-thirty-two-octets")
 
 	testCases := []struct {
@@ -377,7 +377,7 @@ func TestNewClientSecretJWK(t *testing.T) {
 			alg:     string(jose.DIRECT),
 			enc:     "unknown",
 			use:     JSONWebTokenUseEncryption,
-			wantErr: "Unsupported content encryption for the direct key algorthm 'unknown'",
+			wantErr: "Unsupported content encryption for the direct key algorithm 'unknown'",
 		},
 		{
 			name:    "ShouldErrorUnsupportedEncryptionAlg",

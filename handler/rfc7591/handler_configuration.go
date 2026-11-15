@@ -153,7 +153,7 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return err
 	}
 
-	dropUnrecognisedMetadata(ctx, h.Config, metadata)
+	dropUnrecognizedMetadata(ctx, h.Config, metadata)
 
 	for _, validator := range validators(ctx, h.Config) {
 		if err = validator.ValidateClientRegistrationMetadata(ctx, client, metadata); err != nil {
@@ -235,7 +235,7 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		grantableResource := oauth2.Arguments(nil)
 
 		// The authenticated requester carries the client registration token's own grant; a custom
-		// oauth2.ClientRegistrationEndpointAuthStrategy must honour the same contract.
+		// oauth2.ClientRegistrationEndpointAuthStrategy must honor the same contract.
 		if authenticated != nil {
 			grantable = authenticated.GetGrantedScopes()
 			grantableAudience = authenticated.GetGrantedAudience()

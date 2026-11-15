@@ -65,7 +65,7 @@ type DefaultSession struct {
 }
 
 // NewDefaultSession returns a *DefaultSession with the embedded OpenID Connect session and the Extra map SetClaimActor
-// writes to already initialised.
+// writes to already initialized.
 func NewDefaultSession() *DefaultSession {
 	return &DefaultSession{
 		DefaultSession: openid.NewDefaultSession(),

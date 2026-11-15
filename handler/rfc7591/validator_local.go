@@ -39,7 +39,7 @@ func NewLocalValidator(config LocalValidatorConfig) (validator *LocalValidator) 
 }
 
 // validators returns the configured oauth2.ClientRegistrationValidator values, falling back to LocalValidator when
-// none are configured. An empty but non-nil slice is honoured and disables local validation.
+// none are configured. An empty but non-nil slice is honored and disables local validation.
 //
 // Network-dereferencing validators such as SectorIdentifierValidator are not included by default, as they perform
 // egress on a client supplied URI. OpenID Connect Dynamic Client Registration 1.0 Section 5 requires registration to

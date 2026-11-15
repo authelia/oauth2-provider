@@ -51,10 +51,10 @@ func TestApplyCeilingScope(t *testing.T) {
 		{
 			name: "ShouldRemoveTheConfiguredRegistrationScopesAndTheDefaultOne",
 			config: Config{
-				ValidatorConfig: &oauth2.Config{RFC7591ClientRegistrationScopes: []string{"register", "enrol"}},
-				Scopes:          []string{"openid", "register", "enrol", consts.ScopeClientRegistration},
+				ValidatorConfig: &oauth2.Config{RFC7591ClientRegistrationScopes: []string{"register", "enroll"}},
+				Scopes:          []string{"openid", "register", "enroll", consts.ScopeClientRegistration},
 			},
-			scope:    "register openid enrol " + consts.ScopeClientRegistration,
+			scope:    "register openid enroll " + consts.ScopeClientRegistration,
 			expected: "openid",
 		},
 		{

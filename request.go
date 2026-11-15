@@ -173,7 +173,7 @@ func (a *Request) GetRequestedAuthorizationDetails() AuthorizationDetails {
 	return a.RequestedAuthorizationDetails
 }
 
-// SetRequestedAuthorizationDetails stores a copy of the requested RFC 9396 authorization details. The copy normalises
+// SetRequestedAuthorizationDetails stores a copy of the requested RFC 9396 authorization details. The copy normalizes
 // Extra through JSON: numbers become json.Number and structs become maps.
 func (a *Request) SetRequestedAuthorizationDetails(details AuthorizationDetails) {
 	a.RequestedAuthorizationDetails = details.Clone()
@@ -186,7 +186,7 @@ func (a *Request) GetGrantedAuthorizationDetails() AuthorizationDetails {
 
 // SetGrantedAuthorizationDetails stores a copy of the granted RFC 9396 authorization details. The granted set
 // replaces any previous value and may differ from the requested set, e.g. when enriched during consent. The copy
-// normalises Extra through JSON: numbers become json.Number and structs become maps.
+// normalizes Extra through JSON: numbers become json.Number and structs become maps.
 func (a *Request) SetGrantedAuthorizationDetails(details AuthorizationDetails) {
 	a.GrantedAuthorizationDetails = details.Clone()
 }

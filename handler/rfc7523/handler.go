@@ -85,7 +85,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return err
 	}
 
-	// Check fo required claims in token, so we can later find public key based on them.
+	// Check for required claims in token, so we can later find public key based on them.
 	if err = c.validateTokenPreRequisites(token); err != nil {
 		return err
 	}

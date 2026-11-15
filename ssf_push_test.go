@@ -294,7 +294,7 @@ func TestPushSecurityEventTokenShouldRefuseInvalidDelivery(t *testing.T) {
 	}{
 		{"ShouldRefuseHTTP", oauth2.SSFDelivery{EndpointURL: server.URL, AuthorizationHeader: ssfPushSecret}},
 		{"ShouldRefuseEmptyURL", oauth2.SSFDelivery{}},
-		{"ShouldRefuseUnparseableURL", oauth2.SSFDelivery{EndpointURL: "https://[::1"}},
+		{"ShouldRefuseUnparsableURL", oauth2.SSFDelivery{EndpointURL: "https://[::1"}},
 		{"ShouldRefuseNoHost", oauth2.SSFDelivery{EndpointURL: "https:///path"}},
 		{"ShouldRefusePollMethod", oauth2.SSFDelivery{Method: "urn:ietf:rfc:8936", EndpointURL: "https://example.com/push"}},
 	}

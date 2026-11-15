@@ -306,7 +306,7 @@ func TestSendBackChannelLogout_RespectsConcurrencyLimit(t *testing.T) {
 	assert.LessOrEqual(t, observed, 2)
 }
 
-func TestSendBackChannelLogout_HonoursContextCancellation(t *testing.T) {
+func TestSendBackChannelLogout_HonorsContextCancellation(t *testing.T) {
 	f, _ := newBCLProvider(t)
 
 	release := make(chan struct{})

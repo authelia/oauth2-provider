@@ -49,7 +49,7 @@ func TestClientRegistrationTokensAreNotAccessTokens(t *testing.T) {
 	assert.Empty(t, strategy.AccessTokenSignature(ctx, token))
 }
 
-func TestRegistrationScopeDoesNotAuthoriseOtherEndpoints(t *testing.T) {
+func TestRegistrationScopeDoesNotAuthorizeOtherEndpoints(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("ShouldRejectAnIntrospectionScopedTokenAtTheRegistrationEndpoint", func(t *testing.T) {

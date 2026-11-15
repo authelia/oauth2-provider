@@ -106,7 +106,7 @@ type SSFPushResult struct {
 }
 
 // PushSecurityEventToken makes one RFC 8935 push attempt on behalf of the stream's client and reports the outcome. It
-// never retries and never follows redirects; queueing and retrying belong to the caller. An endpoint the
+// never retries and never follows redirects; queuing and retrying belong to the caller. An endpoint the
 // SSFEndpointValidator does not permit for the client is refused without a request, as is any endpoint when no validator
 // is configured.
 //

@@ -16,7 +16,7 @@ import (
 
 const AuthorizationDetailsTypePaymentInitiation = "payment_initiation"
 
-// PaymentInitiationTypeHandler is a test oauth2.AuthorizationDetailsTypeHandler modelled on the RFC 9396 Section 2
+// PaymentInitiationTypeHandler is a test oauth2.AuthorizationDetailsTypeHandler modeled on the RFC 9396 Section 2
 // 'payment_initiation' example. A requested detail of a token request selects a distinct granted detail: each member it
 // carries must be within that of the granted detail, and the assigned detail is the granted detail narrowed to the
 // common members it carries.

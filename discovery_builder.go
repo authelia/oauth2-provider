@@ -753,7 +753,7 @@ func isClaimsParameterEnforced(ctx context.Context, config Configurator) bool {
 }
 
 // isRFC9470StepUpAuthenticationEnabled reports whether 'acr_values_supported' is advertised in the OAuth 2.0
-// Authorization Server Metadata, which signals that 'acr_values' and 'max_age' are honoured without the 'openid' scope.
+// Authorization Server Metadata, which signals that 'acr_values' and 'max_age' are honored without the 'openid' scope.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc9470#section-7
 func isRFC9470StepUpAuthenticationEnabled(ctx context.Context, config Configurator) bool {

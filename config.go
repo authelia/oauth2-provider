@@ -434,7 +434,7 @@ type ClaimsParameterEnforcementProvider interface {
 // See: https://datatracker.ietf.org/doc/html/rfc9470#section-7
 type RFC9470StepUpAuthenticationProvider interface {
 	// GetRFC9470StepUpAuthenticationEnabled returns true if the 'acr_values' and 'max_age' authorization request
-	// parameters are honoured for requests which do not grant the 'openid' scope.
+	// parameters are honored for requests which do not grant the 'openid' scope.
 	GetRFC9470StepUpAuthenticationEnabled(ctx context.Context) (enabled bool)
 }
 
@@ -867,7 +867,7 @@ type RFC7591ClientRegistrationConfigProvider interface {
 	// GetRFC7591ClientRegistrationEndpointAudiences returns the audiences a client creation token may carry to be
 	// accepted at the client registration endpoint. The token must carry at least one of them. An empty value means
 	// the configured registration endpoint URL is expected, falling back to the URL the request was made to. A
-	// deployment authorises a client to obtain such a token by adding one of these values to that client's
+	// deployment authorizes a client to obtain such a token by adding one of these values to that client's
 	// registered audience.
 	GetRFC7591ClientRegistrationEndpointAudiences(ctx context.Context) (audiences []string)
 
@@ -1046,7 +1046,7 @@ type PushedAuthorizeRequestConfigProvider interface {
 	// GetPushedAuthorizeContextLifespan is the lifespan of the short-lived PAR context.
 	GetPushedAuthorizeContextLifespan(ctx context.Context) (lifespan time.Duration)
 
-	// GetRequirePushedAuthorizationRequests indicates if the use of Pushed Authorization Requests is gobally required.
+	// GetRequirePushedAuthorizationRequests indicates if the use of Pushed Authorization Requests is globally required.
 	// In this mode, a client cannot pass authorize parameters at the 'authorize' endpoint. The 'authorize' endpoint
 	// must contain the PAR request_uri.
 	GetRequirePushedAuthorizationRequests(ctx context.Context) (enforce bool)

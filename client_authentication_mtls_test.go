@@ -120,7 +120,7 @@ func TestMatchTLSClientAuthSubject(t *testing.T) {
 			err:    "does not match the registered 'tls_client_auth_san_ip'",
 		},
 		{
-			name:   "ShouldRejectAnUnparseableSANIP",
+			name:   "ShouldRejectAnUnparsableSANIP",
 			client: &DefaultMTLSClient{DefaultJARClient: &DefaultJARClient{DefaultClient: &DefaultClient{ID: "test"}}, TLSClientAuthSANIP: "not-an-ip"},
 			err:    "is not a valid IP address",
 		},

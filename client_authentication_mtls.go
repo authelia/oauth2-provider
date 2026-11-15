@@ -190,7 +190,7 @@ func matchTLSClientAuthSubject(client TLSClientAuthClient, cert *x509.Certificat
 			WithDebugf("The registered client with id '%s' has a 'tls_client_auth_subject_dn' value of '%s' which contains no relative distinguished names.", client.GetID(), client.GetTLSClientAuthSubjectDN()))
 	}
 
-	// Checked ahead of the match so an unparseable registered value is reported as the registration error it is,
+	// Checked ahead of the match so an unparsable registered value is reported as the registration error it is,
 	// rather than as a certificate that failed to match.
 	if parameter == "tls_client_auth_san_ip" && net.ParseIP(client.GetTLSClientAuthSANIP()) == nil {
 		return errorsx.WithStack(ErrInvalidClient.

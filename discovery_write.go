@@ -28,7 +28,7 @@ const (
 )
 
 // WriteDiscoveryResponse writes a discovery metadata document as a 200 JSON response, or a 500 without a body when it
-// cannot be marshalled. Caching headers are left to the caller.
+// cannot be marshaled. Caching headers are left to the caller.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8414#section-3.2
 func (f *Fosite) WriteDiscoveryResponse(_ context.Context, rw http.ResponseWriter, metadata any) {

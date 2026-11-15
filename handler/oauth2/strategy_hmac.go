@@ -292,7 +292,7 @@ func (s *HMACCoreStrategy) ValidateAuthorizeCode(ctx context.Context, r oauth2.R
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8628#section-6.1
 func (s *HMACCoreStrategy) RFC8628UserCodeSignature(ctx context.Context, tokenString string) (signature string, err error) {
-	return s.Enigma.GenerateHMACForString(ctx, normaliseRFC8628UserCode(tokenString))
+	return s.Enigma.GenerateHMACForString(ctx, normalizeRFC8628UserCode(tokenString))
 }
 
 // GenerateRFC8628UserCode implements rfc8628.UserCodeStrategy.
@@ -521,7 +521,7 @@ type cibaAuthRequestLifespanProvider interface {
 
 const rfc8628UserCodeCharset = "BCDFGHJKLMNPQRSTVWXZ"
 
-func normaliseRFC8628UserCode(code string) string {
+func normalizeRFC8628UserCode(code string) string {
 	return strings.Map(func(r rune) rune {
 		if strings.ContainsRune(rfc8628UserCodeCharset, r) {
 			return r

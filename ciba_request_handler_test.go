@@ -466,7 +466,7 @@ func TestNewBackChannelAuthenticationRequest(t *testing.T) {
 			hint: "'request_context'",
 		},
 		{
-			name: "ShouldIgnoreAnUnrecognisedParameter",
+			name: "ShouldIgnoreAnUnrecognizedParameter",
 			form: func(form url.Values) { form.Set("foo", "bar") },
 		},
 		{

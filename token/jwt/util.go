@@ -488,7 +488,7 @@ func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use s
 			case jose.A256GCM:
 				bits = aes.BlockSize * 2
 			default:
-				return nil, &JWKLookupError{Description: fmt.Sprintf("Unsupported content encryption for the direct key algorthm '%s'", enc)}
+				return nil, &JWKLookupError{Description: fmt.Sprintf("Unsupported content encryption for the direct key algorithm '%s'", enc)}
 			}
 
 			// OpenID Connect Core 1.0 Section 10.2: SHA-256 for keys of 256 or fewer bits, SHA-384 for 257-384 bits and

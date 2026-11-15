@@ -451,7 +451,7 @@ type Provider interface {
 	NewOpenIDConnectProviderMetadata(ctx context.Context) (metadata *OpenIDConnectProviderMetadata, err error)
 
 	// WriteDiscoveryResponse writes a discovery metadata document as a 200 JSON response, or a 500 without a body when
-	// it cannot be marshalled. Caching headers are left to the caller.
+	// it cannot be marshaled. Caching headers are left to the caller.
 	//
 	// The following specs must be considered in any implementation of this method:
 	// * https://datatracker.ietf.org/doc/html/rfc8414#section-3.2

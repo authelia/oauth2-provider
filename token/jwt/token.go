@@ -119,7 +119,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 	return token, nil
 }
 
-// Token represets a JWT Token.
+// Token represents a JWT Token.
 type Token struct {
 	KeyID                string
 	SignatureAlgorithm   jose.SignatureAlgorithm // alg (JWS)

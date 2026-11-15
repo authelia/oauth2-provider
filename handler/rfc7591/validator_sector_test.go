@@ -125,7 +125,7 @@ func TestSectorIdentifierValidator(t *testing.T) {
 		assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'sector_identifier_uri' value 'http://127.0.0.1:8080/sector' must use the 'https' scheme.")
 	})
 
-	t.Run("ShouldRejectUnparseableSectorIdentifierURI", func(t *testing.T) {
+	t.Run("ShouldRejectUnparsableSectorIdentifierURI", func(t *testing.T) {
 		err := validator.ValidateClientRegistrationMetadata(ctx, nil, &oauth2.ClientRegistrationMetadata{
 			SectorIdentifierURI: "https://example.com:abc/sector",
 			RedirectURIs:        []string{"https://example.com/cb"},

@@ -140,7 +140,7 @@ type IDJAGResourceKey struct {
 // The used 'jti' values are kept in a separate map per purpose: ClientAssertionJTIs for client assertions,
 // RFC7523JTIs for RFC 7523 authorization grants, TokenExchangeJTIs for RFC 8693 custom JWT subject and actor
 // tokens, and IDJAGJTIs for ID-JAG redemptions. Expired 'jti' values, DPoP proof markers and DPoP nonces are no
-// longer recognised once they expire, and are removed by the next insert into the same map once the prune interval
+// longer recognized once they expire, and are removed by the next insert into the same map once the prune interval
 // has elapsed. Expired Client ID Metadata Document records are removed by DeleteExpiredClientIDMetadataDocuments.
 //
 // AccessTokenRequestIDs indexes every access token signature issued for a request ID, as one request may own several

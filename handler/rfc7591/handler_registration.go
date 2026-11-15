@@ -78,7 +78,7 @@ func (h *ClientRegistrationHandler) HandleRFC7591ClientRegistrationEndpointReque
 		return err
 	}
 
-	dropUnrecognisedMetadata(ctx, h.Config, metadata)
+	dropUnrecognizedMetadata(ctx, h.Config, metadata)
 
 	for _, validator := range validators(ctx, h.Config) {
 		if err = validator.ValidateClientRegistrationMetadata(ctx, nil, metadata); err != nil {

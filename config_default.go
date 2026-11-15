@@ -211,7 +211,7 @@ type Config struct {
 	EnforceAuthenticationRequirements bool
 
 	// RFC9470StepUpAuthenticationEnabled advertises 'acr_values_supported' in the OAuth 2.0 Authorization Server
-	// Metadata, which signals that the 'acr_values' and 'max_age' authorization request parameters are honoured for
+	// Metadata, which signals that the 'acr_values' and 'max_age' authorization request parameters are honored for
 	// requests which do not grant the 'openid' scope. Defaults to false.
 	RFC9470StepUpAuthenticationEnabled bool
 
@@ -405,7 +405,7 @@ type Config struct {
 	FormPostHTMLTemplate *template.Template
 
 	// FormPostResponseWriter is the FormPostResponseWriter used for writing the form post response. Useful for
-	// overwriting the behaviour of this element.
+	// overwriting the behavior of this element.
 	FormPostResponseWriter FormPostResponseWriter
 
 	// OmitRedirectScopeParam indicates whether the "scope" parameter should be omitted from the redirect URL.

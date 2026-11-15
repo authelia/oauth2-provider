@@ -106,18 +106,18 @@ func TestPrefixResourceStrategy(t *testing.T) {
 			expected: debugPrefix + "Requested resource 'https://cloud.authelia.com/api/tenants' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			name:     "ShouldFailNeedleIsUnparseableURL",
+			name:     "ShouldFailNeedleIsUnparsableURL",
 			haystack: []string{"https://example.com/api"},
 			needle:   []string{"\x7f"},
 			expected: debugPrefix + "Requested resource '\x7f' could not be parsed.",
 		},
 		{
-			name:     "ShouldSkipUnparseableHaystackEntryAndKeepLookingForMatch",
+			name:     "ShouldSkipUnparsableHaystackEntryAndKeepLookingForMatch",
 			haystack: []string{"\x7f", "https://example.com/api"},
 			needle:   []string{"https://example.com/api"},
 		},
 		{
-			name:     "ShouldFailWhenAllHaystackEntriesUnparseableExceptOneMismatch",
+			name:     "ShouldFailWhenAllHaystackEntriesUnparsableExceptOneMismatch",
 			haystack: []string{"\x7f", "https://other.example.com/api"},
 			needle:   []string{"https://example.com/api"},
 			expected: debugPrefix + "Requested resource 'https://example.com/api' has not been whitelisted by the OAuth 2.0 Client.",
@@ -161,7 +161,7 @@ func TestIsMatchingResourceIndicator(t *testing.T) {
 
 	mustParse := func(s string) *url.URL {
 		u, err := url.Parse(s)
-		require.NoError(t, err, "test bug: unparseable url %q", s)
+		require.NoError(t, err, "test bug: unparsable url %q", s)
 		return u
 	}
 
@@ -371,7 +371,7 @@ func TestValidateResourceIndicators(t *testing.T) {
 			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. The 'resource' parameter must contain resource indicators that do not contain a fragment but 'https://api.example.com/users#' contains a fragment.",
 		},
 		{
-			name:     "ShouldFailUnparseableResource",
+			name:     "ShouldFailUnparsableResource",
 			form:     url.Values{consts.FormParameterResource: {"\x7f"}},
 			expected: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Unable to parse resource indicator '\x7f' from the 'resource' parameter.",
 		},
@@ -529,7 +529,7 @@ func TestWildcardResourceStrategy(t *testing.T) {
 			expected: debugPrefix + "Requested resource 'https://auth.example.com/api/v1#frag' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			name:     "ShouldFailWildcardNeedleUnparseable",
+			name:     "ShouldFailWildcardNeedleUnparsable",
 			haystack: []string{"https://auth.example.com/api/*"},
 			needle:   []string{"https://auth.example.com/api/\x7f"},
 			expected: debugPrefix + "Requested resource 'https://auth.example.com/api/\x7f' has not been whitelisted by the OAuth 2.0 Client.",

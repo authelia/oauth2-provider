@@ -140,7 +140,7 @@ func (d *AuthorizationDetail) UnmarshalJSON(data []byte) (err error) {
 	return nil
 }
 
-// Clone returns a deep copy of the detail. Extra is normalised through JSON: numbers become json.Number and structs
+// Clone returns a deep copy of the detail. Extra is normalized through JSON: numbers become json.Number and structs
 // become maps.
 func (d AuthorizationDetail) Clone() AuthorizationDetail {
 	c := d

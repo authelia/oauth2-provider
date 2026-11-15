@@ -31,7 +31,7 @@ type ClientRegistrationMetadataStrategyConfig interface {
 // filtered metadata, so a client registered or updated while a feature is disabled loses that feature's values in
 // storage too.
 type DefaultClientRegistrationMetadataStrategy struct {
-	// CustomMetadata is the list of custom client metadata attribute names this server recognises, which
+	// CustomMetadata is the list of custom client metadata attribute names this server recognizes, which
 	// GetClientRegistrationCustomMetadata returns.
 	CustomMetadata []string
 
@@ -105,11 +105,11 @@ func customMetadata(ctx context.Context, config Configurator) (names []string) {
 	return nil
 }
 
-// dropUnrecognisedMetadata removes every unregistered client metadata parameter except the custom names the metadata
+// dropUnrecognizedMetadata removes every unregistered client metadata parameter except the custom names the metadata
 // strategy declares and the language tagged variants (RFC 7591 Section 2.2, OpenID Connect Dynamic Client
 // Registration 1.0 Section 2.1) of those names and of the human-readable members. RFC 7591 Section 2 requires metadata
 // the server does not understand to be ignored, and a registration policy can only constrain a name it knows.
-func dropUnrecognisedMetadata(ctx context.Context, config Configurator, metadata *oauth2.ClientRegistrationMetadata) {
+func dropUnrecognizedMetadata(ctx context.Context, config Configurator, metadata *oauth2.ClientRegistrationMetadata) {
 	if len(metadata.Extra) == 0 {
 		return
 	}

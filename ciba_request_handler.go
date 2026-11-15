@@ -232,7 +232,7 @@ func (f *Fosite) NewBackChannelAuthenticationRequest(ctx context.Context, r *htt
 }
 
 // cibaSignedRequestForm returns the form of a signed authentication request: the parameters of the JWT and the client
-// authentication parameters kept in the form. Any other parameter outside of the JWT is unrecognised and ignored.
+// authentication parameters kept in the form. Any other parameter outside of the JWT is unrecognized and ignored.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.1.1
 func cibaSignedRequestForm(form, params url.Values) (signed url.Values) {

@@ -725,7 +725,7 @@ func errInvalidTxnTokenHook(format string, args ...any) error {
 func (c *TxnTokenTypeHandler) signTxnToken(ctx context.Context, domain *TxnTokenTrustDomain, claims map[string]any) (token string, err error) {
 	headers := &jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeTxnToken}}
 
-	if token, _, err = c.Strategy.Encode(ctx, jwt.MapClaims(claims), jwt.WithHeaders(headers), jwt.WithIssuerSigningAlg(domain.signingAlg())); err != nil {
+	if token, _, err = c.Strategy.Encode(ctx, jwt.MapClaims(claims), jwt.WithHeaders(headers), jwt.WithIssuerSigningAlg(domain.signingAlg()), jwt.WithIssuerSigningKeyID(domain.SigningKeyID)); err != nil {
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 

@@ -652,6 +652,49 @@ func TestDefaultStrategy_EncodeWithIssuerSigningAlg(t *testing.T) {
 	}
 }
 
+func TestDefaultStrategy_EncodeWithIssuerSigningKeyID(t *testing.T) {
+	first := jose.JSONWebKey{Key: gen.MustRSAKey(), KeyID: "rs-1", Algorithm: string(jose.RS256), Use: JSONWebTokenUseSignature}
+	second := jose.JSONWebKey{Key: gen.MustRSAKey(), KeyID: "rs-2", Algorithm: string(jose.RS256), Use: JSONWebTokenUseSignature}
+	ec := jose.JSONWebKey{Key: gen.MustES256Key(), KeyID: "es", Algorithm: string(jose.ES256), Use: JSONWebTokenUseSignature}
+
+	issuer, err := NewDefaultIssuer(first, second, ec)
+	require.NoError(t, err)
+
+	strategy := &DefaultStrategy{Config: &testConfig{}, Issuer: issuer}
+
+	testCases := []struct {
+		name     string
+		alg, kid string
+		expected string
+		err      string
+	}{
+		{"ShouldSelectTheFirstKeyWithoutAKeyID", "", "", first.KeyID, ""},
+		{"ShouldSelectTheNamedKey", "", second.KeyID, second.KeyID, ""},
+		{"ShouldSelectTheNamedKeyOfTheAlgorithm", string(jose.ES256), ec.KeyID, ec.KeyID, ""},
+		{"ShouldRefuseAKeyOfAnotherAlgorithm", "", ec.KeyID, "", "Unable to find JSON web key with kid 'es'"},
+		{"ShouldRefuseAnUnknownKeyID", "", "rs-3", "", "kid 'rs-3' which was not found"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			token, _, err := strategy.Encode(context.Background(), MapClaims{"sub": "a"}, WithIssuerSigningAlg(tc.alg), WithIssuerSigningKeyID(tc.kid))
+
+			if tc.err != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			parsed, err := jose.ParseSignedCompact(token, []jose.SignatureAlgorithm{jose.RS256, jose.ES256})
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, parsed.Signatures[0].Header.KeyID)
+		})
+	}
+}
+
 func TestDefaultStrategy_Validate(t *testing.T) {
 	rsaKey := mustRSAKey(t, 2048)
 

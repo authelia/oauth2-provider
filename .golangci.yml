@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+---
 version: '2'
 linters:
   enable:
@@ -10,6 +11,8 @@ linters:
     - goconst
     - gocritic
     - gocyclo
+    - godoclint
+    - godot
     - gosec
     - misspell
     - nolintlint
@@ -18,6 +21,7 @@ linters:
     - unconvert
     - unparam
     - whitespace
+    - wsl_v5
   settings:
     forbidigo:
       forbid:
@@ -30,17 +34,31 @@ linters:
     goconst:
       min-len: 2
       min-occurrences: 2
+      ignore-tests: true
     gocyclo:
       min-complexity: 15
+    godoclint:
+      enable:
+        - no-unused-link
+        - require-doc
+        - require-pkg-doc
+        - require-stdlib-doclink
+    godot:
+      scope: all
+      exclude:
+        - '^\s*SPDX-'
     revive:
       confidence: 0.8
   exclusions:
     generated: lax
     rules:
+      - linters:
+          - godoclint
+        path: _test\.go$
       - path: (.+)\.go$
-        text:
-          Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*printf?|os\.(Un)?Setenv).
-          is not checked
+        text: Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush). is not checked
+      - path: (.+)\.go$
+        text: Error return value of .(os\.Remove(All)?|.*printf?|os\.(Un)?Setenv). is not checked
       - path: (.+)\.go$
         text: func name will be used as test\.Test.* by other packages, and that stutters; consider calling this
       - path: (.+)\.go$
@@ -61,14 +79,24 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - internal/mock
+      - testing/mock
+      - node_modules
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
 formatters:
   enable:
+    - gci
     - gofmt
     - goimports
   settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(authelia.com,github.com/authelia)
+        - localmodule
     goimports:
       local-prefixes:
         - authelia.com/provider/oauth2
@@ -78,3 +106,5 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+      - node_modules
+...

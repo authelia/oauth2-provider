@@ -7,7 +7,7 @@ LICENSE   ?= Apache-2.0
 YEAR      ?= $(shell date +%Y)
 FILES     ?= $(shell git ls-files)
 
-.PHONY: reuse-lint reuse-annotate reuse-annotate-all reuse-annotate-changed
+.PHONY: lint reuse-lint reuse-annotate reuse-annotate-all reuse-annotate-changed
 
 format: format-goimports-reviser format-prettier
 
@@ -22,6 +22,9 @@ generate: .bin/mockgen
 
 help:
 	@cat Makefile | grep '^[^ ]*:' | grep -v '^\.bin/' | grep -v '.SILENT:' | grep -v '^node_modules:' | grep -v help | sed 's/:.*#/#/' | column -s "#" -t
+
+lint:  # runs all linters
+	scripts/lint.sh
 
 test:  # runs all tests
 	go test ./...

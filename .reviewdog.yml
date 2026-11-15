@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: 2026 Authelia
+#
+# SPDX-License-Identifier: Apache-2.0
+
+---
+runner:
+  golangci:
+    cmd: golangci-lint run
+    errorformat:
+      - '%E%f:%l:%c: %m'
+      - '%E%f:%l: %m'
+      - '%C%.%#'
+    level: error
+
+  shellcheck:
+    cmd: scripts/lint.sh shellcheck --format=gcc
+    errorformat:
+      - '%f:%l:%c: %trror: %m'
+      - '%f:%l:%c: %tarning: %m'
+      - '%f:%l:%c: %tote: %m'
+    level: error
+
+  typos:
+    cmd: scripts/lint.sh typos .
+    errorformat:
+      - '%E%f:%l:%c: %m'
+      - '%C%.%#'
+    level: error
+
+  yamllint:
+    cmd: yamllint -f parsable .
+    errorformat:
+      - '%f:%l:%c: %m'
+    level: error
+
+  scorecard:
+    cmd: scripts/lint.sh scorecard
+    errorformat:
+      - '%E%f:%l:%c: %m'
+      - '%C%.%#'
+    level: error
+
+  reuse:
+    # reuse reports 'path: message' with no position, so a 1:1 position is added for reviewdog.
+    cmd: reuse lint --lines | sed -e 's|^\([^:]*\):|\1:1:1:|'
+    errorformat:
+      - '%f:%l:%c: %m'
+    level: error
+...

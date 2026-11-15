@@ -57,7 +57,7 @@ func (f *Fosite) handleAccessRequest(ctx context.Context, r *http.Request, reque
 	}
 
 	if !found {
-		return nil, errorsx.WithStack(ErrInvalidRequest.WithDebugf("The client with id '%s' requested grant type '%s' which is invalid, unknown, not supported, or not configured to be handled.", accessRequestClientID(requester), strings.Join(requester.GetGrantTypes(), " ")))
+		return nil, errorsx.WithStack(ErrUnsupportedGrantType.WithDebugf("The client with id '%s' requested grant type '%s' which is invalid, unknown, not supported, or not configured to be handled.", accessRequestClientID(requester), strings.Join(requester.GetGrantTypes(), " ")))
 	}
 
 	// Created here rather than by a handler because context values do not propagate between the handlers in this

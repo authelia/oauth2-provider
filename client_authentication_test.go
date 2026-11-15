@@ -190,7 +190,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form: url.Values{consts.FormParameterClientID: {"abc"}, "client_secret": {complexSecretRaw}},
 			r:    &http.Request{Header: clientBasicAuthHeader("abc", complexSecretRaw)},
-			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id 'abc' and the authorization server policy does not permit this malformed request. The `token_endpoint_auth_method` methods determined to be used were 'client_secret_basic', 'client_secret_post'.",
+			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request uses more than one client authentication method. Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id 'abc' and the authorization server policy does not permit this malformed request. The `token_endpoint_auth_method` methods determined to be used were 'client_secret_basic', 'client_secret_post'.",
 		},
 		{
 			name: "ShouldFailWithMultipleAuthenticationMethodsClientMethodPost",
@@ -199,7 +199,7 @@ func TestAuthenticateClient(t *testing.T) {
 			},
 			form: url.Values{consts.FormParameterClientID: {"abc"}, "client_secret": {complexSecretRaw}},
 			r:    &http.Request{Header: clientBasicAuthHeader("abc", complexSecretRaw)},
-			err:  "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The required credentials were not found, used an unknown method, could not be parsed, were otherwise malformed, or were otherwise incorrect. Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id 'abc' and the authorization server policy does not permit this malformed request. The `token_endpoint_auth_method` methods determined to be used were 'client_secret_basic', 'client_secret_post'.",
+			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request uses more than one client authentication method. Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id 'abc' and the authorization server policy does not permit this malformed request. The `token_endpoint_auth_method` methods determined to be used were 'client_secret_basic', 'client_secret_post'.",
 		},
 		{
 			name: "ShouldPassWithMultipleAuthenticationMethods",

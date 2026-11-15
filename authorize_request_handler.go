@@ -777,7 +777,7 @@ func (f *Fosite) validateResponseTypes(_ context.Context, _ *http.Request, reque
 	// See: https://www.rfc-editor.org/rfc/rfc6749#section-3.1.1
 	responseTypes := RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterResponseType), " "))
 	if len(responseTypes) == 0 {
-		return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("The request is missing the 'response_type' parameter."))
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("The request is missing the 'response_type' parameter."))
 	}
 
 	var found bool

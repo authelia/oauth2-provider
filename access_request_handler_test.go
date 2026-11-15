@@ -46,7 +46,7 @@ func TestNewAccessRequest(t *testing.T) {
 			method:       http.MethodPost,
 		},
 		{
-			name:   "ShouldReturnInvalidRequestWhenOnlyGrantType",
+			name:   "ShouldReturnUnsupportedGrantTypeWhenOnlyGrantType",
 			header: http.Header{},
 			method: http.MethodPost,
 			form: url.Values{
@@ -56,19 +56,19 @@ func TestNewAccessRequest(t *testing.T) {
 			mock: func(ctx gomock.Matcher, handler *mock.MockTokenEndpointHandler, store *mock.MockStorage, client *DefaultClient) {
 				store.EXPECT().GetClient(ctx, gomock.Eq("bar")).Return(&DefaultClient{ID: "bar"}, nil)
 			},
-			expectErr:    ErrInvalidRequest,
-			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified. The client with id 'bar' requested grant type 'foo' which is invalid, unknown, not supported, or not configured to be handled.",
+			expectErr:    ErrUnsupportedGrantType,
+			expectStrErr: "The authorization grant type is not supported by the authorization server. The client with id 'bar' requested grant type 'foo' which is invalid, unknown, not supported, or not configured to be handled.",
 		},
 		{
-			name:   "ShouldReturnInvalidRequestWhenEmptyClientID",
+			name:   "ShouldReturnUnsupportedGrantTypeWhenEmptyClientID",
 			header: http.Header{},
 			method: http.MethodPost,
 			form: url.Values{
 				consts.FormParameterGrantType: {"foo"},
 				consts.FormParameterClientID:  {""},
 			},
-			expectErr:    ErrInvalidRequest,
-			expectStrErr: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified. The client with id '' requested grant type 'foo' which is invalid, unknown, not supported, or not configured to be handled.",
+			expectErr:    ErrUnsupportedGrantType,
+			expectStrErr: "The authorization grant type is not supported by the authorization server. The client with id '' requested grant type 'foo' which is invalid, unknown, not supported, or not configured to be handled.",
 		},
 		{
 			name: "ShouldReturnInvalidClientWhenGetClientError",
@@ -279,7 +279,7 @@ func TestNewAccessRequestWithoutClientAuth(t *testing.T) {
 				store.EXPECT().GetClient(gomock.Any(), gomock.Any()).Times(0)
 			},
 			method:   http.MethodPost,
-			err:      "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified. The client with id '' requested grant type 'foo' which is invalid, unknown, not supported, or not configured to be handled.",
+			err:      "The authorization grant type is not supported by the authorization server. The client with id '' requested grant type 'foo' which is invalid, unknown, not supported, or not configured to be handled.",
 			handlers: TokenEndpointHandlers{},
 		},
 		{

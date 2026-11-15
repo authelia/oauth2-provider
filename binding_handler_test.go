@@ -115,7 +115,7 @@ func TestTokenBindingHandlerRunsOnlyForAnAcceptedGrant(t *testing.T) {
 		_, err := provider.NewAccessRequest(context.Background(), newBindingAccessRequest(t), &oauth2.DefaultSession{})
 
 		require.Error(t, err)
-		assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+		assert.ErrorIs(t, err, oauth2.ErrUnsupportedGrantType)
 		assert.Zero(t, binder.calls, "a binding handler ran for a request no grant handler accepted")
 	})
 }

@@ -157,7 +157,7 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 			break
 		}
 
-		return nil, "", errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id '%s' and the authorization server policy does not permit this malformed request. The `%s_endpoint_auth_method` methods determined to be used were '%s'.", client.GetID(), endpointClientAuthMetadataName(strategy), strings.Join(methods, "', '")))
+		return nil, "", errorsx.WithStack(ErrInvalidRequest.WithHint("The request uses more than one client authentication method.").WithDebugf("Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id '%s' and the authorization server policy does not permit this malformed request. The `%s_endpoint_auth_method` methods determined to be used were '%s'.", client.GetID(), endpointClientAuthMetadataName(strategy), strings.Join(methods, "', '")))
 	}
 
 	switch {

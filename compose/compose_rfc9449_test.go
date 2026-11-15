@@ -150,7 +150,7 @@ func TestUnknownGrantTypeIsNotSatisfiedByTheDPoPHandler(t *testing.T) {
 	require.Error(t, err)
 
 	assert.Equal(t, http.StatusBadRequest, oauth2.ErrorToRFC6749Error(err).CodeField)
-	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified. The client with id '' requested grant type 'urn:example:not-a-real-grant' which is invalid, unknown, not supported, or not configured to be handled.")
+	assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The authorization grant type is not supported by the authorization server. The client with id '' requested grant type 'urn:example:not-a-real-grant' which is invalid, unknown, not supported, or not configured to be handled.")
 
 	assert.Empty(t, store.DPoPProofJTIs)
 }

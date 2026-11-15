@@ -156,7 +156,7 @@ func TestIssueInternalAccessResponseRejectsUnhandledGrant(t *testing.T) {
 	requester.Client = &DefaultClient{ID: "client"}
 
 	_, err := provider.issueInternalAccessResponse(context.Background(), requester)
-	assert.ErrorIs(t, err, ErrInvalidRequest)
+	assert.ErrorIs(t, err, ErrUnsupportedGrantType)
 }
 
 func TestIsInternalIssuance(t *testing.T) {

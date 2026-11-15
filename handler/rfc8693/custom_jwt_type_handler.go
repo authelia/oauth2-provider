@@ -148,12 +148,12 @@ func (c *CustomJWTTypeHandler) PopulateTokenEndpointResponse(ctx context.Context
 	return nil
 }
 
-// CanSkipClientAuth indicates if client auth can be skipped
+// CanSkipClientAuth indicates if client auth can be skipped.
 func (c *CustomJWTTypeHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) bool {
 	return false
 }
 
-// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
+// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled.
 func (c *CustomJWTTypeHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) bool {
 	// The parameter 'grant_type' is REQUIRED. Value MUST be set to "urn:ietf:params:oauth:grant-type:token-exchange".
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)

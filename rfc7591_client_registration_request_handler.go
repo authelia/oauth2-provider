@@ -25,7 +25,7 @@ const (
 
 // maxClientRegistrationRequestBodyBytes bounds the size of the JSON request body read at the client registration
 // (RFC 7591) and client configuration (RFC 7592) endpoints, both of which read it before the caller is authenticated.
-const maxClientRegistrationRequestBodyBytes = 1 << 20 // 1 MiB
+const maxClientRegistrationRequestBodyBytes = 1 << 20 // 1 MiB.
 
 // NewRFC7591ClientRegistrationRequest validates the request and produces a ClientRegistrationRequester that can be
 // passed to NewRFC7591ClientRegistrationResponse.

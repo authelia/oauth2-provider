@@ -36,7 +36,7 @@ func OAuth2ClientCredentialsGrantFactory(config oauth2.Configurator, storage any
 }
 
 // OAuth2RefreshTokenGrantFactory creates an OAuth2 refresh grant handler and registers
-// an access token, refresh token and authorize code validator.nmj
+// an access token, refresh token and authorize code validator.
 func OAuth2RefreshTokenGrantFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &hoauth2.RefreshTokenGrantHandler{
 		AccessTokenStrategy:    strategy.(hoauth2.AccessTokenStrategy),

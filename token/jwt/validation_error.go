@@ -7,9 +7,9 @@ package jwt
 // Validation provides a backwards compatible error definition
 // from `jwt-go` to `go-jose`.
 const (
-	ValidationErrorMalformed                      uint32 = 1 << iota // Token is malformed
+	ValidationErrorMalformed                      uint32 = 1 << iota // Token is malformed.
 	ValidationErrorMalformedNotCompactSerialized                     // Token is malformed specifically it does not have the compact serialized format.
-	ValidationErrorUnverifiable                                      // Token could not be verified because of signing problems
+	ValidationErrorUnverifiable                                      // Token could not be verified because of signing problems.
 	ValidationErrorSignatureInvalid                                  // Signature validation failed.
 	ValidationErrorHeaderKeyIDInvalid                                // Header KID invalid error.
 	ValidationErrorHeaderAlgorithmInvalid                            // Header ALG invalid error.
@@ -33,12 +33,12 @@ const (
 
 // The ValidationError is an error implementation from Parse if token is not valid.
 type ValidationError struct {
-	Inner  error  // stores the error returned by external dependencies, i.e.: KeyFunc
-	Errors uint32 // bitfield.  see ValidationError... constants
-	text   string // errors that do not have a valid error just have text
+	Inner  error  // stores the error returned by external dependencies, i.e.: KeyFunc.
+	Errors uint32 // bitfield.  see ValidationError... constants.
+	text   string // errors that do not have a valid error just have text.
 }
 
-// Validation error is an error type
+// Validation error is an error type.
 func (e ValidationError) Error() string {
 	switch {
 	case e.Inner != nil:

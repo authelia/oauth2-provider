@@ -170,7 +170,7 @@ func (c *HMACStrategy) validate(ctx context.Context, secret []byte, token string
 
 	expectedMAC := c.generateHMAC(ctx, decodedTokenKey, &signingKey)
 	if !hmac.Equal(expectedMAC, decodedTokenSignature) {
-		// Hash is invalid
+		// Hash is invalid.
 		return errorsx.WithStack(oauth2.ErrTokenSignatureMismatch)
 	}
 
@@ -195,7 +195,7 @@ func (c *HMACStrategy) generateHMAC(ctx context.Context, data []byte, key *[32]b
 		hasher = sha512.New512_256
 	}
 	h := hmac.New(hasher, key[:])
-	// sha512.digest.Write() always returns nil for err, the panic should never happen
+	// sha512.digest.Write() always returns nil for err, the panic should never happen.
 	_, err := h.Write(data)
 	if err != nil {
 		panic(err)

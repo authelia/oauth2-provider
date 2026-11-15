@@ -39,7 +39,7 @@ func (c *OpenIDConnectImplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 	if !(request.GetGrantedScopes().Has(consts.ScopeOpenID) && (request.GetResponseTypes().Has(consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken) || request.GetResponseTypes().ExactOne(consts.ResponseTypeImplicitFlowIDToken))) {
 		return nil
 	} else if request.GetResponseTypes().Has(consts.ResponseTypeAuthorizationCodeFlow) {
-		// hybrid flow
+		// hybrid flow.
 		return nil
 	}
 

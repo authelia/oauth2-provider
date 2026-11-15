@@ -461,7 +461,7 @@ type DefaultACRValuesClient interface {
 	Client
 }
 
-// ResponseModeClient represents a client capable of handling response_mode
+// ResponseModeClient represents a client capable of handling response_mode.
 type ResponseModeClient interface {
 	// GetResponseModes returns the response modes that client is allowed to send. When it returns any, a request which
 	// omits the 'response_mode' parameter must have a default response mode among them. When it returns none, the client

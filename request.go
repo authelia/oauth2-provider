@@ -16,7 +16,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-// Request is an implementation of Requester
+// Request is an implementation of Requester.
 type Request struct {
 	ID                string       `json:"id" gorethink:"id"`
 	RequestedAt       time.Time    `json:"requestedAt" gorethink:"requestedAt"`

@@ -13,7 +13,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-// RFC8628UserAuthorizeResponse is an implementation of DeviceUserAuthorizeResponder
+// RFC8628UserAuthorizeResponse is an implementation of DeviceUserAuthorizeResponder.
 type RFC8628UserAuthorizeResponse struct {
 	Header     http.Header    `json:"-"`
 	Parameters url.Values     `json:"-"`

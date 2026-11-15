@@ -45,7 +45,7 @@ func (f *Fosite) NewRevocationRequest(ctx context.Context, r *http.Request) erro
 		if err = loader.RevokeToken(ctx, token, tokenTypeHint, client); err == nil {
 			found = true
 		} else if errors.Is(err, ErrUnknownRequest) {
-			// do nothing
+			// do nothing.
 		} else if err != nil {
 			return err
 		}

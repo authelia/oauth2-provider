@@ -23,13 +23,13 @@ import (
 // See: https://datatracker.ietf.org/doc/html/rfc3986#section-4.3
 // See: https://datatracker.ietf.org/doc/html/rfc6819#section-5.1.1
 func IsValidRedirectURI(uri *url.URL) bool {
-	// We need to explicitly check for a scheme
+	// We need to explicitly check for a scheme.
 	if !urls.IsRequestURL(uri.String()) {
 		return false
 	}
 
 	if uri.Fragment != "" {
-		// "The endpoint URI MUST NOT include a fragment component."
+		// "The endpoint URI MUST NOT include a fragment component".
 		return false
 	}
 

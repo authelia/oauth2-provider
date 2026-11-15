@@ -94,7 +94,7 @@ func validateAuthorizeCodeBinding(authorizeRequest oauth2.Requester, request oau
 }
 
 // HandleTokenEndpointRequest implements
-// * https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3 (everything)
+// * https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3 (everything).
 func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(errorsx.WithStack(oauth2.ErrUnknownRequest))
@@ -136,12 +136,12 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 	}
 
 	// The authorization server MUST verify that the authorization code is valid
-	// This needs to happen after store retrieval for the session to be hydrated properly
+	// This needs to happen after store retrieval for the session to be hydrated properly.
 	if err = c.AuthorizeCodeStrategy.ValidateAuthorizeCode(ctx, request, code); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(err).WithDebugError(err))
 	}
 
-	// Override scopes
+	// Override scopes.
 	request.SetRequestedScopes(authorizeRequest.GetRequestedScopes())
 
 	// RFC 8707 Section 2: a token request naming 'resource' or 'audience' restricts the token to exactly the values it

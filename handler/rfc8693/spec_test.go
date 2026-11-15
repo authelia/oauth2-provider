@@ -70,7 +70,7 @@ func TestSpec_4_1_ActClaim_IncludesClientIDWhenPresent(t *testing.T) {
 	assert.Equal(t, "client-bob", act[consts.ClaimClientIdentifier])
 }
 
-// §4.1: "A nested act claim within an act claim MAY be used to express a chain of delegation."
+// §4.1: "A nested act claim within an act claim MAY be used to express a chain of delegation".
 func TestSpec_4_1_ActClaim_ChainsDelegationViaNestedAct(t *testing.T) {
 	cfg := newSpecConfig(t)
 	session := newSpecSession("alice")

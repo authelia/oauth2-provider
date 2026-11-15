@@ -175,7 +175,7 @@ const (
 
 type JWKLookupError struct {
 	Description string
-	Errors      uint32 // bitfield.  see JWKLookupError... constants
+	Errors      uint32 // bitfield.  see JWKLookupError... constants.
 }
 
 // GetDescription returns the description of the error.

@@ -311,7 +311,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 			return "", errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'max_age' must be a non-negative integer.").WithWrap(err).WithDebugError(err))
 		}
 
-		// Adds a bit of wiggle room for timing issues
+		// Adds a bit of wiggle room for timing issues.
 		if claims.GetAuthTimeSafe().After(time.Now().UTC().Add(time.Second * 5)) {
 			return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time is in the future."))
 		}
@@ -361,7 +361,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 			tokenHint, err = h.Decode(ctx, tokenHintString, jwt.WithIDTokenHintClient(request.GetClient()))
 
 			if ve, ok := errors.AsType[*jwt.ValidationError](err); ok && ve.IsExactly(jwt.ValidationErrorExpired) {
-				// Expired ID Tokens are allowed as values to id_token_hint
+				// Expired ID Tokens are allowed as values to id_token_hint.
 			} else if err != nil {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Unable to decode ID Token from 'id_token_hint' parameter because %s.", err.Error()))
 			}
@@ -399,7 +399,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		claims.Nonce = ""
 	} else if nonce := request.GetRequestForm().Get(consts.FormParameterNonce); len(nonce) == 0 {
 	} else if len(nonce) > 0 && len(nonce) < h.Config.GetMinParameterEntropy(ctx) {
-		// We're assuming that using less then, by default, 8 characters for the state can not be considered "unguessable"
+		// We're assuming that using less then, by default, 8 characters for the state can not be considered "unguessable".
 		return "", errorsx.WithStack(oauth2.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", h.Config.GetMinParameterEntropy(ctx)))
 	} else if len(nonce) > 0 {
 		claims.Nonce = nonce

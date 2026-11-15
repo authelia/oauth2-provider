@@ -20,7 +20,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// IDTokenClaims represent the claims used in open id connect requests
+// IDTokenClaims represent the claims used in open id connect requests.
 type IDTokenClaims struct {
 	JTI                                 string         `json:"jti"`
 	Issuer                              string         `json:"iss"`
@@ -289,7 +289,7 @@ func (c *IDTokenClaims) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ToMap will transform the headers to a map structure
+// ToMap will transform the headers to a map structure.
 func (c *IDTokenClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
@@ -392,7 +392,7 @@ func (c *IDTokenClaims) ToMap() map[string]any {
 	return ret
 }
 
-// ToMapClaims will return a jwt-go MapClaims representation
+// ToMapClaims will return a jwt-go MapClaims representation.
 func (c IDTokenClaims) ToMapClaims() MapClaims {
 	return c.ToMap()
 }
@@ -472,12 +472,12 @@ func (c *IDTokenClaims) FromMap(m map[string]any) {
 	}
 }
 
-// FromMapClaims will populate claims from a jwt-go MapClaims representation
+// FromMapClaims will populate claims from a jwt-go MapClaims representation.
 func (c *IDTokenClaims) FromMapClaims(mc MapClaims) {
 	c.FromMap(mc)
 }
 
-// Add will add a key-value pair to the extra field
+// Add will add a key-value pair to the extra field.
 func (c *IDTokenClaims) Add(key string, value any) {
 	if c.Extra == nil {
 		c.Extra = make(map[string]any)
@@ -486,7 +486,7 @@ func (c *IDTokenClaims) Add(key string, value any) {
 	c.Extra[key] = value
 }
 
-// Get will get a value from the extra field based on a given key
+// Get will get a value from the extra field based on a given key.
 func (c *IDTokenClaims) Get(key string) any {
 	return c.ToMap()[key]
 }

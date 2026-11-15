@@ -9,7 +9,7 @@ import (
 	"math/big"
 )
 
-var rander = rand.Reader // random function
+var rander = rand.Reader // random function.
 
 var (
 	// AlphaNum contains runes [abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789].

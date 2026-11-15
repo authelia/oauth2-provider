@@ -252,7 +252,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
 	} else if err = c.ValidateCodeAndSession(ctx, request, ar, code); err != nil {
-		// This needs to happen after store retrieval for the session to be hydrated properly
+		// This needs to happen after store retrieval for the session to be hydrated properly.
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
 	}
 

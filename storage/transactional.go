@@ -41,7 +41,7 @@ type Transactional interface {
 // MaybeBeginTx is a helper function that can be used to initiate a transaction if the supplied storage
 // implements the `Transactional` interface.
 func MaybeBeginTx(ctx context.Context, storage any) (context.Context, error) {
-	// the type assertion checks whether the dynamic type of `storage` implements `Transactional`
+	// the type assertion checks whether the dynamic type of `storage` implements `Transactional`.
 	txnStorage, transactional := storage.(Transactional)
 	if transactional {
 		return txnStorage.BeginTX(ctx)

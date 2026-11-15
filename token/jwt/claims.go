@@ -22,14 +22,14 @@ type Claims interface {
 	Valid(opts ...ClaimValidationOption) (err error)
 }
 
-// Mapper is the interface used internally to map key-value pairs
+// Mapper is the interface used internally to map key-value pairs.
 type Mapper interface {
 	ToMap() map[string]any
 	Add(key string, value any)
 	Get(key string) any
 }
 
-// ToString will return a string representation of a map
+// ToString will return a string representation of a map.
 func ToString(i any) string {
 	if i == nil {
 		return ""
@@ -48,7 +48,7 @@ func ToString(i any) string {
 	return ""
 }
 
-// ToTime will try to convert a given input to a time.Time structure
+// ToTime will try to convert a given input to a time.Time structure.
 func ToTime(i any) time.Time {
 	if t, ok := i.(time.Time); ok {
 		return t
@@ -59,7 +59,7 @@ func ToTime(i any) time.Time {
 	return t
 }
 
-// Filter will filter out elements based on keys in a given input map na key-slice
+// Filter will filter out elements based on keys in a given input map na key-slice.
 func Filter(elements map[string]any, keys ...string) map[string]any {
 	result := Copy(elements)
 
@@ -70,7 +70,7 @@ func Filter(elements map[string]any, keys ...string) map[string]any {
 	return result
 }
 
-// Copy will copy all elements in a map and return a new representational map
+// Copy will copy all elements in a map and return a new representational map.
 func Copy(elements map[string]any) (result map[string]any) {
 	result = make(map[string]any, len(elements))
 

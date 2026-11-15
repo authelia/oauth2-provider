@@ -10,7 +10,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-// PushedAuthorizeResponse is the response object for PAR
+// PushedAuthorizeResponse is the response object for PAR.
 type PushedAuthorizeResponse struct {
 	RequestURI string `json:"request_uri"`
 	ExpiresIn  int    `json:"expires_in"`
@@ -18,47 +18,47 @@ type PushedAuthorizeResponse struct {
 	Extra      map[string]any
 }
 
-// GetRequestURI gets
+// GetRequestURI gets.
 func (a *PushedAuthorizeResponse) GetRequestURI() string {
 	return a.RequestURI
 }
 
-// SetRequestURI sets
+// SetRequestURI sets.
 func (a *PushedAuthorizeResponse) SetRequestURI(requestURI string) {
 	a.RequestURI = requestURI
 }
 
-// GetExpiresIn gets
+// GetExpiresIn gets.
 func (a *PushedAuthorizeResponse) GetExpiresIn() int {
 	return a.ExpiresIn
 }
 
-// SetExpiresIn sets
+// SetExpiresIn sets.
 func (a *PushedAuthorizeResponse) SetExpiresIn(seconds int) {
 	a.ExpiresIn = seconds
 }
 
-// GetHeader gets
+// GetHeader gets.
 func (a *PushedAuthorizeResponse) GetHeader() http.Header {
 	return a.Header
 }
 
-// AddHeader adds
+// AddHeader adds.
 func (a *PushedAuthorizeResponse) AddHeader(key, value string) {
 	a.Header.Add(key, value)
 }
 
-// SetExtra sets
+// SetExtra sets.
 func (a *PushedAuthorizeResponse) SetExtra(key string, value any) {
 	a.Extra[key] = value
 }
 
-// GetExtra gets
+// GetExtra gets.
 func (a *PushedAuthorizeResponse) GetExtra(key string) any {
 	return a.Extra[key]
 }
 
-// ToMap converts to a map
+// ToMap converts to a map.
 func (a *PushedAuthorizeResponse) ToMap() map[string]any {
 	a.Extra[consts.FormParameterRequestURI] = a.RequestURI
 	a.Extra[consts.AccessResponseExpiresIn] = a.ExpiresIn

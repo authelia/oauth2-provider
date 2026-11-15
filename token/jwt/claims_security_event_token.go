@@ -323,7 +323,7 @@ func (c *SecurityEventTokenClaims) ToMap() map[string]any {
 	return ret
 }
 
-// ToMapClaims will return a jwt-go MapClaims representation
+// ToMapClaims will return a jwt-go MapClaims representation.
 func (c SecurityEventTokenClaims) ToMapClaims() MapClaims {
 	return c.ToMap()
 }
@@ -331,7 +331,7 @@ func (c SecurityEventTokenClaims) ToMapClaims() MapClaims {
 // Add is a no-op as a SET has no extra claims.
 func (c *SecurityEventTokenClaims) Add(key string, value any) {}
 
-// Get will get a value from the claims map based on a given key
+// Get will get a value from the claims map based on a given key.
 func (c *SecurityEventTokenClaims) Get(key string) any {
 	return c.ToMap()[key]
 }

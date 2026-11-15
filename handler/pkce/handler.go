@@ -238,7 +238,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	// The code verifier must have enough entropy to make it impractical to guess.
 	// See: https://www.rfc-editor.org/rfc/rfc7636#section-4.1
 
-	// Validation
+	// Validation.
 	switch {
 	case nv < 43:
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must be at least 43 characters."))

@@ -47,7 +47,7 @@ func AccessTokenFromRequest(r *http.Request) string {
 
 	if len(split) != 2 || !strings.EqualFold(split[0], BearerAccessToken) {
 		// Nothing in Authorization header, try access_token
-		// Empty string returned if there's no such parameter
+		// Empty string returned if there's no such parameter.
 		if err := r.ParseForm(); err != nil {
 			return ""
 		}

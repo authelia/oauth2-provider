@@ -235,7 +235,7 @@ func (c *Handler) CheckRequest(ctx context.Context, request oauth2.AccessRequest
 	// Client authentication is optional.
 	// See: https://www.rfc-editor.org/rfc/rfc7523#section-2.1
 
-	// if client is authenticated, check grant types
+	// if client is authenticated, check grant types.
 	if (!c.CanSkipClientAuth(ctx, request) || isAuthenticatedClient(request.GetClient())) && !request.GetClient().GetGrantTypes().Has(consts.GrantTypeOAuthJWTBearer) {
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", consts.GrantTypeOAuthJWTBearer))
 	}

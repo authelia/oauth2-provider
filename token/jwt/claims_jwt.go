@@ -120,7 +120,7 @@ func (c *JWTClaims) WithScopeField(scopeField JWTScopeFieldEnum) JWTClaimsContai
 	return c
 }
 
-// ToMap will transform the headers to a map structure
+// ToMap will transform the headers to a map structure.
 func (c *JWTClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
@@ -309,7 +309,7 @@ func toNumericDate(v any) (date *NumericDate, err error) {
 	return nil, newError("value has invalid type", ErrInvalidType)
 }
 
-// Add will add a key-value pair to the extra field
+// Add will add a key-value pair to the extra field.
 func (c *JWTClaims) Add(key string, value any) {
 	if c.Extra == nil {
 		c.Extra = make(map[string]any)
@@ -318,17 +318,17 @@ func (c *JWTClaims) Add(key string, value any) {
 	c.Extra[key] = value
 }
 
-// Get will get a value from the extra field based on a given key
+// Get will get a value from the extra field based on a given key.
 func (c JWTClaims) Get(key string) any {
 	return c.ToMap()[key]
 }
 
-// ToMapClaims will return a jwt-go MapClaims representation
+// ToMapClaims will return a jwt-go MapClaims representation.
 func (c JWTClaims) ToMapClaims() MapClaims {
 	return c.ToMap()
 }
 
-// FromMapClaims will populate claims from a jwt-go MapClaims representation
+// FromMapClaims will populate claims from a jwt-go MapClaims representation.
 func (c *JWTClaims) FromMapClaims(mc MapClaims) {
 	c.FromMap(mc)
 }

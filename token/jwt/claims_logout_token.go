@@ -34,7 +34,7 @@ func NewLogoutTokenClaims(subject string, audience []string, sid string, extra m
 	return claims
 }
 
-// LogoutTokenClaims represent the claims used in open id connect requests
+// LogoutTokenClaims represent the claims used in open id connect requests.
 type LogoutTokenClaims struct {
 	JTI            string       `json:"jti"`
 	Issuer         string       `json:"iss"`
@@ -237,7 +237,7 @@ func (c *LogoutTokenClaims) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ToMap will transform the headers to a map structure
+// ToMap will transform the headers to a map structure.
 func (c *LogoutTokenClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
@@ -292,12 +292,12 @@ func (c *LogoutTokenClaims) ToMap() map[string]any {
 	return ret
 }
 
-// ToMapClaims will return a jwt-go MapClaims representation
+// ToMapClaims will return a jwt-go MapClaims representation.
 func (c LogoutTokenClaims) ToMapClaims() MapClaims {
 	return c.ToMap()
 }
 
-// Add will add a key-value pair to the extra field
+// Add will add a key-value pair to the extra field.
 func (c *LogoutTokenClaims) Add(key string, value any) {
 	if c.Extra == nil {
 		c.Extra = make(map[string]any)
@@ -306,7 +306,7 @@ func (c *LogoutTokenClaims) Add(key string, value any) {
 	c.Extra[key] = value
 }
 
-// Get will get a value from the extra field based on a given key
+// Get will get a value from the extra field based on a given key.
 func (c *LogoutTokenClaims) Get(key string) any {
 	return c.ToMap()[key]
 }

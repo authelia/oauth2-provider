@@ -28,7 +28,7 @@ func New() *Token {
 	}
 }
 
-// NewWithClaims creates an unverified Token with the given claims and signing method
+// NewWithClaims creates an unverified Token with the given claims and signing method.
 func NewWithClaims(alg jose.SignatureAlgorithm, claims MapClaims) *Token {
 	return &Token{
 		Claims:             claims,
@@ -69,7 +69,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 		return &Token{Claims: MapClaims(nil)}, &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
 	}
 
-	// creates an unsafe token
+	// creates an unsafe token.
 	if token, err = newToken(parsed, claims); err != nil {
 		return &Token{Claims: MapClaims(nil)}, err
 	}
@@ -81,7 +81,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 	var key any
 
 	if key, err = keyFunc(token); err != nil {
-		// keyFunc returned an error
+		// keyFunc returned an error.
 		if ve, ok := errors.AsType[*ValidationError](err); ok {
 			return token, ve
 		}
@@ -105,7 +105,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 
 	// Validate claims
 	// This validation is performed to be backwards compatible
-	// with jwt-go library behavior
+	// with jwt-go library behavior.
 	if err = claims.Valid(); err != nil {
 		if _, ok := errors.AsType[*ValidationError](err); !ok {
 			err = &ValidationError{Inner: err, Errors: ValidationErrorClaimsInvalid}
@@ -122,11 +122,11 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 // Token represents a JWT Token.
 type Token struct {
 	KeyID                string
-	SignatureAlgorithm   jose.SignatureAlgorithm // alg (JWS)
+	SignatureAlgorithm   jose.SignatureAlgorithm // alg (JWS).
 	EncryptionKeyID      string
-	KeyAlgorithm         jose.KeyAlgorithm         // alg (JWE)
-	ContentEncryption    jose.ContentEncryption    // enc (JWE)
-	CompressionAlgorithm jose.CompressionAlgorithm // zip (JWE)
+	KeyAlgorithm         jose.KeyAlgorithm         // alg (JWE).
+	ContentEncryption    jose.ContentEncryption    // enc (JWE).
+	CompressionAlgorithm jose.CompressionAlgorithm // zip (JWE).
 
 	Header    map[string]any
 	HeaderJWE map[string]any
@@ -139,7 +139,7 @@ type Token struct {
 }
 
 // IsSignatureValid informs if the token was verified against a given verification key
-// and claims are valid
+// and claims are valid.
 func (t *Token) IsSignatureValid() bool {
 	return t.valid
 }
@@ -298,7 +298,7 @@ func (t *Token) CompactSigned(k any) (tokenString, signature string, err error) 
 
 // CompactSignedString provides a compatible `jwt-go` Token.CompactSigned method
 //
-// > Get the complete, signed token
+// > Get the complete, signed token.
 func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 	if isUnsafeNoneMagicConstant(k) {
 		return unsignedToken(t)
@@ -518,7 +518,7 @@ func newToken(parsedToken *jwt.JSONWebToken, claims MapClaims) (*Token, error) {
 		return nil, &ValidationError{text: fmt.Sprintf("only one header supported, got %v", len(parsedToken.Headers)), Errors: ValidationErrorMalformed}
 	}
 
-	// copy headers
+	// copy headers.
 	h := parsedToken.Headers[0]
 	token.Header = map[string]any{
 		JSONWebTokenHeaderAlgorithm: h.Algorithm,

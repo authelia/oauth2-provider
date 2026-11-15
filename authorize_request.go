@@ -23,7 +23,7 @@ const (
 	ResponseModeJWT         = ResponseModeType(consts.ResponseModeJWT)
 )
 
-// AuthorizeRequest is an implementation of AuthorizeRequester
+// AuthorizeRequest is an implementation of AuthorizeRequester.
 type AuthorizeRequest struct {
 	ResponseTypes        Arguments        `json:"responseTypes" gorethink:"responseTypes"`
 	RedirectURI          *url.URL         `json:"redirectUri" gorethink:"redirectUri"`
@@ -44,8 +44,7 @@ func NewAuthorizeRequest() *AuthorizeRequest {
 		HandledResponseTypes: Arguments{},
 		Request:              *NewRequest(),
 		ResponseMode:         ResponseModeDefault,
-		// The redirect URL must be unset / nil for redirect detection to work properly:
-		// RedirectURI:          &url.URL{},
+		// The redirect URL must be unset / nil for redirect detection to work properly.
 	}
 }
 

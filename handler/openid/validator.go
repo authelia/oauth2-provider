@@ -130,7 +130,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect 1.0 request because the session subject is empty."))
 	}
 
-	// Adds a bit of wiggle room for timing issues
+	// Adds a bit of wiggle room for timing issues.
 	if claims.GetAuthTimeSafe().After(time.Now().UTC().Add(time.Second * 5)) {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect 1.0 request because authentication time is in the future."))
 	}
@@ -155,7 +155,6 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		}
 
 		if !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().After(rat) {
-			// !claims.AuthTime.Truncate(time.Second).Equal(claims.RequestedAt) && claims.AuthTime.Truncate(time.Second).Before(claims.RequestedAt) {
 			return nil, errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), rat))
 		}
 	}
@@ -176,7 +175,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 	tokenHint, err = v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenHintClient(request.GetClient()))
 
 	if ve, ok := errors.AsType[*jwt.ValidationError](err); ok && ve.Has(jwt.ValidationErrorExpired) {
-		// Expired tokens are ok
+		// Expired tokens are ok.
 	} else if err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding ID Token from id_token_hint parameter failed.").WithWrap(err).WithDebugError(err))
 	}

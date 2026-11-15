@@ -126,12 +126,12 @@ func (c *TxnTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context,
 	return c.issue(ctx, request, tokenType, response)
 }
 
-// CanSkipClientAuth indicates if client auth can be skipped
+// CanSkipClientAuth indicates if client auth can be skipped.
 func (c *TxnTokenTypeHandler) CanSkipClientAuth(_ context.Context, _ oauth2.AccessRequester) bool {
 	return false
 }
 
-// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled
+// CanHandleTokenEndpointRequest indicates if the token endpoint request can be handled.
 func (c *TxnTokenTypeHandler) CanHandleTokenEndpointRequest(_ context.Context, request oauth2.AccessRequester) bool {
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }

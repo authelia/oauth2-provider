@@ -37,7 +37,7 @@ func (d *DeviceAuthorizeResponse) GetDeviceCode() string {
 	return d.DeviceCode
 }
 
-// SetDeviceCode returns the response's user code
+// SetDeviceCode returns the response's user code.
 func (d *DeviceAuthorizeResponse) SetDeviceCode(code string) {
 	d.DeviceCode = code
 }
@@ -52,7 +52,7 @@ func (d *DeviceAuthorizeResponse) SetUserCode(code string) {
 	d.UserCode = code
 }
 
-// GetVerificationURI returns the response's verification uri
+// GetVerificationURI returns the response's verification uri.
 func (d *DeviceAuthorizeResponse) GetVerificationURI() string {
 	return d.VerificationURI
 }
@@ -62,7 +62,7 @@ func (d *DeviceAuthorizeResponse) SetVerificationURI(uri string) {
 	d.VerificationURI = uri
 }
 
-// GetVerificationURIComplete returns the response's complete verification uri if set
+// GetVerificationURIComplete returns the response's complete verification uri if set.
 func (d *DeviceAuthorizeResponse) GetVerificationURIComplete() string {
 	return d.VerificationURIComplete
 }
@@ -73,7 +73,7 @@ func (d *DeviceAuthorizeResponse) SetVerificationURIComplete(uri string) {
 	d.VerificationURIComplete = uri
 }
 
-// GetExpiresIn returns the response's device code and user code lifetime in seconds if set
+// GetExpiresIn returns the response's device code and user code lifetime in seconds if set.
 func (d *DeviceAuthorizeResponse) GetExpiresIn() int64 {
 	return d.ExpiresIn
 }
@@ -83,7 +83,7 @@ func (d *DeviceAuthorizeResponse) SetExpiresIn(seconds int64) {
 	d.ExpiresIn = seconds
 }
 
-// GetInterval returns the response's polling interval if set
+// GetInterval returns the response's polling interval if set.
 func (d *DeviceAuthorizeResponse) GetInterval() int {
 	return d.Interval
 }

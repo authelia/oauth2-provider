@@ -32,7 +32,7 @@ const (
 	// CIBAAuthRequestID represents the CIBA auth_req_id.
 	CIBAAuthRequestID TokenType = consts.FormParameterAuthReqID
 
-	// PushedAuthorizeRequestContext represents the PAR context object
+	// PushedAuthorizeRequestContext represents the PAR context object.
 	PushedAuthorizeRequestContext TokenType = "par_context"
 
 	AuthorizeCode TokenType = "authorize_code"
@@ -116,7 +116,7 @@ type Provider interface {
 	// WriteAccessError writes an access request error response.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc6749#section-5.2 (everything)
+	// * https://datatracker.ietf.org/doc/html/rfc6749#section-5.2 (everything).
 	WriteAccessError(ctx context.Context, rw http.ResponseWriter, request AccessRequester, err error)
 
 	// WriteAccessResponse writes the access response.
@@ -172,16 +172,16 @@ type Provider interface {
 	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-7.2.3
 	WriteSSFConfiguration(ctx context.Context, rw http.ResponseWriter, configuration *SSFConfiguration)
 
-	// NewPushedAuthorizeRequest validates the request and produces an AuthorizeRequester object that can be stored
+	// NewPushedAuthorizeRequest validates the request and produces an AuthorizeRequester object that can be stored.
 	NewPushedAuthorizeRequest(ctx context.Context, r *http.Request) (requester AuthorizeRequester, err error)
 
-	// NewPushedAuthorizeResponse executes the handlers and builds the response
+	// NewPushedAuthorizeResponse executes the handlers and builds the response.
 	NewPushedAuthorizeResponse(ctx context.Context, request AuthorizeRequester, session Session) (responder PushedAuthorizeResponder, err error)
 
-	// WritePushedAuthorizeResponse writes the PAR response
+	// WritePushedAuthorizeResponse writes the PAR response.
 	WritePushedAuthorizeResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, responder PushedAuthorizeResponder)
 
-	// WritePushedAuthorizeError writes the PAR error
+	// WritePushedAuthorizeError writes the PAR error.
 	WritePushedAuthorizeError(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, err error)
 
 	// NewRFC862DeviceAuthorizeRequest validate the OAuth 2.0 Device Authorization Flow Request
@@ -278,46 +278,46 @@ type Provider interface {
 	// NewRFC7591ClientRegistrationRequest validates the request and produces a ClientRegistrationRequester.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.1 (everything MUST be implemented)
+	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.1 (everything MUST be implemented).
 	NewRFC7591ClientRegistrationRequest(ctx context.Context, r *http.Request) (requester ClientRegistrationRequester, err error)
 
 	// NewRFC7591ClientRegistrationResponse executes the configured client registration endpoint handlers and builds
 	// the response.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1 (everything MUST be implemented)
+	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1 (everything MUST be implemented).
 	NewRFC7591ClientRegistrationResponse(ctx context.Context, requester ClientRegistrationRequester) (responder ClientRegistrationResponder, err error)
 
 	// WriteRFC7591ClientRegistrationResponse writes the client registration response with a 201 (Created) status.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1 (everything MUST be implemented)
+	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1 (everything MUST be implemented).
 	WriteRFC7591ClientRegistrationResponse(ctx context.Context, rw http.ResponseWriter, requester ClientRegistrationRequester, responder ClientRegistrationResponder)
 
 	// WriteRFC7591ClientRegistrationError writes a client registration endpoint error response.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.2 (everything MUST be implemented)
+	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.2 (everything MUST be implemented).
 	WriteRFC7591ClientRegistrationError(ctx context.Context, rw http.ResponseWriter, requester ClientRegistrationRequester, err error)
 
 	// NewRFC7592ClientConfigurationRequest validates the request and produces a ClientConfigurationRequester.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc7592#section-2 (everything MUST be implemented)
+	// * https://datatracker.ietf.org/doc/html/rfc7592#section-2 (everything MUST be implemented).
 	NewRFC7592ClientConfigurationRequest(ctx context.Context, r *http.Request) (requester ClientConfigurationRequester, err error)
 
 	// NewRFC7592ClientConfigurationResponse executes the configured client configuration endpoint handlers and
 	// builds the response.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc7592#section-2 (everything MUST be implemented)
+	// * https://datatracker.ietf.org/doc/html/rfc7592#section-2 (everything MUST be implemented).
 	NewRFC7592ClientConfigurationResponse(ctx context.Context, requester ClientConfigurationRequester) (responder ClientConfigurationResponder, err error)
 
 	// WriteRFC7592ClientConfigurationResponse writes the client configuration response. A 204 (No Content) status,
 	// written for a successful DELETE, carries no body.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc7592#section-2.3 (everything MUST be implemented)
+	// * https://datatracker.ietf.org/doc/html/rfc7592#section-2.3 (everything MUST be implemented).
 	WriteRFC7592ClientConfigurationResponse(ctx context.Context, rw http.ResponseWriter, requester ClientConfigurationRequester, responder ClientConfigurationResponder)
 
 	// WriteRFC7592ClientConfigurationError writes a client configuration endpoint error response, mapping to the
@@ -325,7 +325,7 @@ type Provider interface {
 	// invalid registration access token, 404 for an unknown client_id, and 405 for an unsupported method.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc7592#section-3 (everything MUST be implemented)
+	// * https://datatracker.ietf.org/doc/html/rfc7592#section-3 (everything MUST be implemented).
 	WriteRFC7592ClientConfigurationError(ctx context.Context, rw http.ResponseWriter, requester ClientConfigurationRequester, err error)
 
 	// NewRPInitiatedLogoutRequest parses and validates a request to the OpenID Connect end session endpoint. It does
@@ -334,7 +334,7 @@ type Provider interface {
 	//
 	// The following specs must be considered in any implementation of this method:
 	// * https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout (everything MUST be implemented)
-	// * https://openid.net/specs/openid-connect-rpinitiated-1_0.html#ValidationAndErrorHandling (everything MUST be implemented)
+	// * https://openid.net/specs/openid-connect-rpinitiated-1_0.html#ValidationAndErrorHandling (everything MUST be implemented).
 	NewRPInitiatedLogoutRequest(ctx context.Context, r *http.Request) (requester RPInitiatedLogoutRequester, err error)
 
 	// SendBackChannelLogout delivers a Logout Token to each client supplied by the requester. Delivery is best effort:
@@ -343,7 +343,7 @@ type Provider interface {
 	//
 	// The following specs must be considered in any implementation of this method:
 	// * https://openid.net/specs/openid-connect-backchannel-1_0.html#LogoutToken (everything MUST be implemented)
-	// * https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest (everything MUST be implemented)
+	// * https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest (everything MUST be implemented).
 	SendBackChannelLogout(ctx context.Context, requester BackChannelLogoutRequester) (results []BackChannelLogoutResult, err error)
 
 	// GenerateSecurityEventToken returns a signed Security Event Token carrying the event for the subject, issued by
@@ -352,7 +352,7 @@ type Provider interface {
 	// does not deliver the token.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://www.rfc-editor.org/rfc/rfc8417.html#section-2 (everything MUST be implemented)
+	// * https://www.rfc-editor.org/rfc/rfc8417.html#section-2 (everything MUST be implemented).
 	GenerateSecurityEventToken(ctx context.Context, stream *SSFStream, subject *jwt.SubjectIdentifier, event jwt.SecurityEvent, jti, txn string) (token, usedJTI string, err error)
 
 	// PushSecurityEventToken makes one RFC 8935 push attempt of the Security Event Token to the delivery endpoint and
@@ -439,7 +439,7 @@ type Provider interface {
 	// registered handlers and the configuration, omitting every extension whose feature is disabled.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://datatracker.ietf.org/doc/html/rfc8414#section-2 (everything MUST be implemented)
+	// * https://datatracker.ietf.org/doc/html/rfc8414#section-2 (everything MUST be implemented).
 	NewOAuth2AuthorizationServerMetadata(ctx context.Context) (metadata *OAuth2AuthorizationServerMetadata, err error)
 
 	// NewOpenIDConnectProviderMetadata builds the OpenID Provider Metadata document from the OAuth 2.0 Authorization
@@ -447,7 +447,7 @@ type Provider interface {
 	// disabled. It returns ErrDiscoveryOpenIDConnectNotRegistered when no OpenID Connect handler is registered.
 	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata (everything MUST be implemented)
+	// * https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata (everything MUST be implemented).
 	NewOpenIDConnectProviderMetadata(ctx context.Context) (metadata *OpenIDConnectProviderMetadata, err error)
 
 	// WriteDiscoveryResponse writes a discovery metadata document as a 200 JSON response, or a 500 without a body when
@@ -615,21 +615,21 @@ type RefreshTokenAccessRequester interface {
 
 // AuthorizeRequester is an authorize endpoint's request context.
 type AuthorizeRequester interface {
-	// GetResponseTypes returns the requested response types
+	// GetResponseTypes returns the requested response types.
 	GetResponseTypes() (responseTypes Arguments)
 
 	// SetResponseTypeHandled marks a response_type (e.g. token or code) as handled indicating that the response type
 	// is supported.
 	SetResponseTypeHandled(responseType string)
 
-	// DidHandleAllResponseTypes returns if all requested response types have been handled correctly
+	// DidHandleAllResponseTypes returns if all requested response types have been handled correctly.
 	DidHandleAllResponseTypes() (didHandle bool)
 
 	// GetRedirectURI returns the requested redirect URI.
 	GetRedirectURI() (uri *url.URL)
 
 	// IsRedirectURIValid returns false if the redirect is not rfc-conform (i.e. missing client, not on white list,
-	// or malformed)
+	// or malformed).
 	IsRedirectURIValid() (isValid bool)
 
 	// GetState returns the request's state.
@@ -722,7 +722,7 @@ type AuthorizeResponder interface {
 
 // PushedAuthorizeResponder is the response object for PAR.
 type PushedAuthorizeResponder interface {
-	// GetRequestURI returns the request_uri
+	// GetRequestURI returns the request_uri.
 	GetRequestURI() (uri string)
 
 	// SetRequestURI sets the request_uri.

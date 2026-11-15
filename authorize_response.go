@@ -11,7 +11,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-// AuthorizeResponse is an implementation of AuthorizeResponder
+// AuthorizeResponse is an implementation of AuthorizeResponder.
 type AuthorizeResponse struct {
 	Header     http.Header
 	Parameters url.Values

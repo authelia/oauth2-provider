@@ -88,7 +88,7 @@ func (c *defaultMessageCatalog) GetLangFromRequest(r *http.Request) language.Tag
 func (c *defaultMessageCatalog) makeMatcher() {
 	result := []language.Tag{language.English}
 	defLangs := message.DefaultCatalog.Languages()
-	// remove "en" if was already in the list of languages
+	// remove "en" if was already in the list of languages.
 	for i, t := range defLangs {
 		if t == language.English {
 			result = append(result, defLangs[:i]...)

@@ -402,7 +402,7 @@ type RedirectFragmentGuardProvider interface {
 
 type OmitRedirectScopeParamProvider interface {
 	// GetOmitRedirectScopeParam must be set to true if the scope query param is to be omitted
-	// in the authorization's redirect URI
+	// in the authorization's redirect URI.
 	GetOmitRedirectScopeParam(ctx context.Context) (omit bool)
 }
 

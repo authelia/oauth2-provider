@@ -72,7 +72,7 @@ func (c *JARMClaims) Valid(opts ...ClaimValidationOption) (err error) {
 	return nil
 }
 
-// ToMap will transform the headers to a map structure
+// ToMap will transform the headers to a map structure.
 func (c *JARMClaims) ToMap() map[string]any {
 	var ret = Copy(c.Extra)
 
@@ -109,12 +109,12 @@ func (c *JARMClaims) ToMap() map[string]any {
 	return ret
 }
 
-// ToMapClaims will return a jwt-go MapClaims representation
+// ToMapClaims will return a jwt-go MapClaims representation.
 func (c JARMClaims) ToMapClaims() MapClaims {
 	return c.ToMap()
 }
 
-// FromMap will set the claims based on a mapping
+// FromMap will set the claims based on a mapping.
 func (c *JARMClaims) FromMap(m map[string]any) {
 	c.Extra = make(map[string]any)
 	for k, v := range m {
@@ -141,12 +141,12 @@ func (c *JARMClaims) FromMap(m map[string]any) {
 	}
 }
 
-// FromMapClaims will populate claims from a jwt-go MapClaims representation
+// FromMapClaims will populate claims from a jwt-go MapClaims representation.
 func (c *JARMClaims) FromMapClaims(mc MapClaims) {
 	c.FromMap(mc)
 }
 
-// Add will add a key-value pair to the extra field
+// Add will add a key-value pair to the extra field.
 func (c *JARMClaims) Add(key string, value any) {
 	if c.Extra == nil {
 		c.Extra = make(map[string]any)
@@ -155,7 +155,7 @@ func (c *JARMClaims) Add(key string, value any) {
 	c.Extra[key] = value
 }
 
-// Get will get a value from the extra field based on a given key
+// Get will get a value from the extra field based on a given key.
 func (c JARMClaims) Get(key string) any {
 	return c.ToMap()[key]
 }

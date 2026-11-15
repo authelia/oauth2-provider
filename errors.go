@@ -363,37 +363,36 @@ var (
 )
 
 const (
-	errInvalidRequestURIName       = "invalid_request_uri"
-	errInvalidRequestObjectName    = "invalid_request_object"
-	errConsentRequiredName         = "consent_required"
-	errInteractionRequiredName     = "interaction_required"
-	errLoginRequiredName           = "login_required"
-	errRequestUnauthorizedName     = "request_unauthorized"
-	errInvalidRequestName          = "invalid_request"
-	errUnauthorizedClientName      = "unauthorized_client"
-	errAccessDeniedName            = "access_denied"
-	errUnsupportedResponseTypeName = "unsupported_response_type"
-	errUnsupportedResponseModeName = "unsupported_response_mode"
-	errInvalidScopeName            = "invalid_scope"
-	errInsufficientScopeName       = "insufficient_scope"
-	errServerErrorName             = "server_error"
-	errTemporarilyUnavailableName  = "temporarily_unavailable"
-	errUnsupportedGrantTypeName    = "unsupported_grant_type"
-	errInvalidGrantName            = "invalid_grant"
-	errInvalidClientName           = "invalid_client"
-	errNotFoundName                = "not_found"
-	errConflictName                = "conflict"
-	errTooManyRequestsName         = "too_many_requests"
-	errInvalidStateName            = "invalid_state"
-	errMisconfigurationName        = "misconfiguration"
-	errInsufficientEntropyName     = "insufficient_entropy"
-	errInvalidTokenFormatName      = "invalid_token"
-	errTokenSignatureMismatchName  = "token_signature_mismatch"
-	errTokenExpiredName            = "invalid_token" // https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
-	errScopeNotGrantedName         = "scope_not_granted"
-	errTokenClaimName              = "token_claim"
-	errTokenInactiveName           = "token_inactive"
-	// errAuthorizationCodeInactiveName = "authorization_code_inactive"
+	errInvalidRequestURIName           = "invalid_request_uri"
+	errInvalidRequestObjectName        = "invalid_request_object"
+	errConsentRequiredName             = "consent_required"
+	errInteractionRequiredName         = "interaction_required"
+	errLoginRequiredName               = "login_required"
+	errRequestUnauthorizedName         = "request_unauthorized"
+	errInvalidRequestName              = "invalid_request"
+	errUnauthorizedClientName          = "unauthorized_client"
+	errAccessDeniedName                = "access_denied"
+	errUnsupportedResponseTypeName     = "unsupported_response_type"
+	errUnsupportedResponseModeName     = "unsupported_response_mode"
+	errInvalidScopeName                = "invalid_scope"
+	errInsufficientScopeName           = "insufficient_scope"
+	errServerErrorName                 = "server_error"
+	errTemporarilyUnavailableName      = "temporarily_unavailable"
+	errUnsupportedGrantTypeName        = "unsupported_grant_type"
+	errInvalidGrantName                = "invalid_grant"
+	errInvalidClientName               = "invalid_client"
+	errNotFoundName                    = "not_found"
+	errConflictName                    = "conflict"
+	errTooManyRequestsName             = "too_many_requests"
+	errInvalidStateName                = "invalid_state"
+	errMisconfigurationName            = "misconfiguration"
+	errInsufficientEntropyName         = "insufficient_entropy"
+	errInvalidTokenFormatName          = "invalid_token"
+	errTokenSignatureMismatchName      = "token_signature_mismatch"
+	errTokenExpiredName                = "invalid_token" // https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
+	errScopeNotGrantedName             = "scope_not_granted"
+	errTokenClaimName                  = "token_claim"
+	errTokenInactiveName               = "token_inactive"
 	errUnknownErrorName                = "error"
 	errRequestNotSupportedName         = "request_not_supported"
 	errRequestURINotSupportedName      = "request_uri_not_supported"
@@ -460,7 +459,7 @@ type (
 		exposeDebug     bool
 		challenge       string
 
-		// Fields for globalization
+		// Fields for globalization.
 		hintIDField string
 		hintArgs    []any
 		catalog     i18n.MessageCatalog
@@ -622,7 +621,7 @@ func (e *RFC6749Error) WithHint(hint string) *RFC6749Error {
 	return &err
 }
 
-// WithHintIDOrDefaultf accepts the ID of the hint message
+// WithHintIDOrDefaultf accepts the ID of the hint message.
 func (e *RFC6749Error) WithHintIDOrDefaultf(id string, def string, args ...any) *RFC6749Error {
 	err := *e
 	err.hintIDField = id

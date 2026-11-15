@@ -91,11 +91,11 @@ func TestOIDCKeyBindingDeviceFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, verifyResp.StatusCode, "device verify response: %s", verifyBody)
 
-	proof := signDPoPProof(t, key, http.MethodPost, ts.URL+tokenRelativePath, map[string]any{
+	proof := signDPoPProof(t, key, ts.URL+tokenRelativePath, map[string]any{
 		jwt.ClaimDPoPCodeHash: oidckb.CodeHash(device.DeviceCode),
 	})
 
-	status, token, errBody := postOIDCKBToken(t, ts, clientID, oidckbClientSecret, url.Values{
+	status, token, errBody := postOIDCKBToken(t, ts, clientID, url.Values{
 		consts.FormParameterGrantType:  {consts.GrantTypeOAuthDeviceCode},
 		consts.FormParameterDeviceCode: {device.DeviceCode},
 	}, proof)
@@ -110,9 +110,9 @@ func TestOIDCKeyBindingRefreshPreservesConfirmation(t *testing.T) {
 	flow := runOIDCKeyBindingCodeFlow(t, true, []string{consts.ScopeOpenID, consts.ScopeBoundKey, consts.ScopeOffline}, true)
 	require.NotEmpty(t, flow.refreshToken)
 
-	proof := signDPoPProof(t, flow.key, http.MethodPost, flow.ts.URL+tokenRelativePath, nil)
+	proof := signDPoPProof(t, flow.key, flow.ts.URL+tokenRelativePath, nil)
 
-	status, refreshed, errBody := postOIDCKBToken(t, flow.ts, flow.clientID, oidckbClientSecret, url.Values{
+	status, refreshed, errBody := postOIDCKBToken(t, flow.ts, flow.clientID, url.Values{
 		consts.FormParameterGrantType:    {consts.GrantTypeRefreshToken},
 		consts.FormParameterRefreshToken: {flow.refreshToken},
 	}, proof)
@@ -134,9 +134,9 @@ func TestOIDCKeyBindingNarrowedRefreshPreservesConfirmation(t *testing.T) {
 	flow := runOIDCKeyBindingCodeFlow(t, true, []string{consts.ScopeOpenID, consts.ScopeBoundKey, consts.ScopeOffline}, true)
 	require.NotEmpty(t, flow.refreshToken)
 
-	proof := signDPoPProof(t, flow.key, http.MethodPost, flow.ts.URL+tokenRelativePath, nil)
+	proof := signDPoPProof(t, flow.key, flow.ts.URL+tokenRelativePath, nil)
 
-	status, body, _ := postOIDCKBToken(t, flow.ts, flow.clientID, oidckbClientSecret, url.Values{
+	status, body, _ := postOIDCKBToken(t, flow.ts, flow.clientID, url.Values{
 		consts.FormParameterGrantType:    {consts.GrantTypeRefreshToken},
 		consts.FormParameterRefreshToken: {flow.refreshToken},
 		consts.FormParameterScope:        {consts.ScopeOpenID},
@@ -173,9 +173,9 @@ func TestOIDCKeyBindingPlainDPoPClientCanStillRefresh(t *testing.T) {
 
 	requireNoConfirmation(t, flow.idTokenKey, flow.idToken)
 
-	proof := signDPoPProof(t, flow.key, http.MethodPost, flow.ts.URL+tokenRelativePath, nil)
+	proof := signDPoPProof(t, flow.key, flow.ts.URL+tokenRelativePath, nil)
 
-	status, refreshed, errBody := postOIDCKBToken(t, flow.ts, flow.clientID, oidckbClientSecret, url.Values{
+	status, refreshed, errBody := postOIDCKBToken(t, flow.ts, flow.clientID, url.Values{
 		consts.FormParameterGrantType:    {consts.GrantTypeRefreshToken},
 		consts.FormParameterRefreshToken: {flow.refreshToken},
 	}, proof)
@@ -312,7 +312,7 @@ func newDPoPProofKey(t *testing.T) *jose.JSONWebKey {
 	return &jose.JSONWebKey{Key: priv, Algorithm: string(jose.ES256)}
 }
 
-func signDPoPProof(t *testing.T, key *jose.JSONWebKey, method, url string, extra map[string]any) string {
+func signDPoPProof(t *testing.T, key *jose.JSONWebKey, url string, extra map[string]any) string {
 	t.Helper()
 
 	signer, err := jose.NewSigner(
@@ -323,7 +323,7 @@ func signDPoPProof(t *testing.T, key *jose.JSONWebKey, method, url string, extra
 
 	claims := map[string]any{
 		jwt.ClaimJWTID:      fmt.Sprintf("oidckb-proof-%d", oidckbProofSeq.Add(1)),
-		jwt.ClaimHTTPMethod: method,
+		jwt.ClaimHTTPMethod: http.MethodPost,
 		jwt.ClaimHTTPURI:    url,
 		jwt.ClaimIssuedAt:   time.Now().Unix(),
 	}
@@ -338,14 +338,14 @@ func signDPoPProof(t *testing.T, key *jose.JSONWebKey, method, url string, extra
 	return raw
 }
 
-func postOIDCKBToken(t *testing.T, ts *httptest.Server, clientID, clientSecret string, form url.Values, dpopProof string) (status int, token oidckbTokenResponse, errBody oidckbErrorResponse) {
+func postOIDCKBToken(t *testing.T, ts *httptest.Server, clientID string, form url.Values, dpopProof string) (status int, token oidckbTokenResponse, errBody oidckbErrorResponse) {
 	t.Helper()
 
 	req, err := http.NewRequest(http.MethodPost, ts.URL+tokenRelativePath, strings.NewReader(form.Encode()))
 	require.NoError(t, err)
 
 	req.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
-	req.SetBasicAuth(clientID, clientSecret)
+	req.SetBasicAuth(clientID, oidckbClientSecret)
 
 	if dpopProof != "" {
 		req.Header.Set(consts.HeaderDPoP, dpopProof)
@@ -470,11 +470,11 @@ func runOIDCKeyBindingCodeFlow(t *testing.T, oidcKeyBindingEnabled bool, scopes 
 	code := resp.Request.URL.Query().Get("code")
 	require.NotEmpty(t, code)
 
-	proof := signDPoPProof(t, key, http.MethodPost, ts.URL+tokenRelativePath, map[string]any{
+	proof := signDPoPProof(t, key, ts.URL+tokenRelativePath, map[string]any{
 		jwt.ClaimDPoPCodeHash: oidckb.CodeHash(code),
 	})
 
-	status, token, errBody := postOIDCKBToken(t, ts, clientID, oidckbClientSecret, url.Values{
+	status, token, errBody := postOIDCKBToken(t, ts, clientID, url.Values{
 		consts.FormParameterGrantType:         {consts.GrantTypeAuthorizationCode},
 		consts.FormParameterAuthorizationCode: {code},
 		consts.FormParameterRedirectURI:       {ts.URL + "/callback"},

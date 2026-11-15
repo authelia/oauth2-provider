@@ -166,7 +166,7 @@ func TestPushDPoPBinding(t *testing.T) {
 			jkt, err := jwt.ThumbprintJWK(&pub)
 			require.NoError(t, err)
 
-			id := flow.authenticate(t, cibaPushClientID, cibaPushOptions(&cibaRequestOptions{dpop: signDPoPProof(t, key, http.MethodPost, flow.ts.URL+"/bc-authorize", nil)}))
+			id := flow.authenticate(t, cibaPushClientID, cibaPushOptions(&cibaRequestOptions{dpop: signDPoPProof(t, key, flow.ts.URL+"/bc-authorize", nil)}))
 
 			flow.approve(t)
 

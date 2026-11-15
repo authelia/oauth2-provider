@@ -340,7 +340,7 @@ func newFAPI2Config() *oauth2.Config {
 	}
 }
 
-func composeFAPI2(t *testing.T, config *oauth2.Config, extra ...Factory) oauth2.Provider {
+func composeFAPI2(t *testing.T, config *oauth2.Config, extra ...Factory) {
 	t.Helper()
 
 	key := gen.MustRSAKey()
@@ -366,7 +366,7 @@ func composeFAPI2(t *testing.T, config *oauth2.Config, extra ...Factory) oauth2.
 		RFC8705Factory,
 	}, extra...)
 
-	return Compose(
+	Compose(
 		config,
 		storage.NewMemoryStore(),
 		&CommonStrategy{

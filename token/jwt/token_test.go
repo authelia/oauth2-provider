@@ -683,7 +683,7 @@ func TestParser_Parse(t *testing.T) {
 func TestParse(t *testing.T) {
 	signingKey := parseRSAPrivateKeyFromPEM(defaultPrivateKeyPEM)
 	pubKey := parseRSAPublicKeyFromPEM(defaultPubKeyPEM)
-	keyFunc := func(*Token) (any, error) { return pubKey, nil }
+	keyFunc := func(*Token) (any, error) { return pubKey, nil } //nolint:unparam // Keyfunc signature is fixed by the API
 
 	t.Run("ShouldParseValidToken", func(t *testing.T) {
 		raw := makeSampleToken(MapClaims{"foo": "bar"}, jose.RS256, signingKey)
@@ -703,7 +703,7 @@ func TestParse(t *testing.T) {
 func TestParseCustom(t *testing.T) {
 	signingKey := parseRSAPrivateKeyFromPEM(defaultPrivateKeyPEM)
 	pubKey := parseRSAPublicKeyFromPEM(defaultPubKeyPEM)
-	keyFunc := func(*Token) (any, error) { return pubKey, nil }
+	keyFunc := func(*Token) (any, error) { return pubKey, nil } //nolint:unparam // Keyfunc signature is fixed by the API
 
 	t.Run("ShouldParseWithRS256Restricted", func(t *testing.T) {
 		raw := makeSampleToken(MapClaims{"foo": "bar"}, jose.RS256, signingKey)

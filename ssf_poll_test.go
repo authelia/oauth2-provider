@@ -36,11 +36,11 @@ func (h *ssfHandlerHarness) newPollRequest(client, method, contentType, body str
 	return r
 }
 
-func (h *ssfHandlerHarness) parsePoll(client, method, contentType, body, streamID string) (*SSFPollRequest, error) {
-	return h.provider.NewSSFPollRequest(context.Background(), h.newPollRequest(client, method, contentType, body), &DefaultSession{}, streamID)
+func (h *ssfHandlerHarness) parsePoll(contentType, body, streamID string) (*SSFPollRequest, error) {
+	return h.provider.NewSSFPollRequest(context.Background(), h.newPollRequest("a", http.MethodPost, contentType, body), &DefaultSession{}, streamID)
 }
 
-func (h *ssfHandlerHarness) doPoll(client, method, contentType, body, streamID string, sets map[string]string, more bool) *httptest.ResponseRecorder {
+func (h *ssfHandlerHarness) doPoll(client, method, contentType, body, streamID string) *httptest.ResponseRecorder {
 	r := h.newPollRequest(client, method, contentType, body)
 	ctx := context.Background()
 	rw := httptest.NewRecorder()
@@ -51,7 +51,7 @@ func (h *ssfHandlerHarness) doPoll(client, method, contentType, body, streamID s
 		return rw
 	}
 
-	h.provider.WriteSSFPollResponse(ctx, rw, sets, more)
+	h.provider.WriteSSFPollResponse(ctx, rw, nil, false)
 
 	return rw
 }
@@ -65,7 +65,7 @@ func TestSSFPoll(t *testing.T) {
 	const ack = `{"ack":["3d0c3cf797584bd193bd0fb1bd4e7d30"],"setErrs":{"4d3559ec67504aaba65d40b0363faad8":{"err":"authentication_failed","description":"The SET could not be authenticated"}},"returnImmediately":true}`
 
 	t.Run("AckAndSetErrs", func(t *testing.T) {
-		request, err := h.parsePoll("a", http.MethodPost, "application/json", ack, id)
+		request, err := h.parsePoll("application/json", ack, id)
 		require.NoError(t, err)
 
 		assert.Equal(t, id, request.Stream.StreamID)
@@ -76,7 +76,7 @@ func TestSSFPoll(t *testing.T) {
 	})
 
 	t.Run("AcknowledgeOnlyMaxEventsZero", func(t *testing.T) {
-		request, err := h.parsePoll("a", http.MethodPost, "application/json", `{"ack":["4d3559ec67504aaba65d40b0363faad8","3d0c3cf797584bd193bd0fb1bd4e7d30"],"maxEvents":0,"returnImmediately":true}`, id)
+		request, err := h.parsePoll("application/json", `{"ack":["4d3559ec67504aaba65d40b0363faad8","3d0c3cf797584bd193bd0fb1bd4e7d30"],"maxEvents":0,"returnImmediately":true}`, id)
 		require.NoError(t, err)
 
 		require.NotNil(t, request.MaxEvents)
@@ -85,7 +85,7 @@ func TestSSFPoll(t *testing.T) {
 	})
 
 	t.Run("MaxEventsAbsent", func(t *testing.T) {
-		request, err := h.parsePoll("a", http.MethodPost, "application/json", `{}`, id)
+		request, err := h.parsePoll("application/json", `{}`, id)
 		require.NoError(t, err)
 
 		assert.Nil(t, request.MaxEvents)
@@ -95,19 +95,19 @@ func TestSSFPoll(t *testing.T) {
 	})
 
 	t.Run("EmptyObject", func(t *testing.T) {
-		_, err := h.parsePoll("a", http.MethodPost, "application/json", `{}`, id)
+		_, err := h.parsePoll("application/json", `{}`, id)
 		require.NoError(t, err)
 	})
 
 	t.Run("EmptyBodyJSON", func(t *testing.T) {
-		request, err := h.parsePoll("a", http.MethodPost, "application/json", ``, id)
+		request, err := h.parsePoll("application/json", ``, id)
 		require.NoError(t, err)
 
 		assert.Nil(t, request.MaxEvents)
 	})
 
 	t.Run("EmptyBodyNoContentType", func(t *testing.T) {
-		request, err := h.parsePoll("a", http.MethodPost, "", ``, id)
+		request, err := h.parsePoll("", ``, id)
 		require.NoError(t, err)
 
 		assert.Equal(t, id, request.Stream.StreamID)
@@ -118,7 +118,7 @@ func TestSSFPoll(t *testing.T) {
 			require.NoError(t, h.store.UpdateSSFStreamStatus(context.Background(), "a", id, status, ""))
 			require.Equal(t, status, h.stored(t, "a", id).Status)
 
-			_, err := h.parsePoll("a", http.MethodPost, "application/json", `{}`, id)
+			_, err := h.parsePoll("application/json", `{}`, id)
 			assert.NoError(t, err, status)
 		}
 
@@ -156,7 +156,7 @@ func TestSSFPoll(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run("Reject"+tc.name, func(t *testing.T) {
-			rw := h.doPoll(tc.client, tc.method, tc.contentType, tc.body, tc.streamID, nil, false)
+			rw := h.doPoll(tc.client, tc.method, tc.contentType, tc.body, tc.streamID)
 
 			assert.Equal(t, tc.status, rw.Code, rw.Body.String())
 			assert.Equal(t, "no-store", rw.Header().Get("Cache-Control"))
@@ -175,8 +175,8 @@ func TestSSFPoll(t *testing.T) {
 	}
 
 	t.Run("OtherClientIdenticalToUnknown", func(t *testing.T) {
-		other := h.doPoll("b", http.MethodPost, "application/json", `{}`, id, nil, false)
-		unknown := h.doPoll("b", http.MethodPost, "application/json", `{}`, "nope", nil, false)
+		other := h.doPoll("b", http.MethodPost, "application/json", `{}`, id)
+		unknown := h.doPoll("b", http.MethodPost, "application/json", `{}`, "nope")
 
 		assert.Equal(t, http.StatusNotFound, other.Code)
 		assert.Equal(t, unknown.Code, other.Code)
@@ -190,7 +190,7 @@ func TestSSFPollPolicy(t *testing.T) {
 
 	h.config.Policy = ssfHandlerPolicy{err: errors.New("operator disabled")}
 
-	rw := h.doPoll("a", http.MethodPost, "application/json", `{"ack":["x"]}`, id, nil, false)
+	rw := h.doPoll("a", http.MethodPost, "application/json", `{"ack":["x"]}`, id)
 
 	assert.Equal(t, http.StatusForbidden, rw.Code)
 	assert.Contains(t, rw.Body.String(), `"err":"access_denied"`)

@@ -49,7 +49,7 @@ func TestValidateDPoPProofRejectsUnconfiguredURL(t *testing.T) {
 }
 
 func TestHandlerBindAccessRequestAcceptsConfiguredTokenURL(t *testing.T) {
-	h, _, cfg := newTestHandler(false)
+	h, cfg := newTestHandler(false)
 	cfg.urls = oauth2.EndpointURLs{Token: "https://op/token", MutualTLSAliases: oauth2.RFC8705MutualTLSEndpointAliases{Token: "https://mtls.op/token"}}
 
 	for _, htu := range []string{"https://op/token", "https://mtls.op/token"} {
@@ -60,7 +60,7 @@ func TestHandlerBindAccessRequestAcceptsConfiguredTokenURL(t *testing.T) {
 		ar := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
 		ar.Client = &oauth2.DefaultClient{}
 
-		require.NoError(t, h.BindAccessRequest(ctxWithDPoP(http.MethodPost, "http://internal:8080/token", raw), ar), htu)
+		require.NoError(t, h.BindAccessRequest(ctxWithDPoP("http://internal:8080/token", raw), ar), htu)
 	}
 }
 

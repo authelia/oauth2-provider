@@ -514,7 +514,7 @@ func TestAuthenticateClientMTLSRequiresVerifiedChain(t *testing.T) {
 
 	form := url.Values{consts.FormParameterClientID: []string{"test"}}
 
-	newStrategy := func(method string, client Client) *DefaultClientAuthenticationStrategy {
+	newStrategy := func(client Client) *DefaultClientAuthenticationStrategy {
 		store := newMTLSClientStore()
 		store.clients["test"] = client
 
@@ -548,7 +548,7 @@ func TestAuthenticateClientMTLSRequiresVerifiedChain(t *testing.T) {
 	}
 
 	t.Run("ShouldRejectPKIMethodWhenTheChainWasNotValidated", func(t *testing.T) {
-		_, _, err := newStrategy(consts.ClientAuthMethodTLSClientAuth, pkiClient).
+		_, _, err := newStrategy(pkiClient).
 			AuthenticateClient(context.TODO(), newRequest(false), form, &TokenEndpointClientAuthStrategy{})
 
 		require.Error(t, err)
@@ -556,7 +556,7 @@ func TestAuthenticateClientMTLSRequiresVerifiedChain(t *testing.T) {
 	})
 
 	t.Run("ShouldAuthenticatePKIMethodWhenTheChainWasValidated", func(t *testing.T) {
-		client, method, err := newStrategy(consts.ClientAuthMethodTLSClientAuth, pkiClient).
+		client, method, err := newStrategy(pkiClient).
 			AuthenticateClient(context.TODO(), newRequest(true), form, &TokenEndpointClientAuthStrategy{})
 
 		require.NoError(t, err)
@@ -565,7 +565,7 @@ func TestAuthenticateClientMTLSRequiresVerifiedChain(t *testing.T) {
 	})
 
 	t.Run("ShouldAuthenticateSelfSignedMethodWithoutAValidatedChain", func(t *testing.T) {
-		client, method, err := newStrategy(consts.ClientAuthMethodSelfSignedTLSClientAuth, selfSignedClient).
+		client, method, err := newStrategy(selfSignedClient).
 			AuthenticateClient(context.TODO(), newRequest(false), form, &TokenEndpointClientAuthStrategy{})
 
 		require.NoError(t, err)

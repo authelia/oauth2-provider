@@ -265,7 +265,7 @@ func TestIDJAG(t *testing.T) {
 
 				grant := env.exchangeWithDPoP(t, key)
 
-				proof := signDPoPProof(t, key, http.MethodPost, env.rs.URL+tokenRelativePath, nil)
+				proof := signDPoPProof(t, key, env.rs.URL+tokenRelativePath, nil)
 
 				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagDPoPRedeemForm(grant), proof)
 
@@ -292,7 +292,7 @@ func TestIDJAG(t *testing.T) {
 
 				grant := env.exchangeWithDPoP(t, newDPoPProofKey(t))
 
-				proof := signDPoPProof(t, newDPoPProofKey(t), http.MethodPost, env.rs.URL+tokenRelativePath, nil)
+				proof := signDPoPProof(t, newDPoPProofKey(t), env.rs.URL+tokenRelativePath, nil)
 
 				status, _, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagDPoPRedeemForm(grant), proof)
 
@@ -341,9 +341,9 @@ func TestIDJAG(t *testing.T) {
 
 						switch tc.proof {
 						case idjagProofMatch:
-							proof = signDPoPProof(t, key, http.MethodPost, env.rs.URL+tokenRelativePath, nil)
+							proof = signDPoPProof(t, key, env.rs.URL+tokenRelativePath, nil)
 						case idjagProofOther:
-							proof = signDPoPProof(t, newDPoPProofKey(t), http.MethodPost, env.rs.URL+tokenRelativePath, nil)
+							proof = signDPoPProof(t, newDPoPProofKey(t), env.rs.URL+tokenRelativePath, nil)
 						}
 
 						form := idjagRedeemForm(grant)
@@ -394,7 +394,7 @@ func TestIDJAG(t *testing.T) {
 
 				grant := env.exchangeWithDPoP(t, key)
 
-				proof := signDPoPProof(t, key, http.MethodPost, env.rs.URL+tokenRelativePath, nil)
+				proof := signDPoPProof(t, key, env.rs.URL+tokenRelativePath, nil)
 
 				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagDPoPRedeemForm(grant), proof)
 				require.Equal(t, http.StatusOK, status, "redeem error: %+v", errBody)
@@ -408,7 +408,7 @@ func TestIDJAG(t *testing.T) {
 				status, token, errBody := postIDJAGToken(t, env.idp, idjagIdPClientID, env.exchangeForm(env.idToken(t), consts.TokenTypeRFC8693IDToken, env.rs.URL), "")
 				require.Equal(t, http.StatusOK, status, "exchange error: %+v", errBody)
 
-				proof := signDPoPProof(t, newDPoPProofKey(t), http.MethodPost, env.rs.URL+tokenRelativePath, nil)
+				proof := signDPoPProof(t, newDPoPProofKey(t), env.rs.URL+tokenRelativePath, nil)
 
 				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagRedeemForm(token.AccessToken), proof)
 
@@ -456,7 +456,7 @@ func TestIDJAG(t *testing.T) {
 				require.Equal(t, http.StatusBadRequest, status)
 				require.Equal(t, oauth2.ErrInvalidGrant.ErrorField, errBody.Error)
 
-				proof := signDPoPProof(t, key, http.MethodPost, env.rs.URL+tokenRelativePath, nil)
+				proof := signDPoPProof(t, key, env.rs.URL+tokenRelativePath, nil)
 
 				status, redeemed, errBody := postIDJAGToken(t, env.rs, idjagRSClientID, idjagDPoPRedeemForm(grant), proof)
 				require.Equal(t, http.StatusOK, status, "redeem error: %+v", errBody)
@@ -988,7 +988,7 @@ func (env *idjagEnvironment) exchangeForm(subjectToken, subjectTokenType, audien
 func (env *idjagEnvironment) exchangeWithDPoP(t *testing.T, key *jose.JSONWebKey) string {
 	t.Helper()
 
-	proof := signDPoPProof(t, key, http.MethodPost, env.idp.URL+tokenRelativePath, nil)
+	proof := signDPoPProof(t, key, env.idp.URL+tokenRelativePath, nil)
 
 	status, token, errBody := postIDJAGToken(t, env.idp, idjagIdPClientID, env.exchangeForm(env.idToken(t), consts.TokenTypeRFC8693IDToken, env.rs.URL), proof)
 

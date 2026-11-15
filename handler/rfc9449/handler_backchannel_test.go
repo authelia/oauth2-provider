@@ -40,7 +40,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 	for _, st := range stores {
 		t.Run(st.name, func(t *testing.T) {
 			newHandler := func() *Handler {
-				h, _, cfg := newTestHandler(false)
+				h, cfg := newTestHandler(false)
 
 				cfg.urls = oauth2.EndpointURLs{
 					BackChannelAuthentication: testBackChannelURL,
@@ -60,7 +60,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				session := &oauth2.DefaultSession{}
 				request := newTestBackChannelRequest(session, consts.CIBAModePoll, &oauth2.DefaultClient{}, "")
 
-				ctx := ctxWithDPoP(http.MethodPost, testBackChannelURL, signBackChannelProof(t, key, "bc-1", testBackChannelURL))
+				ctx := ctxWithDPoP(testBackChannelURL, signBackChannelProof(t, key, "bc-1", testBackChannelURL))
 
 				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctx, request))
 
@@ -82,7 +82,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				session := &oauth2.DefaultSession{}
 				request := newTestBackChannelRequest(session, consts.CIBAModePoll, &oauth2.DefaultClient{}, "")
 
-				ctx := ctxWithDPoP(http.MethodPost, testBackChannelURL, signBackChannelProof(t, key, "bc-alias", testBackChannelAliasURL))
+				ctx := ctxWithDPoP(testBackChannelURL, signBackChannelProof(t, key, "bc-alias", testBackChannelAliasURL))
 
 				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctx, request))
 				assert.Equal(t, thumbprint(t, key), session.GetDPoPJWKThumbprint())
@@ -95,7 +95,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				session := &oauth2.DefaultSession{}
 				request := newTestBackChannelRequest(session, consts.CIBAModePoll, &oauth2.DefaultClient{}, "")
 
-				ctx := ctxWithDPoP(http.MethodPost, testBackChannelURL, signBackChannelProof(t, key, "bc-htu", "https://as.example.com/token"))
+				ctx := ctxWithDPoP(testBackChannelURL, signBackChannelProof(t, key, "bc-htu", "https://as.example.com/token"))
 
 				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctx, request), oauth2.ErrInvalidDPoPProof)
 				assert.Empty(t, session.GetDPoPJWKThumbprint())
@@ -112,7 +112,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				session := &oauth2.DefaultSession{}
 				request := newTestBackChannelRequest(session, consts.CIBAModePoll, &oauth2.DefaultClient{}, "")
 
-				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(http.MethodPost, testBackChannelURL, raw), request), oauth2.ErrInvalidDPoPProof)
+				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(testBackChannelURL, raw), request), oauth2.ErrInvalidDPoPProof)
 				assert.Empty(t, session.GetDPoPJWKThumbprint())
 			})
 
@@ -123,12 +123,12 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				raw := signBackChannelProof(t, key, "bc-replay", testBackChannelURL)
 
 				first := newTestBackChannelRequest(&oauth2.DefaultSession{}, consts.CIBAModePoll, &oauth2.DefaultClient{}, "")
-				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(http.MethodPost, testBackChannelURL, raw), first))
+				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(testBackChannelURL, raw), first))
 
 				session := &oauth2.DefaultSession{}
 				second := newTestBackChannelRequest(session, consts.CIBAModePoll, &oauth2.DefaultClient{}, "")
 
-				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(http.MethodPost, testBackChannelURL, raw), second), oauth2.ErrInvalidDPoPProof)
+				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(testBackChannelURL, raw), second), oauth2.ErrInvalidDPoPProof)
 				assert.Empty(t, session.GetDPoPJWKThumbprint())
 			})
 
@@ -137,7 +137,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				key := newTestProofKey(t)
 				raw := signBackChannelProof(t, key, "bc-multi", testBackChannelURL)
 
-				ctx := ctxWithDPoP(http.MethodPost, testBackChannelURL, raw)
+				ctx := ctxWithDPoP(testBackChannelURL, raw)
 				ctx.Value(oauth2.RequestContextKey).(*http.Request).Header.Add(consts.HeaderDPoP, raw)
 
 				request := newTestBackChannelRequest(&oauth2.DefaultSession{}, consts.CIBAModePoll, &oauth2.DefaultClient{}, "")
@@ -152,7 +152,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				session.SetDPoPPublicKeyJWK([]byte(`{"kty":"EC"}`))
 				request := newTestBackChannelRequest(session, consts.CIBAModePoll, &oauth2.DefaultClient{}, otherJKT)
 
-				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(http.MethodPost, testBackChannelURL, ""), request))
+				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(testBackChannelURL, ""), request))
 
 				assert.Equal(t, otherJKT, session.GetDPoPJWKThumbprint())
 				assert.Equal(t, otherJKT, session.GetRequestedDPoPJWKThumbprint())
@@ -176,7 +176,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				session := &oauth2.DefaultSession{}
 				request := newTestBackChannelRequest(session, consts.CIBAModePoll, &oauth2.DefaultClient{}, thumbprint(t, key))
 
-				ctx := ctxWithDPoP(http.MethodPost, testBackChannelURL, signBackChannelProof(t, key, "bc-match", testBackChannelURL))
+				ctx := ctxWithDPoP(testBackChannelURL, signBackChannelProof(t, key, "bc-match", testBackChannelURL))
 
 				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctx, request))
 				assert.Equal(t, thumbprint(t, key), session.GetDPoPJWKThumbprint())
@@ -189,7 +189,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				session := &oauth2.DefaultSession{}
 				request := newTestBackChannelRequest(session, consts.CIBAModePoll, &oauth2.DefaultClient{}, otherJKT)
 
-				ctx := ctxWithDPoP(http.MethodPost, testBackChannelURL, signBackChannelProof(t, key, "bc-mismatch", testBackChannelURL))
+				ctx := ctxWithDPoP(testBackChannelURL, signBackChannelProof(t, key, "bc-mismatch", testBackChannelURL))
 
 				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctx, request), oauth2.ErrInvalidDPoPProof)
 				assert.Empty(t, session.GetDPoPJWKThumbprint())
@@ -201,7 +201,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 
 				request := newTestBackChannelRequest(&oauth2.DefaultSession{}, consts.CIBAModePoll, &oauth2.DefaultClient{}, "short")
 
-				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(http.MethodPost, testBackChannelURL, ""), request), oauth2.ErrInvalidRequest)
+				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(testBackChannelURL, ""), request), oauth2.ErrInvalidRequest)
 			})
 
 			t.Run("ShouldSkipWhenDisabled", func(t *testing.T) {
@@ -213,7 +213,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				session := &oauth2.DefaultSession{}
 				request := newTestBackChannelRequest(session, consts.CIBAModePoll, &oauth2.DefaultClient{}, otherJKT)
 
-				ctx := ctxWithDPoP(http.MethodPost, testBackChannelURL, signBackChannelProof(t, key, "bc-disabled", testBackChannelURL))
+				ctx := ctxWithDPoP(testBackChannelURL, signBackChannelProof(t, key, "bc-disabled", testBackChannelURL))
 
 				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctx, request))
 				assert.Empty(t, session.GetDPoPJWKThumbprint())
@@ -225,7 +225,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				session := &oauth2.DefaultSession{}
 				request := newTestBackChannelRequest(session, consts.CIBAModePush, &oauth2.DefaultClient{}, "")
 
-				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(http.MethodPost, testBackChannelURL, ""), request))
+				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(testBackChannelURL, ""), request))
 				assert.Empty(t, session.GetDPoPJWKThumbprint())
 			})
 
@@ -234,7 +234,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 
 				request := newTestBackChannelRequest(&oauth2.DefaultSession{}, consts.CIBAModePoll, &oauth2.DefaultClient{DPoPBoundAccessTokens: true}, "")
 
-				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(http.MethodPost, testBackChannelURL, ""), request))
+				require.NoError(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(testBackChannelURL, ""), request))
 			})
 
 			t.Run("ShouldRequireKeyMaterialForABoundPushClient", func(t *testing.T) {
@@ -242,7 +242,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 
 				request := newTestBackChannelRequest(&oauth2.DefaultSession{}, consts.CIBAModePush, &oauth2.DefaultClient{DPoPBoundAccessTokens: true}, "")
 
-				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(http.MethodPost, testBackChannelURL, ""), request), oauth2.ErrInvalidRequest)
+				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(testBackChannelURL, ""), request), oauth2.ErrInvalidRequest)
 			})
 
 			t.Run("ShouldRequireKeyMaterialForAPushClientWhenEnforced", func(t *testing.T) {
@@ -251,7 +251,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 
 				request := newTestBackChannelRequest(&oauth2.DefaultSession{}, consts.CIBAModePush, &oauth2.DefaultClient{}, "")
 
-				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(http.MethodPost, testBackChannelURL, ""), request), oauth2.ErrInvalidRequest)
+				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(testBackChannelURL, ""), request), oauth2.ErrInvalidRequest)
 			})
 
 			t.Run("ShouldRejectASessionWithoutDPoPSupport", func(t *testing.T) {
@@ -259,7 +259,7 @@ func TestBackChannelDPoPProof(t *testing.T) {
 
 				request := newTestBackChannelRequest(nonDPoPSession{}, consts.CIBAModePoll, &oauth2.DefaultClient{}, otherJKT)
 
-				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(http.MethodPost, testBackChannelURL, ""), request), oauth2.ErrServerError)
+				assert.ErrorIs(t, h.BindBackChannelAuthenticationRequest(ctxWithDPoP(testBackChannelURL, ""), request), oauth2.ErrServerError)
 			})
 		})
 	}

@@ -123,7 +123,7 @@ func TestCIBAPollFlow(t *testing.T) {
 
 				flow.approve(t)
 
-				status, body := flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, key, http.MethodPost, flow.ts.URL+tokenRelativePath, nil)})
+				status, body := flow.poll(t, cibaClientID, id, &cibaRequestOptions{dpop: signDPoPProof(t, key, flow.ts.URL+tokenRelativePath, nil)})
 				require.Equal(t, http.StatusOK, status, "token error: %+v", body)
 				assert.Equal(t, oauth2.DPoPAccessToken, body["token_type"])
 				assert.NotEmpty(t, body["id_token"])

@@ -22,7 +22,7 @@ import (
 )
 
 func TestHandlerBindsProof(t *testing.T) {
-	h, _, _ := newTestHandler(false)
+	h, _ := newTestHandler(false)
 	key := newTestProofKey(t)
 	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 		jwt.ClaimJWTID: "h1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
@@ -32,14 +32,14 @@ func TestHandlerBindsProof(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw)
+	ctx := ctxWithDPoP("https://as.example.com/token", raw)
 
 	assert.NoError(t, h.BindAccessRequest(ctx, request))
 	assert.NotEmpty(t, session.GetDPoPJWKThumbprint())
 }
 
 func TestHandlerRejectsMultipleDPoPHeaders(t *testing.T) {
-	h, _, _ := newTestHandler(false)
+	h, _ := newTestHandler(false)
 	key := newTestProofKey(t)
 	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 		jwt.ClaimJWTID: "multi-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
@@ -64,13 +64,13 @@ func TestHandlerRejectsMultipleDPoPHeaders(t *testing.T) {
 }
 
 func TestHandlerRequiredButMissing(t *testing.T) {
-	h, _, _ := newTestHandler(true)
+	h, _ := newTestHandler(true)
 
 	session := &oauth2.DefaultSession{}
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", "")
+	ctx := ctxWithDPoP("https://as.example.com/token", "")
 	err := h.BindAccessRequest(ctx, request)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
@@ -174,7 +174,7 @@ func TestHandlerAuthorize(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, cfg := newTestHandler(false)
+			_, cfg := newTestHandler(false)
 			cfg.enabled = tc.enabled
 
 			h := &AuthorizeHandler{Config: cfg}
@@ -205,7 +205,7 @@ func TestHandlerAuthorize(t *testing.T) {
 }
 
 func TestHandlerRefreshThumbprintMismatch(t *testing.T) {
-	h, _, _ := newTestHandler(false)
+	h, _ := newTestHandler(false)
 	key := newTestProofKey(t)
 	raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 		jwt.ClaimJWTID: "h2", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
@@ -216,26 +216,26 @@ func TestHandlerRefreshThumbprintMismatch(t *testing.T) {
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw)
+	ctx := ctxWithDPoP("https://as.example.com/token", raw)
 	err := h.BindAccessRequest(ctx, request)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 }
 
 func TestHandlerIsANoOpWhenUnbound(t *testing.T) {
-	h, _, _ := newTestHandler(false)
+	h, _ := newTestHandler(false)
 
 	session := &oauth2.DefaultSession{}
 	request := oauth2.NewAccessRequest(session)
 	request.Client = &oauth2.DefaultClient{}
 
-	ctx := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", "")
+	ctx := ctxWithDPoP("https://as.example.com/token", "")
 
 	require.NoError(t, h.BindAccessRequest(ctx, request))
 	assert.Empty(t, session.GetDPoPJWKThumbprint())
 }
 
 func TestHandlerPopulateBoundTokenEndpointResponseSetsDPoPTokenType(t *testing.T) {
-	h, _, _ := newTestHandler(false)
+	h, _ := newTestHandler(false)
 
 	session := &oauth2.DefaultSession{}
 	session.SetDPoPJWKThumbprint("some-thumbprint")
@@ -262,7 +262,7 @@ func TestHandlerPopulateBoundTokenEndpointResponseTokenType(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			h, _, _ := newTestHandler(false)
+			h, _ := newTestHandler(false)
 
 			session := &oauth2.DefaultSession{}
 			session.SetDPoPJWKThumbprint("some-thumbprint")
@@ -279,7 +279,7 @@ func TestHandlerPopulateBoundTokenEndpointResponseTokenType(t *testing.T) {
 }
 
 func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
-	h, _, _ := newTestHandler(false)
+	h, _ := newTestHandler(false)
 	key := newTestProofKey(t)
 
 	session := &oauth2.DefaultSession{}
@@ -289,7 +289,7 @@ func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
 	raw1 := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 		jwt.ClaimJWTID: "e2e-1", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
-	ctx1 := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw1)
+	ctx1 := ctxWithDPoP("https://as.example.com/token", raw1)
 
 	require.NoError(t, h.BindAccessRequest(ctx1, request))
 
@@ -304,7 +304,7 @@ func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
 	raw2 := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 		jwt.ClaimJWTID: "e2e-2", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
-	ctx2 := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw2)
+	ctx2 := ctxWithDPoP("https://as.example.com/token", raw2)
 
 	require.NoError(t, h.BindAccessRequest(ctx2, refreshRequest))
 	assert.Equal(t, jkt, refreshSession.GetDPoPJWKThumbprint())
@@ -318,7 +318,7 @@ func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
 	raw3 := signProof(t, otherKey, jwt.JSONWebTokenTypeDPoP, map[string]any{
 		jwt.ClaimJWTID: "e2e-3", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
 	})
-	ctx3 := ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw3)
+	ctx3 := ctxWithDPoP("https://as.example.com/token", raw3)
 
 	err := h.BindAccessRequest(ctx3, otherRequest)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
@@ -326,7 +326,7 @@ func TestDPoPEndToEndBindingAndRefresh(t *testing.T) {
 
 func TestHandlerBindAccessRequestWithoutAnHTTPRequest(t *testing.T) {
 	t.Run("ShouldNoOpWhenNothingRequiresABinding", func(t *testing.T) {
-		h, _, _ := newTestHandler(false)
+		h, _ := newTestHandler(false)
 
 		session := &oauth2.DefaultSession{}
 		request := oauth2.NewAccessRequest(session)
@@ -337,7 +337,7 @@ func TestHandlerBindAccessRequestWithoutAnHTTPRequest(t *testing.T) {
 	})
 
 	t.Run("ShouldErrorWhenTheSessionIsAlreadyBound", func(t *testing.T) {
-		h, _, _ := newTestHandler(false)
+		h, _ := newTestHandler(false)
 
 		session := &oauth2.DefaultSession{}
 		session.SetDPoPJWKThumbprint("an-existing-thumbprint")
@@ -349,7 +349,7 @@ func TestHandlerBindAccessRequestWithoutAnHTTPRequest(t *testing.T) {
 	})
 
 	t.Run("ShouldErrorWhenEnforced", func(t *testing.T) {
-		h, _, _ := newTestHandler(true)
+		h, _ := newTestHandler(true)
 
 		request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
 		request.Client = &oauth2.DefaultClient{}
@@ -391,28 +391,28 @@ func TestHandlerEnforcesTheRequestedThumbprint(t *testing.T) {
 	}
 
 	t.Run("ShouldRejectARedemptionWithoutAProof", func(t *testing.T) {
-		h, _, _ := newTestHandler(false)
+		h, _ := newTestHandler(false)
 
-		err := h.BindAccessRequest(ctxWithDPoP(http.MethodPost, endpoint, ""), newRequest(testAuthorizeJKT))
+		err := h.BindAccessRequest(ctxWithDPoP(endpoint, ""), newRequest(testAuthorizeJKT))
 
 		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 	})
 
 	t.Run("ShouldRejectARedemptionWithAnotherKey", func(t *testing.T) {
-		h, _, _ := newTestHandler(false)
+		h, _ := newTestHandler(false)
 
 		raw := signProof(t, newTestProofKey(t), jwt.JSONWebTokenTypeDPoP, map[string]any{
 			jwt.ClaimJWTID: "requested-other", jwt.ClaimHTTPMethod: http.MethodPost,
 			jwt.ClaimHTTPURI: endpoint, jwt.ClaimIssuedAt: time.Now().Unix(),
 		})
 
-		err := h.BindAccessRequest(ctxWithDPoP(http.MethodPost, endpoint, raw), newRequest(testAuthorizeJKT))
+		err := h.BindAccessRequest(ctxWithDPoP(endpoint, raw), newRequest(testAuthorizeJKT))
 
 		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 	})
 
 	t.Run("ShouldAcceptARedemptionWithTheRequestedKey", func(t *testing.T) {
-		h, _, _ := newTestHandler(false)
+		h, _ := newTestHandler(false)
 
 		key := newTestProofKey(t)
 
@@ -423,7 +423,7 @@ func TestHandlerEnforcesTheRequestedThumbprint(t *testing.T) {
 
 		request := newRequest(thumbprint(t, key))
 
-		require.NoError(t, h.BindAccessRequest(ctxWithDPoP(http.MethodPost, endpoint, raw), request))
+		require.NoError(t, h.BindAccessRequest(ctxWithDPoP(endpoint, raw), request))
 
 		bound, ok := request.GetSession().(oauth2.DPoPBoundSession)
 		require.True(t, ok)
@@ -436,11 +436,11 @@ func TestHandlerPublishesTheValidatedProof(t *testing.T) {
 	newCtx := func(t *testing.T, raw string) context.Context {
 		t.Helper()
 
-		return context.WithValue(ctxWithDPoP(http.MethodPost, "https://as.example.com/token", raw), oauth2.DPoPProofContextKey, &oauth2.DPoPProofHolder{})
+		return context.WithValue(ctxWithDPoP("https://as.example.com/token", raw), oauth2.DPoPProofContextKey, &oauth2.DPoPProofHolder{})
 	}
 
 	t.Run("ShouldPublishOnSuccess", func(t *testing.T) {
-		h, _, _ := newTestHandler(false)
+		h, _ := newTestHandler(false)
 		key := newTestProofKey(t)
 		raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 			jwt.ClaimJWTID: "pub-1", jwt.ClaimHTTPMethod: http.MethodPost,
@@ -460,7 +460,7 @@ func TestHandlerPublishesTheValidatedProof(t *testing.T) {
 	})
 
 	t.Run("ShouldPublishNothingWhenValidationFails", func(t *testing.T) {
-		h, _, _ := newTestHandler(false)
+		h, _ := newTestHandler(false)
 		key := newTestProofKey(t)
 
 		raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
@@ -478,7 +478,7 @@ func TestHandlerPublishesTheValidatedProof(t *testing.T) {
 	})
 
 	t.Run("ShouldPublishNothingWhenTheThumbprintDoesNotMatch", func(t *testing.T) {
-		h, _, _ := newTestHandler(false)
+		h, _ := newTestHandler(false)
 		key := newTestProofKey(t)
 		raw := signProof(t, key, jwt.JSONWebTokenTypeDPoP, map[string]any{
 			jwt.ClaimJWTID: "pub-3", jwt.ClaimHTTPMethod: http.MethodPost,
@@ -522,7 +522,7 @@ func TestHandlerRefreshBinding(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			h, _, config := newTestHandler(false)
+			h, config := newTestHandler(false)
 			config.strictRefreshTokenBinding = tc.strict
 
 			bound := thumbprint(t, newTestProofKey(t))
@@ -546,7 +546,7 @@ func TestHandlerRefreshBinding(t *testing.T) {
 				})
 			}
 
-			err := h.BindAccessRequest(ctxWithDPoP(http.MethodPost, endpoint, raw), request)
+			err := h.BindAccessRequest(ctxWithDPoP(endpoint, raw), request)
 
 			if tc.err != nil {
 				assert.ErrorIs(t, err, tc.err)
@@ -561,7 +561,7 @@ func TestHandlerRefreshBinding(t *testing.T) {
 	}
 }
 
-func newTestHandler(enforce bool) (*Handler, *storage.MemoryStore, *testHandlerConfig) {
+func newTestHandler(enforce bool) (*Handler, *testHandlerConfig) {
 	store := storage.NewMemoryStore()
 	cfg := &testHandlerConfig{
 		testStrategyConfig: testStrategyConfig{algs: []string{"ES256"}, skew: time.Minute, lifespan: time.Minute, nonceExp: time.Minute},
@@ -571,13 +571,13 @@ func newTestHandler(enforce bool) (*Handler, *storage.MemoryStore, *testHandlerC
 	strategy := NewDefaultStrategy(cfg, store)
 	cfg.strategy = strategy
 
-	return &Handler{Config: cfg, Strategy: strategy}, store, cfg
+	return &Handler{Config: cfg, Strategy: strategy}, cfg
 }
 
-func ctxWithDPoP(method, rawURL, proof string) context.Context {
+func ctxWithDPoP(rawURL, proof string) context.Context {
 	u, _ := url.Parse(rawURL)
 
-	r := &http.Request{Method: method, Header: http.Header{}, URL: u, Host: u.Host}
+	r := &http.Request{Method: http.MethodPost, Header: http.Header{}, URL: u, Host: u.Host}
 
 	if u.Scheme == consts.SchemeHTTPS {
 		r.Header.Set(consts.HeaderXForwardedProto, consts.SchemeHTTPS)

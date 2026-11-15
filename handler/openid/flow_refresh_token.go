@@ -16,6 +16,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// OpenIDConnectRefreshHandler issues ID Tokens for the refresh token grant.
 type OpenIDConnectRefreshHandler struct {
 	*IDTokenHandleHelper
 

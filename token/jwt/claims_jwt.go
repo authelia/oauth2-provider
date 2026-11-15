@@ -17,23 +17,30 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
-// Enum for different types of scope encoding.
+// JWTScopeFieldEnum is the enum for different types of scope encoding.
 type JWTScopeFieldEnum int
 
 const (
+	// JWTScopeFieldUnset indicates the scope encoding is not set.
 	JWTScopeFieldUnset JWTScopeFieldEnum = iota
+	// JWTScopeFieldList encodes the scope as a list of strings.
 	JWTScopeFieldList
+	// JWTScopeFieldString encodes the scope as a single space delimited string.
 	JWTScopeFieldString
+	// JWTScopeFieldBoth encodes the scope as both a list and a string.
 	JWTScopeFieldBoth
 )
 
+// JWTClaimsDefaults holds default values applied to JWT claims when they are unset.
 type JWTClaimsDefaults struct {
 	ExpiresAt time.Time
 	IssuedAt  time.Time
-	Issuer    string
-	Scope     []string
+	// Issuer provides the JSON Web Keys and algorithms used to issue tokens.
+	Issuer string
+	Scope  []string
 }
 
+// JWTClaimsContainer is a container of JWT claims that can be sanitized and populated with defaults.
 type JWTClaimsContainer interface {
 	// Sanitize should clear the IssuedAt and NotBefore values.
 	Sanitize() JWTClaimsContainer
@@ -54,7 +61,8 @@ type JWTClaimsContainer interface {
 
 // JWTClaims represent a token's claims.
 type JWTClaims struct {
-	Subject    string
+	Subject string
+	// Issuer provides the JSON Web Keys and algorithms used to issue tokens.
 	Issuer     string
 	Audience   []string
 	JTI        string

@@ -12,6 +12,7 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
+// DeviceAuthorizeResponse is the RFC 8628 Section 3.2 device authorization response.
 type DeviceAuthorizeResponse struct {
 	Header                  http.Header    `json:"-"`
 	DeviceCode              string         `json:"device_code"`

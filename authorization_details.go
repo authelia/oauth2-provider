@@ -30,7 +30,7 @@ const (
 
 // AuthorizationDetail is a single RFC 9396 authorization details object. The common data fields are typed; every
 // other member is kept in Extra so type-specific and enriched members round-trip unchanged. Numbers in Extra decode
-// as json.Number. A nil slice or Identifier is an absent member and a non-nil empty one is present, so an empty
+// as [json.Number]. A nil slice or Identifier is an absent member and a non-nil empty one is present, so an empty
 // member is issued exactly as it was validated and granted.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9396#section-2
@@ -140,7 +140,7 @@ func (d *AuthorizationDetail) UnmarshalJSON(data []byte) (err error) {
 	return nil
 }
 
-// Clone returns a deep copy of the detail. Extra is normalized through JSON: numbers become json.Number and structs
+// Clone returns a deep copy of the detail. Extra is normalized through JSON: numbers become [json.Number] and structs
 // become maps.
 func (d AuthorizationDetail) Clone() AuthorizationDetail {
 	c := d

@@ -11,6 +11,7 @@ import (
 	"net/url"
 )
 
+// DefaultFormPostTemplate is the HTML template used for the form_post response mode.
 var DefaultFormPostTemplate = template.Must(template.New("form_post").Parse(`<html>
    <head>
       <title>Submit This Form</title>
@@ -26,6 +27,7 @@ var DefaultFormPostTemplate = template.Must(template.New("form_post").Parse(`<ht
    </body>
 </html>`))
 
+// FormPostResponseWriter renders a form_post response to wr using the given template, redirect URL and parameters.
 type FormPostResponseWriter func(wr io.Writer, template *template.Template, redirectURL string, parameters url.Values)
 
 // DefaultFormPostResponseWriter renders the given template using the supplied redirect URL and parameters and writes

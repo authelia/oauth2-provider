@@ -15,11 +15,13 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
+// IntrospectForm is the form of an introspection request.
 type IntrospectForm struct {
 	Token  string
 	Scopes []string
 }
 
+// IntrospectResponse is the response of the introspection endpoint.
 type IntrospectResponse struct {
 	Active    bool     `json:"active"`
 	ClientID  string   `json:"client_id,omitempty"`
@@ -31,11 +33,13 @@ type IntrospectResponse struct {
 	Username  string   `json:"username,omitempty"`
 }
 
+// Introspect is a client for the introspection endpoint.
 type Introspect struct {
 	endpointURL string
 	client      *http.Client
 }
 
+// IntrospectToken sends an introspection request and returns the response.
 func (c *Introspect) IntrospectToken(
 	ctx context.Context,
 	form IntrospectForm,
@@ -97,6 +101,7 @@ func (c *Introspect) getRequest(
 	return request, nil
 }
 
+// NewIntrospectClient returns an Introspect client for the given endpoint URL.
 func NewIntrospectClient(endpointURL string) *Introspect {
 	return &Introspect{
 		endpointURL: endpointURL,

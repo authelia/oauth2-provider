@@ -6,6 +6,7 @@ package oauth2
 
 import "slices"
 
+// Arguments is a list of strings with helpers for set-style comparisons.
 type Arguments []string
 
 // Matches performs an case-sensitive, out-of-order check that the items

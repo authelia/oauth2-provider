@@ -14,6 +14,7 @@ import (
 	"time"
 )
 
+// NumericDate is a JSON numeric date value, the number of seconds since the Unix epoch (RFC 7519 Section 2).
 type NumericDate struct {
 	time.Time
 }
@@ -100,6 +101,7 @@ func (date *NumericDate) Int64() (val int64) {
 	return date.UTC().Truncate(TimePrecision).Unix()
 }
 
+// ClaimStrings is a claim value that is either a single string or an array of strings, such as aud (RFC 7519).
 type ClaimStrings []string
 
 // Valid reports whether any of the values is equal to cmp, using a constant time comparison. When there are no values
@@ -204,5 +206,6 @@ func (s ClaimStrings) MarshalJSON() (b []byte, err error) {
 }
 
 var (
+	// ErrInvalidType is returned when a claim has an invalid type.
 	ErrInvalidType = errors.New("invalid type for claim")
 )

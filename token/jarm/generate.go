@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package jarm generates JWT Secured Authorization Responses (JARM).
 package jarm
 
 import (
@@ -18,7 +19,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
-// EncodeParameters takes the result from jarm.Generate and turns it into parameters in the form of url.Values.
+// EncodeParameters takes the result from jarm.Generate and turns it into parameters in the form of [url.Values].
 func EncodeParameters(token, _ string, tErr error) (parameters url.Values, err error) {
 	if tErr != nil {
 		return nil, tErr

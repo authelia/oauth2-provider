@@ -140,7 +140,7 @@ func ParseClientCertificateHeader(value string) (cert *x509.Certificate, err err
 }
 
 // stripPEMArmor returns the body of the first PEM document in value, or value unchanged when it carries no armor.
-// It is used in preference to pem.Decode because pem.Decode requires the line breaks that several proxies strip.
+// It is used in preference to [pem.Decode] because [pem.Decode] requires the line breaks that several proxies strip.
 func stripPEMArmor(value string) string {
 	begin := strings.Index(value, pemArmorBegin)
 	if begin < 0 {

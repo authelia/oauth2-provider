@@ -25,6 +25,7 @@ type DeviceCodeTokenHandler struct {
 	}
 }
 
+// DeviceAuthorizeTokenEndpointHandler is a generic code token endpoint handler for the device code grant.
 type DeviceAuthorizeTokenEndpointHandler struct {
 	hoauth2.GenericCodeTokenEndpointHandler
 }

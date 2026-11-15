@@ -22,14 +22,19 @@ func NewBackChannelAuthenticationResponse() *BackChannelAuthenticationResponse {
 	return &BackChannelAuthenticationResponse{}
 }
 
+// GetAuthRequestID returns the auth_req_id.
 func (r *BackChannelAuthenticationResponse) GetAuthRequestID() string { return r.AuthRequestID }
 
+// SetAuthRequestID sets the auth_req_id.
 func (r *BackChannelAuthenticationResponse) SetAuthRequestID(id string) { r.AuthRequestID = id }
 
+// GetExpiresIn returns the lifetime of the auth_req_id in seconds.
 func (r *BackChannelAuthenticationResponse) GetExpiresIn() int64 { return r.ExpiresIn }
 
+// SetExpiresIn sets the lifetime of the auth_req_id in seconds.
 func (r *BackChannelAuthenticationResponse) SetExpiresIn(seconds int64) { r.ExpiresIn = seconds }
 
+// GetInterval returns the minimum polling interval in seconds.
 func (r *BackChannelAuthenticationResponse) GetInterval() int64 { return r.Interval }
 
 // SetInterval sets the minimum polling interval in seconds. A value of 0 omits the parameter.

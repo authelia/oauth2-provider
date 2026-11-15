@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package rfc9449 implements RFC 9449 OAuth 2.0 Demonstrating Proof of Possession (DPoP).
 package rfc9449
 
 import (

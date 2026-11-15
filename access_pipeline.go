@@ -20,7 +20,7 @@ import (
 type internalIssuanceKey struct{}
 
 // IsInternalIssuance returns true when ctx belongs to a token request issued internally for a stored grant rather than
-// received at the token endpoint. Such a request has no *http.Request: RequestContextKey holds none, and no DPoP proof
+// received at the token endpoint. Such a request has no [*http.Request]: RequestContextKey holds none, and no DPoP proof
 // or client certificate was presented, so a binding handler binds from the key material recorded on the session.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#section-5

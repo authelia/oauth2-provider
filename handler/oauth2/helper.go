@@ -15,11 +15,13 @@ import (
 	"authelia.com/provider/oauth2/internal/consts"
 )
 
+// HandleHelperConfigProvider is the configuration HandleHelper requires.
 type HandleHelperConfigProvider interface {
 	oauth2.AccessTokenLifespanProvider
 	oauth2.RefreshTokenLifespanProvider
 }
 
+// HandleHelper issues access and refresh tokens on behalf of the grant handlers.
 type HandleHelper struct {
 	AccessTokenStrategy AccessTokenStrategy
 	AccessTokenStorage  AccessTokenStorage

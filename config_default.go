@@ -44,6 +44,7 @@ const (
 	defaultCIBAMaximumBindingMessageLen   = 64
 )
 
+// Config is the default configuration, implementing the configuration provider interfaces.
 type Config struct {
 	// AccessTokenLifespan sets how long an access token is going to be valid. Defaults to one hour.
 	AccessTokenLifespan time.Duration

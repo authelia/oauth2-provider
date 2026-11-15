@@ -60,116 +60,138 @@ var (
 	// back, and treat the request as a replay only if another request has invalidated it.
 	ErrSerializationFailure = errors.New("The request could not be completed due to concurrent access")
 
+	// ErrUnknownRequest is returned when the handler is not responsible for the request.
 	ErrUnknownRequest = &RFC6749Error{
 		ErrorField:       errUnknownErrorName,
 		DescriptionField: "The handler is not responsible for this request.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidRequest is returned when the request is missing a required parameter, includes an invalid parameter value or a repeated parameter, or is otherwise malformed (the 'invalid_request' error).
 	ErrInvalidRequest = &RFC6749Error{
 		ErrorField:       errInvalidRequestName,
 		DescriptionField: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed.",
 		HintField:        "Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrUnauthorizedClient is returned when the client is not authorized to request a token using the method used (the 'unauthorized_client' error).
 	ErrUnauthorizedClient = &RFC6749Error{
 		ErrorField:       errUnauthorizedClientName,
 		DescriptionField: "The client is not authorized to request a token using this method.",
 		HintField:        "Make sure that client id and secret are correctly specified and that the client exists.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrAccessDenied is returned when the resource owner or authorization server denied the request (the 'access_denied' error).
 	ErrAccessDenied = &RFC6749Error{
 		ErrorField:       errAccessDeniedName,
 		DescriptionField: "The resource owner or authorization server denied the request.",
 		HintField:        "Make sure that the request you are making is valid. Maybe the credential or request parameters you are using are limited in scope or otherwise restricted.",
 		CodeField:        http.StatusForbidden,
 	}
+	// ErrUnsupportedResponseType is returned when the authorization server does not support obtaining a token using the response type (the 'unsupported_response_type' error).
 	ErrUnsupportedResponseType = &RFC6749Error{
 		ErrorField:       errUnsupportedResponseTypeName,
 		DescriptionField: "The authorization server does not support obtaining a token using this method.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrUnsupportedResponseMode is returned when the authorization server does not support the response mode (the 'unsupported_response_mode' error).
 	ErrUnsupportedResponseMode = &RFC6749Error{
 		ErrorField:       errUnsupportedResponseModeName,
 		DescriptionField: "The authorization server does not support obtaining a response using this response mode.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidScope is returned when the requested scope is invalid, unknown, or malformed (the 'invalid_scope' error).
 	ErrInvalidScope = &RFC6749Error{
 		ErrorField:       errInvalidScopeName,
 		DescriptionField: "The requested scope is invalid, unknown, or malformed.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInsufficientScope is returned when the request requires higher privileges than the access token provides (the 'insufficient_scope' error).
 	ErrInsufficientScope = &RFC6749Error{
 		ErrorField:       errInsufficientScopeName,
 		DescriptionField: "The request requires higher privileges than provided by the Access Token.",
 		CodeField:        http.StatusForbidden,
 	}
+	// ErrServerError is returned when the authorization server encountered an unexpected condition (the 'server_error' error).
 	ErrServerError = &RFC6749Error{
 		ErrorField:       errServerErrorName,
 		DescriptionField: errServerErrorDescription,
 		CodeField:        http.StatusInternalServerError,
 	}
+	// ErrTemporarilyUnavailable is returned when the authorization server is temporarily unable to handle the request (the 'temporarily_unavailable' error).
 	ErrTemporarilyUnavailable = &RFC6749Error{
 		ErrorField:       errTemporarilyUnavailableName,
 		DescriptionField: "The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server.",
 		CodeField:        http.StatusServiceUnavailable,
 	}
+	// ErrUnsupportedGrantType is returned when the authorization grant type is not supported by the authorization server (the 'unsupported_grant_type' error).
 	ErrUnsupportedGrantType = &RFC6749Error{
 		ErrorField:       errUnsupportedGrantTypeName,
 		DescriptionField: "The authorization grant type is not supported by the authorization server.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidGrant is returned when the authorization grant or refresh token is invalid, expired, revoked, mismatched, or was issued to another client (the 'invalid_grant' error).
 	ErrInvalidGrant = &RFC6749Error{
 		ErrorField:       errInvalidGrantName,
 		DescriptionField: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidClient is returned when client authentication failed (the 'invalid_client' error).
 	ErrInvalidClient = &RFC6749Error{
 		ErrorField:       errInvalidClientName,
 		DescriptionField: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).",
 		CodeField:        http.StatusUnauthorized,
 	}
+	// ErrInvalidState is returned when the state parameter is missing or too short to be considered secure.
 	ErrInvalidState = &RFC6749Error{
 		ErrorField:       errInvalidStateName,
 		DescriptionField: "The state is missing or does not have enough characters and is therefore considered too weak.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrMisconfiguration is returned when the request failed because of an internal error that is probably caused by misconfiguration.
 	ErrMisconfiguration = &RFC6749Error{
 		ErrorField:       errMisconfigurationName,
 		DescriptionField: "The request failed because of an internal error that is probably caused by misconfiguration.",
 		CodeField:        http.StatusInternalServerError,
 	}
+	// ErrInsufficientEntropy is returned when a security parameter such as state or nonce has insufficient entropy.
 	ErrInsufficientEntropy = &RFC6749Error{
 		ErrorField:       errInsufficientEntropyName,
 		DescriptionField: "The request used a security parameter (e.g., anti-replay, anti-csrf) with insufficient entropy.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrNotFound is returned when a requested resource could not be found.
 	ErrNotFound = &RFC6749Error{
 		ErrorField:       errNotFoundName,
 		DescriptionField: "Could not find the requested resource(s).",
 		CodeField:        http.StatusNotFound,
 	}
+	// ErrSSFStreamConflict is returned when the client already has a Shared Signals Framework stream.
 	ErrSSFStreamConflict = &RFC6749Error{
 		ErrorField:       errConflictName,
 		DescriptionField: "The client already has a stream.",
 		CodeField:        http.StatusConflict,
 	}
+	// ErrSSFVerificationThrottled is returned when a Shared Signals Framework stream was verified too recently.
 	ErrSSFVerificationThrottled = &RFC6749Error{
 		ErrorField:       errTooManyRequestsName,
 		DescriptionField: "The stream was verified too recently.",
 		CodeField:        http.StatusTooManyRequests,
 	}
+	// ErrRequestUnauthorized is returned when the request could not be authorized.
 	ErrRequestUnauthorized = &RFC6749Error{
 		ErrorField:       errRequestUnauthorizedName,
 		DescriptionField: "The request could not be authorized.",
 		HintField:        "Check that you provided valid credentials in the right format.",
 		CodeField:        http.StatusUnauthorized,
 	}
+	// ErrTokenSignatureMismatch is returned when the token signature does not match.
 	ErrTokenSignatureMismatch = &RFC6749Error{
 		ErrorField:       errTokenSignatureMismatchName,
 		DescriptionField: "Token signature mismatch.",
 		HintField:        "Check that you provided a valid token in the right format.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidTokenFormat is returned when the token is expired, revoked, malformed, or otherwise invalid.
 	ErrInvalidTokenFormat = &RFC6749Error{
 		ErrorField:       errInvalidTokenFormatName,
 		DescriptionField: "The token provided is expired, revoked, malformed, or invalid for other reasons.",
@@ -180,104 +202,122 @@ var (
 	// certificate-bound access token whose certificate does not match the binding must be rejected with HTTP 401 and
 	// the 'invalid_token' error code. It deliberately reuses errInvalidTokenFormatName, the same error code as
 	// ErrInvalidTokenFormat, but with HTTP 401 instead of 400; RFC6749Error.Is compares both ErrorField and CodeField,
-	// so the two remain distinguishable by errors.Is.
+	// so the two remain distinguishable by [errors.Is].
 	ErrInvalidToken = &RFC6749Error{
 		ErrorField:       errInvalidTokenFormatName,
 		DescriptionField: "The access token provided is expired, revoked, malformed, or invalid for other reasons.",
 		HintField:        "The access token is invalid or was not presented in the manner it is bound to.",
 		CodeField:        http.StatusUnauthorized,
 	}
+	// ErrInvalidDPoPProof is returned when the DPoP proof is missing or invalid (the 'invalid_dpop_proof' error).
 	ErrInvalidDPoPProof = &RFC6749Error{
 		ErrorField:       errInvalidDPoPProofName,
 		DescriptionField: "The DPoP proof is missing or invalid.",
 		HintField:        "The request was made with an invalid, malformed, expired, or missing DPoP proof JWT.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrUseDPoPNonce is returned when the authorization server requires a nonce in the DPoP proof (the 'use_dpop_nonce' error).
 	ErrUseDPoPNonce = &RFC6749Error{
 		ErrorField:       errUseDPoPNonceName,
 		DescriptionField: "Authorization server requires nonce in DPoP proof.",
 		HintField:        "Retry the request including a 'nonce' claim in the DPoP proof using the value from the most recent 'DPoP-Nonce' response header.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrTokenExpired is returned when the token has expired.
 	ErrTokenExpired = &RFC6749Error{
 		ErrorField:       errTokenExpiredName,
 		DescriptionField: "Token expired.",
 		HintField:        "The token expired.",
 		CodeField:        http.StatusUnauthorized,
 	}
+	// ErrScopeNotGranted is returned when the token was not granted the requested scope.
 	ErrScopeNotGranted = &RFC6749Error{
 		ErrorField:       errScopeNotGrantedName,
 		DescriptionField: "The token was not granted the requested scope.",
 		HintField:        "The resource owner did not grant the requested scope.",
 		CodeField:        http.StatusForbidden,
 	}
+	// ErrTokenClaim is returned when the token failed validation due to a claim mismatch.
 	ErrTokenClaim = &RFC6749Error{
 		ErrorField:       errTokenClaimName,
 		DescriptionField: "The token failed validation due to a claim mismatch.",
 		HintField:        "One or more token claims failed validation.",
 		CodeField:        http.StatusUnauthorized,
 	}
+	// ErrInactiveToken is returned when the token is inactive because it is malformed, expired, or otherwise invalid.
 	ErrInactiveToken = &RFC6749Error{
 		ErrorField:       errTokenInactiveName,
 		DescriptionField: "Token is inactive because it is malformed, expired or otherwise invalid.",
 		HintField:        "Token validation failed.",
 		CodeField:        http.StatusUnauthorized,
 	}
+	// ErrLoginRequired is returned when the authorization server requires end-user authentication (the 'login_required' error).
 	ErrLoginRequired = &RFC6749Error{
 		ErrorField:       errLoginRequiredName,
 		DescriptionField: "The Authorization Server requires End-User authentication.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInteractionRequired is returned when the authorization server requires end-user interaction to proceed (the 'interaction_required' error).
 	ErrInteractionRequired = &RFC6749Error{
 		DescriptionField: "The Authorization Server requires End-User interaction of some form to proceed.",
 		ErrorField:       errInteractionRequiredName,
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrConsentRequired is returned when the authorization server requires end-user consent (the 'consent_required' error).
 	ErrConsentRequired = &RFC6749Error{
 		ErrorField:       errConsentRequiredName,
 		DescriptionField: "The Authorization Server requires End-User consent.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrRequestNotSupported is returned when the authorization server does not support the request parameter (the 'request_not_supported' error).
 	ErrRequestNotSupported = &RFC6749Error{
 		ErrorField:       errRequestNotSupportedName,
 		DescriptionField: "The authorization server does not support the use of the request parameter.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrRequestURINotSupported is returned when the authorization server does not support the request_uri parameter (the 'request_uri_not_supported' error).
 	ErrRequestURINotSupported = &RFC6749Error{
 		ErrorField:       errRequestURINotSupportedName,
 		DescriptionField: "The authorization server does not support the use of the request_uri parameter.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrRegistrationNotSupported is returned when the OpenID Provider does not support the registration parameter (the 'registration_not_supported' error).
 	ErrRegistrationNotSupported = &RFC6749Error{
 		ErrorField:       errRegistrationNotSupportedName,
 		DescriptionField: "The OP does not support use of the registration parameter.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidRequestURI is returned when the request_uri returns an error or contains invalid data (the 'invalid_request_uri' error).
 	ErrInvalidRequestURI = &RFC6749Error{
 		ErrorField:       errInvalidRequestURIName,
 		DescriptionField: "The request_uri in the authorization request returns an error or contains invalid data.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidRequestObject is returned when the request parameter contains an invalid Request Object (the 'invalid_request_object' error).
 	ErrInvalidRequestObject = &RFC6749Error{
 		ErrorField:       errInvalidRequestObjectName,
 		DescriptionField: "The request parameter contains an invalid Request Object.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrJTIKnown is returned when the jti was already used.
 	ErrJTIKnown = &RFC6749Error{
 		ErrorField:       errJTIKnownName,
 		DescriptionField: "The jti was already used.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrAuthorizationPending is returned when the device authorization request is still pending (the 'authorization_pending' error per RFC 8628 Section 3.5).
 	ErrAuthorizationPending = &RFC6749Error{
 		ErrorField:       errAuthorizationPendingName,
 		DescriptionField: "The authorization request is still pending as the end user hasn't yet completed the user-interaction steps.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrDeviceExpiredToken is returned when the device_code has expired (the 'expired_token' error per RFC 8628 Section 3.5).
 	ErrDeviceExpiredToken = &RFC6749Error{
 		ErrorField:       errDeviceExpiredTokenName,
 		DescriptionField: "The device_code has expired, and the device authorization session has concluded.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrSlowDown is returned when the client polled too frequently (the 'slow_down' error per RFC 8628 Section 3.5).
 	ErrSlowDown = &RFC6749Error{
 		ErrorField:       errSlowDownName,
 		DescriptionField: "Too many requests within a short time period.",
@@ -293,68 +333,81 @@ var (
 		DescriptionField: "The OpenID Provider is not able to identify which end-user the Client wishes to be authenticated.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrExpiredLoginHintToken is returned when the login_hint_token has expired (the 'expired_login_hint_token' error).
 	ErrExpiredLoginHintToken = &RFC6749Error{
 		ErrorField:       errExpiredLoginHintTokenName,
 		DescriptionField: "The login_hint_token provided in the authentication request is not valid because it has expired.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrMissingUserCode is returned when a required user code is missing from the authentication request (the 'missing_user_code' error).
 	ErrMissingUserCode = &RFC6749Error{
 		ErrorField:       errMissingUserCodeName,
 		DescriptionField: "The user code was required but missing from the authentication request.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidUserCode is returned when the user code is invalid (the 'invalid_user_code' error).
 	ErrInvalidUserCode = &RFC6749Error{
 		ErrorField:       errInvalidUserCodeName,
 		DescriptionField: "The user code was invalid.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidBindingMessage is returned when the binding message is invalid or unacceptable (the 'invalid_binding_message' error).
 	ErrInvalidBindingMessage = &RFC6749Error{
 		ErrorField:       errInvalidBindingMessageName,
 		DescriptionField: "The binding message is invalid or unacceptable for use in the context of the given request.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrTransactionFailed is returned when the OpenID Provider could not complete the transaction (the 'transaction_failed' error).
 	ErrTransactionFailed = &RFC6749Error{
 		ErrorField:       errTransactionFailedName,
 		DescriptionField: "The OpenID Provider encountered an unexpected condition that prevented it from successfully completing the transaction.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidTarget is returned when the requested resource is invalid, missing, unknown, or malformed (the 'invalid_target' error per RFC 8707 Section 2).
 	ErrInvalidTarget = &RFC6749Error{
 		ErrorField:       errInvalidTargetName,
 		DescriptionField: "The requested resource is invalid, missing, unknown, or malformed.",
 		HintField:        "Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInsufficientUserAuthentication is returned when the end-user authentication does not meet the requirements of the request (the 'insufficient_user_authentication' error).
 	ErrInsufficientUserAuthentication = &RFC6749Error{
 		ErrorField:       errInsufficientUserAuthenticationName,
 		DescriptionField: "The authentication of the End-User does not meet the requirements of the request.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrUnmetAuthenticationRequirements is returned when the authorization server cannot meet the authentication requirements of the relying party (the 'unmet_authentication_requirements' error).
 	ErrUnmetAuthenticationRequirements = &RFC6749Error{
 		ErrorField:       errUnmetAuthenticationRequirementsName,
 		DescriptionField: "The Authorization Server is unable to meet the requirements of the Relying Party for the authentication of the End-User.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidAuthorizationDetails is returned when the requested authorization details are invalid, unknown, or malformed (the 'invalid_authorization_details' error per RFC 9396).
 	ErrInvalidAuthorizationDetails = &RFC6749Error{
 		ErrorField:       errInvalidAuthorizationDetailsName,
 		DescriptionField: "The requested authorization details are invalid, unknown, or malformed.",
 		HintField:        "Ensure every authorization details object has a type supported by the authorization server, conforms to that type's definition, and is permitted for this client.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidClientMetadata is returned when a client metadata field value is invalid (the 'invalid_client_metadata' error per RFC 7591 Section 3.2.2).
 	ErrInvalidClientMetadata = &RFC6749Error{
 		ErrorField:       errInvalidClientMetadataName,
 		DescriptionField: "The value of one of the client metadata fields is invalid and the server has rejected this request.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidRedirectURI is returned when a redirection URI is invalid (the 'invalid_redirect_uri' error per RFC 7591 Section 3.2.2).
 	ErrInvalidRedirectURI = &RFC6749Error{
 		ErrorField:       errInvalidRedirectURIName,
 		DescriptionField: "The value of one or more redirection URIs is invalid.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidSoftwareStatement is returned when the software statement is invalid (the 'invalid_software_statement' error per RFC 7591 Section 3.2.2).
 	ErrInvalidSoftwareStatement = &RFC6749Error{
 		ErrorField:       errInvalidSoftwareStatementName,
 		DescriptionField: "The software statement presented is invalid.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrUnapprovedSoftwareStatement is returned when the software statement is not approved for use by the authorization server (the 'unapproved_software_statement' error per RFC 7591 Section 3.2.2).
 	ErrUnapprovedSoftwareStatement = &RFC6749Error{
 		ErrorField:       errUnapprovedSoftwareStatementName,
 		DescriptionField: "The software statement presented is not approved for use by this authorization server.",
@@ -445,6 +498,7 @@ const (
 )
 
 type (
+	// RFC6749Error is an OAuth 2.0 error response with its description, hint, debug information, and HTTP status code.
 	RFC6749Error struct {
 		ErrorField       string
 		DescriptionField string
@@ -499,7 +553,7 @@ func (e *RFC6749Error) StackTrace() (trace errors.StackTrace) {
 	return
 }
 
-// Unwrap returns the underlying cause of the error to support errors.Is and errors.As traversal.
+// Unwrap returns the underlying cause of the error to support [errors.Is] and [errors.As] traversal.
 func (e RFC6749Error) Unwrap() error {
 	return e.cause
 }
@@ -536,7 +590,7 @@ func (e *RFC6749Error) WithTrace(err error) *RFC6749Error {
 }
 
 // Is reports whether err is equivalent to the receiver. Two RFC6749Errors are considered equal when their ErrorField
-// and CodeField match, supporting use with errors.Is.
+// and CodeField match, supporting use with [errors.Is].
 func (e RFC6749Error) Is(err error) bool {
 	switch te := err.(type) {
 	case RFC6749Error:
@@ -593,7 +647,7 @@ func (e *RFC6749Error) StatusCode() int {
 	return e.CodeField
 }
 
-// Cause returns the underlying error that produced this one, equivalent to errors.Unwrap.
+// Cause returns the underlying error that produced this one, equivalent to [errors.Unwrap].
 func (e *RFC6749Error) Cause() error {
 	return e.cause
 }
@@ -829,7 +883,7 @@ func (e RFC6749Error) marshalWithExtra(data *RFC6749ErrorJSON) ([]byte, error) {
 	return json.Marshal(members)
 }
 
-// ToValues serializes the error into url.Values suitable for use as an authorize endpoint error response in any
+// ToValues serializes the error into [url.Values] suitable for use as an authorize endpoint error response in any
 // response mode. Legacy-format errors produce additional 'error_hint' and 'error_debug' fields. Characters outside the
 // set permitted for the 'error_description' parameter are replaced in every descriptive field, except that a localized
 // description or hint containing such characters is replaced by the default message.

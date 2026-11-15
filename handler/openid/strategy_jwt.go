@@ -245,6 +245,7 @@ func (s *DefaultSession) IDTokenClaims() *jwt.IDTokenClaims {
 	return s.Claims
 }
 
+// DefaultStrategy generates ID Tokens as signed JWTs.
 type DefaultStrategy struct {
 	jwt.Strategy
 

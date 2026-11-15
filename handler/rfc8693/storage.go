@@ -31,6 +31,7 @@ type IDJAGRelationshipStorage interface {
 	GetIDJAGRelationship(ctx context.Context, request oauth2.AccessRequester, audience string) (relationship *oauth2.IDJAGRelationship, err error)
 }
 
+// Storage is the storage the RFC 8693 token exchange handlers require.
 type Storage interface {
 	hoauth2.CoreStorage
 

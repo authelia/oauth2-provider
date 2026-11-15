@@ -25,7 +25,7 @@ import (
 //
 // Full RFC 4517 distinguishedNameMatch is not implemented. Insignificant whitespace around each relative distinguished
 // name is ignored, attribute types are compared without regard to case, and the sequence is compared in both
-// directions because Go's pkix.Name.String and OpenSSL emit relative distinguished names in opposite orders.
+// directions because Go's [pkix.Name.String] and OpenSSL emit relative distinguished names in opposite orders.
 // Attribute values are compared with case significance, which is stricter than RFC 4517 requires.
 //
 // See: https://www.rfc-editor.org/rfc/rfc8705#section-2.1
@@ -66,7 +66,7 @@ func normalizeDistinguishedName(dn string) (rdns []string) {
 }
 
 // trimUnescapedSpace trims leading and trailing ASCII space (U+0020) characters from s. It is deliberately narrower
-// than strings.TrimSpace, which strips the full unicode.IsSpace set (tab, newline, U+00A0, ...): every other
+// than [strings.TrimSpace], which strips the full [unicode.IsSpace] set (tab, newline, U+00A0, ...): every other
 // whitespace character is part of the value. A trailing space escaped with a backslash is also part of the value and
 // is not trimmed.
 //

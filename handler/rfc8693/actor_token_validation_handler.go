@@ -16,6 +16,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// ActorTokenValidationHandler validates the actor of RFC 8693 delegation requests.
 type ActorTokenValidationHandler struct{}
 
 // HandleTokenEndpointRequest enforces RFC 8693 §4.4 'may_act' authorization for delegation requests.

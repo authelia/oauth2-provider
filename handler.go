@@ -8,6 +8,7 @@ import (
 	"context"
 )
 
+// AuthorizeEndpointHandler handles authorization endpoint requests and responses.
 type AuthorizeEndpointHandler interface {
 	// HandleAuthorizeEndpointRequest handles an authorize endpoint request. A handler that is not responsible for the
 	// request must return nil and must not modify the session, responder or requester.
@@ -40,6 +41,7 @@ type AuthorizeEndpointHandler interface {
 	IDTokenSigningAlgValuesSupported(ctx context.Context) (algs []string)
 }
 
+// TokenEndpointHandler handles token endpoint requests and responses.
 type TokenEndpointHandler interface {
 	// PopulateTokenEndpointResponse is responsible for setting return values and should only be executed if
 	// the handler's HandleTokenEndpointRequest did not return ErrUnknownRequest.
@@ -181,6 +183,7 @@ type PushedAuthorizeEndpointHandler interface {
 	HandlePushedAuthorizeEndpointRequest(ctx context.Context, request AuthorizeRequester, response PushedAuthorizeResponder) (err error)
 }
 
+// RFC8628DeviceAuthorizeEndpointHandler handles RFC 8628 device authorization endpoint requests.
 type RFC8628DeviceAuthorizeEndpointHandler interface {
 	// HandleRFC8628DeviceAuthorizeEndpointRequest handles a device authorize endpoint request. To extend the handler's capabilities, the http request
 	// is passed along, if further information retrieval is required. If the handler feels that he is not responsible for
@@ -218,6 +221,7 @@ type BackChannelAuthenticationEndpointBindingHandler interface {
 	BindBackChannelAuthenticationRequest(ctx context.Context, request BackChannelAuthenticationRequester) (err error)
 }
 
+// RFC8628UserAuthorizeEndpointHandler handles RFC 8628 user authorization (user code verification) requests.
 type RFC8628UserAuthorizeEndpointHandler interface {
 	// HandleRFC8628UserAuthorizeEndpointRequest validates the request with the given user code.
 	//

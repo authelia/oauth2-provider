@@ -14,6 +14,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// OpenIDConnectDeviceAuthorizeHandler issues ID Tokens for the RFC 8628 device authorization grant.
 type OpenIDConnectDeviceAuthorizeHandler struct {
 	OpenIDConnectRequestStorage   OpenIDConnectRequestStorage
 	OpenIDConnectRequestValidator *OpenIDConnectRequestValidator

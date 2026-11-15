@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package oidckb implements the OpenID Connect Key Binding 1.0 token endpoint handlers.
 package oidckb
 
 import (

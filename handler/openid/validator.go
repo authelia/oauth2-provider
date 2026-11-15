@@ -21,6 +21,7 @@ type openIDConnectRequestValidatorConfigProvider interface {
 	oauth2.AllowedPromptsProvider
 }
 
+// OpenIDConnectRequestValidator validates the OpenID Connect parameters of authorization requests.
 type OpenIDConnectRequestValidator struct {
 	Strategy jwt.Strategy
 	Config   openIDConnectRequestValidatorConfigProvider

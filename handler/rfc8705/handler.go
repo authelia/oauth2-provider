@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package rfc8705 implements RFC 8705 OAuth 2.0 Mutual-TLS certificate-bound access tokens.
 package rfc8705
 
 import (

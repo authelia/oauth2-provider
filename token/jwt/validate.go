@@ -9,8 +9,10 @@ import (
 	"time"
 )
 
+// ClaimValidationOption configures ClaimValidationOptions.
 type ClaimValidationOption func(opts *ClaimValidationOptions)
 
+// ClaimValidationOptions holds the options used when validating claims.
 type ClaimValidationOptions struct {
 	timef          func() time.Time
 	clockSkew      time.Duration

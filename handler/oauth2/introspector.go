@@ -13,11 +13,13 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// CoreValidatorConfigProvider is the configuration CoreValidator requires.
 type CoreValidatorConfigProvider interface {
 	oauth2.ScopeStrategyProvider
 	oauth2.DisableRefreshTokenValidationProvider
 }
 
+// CoreValidator introspects opaque access tokens and refresh tokens using the core strategy and storage.
 type CoreValidator struct {
 	CoreStrategy
 	CoreStorage

@@ -15,6 +15,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// OpenIDConnectHybridHandler handles the OpenID Connect hybrid flow.
 type OpenIDConnectHybridHandler struct {
 	AuthorizeImplicitGrantTypeHandler *hoauth2.AuthorizeImplicitGrantTypeHandler
 	AuthorizeExplicitGrantHandler     *hoauth2.AuthorizeExplicitGrantHandler

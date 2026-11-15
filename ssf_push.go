@@ -71,7 +71,7 @@ type SSFDelivery struct {
 	AuthorizationHeader string `json:"-"`
 }
 
-// Format implements fmt.Formatter, redacting AuthorizationHeader for every verb.
+// Format implements [fmt.Formatter], redacting AuthorizationHeader for every verb.
 func (d SSFDelivery) Format(f fmt.State, verb rune) {
 	redacted := ""
 

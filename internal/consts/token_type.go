@@ -5,8 +5,11 @@
 package consts
 
 const (
-	TokenTypeAccessToken             = "access_token"
-	TokenTypeRefreshToken            = "refresh_token"
+	// TokenTypeAccessToken is the access_token token type hint value from RFC 7009.
+	TokenTypeAccessToken = "access_token"
+	// TokenTypeRefreshToken is the refresh_token token type hint value from RFC 7009.
+	TokenTypeRefreshToken = "refresh_token"
+	// TokenTypeClientRegistrationToken is the client_registration_token token type value.
 	TokenTypeClientRegistrationToken = "client_registration_token"
 )
 

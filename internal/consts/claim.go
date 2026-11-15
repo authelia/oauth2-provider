@@ -62,5 +62,6 @@ const (
 )
 
 const (
+	// ClaimEventBackChannelLogout is the back-channel logout event identifier from OpenID Connect Back-Channel Logout 1.0.
 	ClaimEventBackChannelLogout = "http://schemas.openid.net/event/backchannel-logout"
 )

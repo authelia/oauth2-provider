@@ -283,6 +283,7 @@ func introspectionCredentialFromRequest(r *http.Request) (token string, err erro
 	return AccessTokenFromRequest(r), nil
 }
 
+// IntrospectionResponse is the result of introspecting a token.
 type IntrospectionResponse struct {
 	Client          Client          `json:"-"`
 	Active          bool            `json:"active"`

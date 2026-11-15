@@ -373,7 +373,7 @@ func validateURI(name, value string, secure bool) (err error) {
 }
 
 // isPrivateUseURIScheme reports whether scheme is a private-use URI scheme of the reverse-DNS form RFC 8252 Section
-// 7.1 requires of a native application, such as 'com.example.app'. The scheme must already be parsed by url.Parse;
+// 7.1 requires of a native application, such as 'com.example.app'. The scheme must already be parsed by [url.Parse];
 // only the domain shape is checked: at least one dot, and every label non-empty, composed of unreserved DNS
 // characters, and neither starting nor ending with a hyphen.
 //

@@ -270,6 +270,7 @@ func isMatchingRedirectURI(needle string, haystack []string, strategy URICompari
 	return "", false
 }
 
+// RedirectURICustomComparisonClient is implemented by a client that selects its own redirect URI comparison strategy.
 type RedirectURICustomComparisonClient interface {
 	GetRedirectURIComparisonStrategy() URIComparisonStrategy
 }

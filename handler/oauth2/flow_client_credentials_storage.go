@@ -4,6 +4,7 @@
 
 package oauth2
 
+// ClientCredentialsGrantStorage is the storage the client credentials grant requires.
 type ClientCredentialsGrantStorage interface {
 	AccessTokenStorage
 }

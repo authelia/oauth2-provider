@@ -22,6 +22,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// DefaultClientAuthenticationStrategy is the default implementation of ClientAuthenticationStrategy.
 type DefaultClientAuthenticationStrategy struct {
 	Store interface {
 		ClientManager

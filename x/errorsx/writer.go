@@ -29,8 +29,8 @@ func WriteJSONError(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 // WriteJSONErrorCode is a helper function for writing errors in various scenarios. Taken from github.com/ory/herodot.
-// The body is the first error in the tree of err, searched depth first as errors.As does, that implements
-// json.Marshaler or RFCError, so a wrapped or joined RFC 6749 error still carries the 'error' member required by
+// The body is the first error in the tree of err, searched depth first as [errors.As] does, that implements
+// [json.Marshaler] or RFCError, so a wrapped or joined RFC 6749 error still carries the 'error' member required by
 // RFC 6749 Section 5.2.
 func WriteJSONErrorCode(w http.ResponseWriter, r *http.Request, code int, err error) {
 	if code == 0 {
@@ -91,6 +91,7 @@ func findJSONError(err error) error {
 	return nil
 }
 
+// Fields are the attributes of a WWW-Authenticate header.
 type Fields map[string]string
 
 // EncodeRFC6750 returns the fields as an RFC 6750 WWW-Authenticate header value for the Bearer scheme, with each field

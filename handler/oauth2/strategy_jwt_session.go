@@ -13,6 +13,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+// JWTSessionContainer is a session that carries the JWT claims and headers of a token.
 type JWTSessionContainer interface {
 	// GetJWTClaims returns the claims.
 	GetJWTClaims() jwt.JWTClaimsContainer

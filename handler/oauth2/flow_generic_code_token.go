@@ -17,6 +17,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// CodeTokenEndpointHandler is the grant specific behavior GenericCodeTokenEndpointHandler delegates to.
 type CodeTokenEndpointHandler interface {
 	ValidateGrantTypes(ctx context.Context, request oauth2.AccessRequester) (err error)
 	ValidateCodeAndSession(ctx context.Context, request oauth2.AccessRequester, authorizeRequest oauth2.Requester, code string) (err error)
@@ -28,6 +29,7 @@ type CodeTokenEndpointHandler interface {
 	DeviceCodeSignature(ctx context.Context, code string) (signature string, err error)
 }
 
+// GenericCodeTokenEndpointHandler handles token endpoint requests for grants that exchange a code for tokens.
 type GenericCodeTokenEndpointHandler struct {
 	CodeTokenEndpointHandler
 

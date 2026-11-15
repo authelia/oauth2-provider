@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package randx generates random sequences.
 package randx
 
 import (

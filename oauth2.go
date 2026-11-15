@@ -16,18 +16,26 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+// TokenUse is an alias of TokenType used as a token type hint.
 type TokenUse = TokenType
 
+// TokenType identifies a kind of token or code.
 type TokenType string
 
+// GrantType is an OAuth 2.0 grant type.
 type GrantType string
 
 const (
-	AccessToken             TokenType = consts.TokenTypeAccessToken
-	RefreshToken            TokenType = consts.TokenTypeRefreshToken
+	// AccessToken is the access token type.
+	AccessToken TokenType = consts.TokenTypeAccessToken
+	// RefreshToken is the refresh token type.
+	RefreshToken TokenType = consts.TokenTypeRefreshToken
+	// ClientRegistrationToken is the client registration access token type.
 	ClientRegistrationToken TokenType = consts.TokenTypeClientRegistrationToken
-	DeviceCode              TokenType = consts.CodeDevice
-	UserCode                TokenType = consts.CodeUser
+	// DeviceCode is the RFC 8628 device code type.
+	DeviceCode TokenType = consts.CodeDevice
+	// UserCode is the RFC 8628 user code type.
+	UserCode TokenType = consts.CodeUser
 
 	// CIBAAuthRequestID represents the CIBA auth_req_id.
 	CIBAAuthRequestID TokenType = consts.FormParameterAuthReqID
@@ -35,18 +43,29 @@ const (
 	// PushedAuthorizeRequestContext represents the PAR context object.
 	PushedAuthorizeRequestContext TokenType = "par_context"
 
+	// AuthorizeCode is the authorization code type.
 	AuthorizeCode TokenType = "authorize_code"
-	IDToken       TokenType = "id_token"
+	// IDToken is the ID Token type.
+	IDToken TokenType = "id_token"
 
-	GrantTypeImplicit          GrantType = consts.GrantTypeImplicit
-	GrantTypeRefreshToken      GrantType = consts.GrantTypeRefreshToken
+	// GrantTypeImplicit is the implicit grant type.
+	GrantTypeImplicit GrantType = consts.GrantTypeImplicit
+	// GrantTypeRefreshToken is the refresh token grant type.
+	GrantTypeRefreshToken GrantType = consts.GrantTypeRefreshToken
+	// GrantTypeAuthorizationCode is the authorization code grant type.
 	GrantTypeAuthorizationCode GrantType = consts.GrantTypeAuthorizationCode
-	GrantTypePassword          GrantType = consts.GrantTypeResourceOwnerPasswordCredentials
+	// GrantTypePassword is the resource owner password credentials grant type.
+	GrantTypePassword GrantType = consts.GrantTypeResourceOwnerPasswordCredentials
+	// GrantTypeClientCredentials is the client credentials grant type.
 	GrantTypeClientCredentials GrantType = consts.GrantTypeClientCredentials
-	GrantTypeJWTBearer         GrantType = consts.GrantTypeOAuthJWTBearer
-	GrantTypeDeviceCode        GrantType = consts.GrantTypeOAuthDeviceCode
-	GrantTypeTokenExchange     GrantType = consts.GrantTypeOAuthTokenExchange
-	GrantTypeCIBA              GrantType = consts.GrantTypeOpenIDCIBA
+	// GrantTypeJWTBearer is the JWT bearer grant type.
+	GrantTypeJWTBearer GrantType = consts.GrantTypeOAuthJWTBearer
+	// GrantTypeDeviceCode is the RFC 8628 device authorization grant type.
+	GrantTypeDeviceCode GrantType = consts.GrantTypeOAuthDeviceCode
+	// GrantTypeTokenExchange is the RFC 8693 token exchange grant type.
+	GrantTypeTokenExchange GrantType = consts.GrantTypeOAuthTokenExchange
+	// GrantTypeCIBA is the OpenID Connect CIBA grant type.
+	GrantTypeCIBA GrantType = consts.GrantTypeOpenIDCIBA
 
 	// BearerAccessToken is the standard OAuth 2.0 Token type.
 	BearerAccessToken string = "bearer"
@@ -776,6 +795,7 @@ type BackChannelAuthenticationResponder interface {
 	ToMap() (data map[string]any)
 }
 
+// DeviceAuthorizeResponder is the RFC 8628 device authorization response.
 type DeviceAuthorizeResponder interface {
 	GetDeviceCode() string
 
@@ -853,6 +873,7 @@ type G11NContext interface {
 	GetLang() (lang language.Tag)
 }
 
+// RFC8693TokenType identifies an RFC 8693 token type by name and type URN.
 type RFC8693TokenType interface {
 	GetName(ctx context.Context) (name string)
 

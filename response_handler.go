@@ -17,6 +17,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// DefaultResponseModeHandler is the default ResponseModeHandler.
 type DefaultResponseModeHandler struct {
 	Config ResponseModeHandlerConfigurator
 }
@@ -318,6 +319,7 @@ type ResponseModeHandler interface {
 	ResponseModesSupported(ctx context.Context) (modes ResponseModeTypes)
 }
 
+// ResponseModeParameterHandler handles the parameters of the response modes it supports.
 type ResponseModeParameterHandler interface {
 	// ResponseModes returns a set of supported response modes handled
 	// by the interface implementation.
@@ -331,6 +333,7 @@ type ResponseModeParameterHandler interface {
 	WriteParameters(ctx context.Context, request AuthorizeRequester, parameters url.Values)
 }
 
+// ResponseModeTypes is a list of ResponseModeType values.
 type ResponseModeTypes []ResponseModeType
 
 // Has reports whether the slice contains the given response mode.
@@ -338,6 +341,7 @@ func (rs ResponseModeTypes) Has(item ResponseModeType) bool {
 	return slices.Contains(rs, item)
 }
 
+// ResponseModeHandlerConfigurator is the configuration required by DefaultResponseModeHandler.
 type ResponseModeHandlerConfigurator interface {
 	ResponseModeParameterHandlerProvider
 	FormPostHTMLTemplateProvider

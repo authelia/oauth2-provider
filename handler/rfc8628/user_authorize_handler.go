@@ -16,6 +16,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// UserAuthorizeHandler handles the RFC 8628 user verification request.
 type UserAuthorizeHandler struct {
 	Storage  Storage
 	Strategy CodeStrategy

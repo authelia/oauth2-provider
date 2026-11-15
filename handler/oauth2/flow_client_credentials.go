@@ -13,6 +13,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// ClientCredentialsGrantHandler handles the OAuth 2.0 client credentials grant at the token endpoint.
 type ClientCredentialsGrantHandler struct {
 	*HandleHelper
 	Config interface {

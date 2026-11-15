@@ -18,6 +18,7 @@ func NewAccessResponse() *AccessResponse {
 	}
 }
 
+// AccessResponse is the default implementation of AccessResponder.
 type AccessResponse struct {
 	Extra       map[string]any
 	AccessToken string

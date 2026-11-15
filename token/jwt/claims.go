@@ -11,6 +11,7 @@ import (
 	"authelia.com/provider/oauth2/internal/claimvalue"
 )
 
+// Claims is the set of registered claim accessors implemented by the claim types of this package.
 type Claims interface {
 	GetExpirationTime() (exp *NumericDate, err error)
 	GetIssuedAt() (iat *NumericDate, err error)
@@ -48,7 +49,7 @@ func ToString(i any) string {
 	return ""
 }
 
-// ToTime will try to convert a given input to a time.Time structure.
+// ToTime will try to convert a given input to a [time.Time] structure.
 func ToTime(i any) time.Time {
 	if t, ok := i.(time.Time); ok {
 		return t

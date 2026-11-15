@@ -11,16 +11,26 @@ import (
 )
 
 const (
-	SecurityEventTypeCAEPSessionRevoked         = "https://schemas.openid.net/secevent/caep/event-type/session-revoked"
-	SecurityEventTypeCAEPTokenClaimsChange      = "https://schemas.openid.net/secevent/caep/event-type/token-claims-change"
-	SecurityEventTypeCAEPCredentialChange       = "https://schemas.openid.net/secevent/caep/event-type/credential-change"
-	SecurityEventTypeCAEPAssuranceLevelChange   = "https://schemas.openid.net/secevent/caep/event-type/assurance-level-change"
+	// SecurityEventTypeCAEPSessionRevoked is the event type URI of the CAEP session revoked security event.
+	SecurityEventTypeCAEPSessionRevoked = "https://schemas.openid.net/secevent/caep/event-type/session-revoked"
+	// SecurityEventTypeCAEPTokenClaimsChange is the event type URI of the CAEP token claims change security event.
+	SecurityEventTypeCAEPTokenClaimsChange = "https://schemas.openid.net/secevent/caep/event-type/token-claims-change"
+	// SecurityEventTypeCAEPCredentialChange is the event type URI of the CAEP credential change security event.
+	SecurityEventTypeCAEPCredentialChange = "https://schemas.openid.net/secevent/caep/event-type/credential-change"
+	// SecurityEventTypeCAEPAssuranceLevelChange is the event type URI of the CAEP assurance level change security event.
+	SecurityEventTypeCAEPAssuranceLevelChange = "https://schemas.openid.net/secevent/caep/event-type/assurance-level-change"
+	// SecurityEventTypeCAEPDeviceComplianceChange is the event type URI of the CAEP device compliance change security event.
 	SecurityEventTypeCAEPDeviceComplianceChange = "https://schemas.openid.net/secevent/caep/event-type/device-compliance-change"
-	SecurityEventTypeCAEPSessionEstablished     = "https://schemas.openid.net/secevent/caep/event-type/session-established"
-	SecurityEventTypeCAEPSessionPresented       = "https://schemas.openid.net/secevent/caep/event-type/session-presented"
-	SecurityEventTypeCAEPRiskLevelChange        = "https://schemas.openid.net/secevent/caep/event-type/risk-level-change"
-	SecurityEventTypeSSFVerification            = "https://schemas.openid.net/secevent/ssf/event-type/verification"
-	SecurityEventTypeSSFStreamUpdated           = "https://schemas.openid.net/secevent/ssf/event-type/stream-updated"
+	// SecurityEventTypeCAEPSessionEstablished is the event type URI of the CAEP session established security event.
+	SecurityEventTypeCAEPSessionEstablished = "https://schemas.openid.net/secevent/caep/event-type/session-established"
+	// SecurityEventTypeCAEPSessionPresented is the event type URI of the CAEP session presented security event.
+	SecurityEventTypeCAEPSessionPresented = "https://schemas.openid.net/secevent/caep/event-type/session-presented"
+	// SecurityEventTypeCAEPRiskLevelChange is the event type URI of the CAEP risk level change security event.
+	SecurityEventTypeCAEPRiskLevelChange = "https://schemas.openid.net/secevent/caep/event-type/risk-level-change"
+	// SecurityEventTypeSSFVerification is the event type URI of the SSF verification security event.
+	SecurityEventTypeSSFVerification = "https://schemas.openid.net/secevent/ssf/event-type/verification"
+	// SecurityEventTypeSSFStreamUpdated is the event type URI of the SSF stream updated security event.
+	SecurityEventTypeSSFStreamUpdated = "https://schemas.openid.net/secevent/ssf/event-type/stream-updated"
 )
 
 // The initiating_entity values (CAEP 1.0 §2).
@@ -127,6 +137,7 @@ type CAEPSessionRevoked struct {
 	SecurityEventCommon
 }
 
+// SecurityEventType returns the event type URI of the session revoked security event.
 func (CAEPSessionRevoked) SecurityEventType() (uri string) {
 	return SecurityEventTypeCAEPSessionRevoked
 }
@@ -135,9 +146,11 @@ func (CAEPSessionRevoked) SecurityEventType() (uri string) {
 type CAEPTokenClaimsChange struct {
 	SecurityEventCommon
 
+	// Claims is the set of registered claim accessors implemented by the claim types of this package.
 	Claims map[string]any `json:"claims"`
 }
 
+// SecurityEventType returns the event type URI of the token claims change security event.
 func (CAEPTokenClaimsChange) SecurityEventType() (uri string) {
 	return SecurityEventTypeCAEPTokenClaimsChange
 }
@@ -167,6 +180,7 @@ type CAEPCredentialChange struct {
 	FIDO2AAGUID    string `json:"fido2_aaguid,omitempty"`
 }
 
+// SecurityEventType returns the event type URI of the credential change security event.
 func (CAEPCredentialChange) SecurityEventType() (uri string) {
 	return SecurityEventTypeCAEPCredentialChange
 }
@@ -194,6 +208,7 @@ type CAEPAssuranceLevelChange struct {
 	ChangeDirection string `json:"change_direction,omitempty"`
 }
 
+// SecurityEventType returns the event type URI of the assurance level change security event.
 func (CAEPAssuranceLevelChange) SecurityEventType() (uri string) {
 	return SecurityEventTypeCAEPAssuranceLevelChange
 }
@@ -223,6 +238,7 @@ type CAEPDeviceComplianceChange struct {
 	CurrentStatus  string `json:"current_status"`
 }
 
+// SecurityEventType returns the event type URI of the device compliance change security event.
 func (CAEPDeviceComplianceChange) SecurityEventType() (uri string) {
 	return SecurityEventTypeCAEPDeviceComplianceChange
 }
@@ -250,6 +266,7 @@ type CAEPSessionEstablished struct {
 	ExternalID           string   `json:"ext_id,omitempty"`
 }
 
+// SecurityEventType returns the event type URI of the session established security event.
 func (CAEPSessionEstablished) SecurityEventType() (uri string) {
 	return SecurityEventTypeCAEPSessionEstablished
 }
@@ -262,6 +279,7 @@ type CAEPSessionPresented struct {
 	ExternalID           string `json:"ext_id,omitempty"`
 }
 
+// SecurityEventType returns the event type URI of the session presented security event.
 func (CAEPSessionPresented) SecurityEventType() (uri string) {
 	return SecurityEventTypeCAEPSessionPresented
 }
@@ -276,6 +294,7 @@ type CAEPRiskLevelChange struct {
 	PreviousLevel string `json:"previous_level,omitempty"`
 }
 
+// SecurityEventType returns the event type URI of the risk level change security event.
 func (CAEPRiskLevelChange) SecurityEventType() (uri string) {
 	return SecurityEventTypeCAEPRiskLevelChange
 }
@@ -303,6 +322,7 @@ type SSFVerification struct {
 	State string `json:"state,omitempty"`
 }
 
+// SecurityEventType returns the event type URI of the verification security event.
 func (SSFVerification) SecurityEventType() (uri string) { return SecurityEventTypeSSFVerification }
 
 // Validate always succeeds as state is optional (SSF 1.0 §8.1.4.1).
@@ -315,6 +335,7 @@ type SSFStreamUpdated struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+// SecurityEventType returns the event type URI of the stream updated security event.
 func (SSFStreamUpdated) SecurityEventType() (uri string) { return SecurityEventTypeSSFStreamUpdated }
 
 // Validate requires status (SSF 1.0 §8.1.5).
@@ -324,12 +345,15 @@ func (e SSFStreamUpdated) Validate() (err error) {
 
 // RawSecurityEvent carries an event type without a typed payload, such as a RISC event. Only Claims is marshaled.
 type RawSecurityEvent struct {
-	URI    string
+	URI string
+	// Claims is the set of registered claim accessors implemented by the claim types of this package.
 	Claims map[string]any
 }
 
+// SecurityEventType returns the event type URI of the raw security event.
 func (e RawSecurityEvent) SecurityEventType() (uri string) { return e.URI }
 
+// MarshalJSON marshals the raw event claims.
 func (e RawSecurityEvent) MarshalJSON() (data []byte, err error) {
 	if e.Claims == nil {
 		return []byte("{}"), nil

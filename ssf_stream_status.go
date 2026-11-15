@@ -56,9 +56,16 @@ type SSFStreamStatusRequest struct {
 	Body     *SSFStreamStatusRequestBody
 }
 
+// GetMethod returns the HTTP method of the request.
 func (r *SSFStreamStatusRequest) GetMethod() (method string) { return r.Method }
+
+// GetClient returns the authenticated client.
 func (r *SSFStreamStatusRequest) GetClient() (client Client) { return r.Client }
-func (r *SSFStreamStatusRequest) GetStreamID() (id string)   { return r.StreamID }
+
+// GetStreamID returns the stream identifier of the request.
+func (r *SSFStreamStatusRequest) GetStreamID() (id string) { return r.StreamID }
+
+// GetBody returns the decoded request body.
 func (r *SSFStreamStatusRequest) GetBody() (body *SSFStreamStatusRequestBody) {
 	return r.Body
 }

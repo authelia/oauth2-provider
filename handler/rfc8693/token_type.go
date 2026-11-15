@@ -8,6 +8,7 @@ import (
 	"context"
 )
 
+// DefaultTokenType is a token type identified by its name.
 type DefaultTokenType struct {
 	Name string
 }

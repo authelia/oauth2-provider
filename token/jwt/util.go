@@ -163,16 +163,18 @@ func headerValidateJWE(header jose.Header, minimum, maximum int) (kid, alg, enc,
 	return header.KeyID, header.Algorithm, enc, cty, nil
 }
 
-// PrivateKey properly describes crypto.PrivateKey.
+// PrivateKey properly describes [crypto.PrivateKey].
 type PrivateKey interface {
 	Public() crypto.PublicKey
 	Equal(x crypto.PrivateKey) bool
 }
 
 const (
+	// JWKLookupErrorClientNoJWKS is the JWKLookupError bit set when the client has no JSON Web Key Set.
 	JWKLookupErrorClientNoJWKS uint32 = 1 << iota
 )
 
+// JWKLookupError is returned when a JSON Web Key cannot be found or used.
 type JWKLookupError struct {
 	Description string
 	Errors      uint32 // bitfield.  see JWKLookupError... constants.

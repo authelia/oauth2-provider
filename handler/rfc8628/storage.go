@@ -10,6 +10,7 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
+// Storage persists the sessions of the RFC 8628 device authorization grant.
 type Storage interface {
 	// CreateDeviceCodeSession stores the device request for a given device code. It must atomically reject a user code
 	// signature already held by another session with oauth2.ErrDuplicateUserCode.

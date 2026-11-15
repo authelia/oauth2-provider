@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package hmac implements the HMAC-SHA token strategy.
 package hmac
 
 import (
@@ -11,7 +12,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// RandomBytes returns n random bytes by reading from crypto/rand.Reader.
+// RandomBytes returns n random bytes by reading from [crypto/rand.Reader].
 func RandomBytes(n int) ([]byte, error) {
 	bytes := make([]byte, n)
 	if _, err := io.ReadFull(rand.Reader, bytes); err != nil {

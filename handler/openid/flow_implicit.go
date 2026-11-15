@@ -14,6 +14,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// OpenIDConnectImplicitHandler handles the OpenID Connect implicit flow.
 type OpenIDConnectImplicitHandler struct {
 	*IDTokenHandleHelper
 

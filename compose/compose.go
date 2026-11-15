@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package compose provides functions to build a Provider from a configuration, a storage, and a set of handler factories.
 package compose
 
 import (
@@ -11,6 +12,7 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+// Factory is the signature of the functions that build a handler from a configurator, a storage, and a strategy.
 type Factory func(config oauth2.Configurator, storage any, strategy any) any
 
 // Compose takes a config, a storage, a strategy and handlers to instantiate an Provider:

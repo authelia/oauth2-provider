@@ -133,6 +133,7 @@ func MustGenDefaultIssuer() (issuer *DefaultIssuer) {
 	return issuer
 }
 
+// DefaultIssuer is the default Issuer, backed by a JSON Web Key Set.
 type DefaultIssuer struct {
 	jwks *jose.JSONWebKeySet
 }
@@ -183,6 +184,7 @@ func (i *DefaultIssuer) keyAlgValues(use string) (algs []string) {
 	return slices.Compact(algs)
 }
 
+// Issuer provides the JSON Web Keys and algorithms used to issue tokens.
 type Issuer interface {
 	GetIssuerJWK(ctx context.Context, kid, alg, use string) (jwk *jose.JSONWebKey, err error)
 	GetIssuerStrictJWK(ctx context.Context, kid, alg, use string) (jwk *jose.JSONWebKey, err error)

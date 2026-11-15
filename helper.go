@@ -16,14 +16,14 @@ import (
 
 // StringInSlice returns true if needle exists in haystack.
 //
-// Deprecated: use slices.Contains.
+// Deprecated: use [slices.Contains].
 func StringInSlice(needle string, haystack []string) bool {
 	return slices.Contains(haystack, needle)
 }
 
 // StringInSliceFold returns true if needle exists in haystack (case-insensitive).
 //
-// Deprecated: use slices.ContainsFunc with strings.EqualFold.
+// Deprecated: use [slices.ContainsFunc] with [strings.EqualFold].
 func StringInSliceFold(needle string, haystack []string) bool {
 	return slices.ContainsFunc(haystack, equalFold(needle))
 }
@@ -115,7 +115,7 @@ func boundedBackoff(backoff retryablehttp.Backoff) retryablehttp.Backoff {
 
 // HTTPClientWithoutRedirects returns a copy of client that refuses to follow HTTP redirects, returning the first
 // redirect response as-is. client itself, typically the shared instance, is not mutated: the copy is built from its
-// exported fields, and its unexported sync.Once guards are not copied. The wait between retries never exceeds
+// exported fields, and its unexported [sync.Once] guards are not copied. The wait between retries never exceeds
 // RetryWaitMax, including one a response asks for with a 'Retry-After' header.
 func HTTPClientWithoutRedirects(client *retryablehttp.Client) (scoped *retryablehttp.Client) {
 	refuseRedirect := func(req *http.Request, via []*http.Request) error {

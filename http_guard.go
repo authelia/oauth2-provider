@@ -368,8 +368,8 @@ func closeDialResults(results <-chan dialResult, pending int) {
 // resolved and every address it resolves to is checked before the transport's own dial function is called with each
 // address in turn, the next attempt starting when the previous one fails or has not connected within 250 milliseconds,
 // and the remote address of the established connection is checked again before any request is sent. The proxy of the
-// transport is ignored. The transport must be a non-nil *http.Transport without a custom TLS dial function, or nil for
-// http.DefaultTransport, since a custom TLS dial function connects before its address can be checked. Neither base
+// transport is ignored. The transport must be a non-nil *[http.Transport] without a custom TLS dial function, or nil for
+// [http.DefaultTransport], since a custom TLS dial function connects before its address can be checked. Neither base
 // nor its transport is mutated.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc8725bis-10#section-3.10

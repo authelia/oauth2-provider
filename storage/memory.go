@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package storage provides in-memory implementations of the storage interfaces.
 package storage
 
 import (
@@ -24,21 +25,25 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// MemoryUserRelation is the credentials of a user in the memory store.
 type MemoryUserRelation struct {
 	Username string
 	Password string
 }
 
+// IssuerPublicKeys holds the public keys of an issuer by subject.
 type IssuerPublicKeys struct {
 	Issuer    string
 	KeysBySub map[string]SubjectPublicKeys
 }
 
+// SubjectPublicKeys holds the public keys of a subject by key identifier.
 type SubjectPublicKeys struct {
 	Subject string
 	Keys    map[string]PublicKeyScopes
 }
 
+// PublicKeyScopes is a public key with the scopes and audience it is permitted.
 type PublicKeyScopes struct {
 	Key      *jose.JSONWebKey
 	Scopes   []string
@@ -269,6 +274,7 @@ type StoreClientIDMetadataDocument struct {
 	ExpiresAt time.Time
 }
 
+// StoreAuthorizeCode is a stored authorization code request and whether it is active.
 type StoreAuthorizeCode struct {
 	active bool
 	oauth2.Requester
@@ -290,6 +296,7 @@ func (s StoreAuthorizeCode) SetClaims(claims *oauth2.ClaimsRequest) {
 	}
 }
 
+// StoreRefreshToken is a stored refresh token request and whether it is active.
 type StoreRefreshToken struct {
 	active               bool
 	accessTokenSignature string

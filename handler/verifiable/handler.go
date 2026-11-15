@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package verifiable implements the token endpoint handler of OpenID for Verifiable Credential Issuance.
 package verifiable
 
 import (
@@ -18,6 +19,7 @@ const (
 	draftNonceExpField = "c_nonce_expires_in_draft_00"
 )
 
+// Handler issues the nonce of the OpenID for Verifiable Credential Issuance flow at the token endpoint.
 type Handler struct {
 	Config interface {
 		oauth2.VerifiableCredentialsNonceLifespanProvider

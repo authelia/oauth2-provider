@@ -10,17 +10,20 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
+// CodeStrategy is the combined device code and user code strategy.
 type CodeStrategy interface {
 	DeviceCodeStrategy
 	UserCodeStrategy
 }
 
+// DeviceCodeStrategy generates and validates RFC 8628 device codes.
 type DeviceCodeStrategy interface {
 	RFC8628DeviceCodeSignature(ctx context.Context, code string) (signature string, err error)
 	GenerateRFC8628DeviceCode(ctx context.Context) (code string, signature string, err error)
 	ValidateRFC8628DeviceCode(ctx context.Context, r oauth2.Requester, code string) (err error)
 }
 
+// UserCodeStrategy generates and validates RFC 8628 user codes.
 type UserCodeStrategy interface {
 	RFC8628UserCodeSignature(ctx context.Context, code string) (signature string, err error)
 	GenerateRFC8628UserCode(ctx context.Context) (code string, signature string, err error)

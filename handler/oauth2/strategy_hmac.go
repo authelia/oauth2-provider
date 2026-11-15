@@ -486,6 +486,7 @@ const (
 	tokenPrefixPartClientRegistrationToken = "cr"
 )
 
+// CoreStrategyConfigurator is the configuration the core token strategy requires.
 type CoreStrategyConfigurator interface {
 	HMACCoreStrategyConfigurator
 
@@ -495,6 +496,7 @@ type CoreStrategyConfigurator interface {
 	oauth2.ConfirmationConfigProvider
 }
 
+// HMACCoreStrategyConfigurator is the configuration the HMAC-SHA core token strategy requires.
 type HMACCoreStrategyConfigurator interface {
 	oauth2.AccessTokenLifespanProvider
 	oauth2.RefreshTokenLifespanProvider

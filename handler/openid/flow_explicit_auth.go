@@ -12,6 +12,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// OpenIDConnectExplicitHandler handles the OpenID Connect authorization code flow at the authorization endpoint.
 type OpenIDConnectExplicitHandler struct {
 	// OpenIDConnectRequestStorage is the storage for open id connect sessions.
 	OpenIDConnectRequestStorage   OpenIDConnectRequestStorage

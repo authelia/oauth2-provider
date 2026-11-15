@@ -13,14 +13,22 @@ func NewContext() context.Context {
 	return context.Background()
 }
 
+// ContextKey is the type of keys used to store values on a [context.Context].
 type ContextKey string
 
 const (
-	RequestContextKey                 = ContextKey("request")
-	AccessRequestContextKey           = ContextKey("accessRequest")
-	AccessResponseContextKey          = ContextKey("accessResponse")
-	AuthorizeRequestContextKey        = ContextKey("authorizeRequest")
-	AuthorizeResponseContextKey       = ContextKey("authorizeResponse")
+	// RequestContextKey is the context key for the [http.Request].
+	RequestContextKey = ContextKey("request")
+	// AccessRequestContextKey is the context key for the AccessRequester.
+	AccessRequestContextKey = ContextKey("accessRequest")
+	// AccessResponseContextKey is the context key for the AccessResponder.
+	AccessResponseContextKey = ContextKey("accessResponse")
+	// AuthorizeRequestContextKey is the context key for the AuthorizeRequester.
+	AuthorizeRequestContextKey = ContextKey("authorizeRequest")
+	// AuthorizeResponseContextKey is the context key for the AuthorizeResponder.
+	AuthorizeResponseContextKey = ContextKey("authorizeResponse")
+	// PushedAuthorizeResponseContextKey is the context key for the PushedAuthorizeResponder.
 	PushedAuthorizeResponseContextKey = ContextKey("pushedAuthorizeResponse")
-	DPoPProofContextKey               = ContextKey("dpopProof")
+	// DPoPProofContextKey is the context key for the DPoP proof.
+	DPoPProofContextKey = ContextKey("dpopProof")
 )

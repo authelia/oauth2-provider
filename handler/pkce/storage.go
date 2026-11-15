@@ -11,6 +11,7 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
+// Storage persists the PKCE request sessions and challenge use records.
 type Storage interface {
 	GetPKCERequestSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.Requester, error)
 	CreatePKCERequestSession(ctx context.Context, signature string, request oauth2.Requester) error

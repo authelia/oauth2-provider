@@ -146,7 +146,7 @@ func (t *Token) IsSignatureValid() bool {
 
 // UnsafeClaimsWithoutVerification decodes the JWT Claims Set of a parsed token into each dest without verifying the
 // token. Unlike Claims, which holds every number as an integer or a float, dest controls how values decode, so a
-// json.RawMessage keeps a member exactly as it was signed.
+// [json.RawMessage] keeps a member exactly as it was signed.
 func (t *Token) UnsafeClaimsWithoutVerification(dest ...any) (err error) {
 	if t == nil || t.parsedToken == nil {
 		return errorsx.WithStack(errors.New("the token was not parsed"))
@@ -421,8 +421,10 @@ func (t *Token) IsJWTProfileAccessToken() (ok bool) {
 	return validateTokenTypeValue(raw, JSONWebTokenTypeAccessToken)
 }
 
+// HeaderValidationOption configures HeaderValidationOptions.
 type HeaderValidationOption func(opts *HeaderValidationOptions)
 
+// HeaderValidationOptions holds the options used when validating token headers.
 type HeaderValidationOptions struct {
 	allowEmptyType bool
 	types          []string

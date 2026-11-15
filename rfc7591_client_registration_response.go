@@ -83,7 +83,7 @@ type ClientRegistrationResponse struct {
 }
 
 // NewClientRegistrationResponse returns an empty ClientRegistrationResponse with its status code set to
-// http.StatusOK and its header initialized.
+// [http.StatusOK] and its header initialized.
 func NewClientRegistrationResponse() *ClientRegistrationResponse {
 	return &ClientRegistrationResponse{
 		StatusCode: http.StatusOK,

@@ -53,6 +53,7 @@ type Session interface {
 	AccessTokenClaimsMap() map[string]any
 }
 
+// DefaultSession is the default session of an RFC 8693 token exchange request.
 type DefaultSession struct {
 	*openid.DefaultSession
 

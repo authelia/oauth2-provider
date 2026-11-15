@@ -59,7 +59,7 @@ func (c *LogoutTokenClaims) GetIssuedAt() (iat *NumericDate, err error) {
 	return c.IssuedAt, nil
 }
 
-// A logout-token never contains an nbf claim, so we simply return nil, nil.
+// GetNotBefore returns nil, nil as a logout token never contains an nbf claim.
 func (c *LogoutTokenClaims) GetNotBefore() (*NumericDate, error) {
 	return nil, nil
 }

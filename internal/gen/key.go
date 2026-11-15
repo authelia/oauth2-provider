@@ -11,6 +11,7 @@ import (
 	"crypto/rsa"
 )
 
+// MustRSAKey generates a 2048 bit RSA key and panics on failure.
 func MustRSAKey() *rsa.PrivateKey {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -20,6 +21,7 @@ func MustRSAKey() *rsa.PrivateKey {
 	return key
 }
 
+// MustES256Key generates an ECDSA key on the P-256 curve and panics on failure.
 func MustES256Key() *ecdsa.PrivateKey {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -29,6 +31,7 @@ func MustES256Key() *ecdsa.PrivateKey {
 	return key
 }
 
+// MustES521Key generates an ECDSA key on the P-521 curve and panics on failure.
 func MustES521Key() *ecdsa.PrivateKey {
 	key, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
 	if err != nil {

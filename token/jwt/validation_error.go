@@ -38,7 +38,7 @@ type ValidationError struct {
 	text   string // errors that do not have a valid error just have text.
 }
 
-// Validation error is an error type.
+// Error implements the error interface.
 func (e ValidationError) Error() string {
 	switch {
 	case e.Inner != nil:

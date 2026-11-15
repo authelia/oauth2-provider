@@ -22,6 +22,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// HMACStrategyConfigurator is the configuration the HMAC strategy requires.
 type HMACStrategyConfigurator interface {
 	oauth2.TokenEntropyProvider
 	oauth2.GlobalSecretProvider

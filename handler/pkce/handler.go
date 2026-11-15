@@ -20,6 +20,7 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// Handler implements RFC 7636 Proof Key for Code Exchange for the authorization and token endpoints.
 type Handler struct {
 	AuthorizeCodeStrategy hoauth2.AuthorizeCodeStrategy
 	Storage               Storage

@@ -130,8 +130,11 @@ func capabilities[H any](handlers []H, get func(h H) []string) (values []string)
 type ClientAuthEndpoint string
 
 const (
-	ClientAuthEndpointToken         ClientAuthEndpoint = "token"
-	ClientAuthEndpointRevocation    ClientAuthEndpoint = "revocation"
+	// ClientAuthEndpointToken is the token endpoint.
+	ClientAuthEndpointToken ClientAuthEndpoint = "token"
+	// ClientAuthEndpointRevocation is the token revocation endpoint.
+	ClientAuthEndpointRevocation ClientAuthEndpoint = "revocation"
+	// ClientAuthEndpointIntrospection is the token introspection endpoint.
 	ClientAuthEndpointIntrospection ClientAuthEndpoint = "introspection"
 
 	// ClientAuthEndpointBackChannelAuthentication is the OpenID Connect CIBA backchannel authentication endpoint,

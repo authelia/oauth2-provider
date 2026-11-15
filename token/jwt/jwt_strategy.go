@@ -43,6 +43,7 @@ type Strategy interface {
 	DecryptionAlgValues(ctx context.Context) (algs []string)
 }
 
+// StrategyConfig is the configuration required by the JWT strategy.
 type StrategyConfig interface {
 	// GetJWKSFetcherStrategy returns the JWKS fetcher strategy.
 	GetJWKSFetcherStrategy(ctx context.Context) (strategy JWKSFetcherStrategy)
@@ -115,6 +116,7 @@ func FilterKeyAlgorithms[T ~string](ctx context.Context, config any, algs []T) (
 	return out
 }
 
+// JWKSFetcherStrategy fetches JSON Web Key Sets.
 type JWKSFetcherStrategy interface {
 	// Resolve returns the JSON Web Key Set, or an error if something went wrong. The forceRefresh, if true, forces
 	// the strategy to fetch the key from the remote. If forceRefresh is false, the strategy may use a caching strategy
@@ -125,6 +127,7 @@ type JWKSFetcherStrategy interface {
 // DefaultStrategy is responsible for providing JWK encoding and cryptographic functionality.
 type DefaultStrategy struct {
 	Config StrategyConfig
+	// Issuer provides the JSON Web Keys and algorithms used to issue tokens.
 	Issuer Issuer
 }
 

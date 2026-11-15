@@ -88,7 +88,7 @@ func (d SSFStreamRequestDelivery) MarshalJSON() (data []byte, err error) {
 	}{d.Method, d.EndpointURL})
 }
 
-// Format implements fmt.Formatter, redacting AuthorizationHeader for every verb.
+// Format implements [fmt.Formatter], redacting AuthorizationHeader for every verb.
 func (d SSFStreamRequestDelivery) Format(f fmt.State, verb rune) {
 	SSFDelivery{Method: d.Method, EndpointURL: d.EndpointURL, AuthorizationHeader: ptrString(d.AuthorizationHeader)}.Format(f, verb)
 }
@@ -101,9 +101,16 @@ type SSFStreamRequest struct {
 	Body     *SSFStreamRequestBody
 }
 
-func (r *SSFStreamRequest) GetMethod() (method string)            { return r.Method }
-func (r *SSFStreamRequest) GetClient() (client Client)            { return r.Client }
-func (r *SSFStreamRequest) GetStreamID() (id string)              { return r.StreamID }
+// GetMethod returns the HTTP method of the request.
+func (r *SSFStreamRequest) GetMethod() (method string) { return r.Method }
+
+// GetClient returns the authenticated client.
+func (r *SSFStreamRequest) GetClient() (client Client) { return r.Client }
+
+// GetStreamID returns the stream identifier of the request.
+func (r *SSFStreamRequest) GetStreamID() (id string) { return r.StreamID }
+
+// GetBody returns the decoded request body.
 func (r *SSFStreamRequest) GetBody() (body *SSFStreamRequestBody) { return r.Body }
 
 // SSFStreamResponse is the default SSFStreamResponder.
@@ -112,8 +119,11 @@ type SSFStreamResponse struct {
 	Body       any
 }
 
+// GetStatusCode returns the HTTP status code of the response.
 func (r *SSFStreamResponse) GetStatusCode() (code int) { return r.StatusCode }
-func (r *SSFStreamResponse) GetBody() (body any)       { return r.Body }
+
+// GetBody returns the response body.
+func (r *SSFStreamResponse) GetBody() (body any) { return r.Body }
 
 // NewSSFStreamRequest authorizes the request and decodes its body. Only GET, POST, PUT, PATCH and DELETE are served; reads need
 // 'ssf.read' and writes 'ssf.manage'.

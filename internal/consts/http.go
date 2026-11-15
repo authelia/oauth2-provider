@@ -5,30 +5,46 @@
 package consts
 
 const (
-	HeaderContentType     = "Content-Type"
-	HeaderCacheControl    = "Cache-Control"
-	HeaderAllow           = "Allow"
-	HeaderPragma          = "Pragma"
-	HeaderAuthorization   = "Authorization"
-	HeaderLocation        = "Location"
-	HeaderAccept          = "Accept"
-	HeaderAcceptLanguage  = "Accept-Language"
+	// HeaderContentType is the Content-Type HTTP header.
+	HeaderContentType = "Content-Type"
+	// HeaderCacheControl is the Cache-Control HTTP header.
+	HeaderCacheControl = "Cache-Control"
+	// HeaderAllow is the Allow HTTP header.
+	HeaderAllow = "Allow"
+	// HeaderPragma is the Pragma HTTP header.
+	HeaderPragma = "Pragma"
+	// HeaderAuthorization is the Authorization HTTP header.
+	HeaderAuthorization = "Authorization"
+	// HeaderLocation is the Location HTTP header.
+	HeaderLocation = "Location"
+	// HeaderAccept is the Accept HTTP header.
+	HeaderAccept = "Accept"
+	// HeaderAcceptLanguage is the Accept-Language HTTP header.
+	HeaderAcceptLanguage = "Accept-Language"
+	// HeaderWWWAuthenticate is the WWW-Authenticate HTTP header.
 	HeaderWWWAuthenticate = "WWW-Authenticate"
+	// HeaderXForwardedProto is the X-Forwarded-Proto HTTP header.
 	HeaderXForwardedProto = "X-Forwarded-Proto"
-	HeaderDPoP            = "DPoP"
-	HeaderDPoPNonce       = "DPoP-Nonce"
+	// HeaderDPoP is the DPoP HTTP header from RFC 9449.
+	HeaderDPoP = "DPoP"
+	// HeaderDPoPNonce is the DPoP-Nonce HTTP header from RFC 9449.
+	HeaderDPoPNonce = "DPoP-Nonce"
 )
 
 const (
-	ContentTypeApplicationURLEncodedForm        = "application/x-www-form-urlencoded"
-	ContentTypeApplicationJSON                  = "application/json; charset=utf-8"
+	// ContentTypeApplicationURLEncodedForm is the application/x-www-form-urlencoded content type.
+	ContentTypeApplicationURLEncodedForm = "application/x-www-form-urlencoded"
+	// ContentTypeApplicationJSON is the application/json content type with a UTF-8 charset.
+	ContentTypeApplicationJSON = "application/json; charset=utf-8"
+	// ContentTypeApplicationTokenIntrospectionJWT is the application/token-introspection+jwt content type from RFC 9701 with a UTF-8 charset.
 	ContentTypeApplicationTokenIntrospectionJWT = "application/token-introspection+jwt; charset=utf-8"
-	ContentTypeTextHTML                         = "text/html; charset=utf-8"
+	// ContentTypeTextHTML is the text/html content type with a UTF-8 charset.
+	ContentTypeTextHTML = "text/html; charset=utf-8"
 )
 
 const (
 	// MediaTypeApplicationJSON is the bare "application/json" media type, without a charset parameter. It is used to
-	// validate an incoming request's Content-Type header via mime.ParseMediaType, which strips any parameters before
+	// validate an incoming request's Content-Type header via [mime.ParseMediaType], which strips any parameters before
 	// comparison.
 	MediaTypeApplicationJSON = "application/json"
 )
@@ -52,12 +68,16 @@ const (
 )
 
 const (
-	PragmaNoCache       = "no-cache"
+	// PragmaNoCache is the no-cache Pragma header value.
+	PragmaNoCache = "no-cache"
+	// CacheControlNoStore is the no-store Cache-Control header value from RFC 9111.
 	CacheControlNoStore = "no-store"
 )
 
 const (
-	SchemeHTTP  = "http"
+	// SchemeHTTP is the http URI scheme.
+	SchemeHTTP = "http"
+	// SchemeHTTPS is the https URI scheme.
 	SchemeHTTPS = "https"
 )
 

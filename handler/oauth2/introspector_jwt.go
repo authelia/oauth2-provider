@@ -15,12 +15,14 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+// StatelessJWTStrategy is a strategy that can validate JWT access tokens and refresh tokens.
 type StatelessJWTStrategy interface {
 	jwt.Strategy
 	AccessTokenStrategy
 	RefreshTokenStrategy
 }
 
+// StatelessJWTValidator introspects JWT access tokens without consulting storage.
 type StatelessJWTValidator struct {
 	StatelessJWTStrategy
 	Config interface {

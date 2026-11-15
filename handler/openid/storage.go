@@ -11,8 +11,10 @@ import (
 	"authelia.com/provider/oauth2"
 )
 
+// ErrNoSessionFound is returned when no OpenID Connect session is found.
 var ErrNoSessionFound = oauth2.ErrNotFound
 
+// OpenIDConnectRequestStorage persists the OpenID Connect sessions of authorization requests.
 type OpenIDConnectRequestStorage interface {
 	// CreateOpenIDConnectSession creates an open id connect session
 	// for a given authorize code. This is relevant for explicit open id connect flow.

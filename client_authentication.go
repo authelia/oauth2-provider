@@ -35,6 +35,7 @@ type ClientAuthenticationStrategy interface {
 }
 
 var (
+	// ErrClientSecretNotRegistered is returned when the client has no secret registered to check against.
 	ErrClientSecretNotRegistered = errors.New("error occurred checking the client secret: the client is not registered with a secret")
 
 	// ErrClientSecretExpired is returned when the client's secret has passed the expiry recorded at registration.
@@ -623,7 +624,7 @@ func (s *RevocationEndpointClientAuthStrategy) AllowMethodNone() bool {
 	return true
 }
 
-// PrivateKey properly describes crypto.PrivateKey.
+// PrivateKey properly describes [crypto.PrivateKey].
 type PrivateKey interface {
 	Public() crypto.PublicKey
 	Equal(x crypto.PrivateKey) bool

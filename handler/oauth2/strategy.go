@@ -34,6 +34,7 @@ type CoreStrategy interface {
 	UserCodeStrategy
 }
 
+// AccessTokenStrategy generates, validates, and identifies access tokens.
 type AccessTokenStrategy interface {
 	// IsOpaqueAccessToken returns true if the provided token is possibly an opaque Access Token.
 	//
@@ -52,6 +53,7 @@ type AccessTokenStrategy interface {
 	ValidateAccessToken(ctx context.Context, request oauth2.Requester, token string) (err error)
 }
 
+// RefreshTokenStrategy generates, validates, and identifies refresh tokens.
 type RefreshTokenStrategy interface {
 	// IsOpaqueRefreshToken returns true if the provided token is possibly an opaque Refresh Token.
 	//
@@ -71,6 +73,7 @@ type RefreshTokenStrategy interface {
 	ValidateRefreshToken(ctx context.Context, request oauth2.Requester, token string) (err error)
 }
 
+// AuthorizeCodeStrategy generates, validates, and identifies authorization codes.
 type AuthorizeCodeStrategy interface {
 	// IsOpaqueAuthorizeCode returns true if the provided token is possibly an opaque Authorize Code.
 	//
@@ -88,6 +91,7 @@ type AuthorizeCodeStrategy interface {
 	ValidateAuthorizeCode(ctx context.Context, request oauth2.Requester, token string) (err error)
 }
 
+// DeviceCodeStrategy generates, validates, and identifies RFC 8628 device codes.
 type DeviceCodeStrategy interface {
 	// IsOpaqueRFC8628DeviceCode returns true if the provided token is possibly an opaque RFC8628 Device Code.
 	//
@@ -105,6 +109,7 @@ type DeviceCodeStrategy interface {
 	ValidateRFC8628DeviceCode(ctx context.Context, r oauth2.Requester, code string) (err error)
 }
 
+// UserCodeStrategy generates and validates RFC 8628 user codes.
 type UserCodeStrategy interface {
 	// RFC8628UserCodeSignature returns the signature of the provided RFC8628 User Code.
 	RFC8628UserCodeSignature(ctx context.Context, code string) (signature string, err error)

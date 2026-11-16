@@ -35,6 +35,7 @@ type txnRequest struct {
 type txnFixture struct {
 	config  *oauth2.Config
 	client  *oauth2.DefaultClient
+	domain  *TxnTokenTrustDomain
 	handler *TokenExchangeGrantHandler
 }
 
@@ -42,7 +43,8 @@ func newTxnFixture(t *testing.T) *txnFixture {
 	t.Helper()
 
 	config := newSpecConfig(t)
-	config.RFC8693TokenTypes[consts.TokenTypeRFC8693TxnToken] = &TxnTokenType{Name: consts.TokenTypeRFC8693TxnToken, TrustDomain: txnTrustDomain}
+	domain := &TxnTokenTrustDomain{}
+	config.RFC8693TokenTypes[consts.TokenTypeRFC8693TxnToken] = &TxnTokenType{Name: consts.TokenTypeRFC8693TxnToken, Domains: map[string]*TxnTokenTrustDomain{txnTrustDomain: domain}}
 
 	client := &oauth2.DefaultClient{
 		ID:           "txn-client",
@@ -56,6 +58,7 @@ func newTxnFixture(t *testing.T) *txnFixture {
 	return &txnFixture{
 		config: config,
 		client: client,
+		domain: domain,
 		handler: &TokenExchangeGrantHandler{
 			Config:           config,
 			ScopeStrategy:    oauth2.ExactScopeStrategy,
@@ -184,7 +187,7 @@ func TestTxnTokenClientAuthenticationMethods(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newTxnFixture(t)
-			f.config.RFC8693TokenTypes[consts.TokenTypeRFC8693TxnToken].(*TxnTokenType).ClientAuthenticationMethods = tc.allowed
+			f.domain.ClientAuthenticationMethods = tc.allowed
 
 			request := f.request(txnRequest{})
 			request.SetClientAuthenticationMethod(tc.method)

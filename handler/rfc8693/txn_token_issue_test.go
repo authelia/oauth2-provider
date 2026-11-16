@@ -376,11 +376,12 @@ func TestTxnTokenIssuedScopeIsTheGrantedRequestedScopes(t *testing.T) {
 				request := &oauth2.AccessRequest{
 					GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
 					Request: oauth2.Request{
-						Client:         f.client,
-						Session:        session,
-						RequestedScope: oauth2.Arguments{"trade.stocks"},
-						GrantedScope:   oauth2.Arguments{"trade.bonds"},
-						Form:           url.Values{consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693TxnToken}},
+						Client:            f.client,
+						Session:           session,
+						RequestedScope:    oauth2.Arguments{"trade.stocks"},
+						GrantedScope:      oauth2.Arguments{"trade.bonds"},
+						RequestedAudience: oauth2.Arguments{f.audience},
+						Form:              url.Values{consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693TxnToken}},
 					},
 				}
 
@@ -395,7 +396,7 @@ func TestTxnTokenIssuer(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Run("ShouldSetAConfiguredIssuer", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
-				f.txnType.Issuer = "https://tts.example"
+				f.txnDomain.Issuer = "https://tts.example"
 
 				response, err := f.exchange(t, txnExchange{subjectToken: f.mint(t, txnMint{scopes: []string{"trade.stocks"}}), scopes: []string{"trade.stocks"}})
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -405,7 +406,7 @@ func TestTxnTokenIssuer(t *testing.T) {
 
 			t.Run("ShouldRefuseTheIDTokenIssuer", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
-				f.txnType.Issuer = f.cfg.Issuer
+				f.txnDomain.Issuer = f.cfg.Issuer
 
 				_, err := f.exchange(t, txnExchange{subjectToken: f.mint(t, txnMint{scopes: []string{"trade.stocks"}}), scopes: []string{"trade.stocks"}})
 
@@ -423,7 +424,7 @@ func TestTxnTokenSigning(t *testing.T) {
 				require.NoError(t, err)
 
 				f := newTxnIssueFixture(t, store)
-				f.txnType.SigningAlg = "ES256"
+				f.txnDomain.SigningAlg = "ES256"
 
 				f.strategy.Issuer, err = jwt.NewDefaultIssuer(
 					jose.JSONWebKey{Key: key, KeyID: "rs", Algorithm: "RS256", Use: "sig"},
@@ -446,7 +447,7 @@ func TestTxnTokenSigning(t *testing.T) {
 
 			t.Run("ShouldReturnServerErrorWithoutAKey", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
-				f.txnType.SigningAlg = "ES256"
+				f.txnDomain.SigningAlg = "ES256"
 
 				_, err := f.exchange(t, txnExchange{subjectToken: f.mint(t, txnMint{scopes: []string{"trade.stocks"}}), scopes: []string{"trade.stocks"}})
 
@@ -506,7 +507,7 @@ func TestTxnTokenExpiry(t *testing.T) {
 			for _, tc := range testCases {
 				t.Run(tc.name, func(t *testing.T) {
 					f := newTxnIssueFixture(t, store)
-					f.txnType.Expiry = tc.expiry
+					f.txnDomain.Expiry = tc.expiry
 					f.scopes.scopes = []string{"trade.stocks"}
 
 					expires := time.Now().Add(tc.subject)
@@ -806,8 +807,8 @@ func TestTxnTokenIsNotAcceptedElsewhere(t *testing.T) {
 				t.Run(tc.name, func(t *testing.T) {
 					f := newTxnIssueFixture(t, store)
 
-					f.txnType.Issuer = txnJWTIssuer
-					f.txnType.TrustDomain = txnClientID
+					f.txnDomain.Issuer = txnJWTIssuer
+					f.txnType.Domains = map[string]*TxnTokenTrustDomain{txnClientID: f.txnDomain}
 					f.client.Audience = []string{txnClientID}
 					f.audience = txnClientID
 
@@ -836,6 +837,7 @@ type txnIssueStore interface {
 
 type txnScopeCall struct {
 	client      oauth2.Client
+	trustDomain string
 	subjectType string
 	subject     string
 	claims      map[string]any
@@ -848,8 +850,8 @@ type txnScopeStub struct {
 	mutate func(claims map[string]any)
 }
 
-func (s *txnScopeStub) GetTxnTokenSubjectScopes(_ context.Context, client oauth2.Client, subjectTokenType, subject string, claims map[string]any) ([]string, error) {
-	s.calls = append(s.calls, txnScopeCall{client, subjectTokenType, subject, claims})
+func (s *txnScopeStub) GetTxnTokenSubjectScopes(_ context.Context, client oauth2.Client, trustDomain, subjectTokenType, subject string, claims map[string]any) ([]string, error) {
+	s.calls = append(s.calls, txnScopeCall{client, trustDomain, subjectTokenType, subject, claims})
 
 	if s.mutate != nil {
 		s.mutate(claims)
@@ -920,6 +922,7 @@ type txnIssueFixture struct {
 	core        hoauth2.CoreStrategy
 	strategy    *jwt.DefaultStrategy
 	txnType     *TxnTokenType
+	txnDomain   *TxnTokenTrustDomain
 	txn         *TxnTokenTypeHandler
 	scopes      *txnScopeStub
 	workloadKey *ecdsa.PrivateKey
@@ -932,7 +935,8 @@ func newTxnIssueFixture(t *testing.T, store txnIssueStore) *txnIssueFixture {
 
 	cfg := newSpecConfig(t)
 
-	txnType := &TxnTokenType{Name: consts.TokenTypeRFC8693TxnToken, TrustDomain: txnTrustDomain}
+	txnDomain := &TxnTokenTrustDomain{}
+	txnType := &TxnTokenType{Name: consts.TokenTypeRFC8693TxnToken, Domains: map[string]*TxnTokenTrustDomain{txnTrustDomain: txnDomain}}
 
 	cfg.Issuer = "https://op.example"
 	cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693TxnToken] = txnType
@@ -971,6 +975,7 @@ func newTxnIssueFixture(t *testing.T, store txnIssueStore) *txnIssueFixture {
 		core:        core,
 		strategy:    strategy,
 		txnType:     txnType,
+		txnDomain:   txnDomain,
 		txn:         txn,
 		scopes:      scopes,
 		workloadKey: workloadKey,

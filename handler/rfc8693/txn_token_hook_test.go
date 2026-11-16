@@ -51,7 +51,7 @@ func TestTxnTokenHookInput(t *testing.T) {
 
 				var seen *TxnTokenClaimsInput
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					seen = input
 
 					return nil
@@ -74,7 +74,7 @@ func TestTxnTokenHookInput(t *testing.T) {
 
 				called := false
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					called = true
 
 					assert.Nil(t, input.RequestContext)
@@ -95,7 +95,7 @@ func TestTxnTokenHookInput(t *testing.T) {
 
 				var seen map[string]any
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					seen = input.SubjectClaims
 
 					return nil
@@ -111,7 +111,7 @@ func TestTxnTokenHookInput(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
 				f.scopes.scopes = []string{"trade.stocks"}
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					input.SubjectClaims["tenant"] = "forged"
 					input.SubjectClaims["nested"].(map[string]any)["name"] = "forged"
 
@@ -136,7 +136,7 @@ func TestTxnTokenHookContextClaims(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Run("ShouldSetFromTheParameters", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
-				f.txnType.TranscribeClaims = txnHookFullCopy
+				f.txnDomain.TranscribeClaims = txnHookFullCopy
 
 				response, err := f.exchange(t, f.hookExchange(t, txnHookParameters()))
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -153,7 +153,7 @@ func TestTxnTokenHookContextClaims(t *testing.T) {
 					{consts.FormParameterRequestContext: {"{}"}, consts.FormParameterRequestDetails: {"{}"}},
 				} {
 					f := newTxnIssueFixture(t, store)
-					f.txnType.TranscribeClaims = txnHookFullCopy
+					f.txnDomain.TranscribeClaims = txnHookFullCopy
 
 					response, err := f.exchange(t, f.hookExchange(t, parameters))
 					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -168,7 +168,7 @@ func TestTxnTokenHookContextClaims(t *testing.T) {
 			t.Run("ShouldAcceptAnyValueEncodedAsAnObject", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					input.Claims[consts.ClaimRequestContext] = map[string]string{"value": "typed"}
 					input.Claims[consts.ClaimTransactionContext] = struct {
 						Value string `json:"value"`
@@ -189,7 +189,7 @@ func TestTxnTokenHookContextClaims(t *testing.T) {
 			t.Run("ShouldOmitAnEmptyValueOfAnotherType", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					input.Claims[consts.ClaimRequestContext] = map[string]string{}
 					input.Claims[consts.ClaimTransactionContext] = struct{}{}
 
@@ -213,12 +213,12 @@ func TestTxnTokenHookProtectedClaims(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Run("ShouldDiscardChanges", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
-				f.txnType.Issuer = "https://tts.example"
+				f.txnDomain.Issuer = "https://tts.example"
 				f.client.allowActor = true
 
 				var draft map[string]any
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					draft = map[string]any{}
 
 					for name, value := range input.Claims {
@@ -251,10 +251,10 @@ func TestTxnTokenHookProtectedClaims(t *testing.T) {
 
 			t.Run("ShouldRestoreDeletedClaims", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
-				f.txnType.Issuer = "https://tts.example"
+				f.txnDomain.Issuer = "https://tts.example"
 				f.client.allowActor = true
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					for _, name := range txnHookProtectedClaims() {
 						delete(input.Claims, name)
 					}
@@ -278,7 +278,7 @@ func TestTxnTokenHookProtectedClaims(t *testing.T) {
 			t.Run("ShouldRemoveAnIssuerOrActorThatWasNotDrafted", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					input.Claims[consts.ClaimIssuer] = "https://forged.example"
 					input.Claims[consts.ClaimActor] = map[string]any{consts.ClaimSubject: "mallory"}
 
@@ -297,7 +297,7 @@ func TestTxnTokenHookProtectedClaims(t *testing.T) {
 			t.Run("ShouldRemoveAConfirmationClaim", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					input.Claims[consts.ClaimConfirmation] = map[string]any{consts.ClaimConfirmationJWKThumbprint: "forged"}
 
 					return nil
@@ -313,7 +313,7 @@ func TestTxnTokenHookProtectedClaims(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
 				f.client.allowActor = true
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					act := input.Claims[consts.ClaimActor].(map[string]any)
 					act[consts.ClaimSubject] = "mallory"
 					act[consts.ClaimActor].(map[string]any)[consts.ClaimSubject] = "mallory"
@@ -334,7 +334,7 @@ func TestTxnTokenHookProtectedClaims(t *testing.T) {
 			t.Run("ShouldRestoreIntoAReplacedClaimsMap", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					input.Claims = map[string]any{
 						consts.ClaimSubject: "service",
 						consts.ClaimScope:   "trade.stocks",
@@ -365,7 +365,7 @@ func TestTxnTokenHookAllowedChanges(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newTxnIssueFixture(t, store)
 
-			f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+			f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 				input.Claims[consts.ClaimSubject] = "service-account"
 				input.Claims[consts.ClaimScope] = "trade.bonds"
 				input.Claims["tenant"] = "acme"
@@ -403,7 +403,7 @@ func TestTxnTokenHookScopeIsNormalized(t *testing.T) {
 				t.Run(tc.name, func(t *testing.T) {
 					f := newTxnIssueFixture(t, store)
 
-					f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+					f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 						input.Claims[consts.ClaimScope] = tc.scope
 
 						return nil
@@ -450,7 +450,7 @@ func TestTxnTokenHookMisuseIsServerError(t *testing.T) {
 				t.Run(tc.name, func(t *testing.T) {
 					f := newTxnIssueFixture(t, store)
 
-					f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+					f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 						tc.hook(input.Claims)
 
 						return nil
@@ -466,7 +466,7 @@ func TestTxnTokenHookMisuseIsServerError(t *testing.T) {
 			t.Run("ShouldRefuseAScopeGrantedButNotRequested", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					input.Claims[consts.ClaimScope] = "trade.bonds"
 
 					return nil
@@ -483,7 +483,7 @@ func TestTxnTokenHookMisuseIsServerError(t *testing.T) {
 			t.Run("ShouldRefuseAScopeGrantedByTheHook", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
 
-				f.txnType.TranscribeClaims = func(_ context.Context, request oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, request oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					request.AppendRequestedScope("trade.options")
 					request.GrantScope("trade.options")
 
@@ -500,7 +500,7 @@ func TestTxnTokenHookMisuseIsServerError(t *testing.T) {
 			t.Run("ShouldRefuseNilClaims", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
 
-				f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+				f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 					input.Claims = nil
 
 					return nil
@@ -531,7 +531,7 @@ func TestTxnTokenHookErrorDeniesTheRequest(t *testing.T) {
 				t.Run(tc.name, func(t *testing.T) {
 					f := newTxnIssueFixture(t, store)
 
-					f.txnType.TranscribeClaims = func(context.Context, oauth2.AccessRequester, *TxnTokenClaimsInput) error {
+					f.txnDomain.TranscribeClaims = func(context.Context, oauth2.AccessRequester, *TxnTokenClaimsInput) error {
 						return tc.err
 					}
 
@@ -550,7 +550,7 @@ func TestTxnTokenHookPanicIsNotRecovered(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newTxnIssueFixture(t, store)
 
-			f.txnType.TranscribeClaims = func(context.Context, oauth2.AccessRequester, *TxnTokenClaimsInput) error {
+			f.txnDomain.TranscribeClaims = func(context.Context, oauth2.AccessRequester, *TxnTokenClaimsInput) error {
 				panic("hook failure")
 			}
 
@@ -567,7 +567,7 @@ func TestTxnTokenParametersKeepNumberPrecision(t *testing.T) {
 	for name, store := range txnIssueStores() {
 		t.Run(name, func(t *testing.T) {
 			f := newTxnIssueFixture(t, store)
-			f.txnType.TranscribeClaims = txnHookFullCopy
+			f.txnDomain.TranscribeClaims = txnHookFullCopy
 
 			response, err := f.exchange(t, f.hookExchange(t, url.Values{
 				consts.FormParameterRequestContext: {`{"precise":0.1234567890123456789012345}`},
@@ -597,7 +597,7 @@ func TestTxnTokenHookClaimsKeepTheirTypes(t *testing.T) {
 			f := newTxnIssueFixture(t, store)
 			f.scopes.scopes = []string{"trade.stocks"}
 
-			f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+			f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 				input.Claims["account"] = input.SubjectClaims["account"]
 				input.Claims["typed"] = struct {
 					Value json.Number `json:"value"`

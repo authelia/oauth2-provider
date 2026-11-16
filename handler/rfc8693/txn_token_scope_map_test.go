@@ -23,8 +23,8 @@ import (
 
 const txnInternalScope = "orders.write"
 
-func txnMapScopes(result []string, err error) func(context.Context, oauth2.AccessRequester, []string) ([]string, error) {
-	return func(context.Context, oauth2.AccessRequester, []string) ([]string, error) { return result, err }
+func txnMapScopes(result []string, err error) func(context.Context, oauth2.AccessRequester, string, []string) ([]string, error) {
+	return func(context.Context, oauth2.AccessRequester, string, []string) ([]string, error) { return result, err }
 }
 
 func TestTxnTokenMapScopes(t *testing.T) {
@@ -32,7 +32,7 @@ func TestTxnTokenMapScopes(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Run("ShouldIssueTheMappedScopes", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
-				f.txnType.MapScopes = txnMapScopes([]string{txnInternalScope, "orders.read"}, nil)
+				f.txnDomain.MapScopes = txnMapScopes([]string{txnInternalScope, "orders.read"}, nil)
 
 				response, err := f.exchange(t, f.hookExchange(t, nil))
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -55,7 +55,7 @@ func TestTxnTokenMapScopes(t *testing.T) {
 
 				var received []string
 
-				f.txnType.MapScopes = func(_ context.Context, request oauth2.AccessRequester, scopes []string) ([]string, error) {
+				f.txnDomain.MapScopes = func(_ context.Context, request oauth2.AccessRequester, _ string, scopes []string) ([]string, error) {
 					received = scopes
 
 					assert.Equal(t, txnClientID, request.GetClient().GetID())
@@ -72,7 +72,7 @@ func TestTxnTokenMapScopes(t *testing.T) {
 			t.Run("ShouldNotRunWhenTheCeilingRefuses", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
 
-				f.txnType.MapScopes = func(context.Context, oauth2.AccessRequester, []string) ([]string, error) {
+				f.txnDomain.MapScopes = func(context.Context, oauth2.AccessRequester, string, []string) ([]string, error) {
 					t.Error("MapScopes ran for a refused request")
 
 					return nil, nil
@@ -85,7 +85,7 @@ func TestTxnTokenMapScopes(t *testing.T) {
 
 			t.Run("ShouldDropARepeatedScope", func(t *testing.T) {
 				f := newTxnIssueFixture(t, store)
-				f.txnType.MapScopes = txnMapScopes([]string{txnInternalScope, txnInternalScope}, nil)
+				f.txnDomain.MapScopes = txnMapScopes([]string{txnInternalScope, txnInternalScope}, nil)
 
 				response, err := f.exchange(t, f.hookExchange(t, nil))
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
@@ -96,7 +96,7 @@ func TestTxnTokenMapScopes(t *testing.T) {
 			t.Run("ShouldRefuseAnEmptyResult", func(t *testing.T) {
 				for _, result := range [][]string{nil, {}} {
 					f := newTxnIssueFixture(t, store)
-					f.txnType.MapScopes = txnMapScopes(result, nil)
+					f.txnDomain.MapScopes = txnMapScopes(result, nil)
 
 					response, err := f.exchange(t, f.hookExchange(t, nil))
 
@@ -109,7 +109,7 @@ func TestTxnTokenMapScopes(t *testing.T) {
 				failure := errors.New("the mapping service is down")
 
 				f := newTxnIssueFixture(t, store)
-				f.txnType.MapScopes = txnMapScopes([]string{txnInternalScope}, failure)
+				f.txnDomain.MapScopes = txnMapScopes([]string{txnInternalScope}, failure)
 
 				response, err := f.exchange(t, f.hookExchange(t, nil))
 
@@ -120,7 +120,7 @@ func TestTxnTokenMapScopes(t *testing.T) {
 			t.Run("ShouldRefuseAnInvalidScopeToken", func(t *testing.T) {
 				for _, scope := range []string{"", "orders write", "orders\twrite", `orders"write`, `orders\write`, "orders.wríte"} {
 					f := newTxnIssueFixture(t, store)
-					f.txnType.MapScopes = txnMapScopes([]string{scope}, nil)
+					f.txnDomain.MapScopes = txnMapScopes([]string{scope}, nil)
 
 					response, err := f.exchange(t, f.hookExchange(t, nil))
 
@@ -135,13 +135,13 @@ func TestTxnTokenMapScopes(t *testing.T) {
 func TestTxnTokenMapScopesCannotChangeTheInput(t *testing.T) {
 	f := newTxnIssueFixture(t, storage.NewExampleStore())
 
-	f.txnType.MapScopes = func(_ context.Context, _ oauth2.AccessRequester, scopes []string) ([]string, error) {
+	f.txnDomain.MapScopes = func(_ context.Context, _ oauth2.AccessRequester, _ string, scopes []string) ([]string, error) {
 		scopes[0] = "tampered"
 
 		return []string{txnInternalScope}, nil
 	}
 
-	f.txnType.TranscribeClaims = func(_ context.Context, request oauth2.AccessRequester, _ *TxnTokenClaimsInput) error {
+	f.txnDomain.TranscribeClaims = func(_ context.Context, request oauth2.AccessRequester, _ *TxnTokenClaimsInput) error {
 		assert.NotContains(t, request.GetGrantedScopes(), "tampered")
 		assert.NotContains(t, request.GetRequestedScopes(), "tampered")
 
@@ -171,8 +171,8 @@ func TestTxnTokenHookNarrowsTheMappedScopes(t *testing.T) {
 			for _, tc := range testCases {
 				t.Run(tc.name, func(t *testing.T) {
 					f := newTxnIssueFixture(t, store)
-					f.txnType.MapScopes = txnMapScopes([]string{txnInternalScope, "orders.read"}, nil)
-					f.txnType.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
+					f.txnDomain.MapScopes = txnMapScopes([]string{txnInternalScope, "orders.read"}, nil)
+					f.txnDomain.TranscribeClaims = func(_ context.Context, _ oauth2.AccessRequester, input *TxnTokenClaimsInput) error {
 						assert.Equal(t, txnInternalScope+" orders.read", input.Claims[consts.ClaimScope])
 
 						input.Claims[consts.ClaimScope] = tc.scope
@@ -204,7 +204,7 @@ func TestTxnTokenMapScopesFailureKeepsTheJTI(t *testing.T) {
 			f.scopes.scopes = []string{"trade.stocks"}
 			f.cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693SelfSigned].(*SelfSignedTokenType).ValidateJTI = true
 			f.txn.JTIStorage = store
-			f.txnType.MapScopes = txnMapScopes(nil, errors.New("the mapping service is down"))
+			f.txnDomain.MapScopes = txnMapScopes(nil, errors.New("the mapping service is down"))
 
 			claims := selfSignedClaims()
 			claims[consts.ClaimJWTID] = uuid.New().String()
@@ -214,7 +214,7 @@ func TestTxnTokenMapScopesFailureKeepsTheJTI(t *testing.T) {
 			_, err := f.exchange(t, e)
 			require.Error(t, err)
 
-			f.txnType.MapScopes = nil
+			f.txnDomain.MapScopes = nil
 
 			_, err = f.exchange(t, e)
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))

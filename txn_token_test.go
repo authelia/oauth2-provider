@@ -104,7 +104,7 @@ func TestTxnTokenIsNotAcceptedAsClientAssertion(t *testing.T) {
 
 	t.Run("ShouldRefuseAnIssuedTxnToken", func(t *testing.T) {
 		tokenTypes := map[string]oauth2.RFC8693TokenType{
-			consts.TokenTypeRFC8693TxnToken: &rfc8693.TxnTokenType{Name: consts.TokenTypeRFC8693TxnToken, TrustDomain: asIssuer, Issuer: clientID},
+			consts.TokenTypeRFC8693TxnToken: &rfc8693.TxnTokenType{Name: consts.TokenTypeRFC8693TxnToken, Domains: map[string]*rfc8693.TxnTokenTrustDomain{asIssuer: {Issuer: clientID}}},
 		}
 
 		config.RFC8693TokenTypes = tokenTypes
@@ -115,11 +115,12 @@ func TestTxnTokenIsNotAcceptedAsClientAssertion(t *testing.T) {
 		request := &oauth2.AccessRequest{
 			GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},
 			Request: oauth2.Request{
-				Client:         client,
-				Session:        session,
-				RequestedScope: oauth2.Arguments{"trade.stocks"},
-				GrantedScope:   oauth2.Arguments{"trade.stocks"},
-				Form:           url.Values{consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693TxnToken}},
+				Client:            client,
+				Session:           session,
+				RequestedScope:    oauth2.Arguments{"trade.stocks"},
+				GrantedScope:      oauth2.Arguments{"trade.stocks"},
+				RequestedAudience: oauth2.Arguments{asIssuer},
+				Form:              url.Values{consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693TxnToken}},
 			},
 		}
 

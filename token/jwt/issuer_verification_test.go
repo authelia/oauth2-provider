@@ -373,6 +373,78 @@ func TestDefaultStrategyVerificationOnlyKeys(t *testing.T) {
 	}
 }
 
+func TestDefaultStrategyIssuerSigningJWK(t *testing.T) {
+	strategy := &DefaultStrategy{Config: &testConfig{}, Issuer: newRotationIssuer(t)}
+
+	testCases := []struct {
+		name     string
+		strategy *DefaultStrategy
+		kid      string
+		alg      string
+		err      string
+	}{
+		{
+			name:     "ShouldReturnIssuingKey",
+			strategy: strategy,
+			kid:      "sig-new",
+			alg:      "RS256",
+		},
+		{
+			name:     "ShouldFailWithUnknownKeyID",
+			strategy: strategy,
+			kid:      "missing",
+			alg:      "RS256",
+			err:      "Error occurred retrieving the JSON Web Key. The JSON Web Token uses signing key with kid 'missing' which was not found",
+		},
+		{
+			name:     "ShouldFailWithMismatchedAlgorithm",
+			strategy: strategy,
+			kid:      "sig-new",
+			alg:      "RS384",
+			err:      "Error occurred retrieving the JSON Web Key. Unable to find JSON web key with kid 'sig-new', use 'sig', and alg 'RS384' in JSON Web Key Set",
+		},
+		{
+			name:     "ShouldFailWithEncryptionKey",
+			strategy: strategy,
+			kid:      "enc-new",
+			alg:      "RSA-OAEP-256",
+			err:      "Error occurred retrieving the JSON Web Key. Unable to find JSON web key with kid 'enc-new', use 'sig', and alg 'RSA-OAEP-256' in JSON Web Key Set",
+		},
+		{
+			name:     "ShouldFailWithVerificationOnlyKey",
+			strategy: strategy,
+			kid:      "sig-old",
+			alg:      "RS256",
+			err:      "Error occurred retrieving the JSON Web Key. The JSON Web Token uses signing key with kid 'sig-old' which was not found",
+		},
+		{
+			name:     "ShouldFailWithoutAnIssuer",
+			strategy: &DefaultStrategy{Config: &testConfig{}},
+			kid:      "sig-new",
+			alg:      "RS256",
+			err:      "no issuer is configured",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var provider IssuerSigningJWKProvider = tc.strategy
+
+			key, err := provider.IssuerSigningJWK(t.Context(), tc.kid, tc.alg)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+				assert.Nil(t, key)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.kid, key.KeyID)
+		})
+	}
+}
+
 func newRotationIssuer(t *testing.T) *DefaultIssuer {
 	t.Helper()
 

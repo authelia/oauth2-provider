@@ -134,6 +134,21 @@ func TestLocalValidatorCapabilities(t *testing.T) {
 			err: "The 'id_token_signed_response_alg' value 'RS256' is not supported by this authorization server.",
 		},
 		{
+			name: "ShouldRejectIDTokenSignedResponseKeyIDUnknown",
+			metadata: func(metadata *oauth2.ClientRegistrationMetadata) {
+				metadata.IDTokenSignedResponseAlg = "ES256"
+				metadata.IDTokenSignedResponseKeyID = "missing"
+			},
+			err: "The 'id_token_signed_response_kid' value 'missing' does not identify a signing key of this authorization server for the 'id_token_signed_response_alg' value 'ES256'. Error occurred retrieving the JSON Web Key. The JSON Web Token uses signing key with kid 'missing' which was not found",
+		},
+		{
+			name: "ShouldAcceptIDTokenSignedResponseKeyID",
+			metadata: func(metadata *oauth2.ClientRegistrationMetadata) {
+				metadata.IDTokenSignedResponseAlg = "ES256"
+				metadata.IDTokenSignedResponseKeyID = "es256"
+			},
+		},
+		{
 			name: "ShouldAcceptIDTokenAlgClientSecret",
 			metadata: func(metadata *oauth2.ClientRegistrationMetadata) {
 				metadata.IDTokenSignedResponseAlg = "HS256"

@@ -49,7 +49,7 @@ func Generate(ctx context.Context, config Configurator, client Client, _ any, pa
 
 			switch {
 			case alg == "":
-				if alg = signedResponseAlgDefault(ctx, config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx), permitted); alg == "" {
+				if alg = SignedResponseAlgDefault(ctx, config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx), permitted); alg == "" {
 					return "", "", fmt.Errorf("the JARM response for client '%s' must be signed with one of the permitted algorithms '%s', but the first is empty", client.GetID(), strings.Join(permitted, "', '"))
 				}
 
@@ -122,7 +122,16 @@ func (c *signedResponseAlgClient) GetClientSecretExpiresAt() (expires time.Time)
 	return time.Time{}
 }
 
-func signedResponseAlgDefault(ctx context.Context, strategy jwt.Strategy, permitted []string) string {
+// SignedResponseAlgDefault returns the algorithm which signs a JARM response when the client has not registered one and
+// the permitted algorithms are restricted: the first permitted algorithm the strategy signs with, or the first permitted
+// algorithm when there is none. It returns an empty value when the permitted algorithms are empty.
+//
+// See: https://openid.net/specs/oauth-v2-jarm.html#section-3
+func SignedResponseAlgDefault(ctx context.Context, strategy jwt.Strategy, permitted []string) (alg string) {
+	if len(permitted) == 0 {
+		return ""
+	}
+
 	if strategy != nil {
 		supported := strategy.SigningAlgValues(ctx)
 

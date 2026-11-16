@@ -13,6 +13,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jarm"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -125,6 +126,7 @@ func validateCapabilities(ctx context.Context, config LocalValidatorConfig, meta
 		validateAuthMethodsSupported,
 		validateSubjectTypeSupported,
 		validateAlgorithmsSupported,
+		validateSigningKeyIDsSupported,
 	} {
 		if err = validate(ctx, config, metadata); err != nil {
 			return err
@@ -919,6 +921,100 @@ func validateAlgorithmsSupported(ctx context.Context, config LocalValidatorConfi
 		if err = validateValueSupported(algorithm.name, algorithm.value, algorithm.supported()); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// validateSigningKeyIDsSupported requires each registered identifier of the key which signs a response to resolve to a
+// signing key of the authorization server for the algorithm that response is signed with: the registered algorithm, or
+// the one which applies when it is omitted. An identifier registered for a response which is not signed is rejected.
+//
+// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+// See: https://openid.net/specs/oauth-v2-jarm.html#section-3
+// See: https://www.rfc-editor.org/rfc/rfc9701#section-6
+func validateSigningKeyIDsSupported(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	var authorization, introspection []string
+
+	if provider, ok := config.(oauth2.SignedResponseAlgValuesProvider); ok {
+		authorization, introspection = provider.GetAuthorizationSignedResponseAlgValues(ctx), provider.GetIntrospectionSignedResponseAlgValues(ctx)
+	}
+
+	for _, key := range []struct {
+		name     string
+		value    string
+		algName  string
+		alg      string
+		strategy func() jwt.Strategy
+		omitted  func(strategy jwt.Strategy) string
+	}{
+		{
+			consts.ClientMetadataIDTokenSignedResponseKeyID, metadata.IDTokenSignedResponseKeyID,
+			consts.ClientMetadataIDTokenSignedResponseAlg, metadata.IDTokenSignedResponseAlg,
+			func() jwt.Strategy { return config.GetJWTStrategy(ctx) },
+			func(_ jwt.Strategy) string { return policyDefaultSigningAlg },
+		},
+		{
+			consts.ClientMetadataUserinfoSignedResponseKeyID, metadata.UserinfoSignedResponseKeyID,
+			consts.ClientMetadataUserinfoSignedResponseAlg, metadata.UserinfoSignedResponseAlg,
+			func() jwt.Strategy { return config.GetJWTStrategy(ctx) },
+			func(_ jwt.Strategy) string { return "" },
+		},
+		{
+			consts.ClientMetadataAuthorizationSignedResponseKeyID, metadata.AuthorizationSignedResponseKeyID,
+			consts.ClientMetadataAuthorizationSignedResponseAlg, metadata.AuthorizationSignedResponseAlg,
+			func() jwt.Strategy { return config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx) },
+			func(strategy jwt.Strategy) string {
+				if len(authorization) == 0 {
+					return policyDefaultSigningAlg
+				}
+
+				return jarm.SignedResponseAlgDefault(ctx, strategy, authorization)
+			},
+		},
+		{
+			consts.ClientMetadataIntrospectionSignedResponseKeyID, metadata.IntrospectionSignedResponseKeyID,
+			consts.ClientMetadataIntrospectionSignedResponseAlg, metadata.IntrospectionSignedResponseAlg,
+			func() jwt.Strategy { return config.GetIntrospectionJWTResponseStrategy(ctx) },
+			func(strategy jwt.Strategy) string {
+				return oauth2.IntrospectionSignedResponseAlgDefault(ctx, strategy, introspection)
+			},
+		},
+		{
+			consts.ClientMetadataAccessTokenSignedResponseKeyID, metadata.AccessTokenSignedResponseKeyID,
+			consts.ClientMetadataAccessTokenSignedResponseAlg, metadata.AccessTokenSignedResponseAlg,
+			func() jwt.Strategy { return config.GetJWTStrategy(ctx) },
+			func(_ jwt.Strategy) string { return policyDefaultSigningAlg },
+		},
+	} {
+		if key.value == "" {
+			continue
+		}
+
+		provider, ok := key.strategy().(jwt.IssuerSigningJWKProvider)
+		if !ok {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is not supported as it cannot be validated by this authorization server.", key.name, key.value))
+		}
+
+		alg, defaulted := key.alg, false
+
+		if alg == "" {
+			alg, defaulted = key.omitted(key.strategy()), true
+		}
+
+		if jwt.IsNoneAlg(alg) {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' requires a signed response, but the '%s' value is omitted or '%s'.", key.name, key.value, key.algName, consts.JSONWebTokenAlgNone))
+		}
+
+		if _, err = provider.IssuerSigningJWK(ctx, key.value, alg); err == nil {
+			continue
+		}
+
+		if defaulted {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' does not identify a signing key of this authorization server for the '%s' value '%s', which applies by default when '%s' is omitted.", key.name, key.value, key.algName, alg, key.algName).WithWrap(err).WithDebugError(err))
+		}
+
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' does not identify a signing key of this authorization server for the '%s' value '%s'.", key.name, key.value, key.algName, alg).WithWrap(err).WithDebugError(err))
 	}
 
 	return nil

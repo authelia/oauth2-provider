@@ -43,6 +43,20 @@ type Strategy interface {
 	DecryptionAlgValues(ctx context.Context) (algs []string)
 }
 
+// IssuerSigningJWKProvider is optionally implemented by a Strategy to resolve the key of the issuer which signs a token
+// for a client that has registered a signing key identifier. It allows such an identifier to be validated when the
+// client is registered rather than when the first token is signed.
+//
+// A Strategy which wraps another by embedding the Strategy interface does not implement this interface unless it
+// forwards IssuerSigningJWK. Without it, RFC 7591 client registration rejects every signing key identifier as one
+// which cannot be validated.
+type IssuerSigningJWKProvider interface {
+	// IssuerSigningJWK returns the issuing key with a use value of 'sig' which matches the kid and alg values, and
+	// returns an error when there is no such key or more than one. A key which only verifies, such as the
+	// verification only keys of an IssuerVerificationJWKProvider, is never returned.
+	IssuerSigningJWK(ctx context.Context, kid, alg string) (jwk *jose.JSONWebKey, err error)
+}
+
 // StrategyConfig is the configuration required by the JWT strategy.
 type StrategyConfig interface {
 	// GetJWKSFetcherStrategy returns the JWKS fetcher strategy.
@@ -150,6 +164,12 @@ func (j *DefaultStrategy) DecryptionAlgValues(ctx context.Context) (algs []strin
 	}
 
 	return j.Issuer.GetIssuerDecryptionAlgValues(ctx)
+}
+
+// IssuerSigningJWK returns the issuing key of the Issuer with a use value of 'sig' which matches the kid and alg values,
+// using Issuer.GetIssuerStrictJWK.
+func (j *DefaultStrategy) IssuerSigningJWK(ctx context.Context, kid, alg string) (jwk *jose.JSONWebKey, err error) {
+	return j.issuerStrictJWK(ctx, kid, alg, JSONWebTokenUseSignature)
 }
 
 // Encode handles encoding JWT's.

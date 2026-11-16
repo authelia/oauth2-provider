@@ -120,14 +120,10 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	}
 
 	if alg == "" && ((kid == "" && f.isIntrospectionJWTRequested(ctx, r, caller)) || (kid != "" && len(permitted) != 0)) {
-		alg = string(jose.RS256)
+		if alg = IntrospectionSignedResponseAlgDefault(ctx, f.Config.GetIntrospectionJWTResponseStrategy(ctx), permitted); alg == "" {
+			f.writeErrorJSON(ctx, rw, nil, errors.WithStack(ErrServerError.WithHint("The introspection response could not be signed.").WithDebugf("The first of the permitted algorithms '%s' is empty.", strings.Join(permitted, "', '"))))
 
-		if len(permitted) != 0 && !f.isIntrospectionSignedResponseAlgSupported(ctx, permitted, alg) {
-			if alg = f.introspectionSignedResponseAlgDefault(ctx, permitted); alg == "" {
-				f.writeErrorJSON(ctx, rw, nil, errors.WithStack(ErrServerError.WithHint("The introspection response could not be signed.").WithDebugf("The first of the permitted algorithms '%s' is empty.", strings.Join(permitted, "', '"))))
-
-				return
-			}
+			return
 		}
 	}
 
@@ -345,19 +341,33 @@ func (c *introspectionSignedResponseAlgClient) GetClientSecretExpiresAt() (expir
 	return time.Time{}
 }
 
-func (f *Fosite) isIntrospectionSignedResponseAlgSupported(ctx context.Context, permitted []string, alg string) bool {
-	if !slices.Contains(permitted, alg) {
-		return false
+// IntrospectionSignedResponseAlgDefault returns the algorithm which signs an RFC 9701 introspection response when the
+// caller has not registered one. It is RS256 when the permitted algorithms are empty, or when RS256 is permitted and
+// the strategy signs with it. Otherwise it is the first permitted algorithm the strategy signs with, or the first
+// permitted algorithm when there is none. A nil strategy is treated as signing with every algorithm.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9701#section-6
+func IntrospectionSignedResponseAlgDefault(ctx context.Context, strategy jwt.Strategy, permitted []string) (alg string) {
+	if len(permitted) == 0 {
+		return string(jose.RS256)
 	}
 
-	strategy := f.Config.GetIntrospectionJWTResponseStrategy(ctx)
+	var supported []string
 
-	return strategy == nil || slices.Contains(strategy.SigningAlgValues(ctx), alg)
-}
+	if strategy != nil {
+		supported = strategy.SigningAlgValues(ctx)
+	}
 
-func (f *Fosite) introspectionSignedResponseAlgDefault(ctx context.Context, permitted []string) string {
-	for _, alg := range permitted {
-		if alg != "" && f.isIntrospectionSignedResponseAlgSupported(ctx, permitted, alg) {
+	isSupported := func(alg string) bool {
+		return alg != "" && slices.Contains(permitted, alg) && (strategy == nil || slices.Contains(supported, alg))
+	}
+
+	if isSupported(string(jose.RS256)) {
+		return string(jose.RS256)
+	}
+
+	for _, alg = range permitted {
+		if isSupported(alg) {
 			return alg
 		}
 	}

@@ -124,6 +124,15 @@ type Config struct {
 	// rfc8693.RefreshTokenRotationOverrideClient.
 	DisableRefreshTokenRotation bool
 
+	// RefreshTokenGracePeriod is the time a rotated refresh token remains redeemable after it is first redeemed, so
+	// that a client which did not receive the response, or which made concurrent requests, can redeem it again. Each
+	// redemption issues its own access and refresh token. Defaults to 0, which deactivates a refresh token when it is
+	// rotated. A client may override it with RefreshTokenGracePeriodClient. It does not apply to a public client whose
+	// refresh token is not sender-constrained by an enabled DPoP or mTLS binding, as RFC 9700 Section 4.14.2 requires
+	// rotation to detect the replay of such a refresh token, nor when the storage does not implement the refresh token
+	// grant handler's RefreshTokenGracePeriodStorage.
+	RefreshTokenGracePeriod time.Duration
+
 	// RefreshTokenMaximumLifespan is the time after the first refresh token of a grant is issued beyond which no
 	// refresh token of the grant may expire, however often it is rotated. RefreshTokenLifespan then acts as the time
 	// a refresh token expires after if it is not used. RFC 10017 Section 6.3.2.3 requires this for browser-based
@@ -1662,6 +1671,12 @@ func (c *Config) GetDisableRefreshTokenRotation(_ context.Context) bool {
 	return c.DisableRefreshTokenRotation
 }
 
+// GetRefreshTokenGracePeriod returns the time a rotated refresh token remains redeemable after it is first redeemed.
+// Defaults to 0, which is none.
+func (c *Config) GetRefreshTokenGracePeriod(_ context.Context) time.Duration {
+	return c.RefreshTokenGracePeriod
+}
+
 // GetRefreshTokenMaximumLifespan returns the maximum lifespan of a grant's refresh tokens. Defaults to 0, which applies
 // no limit.
 func (c *Config) GetRefreshTokenMaximumLifespan(_ context.Context) time.Duration {
@@ -2442,6 +2457,7 @@ var (
 	_ RefreshTokenScopesProvider                               = (*Config)(nil)
 	_ DisableRefreshTokenValidationProvider                    = (*Config)(nil)
 	_ DisableRefreshTokenRotationProvider                      = (*Config)(nil)
+	_ RefreshTokenGracePeriodProvider                          = (*Config)(nil)
 	_ RefreshTokenMaximumLifespanProvider                      = (*Config)(nil)
 	_ DiscoveryMetadataHooksProvider                           = (*Config)(nil)
 	_ DiscoveryMetadataSigningStrategyProvider                 = (*Config)(nil)

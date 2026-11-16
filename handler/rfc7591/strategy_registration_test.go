@@ -103,6 +103,7 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesServerPolicy(t *te
 	registered.RequireRequestObjectAudienceAndLifetime = true
 	registered.RequestObjectMaximumLifetime = 10 * time.Minute
 	registered.DisableRefreshTokenRotation = true
+	registered.RefreshTokenGracePeriod = new(time.Duration)
 	registered.TokenExchangeOwnAccessTokenRestrictTargets = true
 	registered.TokenExchangeOwnAccessToken = true
 	registered.TokenExchangeRefreshToken = true
@@ -132,6 +133,7 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesServerPolicy(t *te
 	assert.True(t, result.RequireRequestObjectAudienceAndLifetime)
 	assert.Equal(t, 10*time.Minute, result.RequestObjectMaximumLifetime)
 	assert.True(t, result.DisableRefreshTokenRotation)
+	assert.Same(t, registered.RefreshTokenGracePeriod, result.RefreshTokenGracePeriod)
 	assert.True(t, result.TokenExchangeOwnAccessTokenRestrictTargets)
 	assert.True(t, result.TokenExchangeOwnAccessToken)
 	assert.True(t, result.TokenExchangeRefreshToken)
@@ -167,6 +169,7 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesEveryUnregisteredF
 		RequireRequestObjectAudienceAndLifetime:       true,
 		RequestObjectMaximumLifetime:                  time.Minute,
 		DisableRefreshTokenRotation:                   true,
+		RefreshTokenGracePeriod:                       new(time.Duration),
 		RefreshTokenMaximumLifespan:                   time.Minute,
 		EnforceSenderConstrainedAccessTokens:          true,
 		FAPI2SecurityProfile:                          true,

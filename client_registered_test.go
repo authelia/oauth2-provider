@@ -43,6 +43,7 @@ func TestDefaultRegisteredClientImplementsInterfaces(t *testing.T) {
 		_ PushedAuthorizationRequestRedirectURIClient = client
 		_ RequestObjectLifetimeClient                 = client
 		_ RefreshTokenRotationClient                  = client
+		_ RefreshTokenGracePeriodClient               = client
 	)
 }
 
@@ -53,6 +54,7 @@ func TestDefaultRegisteredClientFAPIPolicy(t *testing.T) {
 	assert.False(t, unset.GetRequireRequestObjectAudienceAndLifetime())
 	assert.Equal(t, time.Duration(0), unset.GetRequestObjectMaximumLifetime())
 	assert.False(t, unset.GetDisableRefreshTokenRotation())
+	assert.Equal(t, time.Minute, unset.GetRefreshTokenGracePeriod(time.Minute))
 
 	set := &DefaultRegisteredClient{
 		DefaultClient: &DefaultClient{ID: "abc"},
@@ -60,8 +62,10 @@ func TestDefaultRegisteredClientFAPIPolicy(t *testing.T) {
 		RequireRequestObjectAudienceAndLifetime:       true,
 		RequestObjectMaximumLifetime:                  time.Minute * 30,
 		DisableRefreshTokenRotation:                   true,
+		RefreshTokenGracePeriod:                       new(time.Duration),
 	}
 
+	assert.Equal(t, time.Duration(0), set.GetRefreshTokenGracePeriod(time.Minute))
 	assert.True(t, set.GetRequireRedirectURIPushedAuthorizationRequests())
 	assert.True(t, set.GetRequireRequestObjectAudienceAndLifetime())
 	assert.Equal(t, time.Minute*30, set.GetRequestObjectMaximumLifetime())

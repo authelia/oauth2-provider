@@ -4,6 +4,10 @@
 
 package oauth2
 
+import (
+	"time"
+)
+
 // AccessRequest is the default implementation of AccessRequester.
 type AccessRequest struct {
 	GrantTypes       Arguments `json:"grantTypes" gorethink:"grantTypes"`
@@ -12,6 +16,7 @@ type AccessRequest struct {
 	Request
 
 	refreshTokenRotationDisabled *bool
+	refreshTokenGraceDeadline    *time.Time
 
 	clientAuthenticationMethod string
 }
@@ -58,6 +63,18 @@ func (a *AccessRequest) getRefreshTokenRotationDisabled() (disable, ok bool) {
 
 func (a *AccessRequest) setRefreshTokenRotationDisabled(disable bool) {
 	a.refreshTokenRotationDisabled = &disable
+}
+
+func (a *AccessRequest) getRefreshTokenGraceDeadline() (deadline time.Time, ok bool) {
+	if a.refreshTokenGraceDeadline == nil {
+		return time.Time{}, false
+	}
+
+	return *a.refreshTokenGraceDeadline, true
+}
+
+func (a *AccessRequest) setRefreshTokenGraceDeadline(deadline time.Time) {
+	a.refreshTokenGraceDeadline = &deadline
 }
 
 // NewAccessRequest returns an empty AccessRequest seeded with the given session.

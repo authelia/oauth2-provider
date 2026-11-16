@@ -371,6 +371,20 @@ type RefreshTokenRotationClient interface {
 	Client
 }
 
+// RefreshTokenGracePeriodClient is a client with its own refresh token grace period, which takes precedence over the
+// provider-wide option. There is no grace period for a public client whose refresh token is not sender-constrained by
+// an enabled DPoP or mTLS binding; see GetRefreshTokenGraceDeadlineForRequest.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+type RefreshTokenGracePeriodClient interface {
+	// GetRefreshTokenGracePeriod should return the time a rotated refresh token of this client remains redeemable
+	// after it is first redeemed, or the fallback value, which is the provider-wide option, when the client has no
+	// policy of its own. A duration of 0 seconds or less is no grace period.
+	GetRefreshTokenGracePeriod(fallback time.Duration) (grace time.Duration)
+
+	Client
+}
+
 // RefreshTokenMaximumLifespanClient is a client with its own maximum lifespan for the refresh tokens of its grants; see
 // GetRefreshTokenMaximumLifespan.
 //

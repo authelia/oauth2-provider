@@ -72,6 +72,7 @@ func (s *DefaultClientRegistrationStrategy) PatchClient(ctx context.Context, cli
 	replacement.RequireRequestObjectAudienceAndLifetime = registered.RequireRequestObjectAudienceAndLifetime
 	replacement.RequestObjectMaximumLifetime = registered.RequestObjectMaximumLifetime
 	replacement.DisableRefreshTokenRotation = registered.DisableRefreshTokenRotation
+	replacement.RefreshTokenGracePeriod = registered.RefreshTokenGracePeriod
 	replacement.RefreshTokenMaximumLifespan = registered.RefreshTokenMaximumLifespan
 	replacement.EnforceSenderConstrainedAccessTokens = registered.EnforceSenderConstrainedAccessTokens
 	replacement.FAPI2SecurityProfile = registered.FAPI2SecurityProfile

@@ -32,6 +32,7 @@ type RefreshTokenGrantHandler struct {
 		oauth2.ResourceStrategyProvider
 		oauth2.RefreshTokenScopesProvider
 		oauth2.DisableRefreshTokenRotationProvider
+		oauth2.RefreshTokenGracePeriodProvider
 	}
 }
 
@@ -220,6 +221,10 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	// the presented refresh token. An unrotated refresh token keeps the expiry it was issued with.
 	rotate := !oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, c.Config, request)
 
+	// RFC 9700 Section 4.14.2: the grace period is likewise decided for the presented refresh token, and ends no later
+	// than it expires.
+	oauth2.GetRefreshTokenGraceDeadlineForRequest(ctx, c.Config, request, now)
+
 	rtLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 
 	if !rotate {
@@ -322,7 +327,7 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		srtrequester.SetSession(request.GetSession().Clone())
 	}
 
-	if err = c.TokenRevocationStorage.RotateRefreshToken(ctx, request.GetID(), signature); errors.Is(err, oauth2.ErrInactiveToken) {
+	if err = c.rotateRefreshToken(ctx, request, signature); errors.Is(err, oauth2.ErrInactiveToken) {
 		replayed = err
 
 		return err
@@ -420,6 +425,16 @@ func (c *RefreshTokenGrantHandler) setAccessTokenResponse(ctx context.Context, r
 	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx)), time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
 	setAuthorizationDetailsResponse(response, request)
+}
+
+func (c *RefreshTokenGrantHandler) rotateRefreshToken(ctx context.Context, request oauth2.AccessRequester, signature string) (err error) {
+	if deadline := oauth2.GetRefreshTokenGraceDeadlineForRequest(ctx, c.Config, request, time.Now().UTC()); !deadline.IsZero() {
+		if store, ok := c.TokenRevocationStorage.(RefreshTokenGracePeriodStorage); ok {
+			return store.RotateRefreshTokenWithGracePeriod(ctx, request.GetID(), signature, deadline)
+		}
+	}
+
+	return c.TokenRevocationStorage.RotateRefreshToken(ctx, request.GetID(), signature)
 }
 
 func (c *RefreshTokenGrantHandler) handleRefreshTokenReuse(ctx context.Context, signature string, request oauth2.Requester) (err error) {

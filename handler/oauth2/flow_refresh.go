@@ -32,6 +32,7 @@ type RefreshTokenGrantHandler struct {
 		oauth2.ResourceStrategyProvider
 		oauth2.RefreshTokenScopesProvider
 		oauth2.DisableRefreshTokenRotationProvider
+		oauth2.RefreshTokenGracePeriodProvider
 	}
 }
 
@@ -220,6 +221,16 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 	// the presented refresh token. An unrotated refresh token keeps the expiry it was issued with.
 	rotate := !oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, c.Config, request)
 
+	// RFC 9700 Section 4.14.2: the grace period is likewise decided for the presented refresh token, and ends no later
+	// than it expires.
+	oauth2.GetRefreshTokenGraceDeadlineForRequest(ctx, c.Config, request, now)
+
+	// Neither decision is made again once the binding handlers have run, so a request which cannot record them is
+	// refused.
+	if _, _, ok := recordedRefreshTokenRotation(request); !ok {
+		return errorsx.WithStack(errRefreshTokenRotationNotRecorded)
+	}
+
 	rtLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 
 	if !rotate {
@@ -241,6 +252,13 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
+	// The rotation and grace period decisions are those HandleTokenEndpointRequest recorded for the presented refresh
+	// token.
+	disabled, deadline, ok := recordedRefreshTokenRotation(request)
+	if !ok {
+		return errorsx.WithStack(errRefreshTokenRotationNotRecorded)
+	}
+
 	var (
 		accessToken, refreshToken         string
 		accessSignature, refreshSignature string
@@ -250,7 +268,7 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if oauth2.IsRefreshTokenRotationDisabledForRequest(ctx, c.Config, request) {
+	if disabled {
 		return c.populateTokenEndpointResponseWithoutRotation(ctx, request, response, accessToken, accessSignature)
 	}
 
@@ -322,7 +340,7 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		srtrequester.SetSession(request.GetSession().Clone())
 	}
 
-	if err = c.TokenRevocationStorage.RotateRefreshToken(ctx, request.GetID(), signature); errors.Is(err, oauth2.ErrInactiveToken) {
+	if err = c.rotateRefreshToken(ctx, request, signature, deadline); errors.Is(err, oauth2.ErrInactiveToken) {
 		replayed = err
 
 		return err
@@ -420,6 +438,36 @@ func (c *RefreshTokenGrantHandler) setAccessTokenResponse(ctx context.Context, r
 	response.SetExpiresIn(getExpiresIn(request, oauth2.AccessToken, oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeRefreshToken, oauth2.AccessToken, c.Config.GetAccessTokenLifespan(ctx)), time.Now().UTC()))
 	response.SetScopes(request.GetGrantedScopes())
 	setAuthorizationDetailsResponse(response, request)
+}
+
+func (c *RefreshTokenGrantHandler) rotateRefreshToken(ctx context.Context, request oauth2.AccessRequester, signature string, deadline time.Time) (err error) {
+	if !deadline.IsZero() {
+		if store, ok := c.TokenRevocationStorage.(RefreshTokenGracePeriodStorage); ok {
+			return store.RotateRefreshTokenWithGracePeriod(ctx, request.GetID(), signature, deadline)
+		}
+	}
+
+	return c.TokenRevocationStorage.RotateRefreshToken(ctx, request.GetID(), signature)
+}
+
+var errRefreshTokenRotationNotRecorded = oauth2.ErrServerError.
+	WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
+	WithDebug("The 'oauth2.AccessRequester' must be or embed an '*oauth2.AccessRequest' which 'HandleTokenEndpointRequest' has handled, as it records the refresh token rotation and grace period decisions.")
+
+// recordedRefreshTokenRotation returns the rotation and grace period decisions recorded on the request, which are made
+// once for the presented refresh token.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+func recordedRefreshTokenRotation(request oauth2.AccessRequester) (disabled bool, deadline time.Time, ok bool) {
+	if disabled, ok = request.GetRefreshTokenRotationDisabled(); !ok {
+		return false, time.Time{}, false
+	}
+
+	if deadline, ok = oauth2.GetRecordedRefreshTokenGraceDeadlineForRequest(request); !ok {
+		return false, time.Time{}, false
+	}
+
+	return disabled, deadline, true
 }
 
 func (c *RefreshTokenGrantHandler) handleRefreshTokenReuse(ctx context.Context, signature string, request oauth2.Requester) (err error) {

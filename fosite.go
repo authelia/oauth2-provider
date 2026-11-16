@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"reflect"
+	"time"
 )
 
 // MinParameterEntropy is the default minimum length of the state and nonce parameters.
@@ -283,6 +284,7 @@ type Configurator interface {
 	JWTProfileAccessTokensProvider
 	DisableRefreshTokenValidationProvider
 	DisableRefreshTokenRotationProvider
+	RefreshTokenGracePeriodProvider
 	RefreshTokenScopesProvider
 	AccessTokenLifespanProvider
 	RefreshTokenLifespanProvider
@@ -419,14 +421,14 @@ func IsRefreshTokenRotationDisabled(ctx context.Context, config DisableRefreshTo
 // refresh tokens of public clients to be sender-constrained or rotated so that a replay can be detected.
 //
 // The binding is that of the presented refresh token, not one a token endpoint binding handler records on the session
-// for this request, so an *AccessRequest keeps the result of the first call and returns it on every later call. The
+// for this request, so an AccessRequester records the result of the first call and returns it on every later call. The
 // refresh token grant makes that call from HandleTokenEndpointRequest, before any binding handler runs.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 func IsRefreshTokenRotationDisabledForRequest(ctx context.Context, config DisableRefreshTokenRotationProvider, request Requester) (disable bool) {
-	recorder, ok := request.(refreshTokenRotationRecorder)
+	recorder, ok := request.(AccessRequester)
 	if ok {
-		if disable, ok = recorder.getRefreshTokenRotationDisabled(); ok {
+		if disable, ok = recorder.GetRefreshTokenRotationDisabled(); ok {
 			return disable
 		}
 	}
@@ -434,15 +436,10 @@ func IsRefreshTokenRotationDisabledForRequest(ctx context.Context, config Disabl
 	disable = isRefreshTokenRotationDisabledForRequest(ctx, config, request)
 
 	if recorder != nil {
-		recorder.setRefreshTokenRotationDisabled(disable)
+		recorder.SetRefreshTokenRotationDisabled(disable)
 	}
 
 	return disable
-}
-
-type refreshTokenRotationRecorder interface {
-	getRefreshTokenRotationDisabled() (disable, ok bool)
-	setRefreshTokenRotationDisabled(disable bool)
 }
 
 func isRefreshTokenRotationDisabledForRequest(ctx context.Context, config DisableRefreshTokenRotationProvider, request Requester) (disable bool) {
@@ -457,6 +454,105 @@ func isRefreshTokenRotationDisabledForRequest(ctx context.Context, config Disabl
 	}
 
 	return isSenderConstrained(ctx, config, request.GetSession())
+}
+
+// GetRefreshTokenGracePeriod returns the time a rotated refresh token of the client remains redeemable after it is first
+// redeemed. The client's own policy, when it implements RefreshTokenGracePeriodClient, takes precedence over the
+// provider-wide option, and a negative value is none.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+func GetRefreshTokenGracePeriod(ctx context.Context, config RefreshTokenGracePeriodProvider, client Client) (grace time.Duration) {
+	if config != nil {
+		grace = config.GetRefreshTokenGracePeriod(ctx)
+	}
+
+	if c, ok := client.(RefreshTokenGracePeriodClient); ok {
+		grace = c.GetRefreshTokenGracePeriod(grace)
+	}
+
+	return max(grace, 0)
+}
+
+// GetRefreshTokenGraceDeadlineForRequest returns the time until which the refresh token presented with the request
+// remains redeemable once it is rotated, or the zero time when it must be deactivated immediately. The deadline is the
+// given time plus the grace period GetRefreshTokenGracePeriod determines, and is never after the expiry of the
+// presented refresh token. There is no grace period when IsRefreshTokenRotationDisabledForRequest disables rotation,
+// nor for a public client whose refresh token is not sender-constrained by an enabled DPoP or mTLS binding: RFC 9700
+// Section 4.14.2 requires rotation to detect the replay of such a refresh token.
+//
+// The binding and the expiry are those of the presented refresh token, not those recorded on the session for this
+// request, so an *AccessRequest keeps the result of the first call and returns it on every later call. The refresh
+// token grant makes that call from HandleTokenEndpointRequest, before any binding handler runs and before the expiry
+// of the rotated refresh token is recorded.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+func GetRefreshTokenGraceDeadlineForRequest(ctx context.Context, config RefreshTokenGracePeriodConfigProvider, request Requester, now time.Time) (deadline time.Time) {
+	recorder, ok := request.(refreshTokenGraceDeadlineRecorder)
+	if ok {
+		if deadline, ok = recorder.getRefreshTokenGraceDeadline(); ok {
+			return deadline
+		}
+	}
+
+	deadline = getRefreshTokenGraceDeadlineForRequest(ctx, config, request, now)
+
+	if recorder != nil {
+		recorder.setRefreshTokenGraceDeadline(deadline)
+	}
+
+	return deadline
+}
+
+// RefreshTokenGracePeriodConfigProvider is the configuration GetRefreshTokenGraceDeadlineForRequest requires.
+type RefreshTokenGracePeriodConfigProvider interface {
+	DisableRefreshTokenRotationProvider
+	RefreshTokenGracePeriodProvider
+}
+
+// GetRecordedRefreshTokenGraceDeadlineForRequest returns the deadline GetRefreshTokenGraceDeadlineForRequest recorded on
+// the request. There is none when it has not been called with the request or the request cannot record one.
+func GetRecordedRefreshTokenGraceDeadlineForRequest(request Requester) (deadline time.Time, ok bool) {
+	if recorder, ok := request.(refreshTokenGraceDeadlineRecorder); ok {
+		return recorder.getRefreshTokenGraceDeadline()
+	}
+
+	return time.Time{}, false
+}
+
+type refreshTokenGraceDeadlineRecorder interface {
+	getRefreshTokenGraceDeadline() (deadline time.Time, ok bool)
+	setRefreshTokenGraceDeadline(deadline time.Time)
+}
+
+func getRefreshTokenGraceDeadlineForRequest(ctx context.Context, config RefreshTokenGracePeriodConfigProvider, request Requester, now time.Time) (deadline time.Time) {
+	if config == nil || IsRefreshTokenRotationDisabledForRequest(ctx, config, request) {
+		return time.Time{}
+	}
+
+	client, session := request.GetClient(), request.GetSession()
+
+	grace := GetRefreshTokenGracePeriod(ctx, config, client)
+	if grace <= 0 {
+		return time.Time{}
+	}
+
+	if client != nil && client.IsPublic() && !isSenderConstrained(ctx, config, session) {
+		return time.Time{}
+	}
+
+	deadline = now.Add(grace)
+
+	if session != nil {
+		if expires := session.GetExpiresAt(RefreshToken); !expires.IsZero() && expires.Before(deadline) {
+			deadline = expires
+		}
+	}
+
+	if !deadline.After(now) {
+		return time.Time{}
+	}
+
+	return deadline
 }
 
 // IsSenderConstrainedAccessTokenEnforced determines if a token request must bind its tokens to a DPoP proof or a

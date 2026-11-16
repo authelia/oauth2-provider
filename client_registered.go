@@ -197,13 +197,14 @@ type DefaultRegisteredClient struct {
 	PKCEChallengeMethod               string        `json:"-"`
 	PushedAuthorizeContextLifespan    time.Duration `json:"-"`
 
-	RequireRedirectURIPushedAuthorizationRequests bool          `json:"-"`
-	RequireRequestObjectAudienceAndLifetime       bool          `json:"-"`
-	RequestObjectMaximumLifetime                  time.Duration `json:"-"`
-	DisableRefreshTokenRotation                   bool          `json:"-"`
-	RefreshTokenMaximumLifespan                   time.Duration `json:"-"`
-	EnforceSenderConstrainedAccessTokens          bool          `json:"-"`
-	FAPI2SecurityProfile                          bool          `json:"-"`
+	RequireRedirectURIPushedAuthorizationRequests bool           `json:"-"`
+	RequireRequestObjectAudienceAndLifetime       bool           `json:"-"`
+	RequestObjectMaximumLifetime                  time.Duration  `json:"-"`
+	DisableRefreshTokenRotation                   bool           `json:"-"`
+	RefreshTokenGracePeriod                       *time.Duration `json:"-"`
+	RefreshTokenMaximumLifespan                   time.Duration  `json:"-"`
+	EnforceSenderConstrainedAccessTokens          bool           `json:"-"`
+	FAPI2SecurityProfile                          bool           `json:"-"`
 
 	// Extra holds every unregistered client metadata parameter carried by ClientRegistrationMetadata.Extra so it can
 	// survive a registration round trip. This type only provides the storage location; converting to and from
@@ -530,6 +531,16 @@ func (c *DefaultRegisteredClient) GetDisableRefreshTokenRotation() bool {
 	return c.DisableRefreshTokenRotation
 }
 
+// GetRefreshTokenGracePeriod returns the time a rotated refresh token of this client remains redeemable after it is
+// first redeemed, or the fallback value when RefreshTokenGracePeriod is nil.
+func (c *DefaultRegisteredClient) GetRefreshTokenGracePeriod(fallback time.Duration) (grace time.Duration) {
+	if c.RefreshTokenGracePeriod == nil {
+		return fallback
+	}
+
+	return *c.RefreshTokenGracePeriod
+}
+
 // GetRefreshTokenMaximumLifespan returns the maximum lifespan of the refresh tokens of this client's grants, a negative
 // duration for no limit, or a duration of 0 seconds to utilize the global lifespan.
 func (c *DefaultRegisteredClient) GetRefreshTokenMaximumLifespan() time.Duration {
@@ -743,6 +754,7 @@ var (
 	_ PushedAuthorizationRequestRedirectURIClient = (*DefaultRegisteredClient)(nil)
 	_ RequestObjectLifetimeClient                 = (*DefaultRegisteredClient)(nil)
 	_ RefreshTokenRotationClient                  = (*DefaultRegisteredClient)(nil)
+	_ RefreshTokenGracePeriodClient               = (*DefaultRegisteredClient)(nil)
 	_ RPInitiatedLogoutClient                     = (*DefaultRegisteredClient)(nil)
 	_ BackChannelLogoutClient                     = (*DefaultRegisteredClient)(nil)
 	_ CIBAClient                                  = (*DefaultRegisteredClient)(nil)

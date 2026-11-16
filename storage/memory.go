@@ -151,43 +151,44 @@ type IDJAGResourceKey struct {
 // AccessTokenRequestIDs indexes every access token signature issued for a request ID, as one request may own several
 // live access tokens (e.g. the OpenID Connect hybrid flow).
 type MemoryStore struct {
-	Clients                  map[string]oauth2.Client
-	AuthorizeCodes           map[string]StoreAuthorizeCode
-	IDSessions               map[string]oauth2.Requester
-	AccessTokens             map[string]oauth2.Requester
-	ClientRegistrationTokens map[string]oauth2.Requester
-	RefreshTokens            map[string]StoreRefreshToken
-	DeviceCodes              map[string]oauth2.Requester
-	UserCodes                map[string]oauth2.Requester
-	InvalidatedDeviceCodes   map[string]bool
-	CIBASessions             map[string]oauth2.BackChannelAuthenticationRequester
-	CIBARequestIDs           map[string]string
-	InvalidatedCIBASessions  map[string]bool
-	PKCES                    map[string]oauth2.Requester
-	PKCEChallenges           map[ClientValueMarker]time.Time
-	OpenIDConnectNonces      map[ClientValueMarker]time.Time
-	Users                    map[string]MemoryUserRelation
-	ClientAssertionJTIs      map[JTIMarker]time.Time
-	RFC7523JTIs              map[JTIMarker]time.Time
-	TokenExchangeJTIs        map[JTIMarker]time.Time
-	AccessTokenRequestIDs    map[string]map[string]struct{}
-	RefreshTokenRequestIDs   map[string]string
-	IssuerPublicKeys         map[string]IssuerPublicKeys
-	PARSessions              map[string]oauth2.AuthorizeRequester
-	DPoPProofJTIs            map[DPoPProofMarker]time.Time
-	DPoPNonces               map[string]time.Time
-	IDJAGRelationships       map[IDJAGRelationshipKey]oauth2.IDJAGRelationship
-	IDJAGTrustedIssuers      map[string]oauth2.IDJAGTrustedIssuer
-	IDJAGSubjects            map[IDJAGSubjectKey]string
-	IDJAGAudienceSubjects    map[IDJAGAudienceSubjectKey]string
-	IDJAGAudienceClaims      map[IDJAGAudienceSubjectKey]map[string]any
-	IDJAGTenants             map[IDJAGTenantKey]struct{}
-	IDJAGResources           map[IDJAGResourceKey]struct{}
-	IDJAGJTIs                map[JTIMarker]time.Time
-	SSFStreams               map[string]*oauth2.SSFStream
-
+	Clients                   map[string]oauth2.Client
+	AuthorizeCodes            map[string]StoreAuthorizeCode
+	IDSessions                map[string]oauth2.Requester
+	AccessTokens              map[string]oauth2.Requester
+	ClientRegistrationTokens  map[string]oauth2.Requester
+	RefreshTokens             map[string]StoreRefreshToken
+	DeviceCodes               map[string]oauth2.Requester
+	UserCodes                 map[string]oauth2.Requester
+	InvalidatedDeviceCodes    map[string]bool
+	CIBASessions              map[string]oauth2.BackChannelAuthenticationRequester
+	CIBARequestIDs            map[string]string
+	InvalidatedCIBASessions   map[string]bool
+	PKCES                     map[string]oauth2.Requester
+	PKCEChallenges            map[ClientValueMarker]time.Time
+	OpenIDConnectNonces       map[ClientValueMarker]time.Time
+	Users                     map[string]MemoryUserRelation
+	ClientAssertionJTIs       map[JTIMarker]time.Time
+	RFC7523JTIs               map[JTIMarker]time.Time
+	TokenExchangeJTIs         map[JTIMarker]time.Time
+	AccessTokenRequestIDs     map[string]map[string]struct{}
+	RefreshTokenRequestIDs    map[string]string
+	IssuerPublicKeys          map[string]IssuerPublicKeys
+	PARSessions               map[string]oauth2.AuthorizeRequester
+	DPoPProofJTIs             map[DPoPProofMarker]time.Time
+	DPoPNonces                map[string]time.Time
+	IDJAGRelationships        map[IDJAGRelationshipKey]oauth2.IDJAGRelationship
+	IDJAGTrustedIssuers       map[string]oauth2.IDJAGTrustedIssuer
+	IDJAGSubjects             map[IDJAGSubjectKey]string
+	IDJAGAudienceSubjects     map[IDJAGAudienceSubjectKey]string
+	IDJAGAudienceClaims       map[IDJAGAudienceSubjectKey]map[string]any
+	IDJAGTenants              map[IDJAGTenantKey]struct{}
+	IDJAGResources            map[IDJAGResourceKey]struct{}
+	IDJAGJTIs                 map[JTIMarker]time.Time
+	SSFStreams                map[string]*oauth2.SSFStream
 	ClientRegistrationCounts  map[string]int64
 	ClientIDMetadataDocuments map[string]StoreClientIDMetadataDocument
+
+	Clock func() time.Time
 
 	clientsMutex                  sync.RWMutex
 	authorizeCodesMutex           sync.RWMutex
@@ -220,6 +221,16 @@ type MemoryStore struct {
 	idjagJTIsPruneAt           time.Time
 	pkceChallengesPruneAt      time.Time
 	openIDConnectNoncesPruneAt time.Time
+
+	refreshTokenFamilies map[string]map[string]struct{}
+}
+
+func (s *MemoryStore) now() time.Time {
+	if s.Clock != nil {
+		return s.Clock()
+	}
+
+	return time.Now()
 }
 
 const memoryStorePruneInterval = time.Minute
@@ -300,7 +311,12 @@ func (s StoreAuthorizeCode) SetClaims(claims *oauth2.ClaimsRequest) {
 type StoreRefreshToken struct {
 	active               bool
 	accessTokenSignature string
+	graceDeadline        time.Time
 	oauth2.Requester
+}
+
+func (s StoreRefreshToken) isActive(now time.Time) bool {
+	return s.active && (s.graceDeadline.IsZero() || now.Before(s.graceDeadline))
 }
 
 // GetClaims returns the claims request of the stored request.
@@ -905,12 +921,25 @@ func (s *MemoryStore) CreateRefreshTokenSession(_ context.Context, signature, ac
 	s.RefreshTokens[signature] = StoreRefreshToken{active: true, accessTokenSignature: accessTokenSignature, Requester: req}
 	s.RefreshTokenRequestIDs[req.GetID()] = signature
 
+	if s.refreshTokenFamilies == nil {
+		s.refreshTokenFamilies = make(map[string]map[string]struct{})
+	}
+
+	signatures, ok := s.refreshTokenFamilies[req.GetID()]
+	if !ok {
+		signatures = make(map[string]struct{})
+		s.refreshTokenFamilies[req.GetID()] = signatures
+	}
+
+	signatures[signature] = struct{}{}
+
 	return nil
 }
 
 // GetRefreshTokenSession returns the request stored against the refresh token signature, or oauth2.ErrNotFound when no
-// session exists for it. When the refresh token has been deactivated it returns the request alongside
-// oauth2.ErrInactiveToken so the refresh token grant handler can revoke the rest of the authorization grant.
+// session exists for it. When the refresh token has been deactivated, or the grace period it was rotated with has
+// ended, it returns the request alongside oauth2.ErrInactiveToken so the refresh token grant handler can revoke the
+// rest of the authorization grant.
 func (s *MemoryStore) GetRefreshTokenSession(_ context.Context, signature string, _ oauth2.Session) (oauth2.Requester, error) {
 	s.refreshTokensMutex.RLock()
 	defer s.refreshTokensMutex.RUnlock()
@@ -920,7 +949,7 @@ func (s *MemoryStore) GetRefreshTokenSession(_ context.Context, signature string
 		return nil, oauth2.ErrNotFound
 	}
 
-	if !rel.active {
+	if !rel.isActive(s.now()) {
 		return rel, oauth2.ErrInactiveToken
 	}
 
@@ -974,8 +1003,9 @@ func (s *MemoryStore) Authenticate(ctx context.Context, name string, secret stri
 	return uuid.New().String(), nil
 }
 
-// RevokeRefreshToken deactivates the refresh token recorded against the request ID. A request ID with no recorded
-// refresh token is not an error.
+// RevokeRefreshToken deactivates every refresh token recorded against the request ID, including one which is within
+// the grace period it was rotated with. A request ID with no recorded refresh token is not an error. It returns
+// oauth2.ErrNotFound when the session of the most recent refresh token has been deleted, having deactivated the rest.
 func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) error {
 	s.refreshTokenRequestIDsMutex.Lock()
 	defer s.refreshTokenRequestIDsMutex.Unlock()
@@ -983,38 +1013,63 @@ func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) 
 	s.refreshTokensMutex.Lock()
 	defer s.refreshTokensMutex.Unlock()
 
-	return s.deactivateRefreshToken(requestID)
+	return s.deactivateRefreshTokens(requestID)
 }
 
-func (s *MemoryStore) deactivateRefreshToken(requestID string) error {
+func (s *MemoryStore) deactivateRefreshTokens(requestID string) error {
+	for signature := range s.refreshTokenFamilies[requestID] {
+		s.deactivateRefreshToken(signature)
+	}
+
 	if signature, exists := s.RefreshTokenRequestIDs[requestID]; exists {
-		rel, ok := s.RefreshTokens[signature]
-		if !ok {
+		if _, ok := s.RefreshTokens[signature]; !ok {
 			return oauth2.ErrNotFound
 		}
 
-		rel.active = false
-		s.RefreshTokens[signature] = rel
+		s.deactivateRefreshToken(signature)
 	}
 
 	return nil
 }
 
+func (s *MemoryStore) deactivateRefreshToken(signature string) {
+	if rel, ok := s.RefreshTokens[signature]; ok {
+		rel.active = false
+		s.RefreshTokens[signature] = rel
+	}
+}
+
 // RotateRefreshToken deactivates the refresh token and revokes the access tokens issued for the same request, which
 // the request ID locates. It returns oauth2.ErrInactiveToken when the refresh token with the given signature is
-// already inactive, as it is when a concurrent request rotated it first, and oauth2.ErrNotFound when it does not exist. A
-// grace period is not implemented by the
-// memory store; implementations that need one should mark the refresh token as expiring after the grace period instead
-// of deactivating it here.
+// already inactive, as it is when a concurrent request rotated it first, and oauth2.ErrNotFound when it does not exist.
 func (s *MemoryStore) RotateRefreshToken(ctx context.Context, requestID string, signature string) error {
-	if err := s.rotateRefreshToken(requestID, signature); err != nil {
+	if _, err := s.rotateRefreshToken(signature, time.Time{}); err != nil {
 		return err
 	}
 
 	return s.RevokeAccessToken(ctx, requestID)
 }
 
-func (s *MemoryStore) rotateRefreshToken(requestID, signature string) error {
+// RotateRefreshTokenWithGracePeriod records the deadline after which the refresh token is inactive, unless an earlier
+// rotation already recorded one, and revokes only the access token issued alongside the refresh token. It returns
+// oauth2.ErrInactiveToken when the refresh token with the given signature is already inactive, as it is once its
+// deadline has passed, and oauth2.ErrNotFound when it does not exist.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+func (s *MemoryStore) RotateRefreshTokenWithGracePeriod(ctx context.Context, _ string, signature string, deadline time.Time) error {
+	accessTokenSignature, err := s.rotateRefreshToken(signature, deadline)
+	if err != nil {
+		return err
+	}
+
+	if accessTokenSignature == "" {
+		return nil
+	}
+
+	return s.DeleteAccessTokenSession(ctx, accessTokenSignature)
+}
+
+func (s *MemoryStore) rotateRefreshToken(signature string, deadline time.Time) (accessTokenSignature string, err error) {
 	s.refreshTokenRequestIDsMutex.Lock()
 	defer s.refreshTokenRequestIDsMutex.Unlock()
 
@@ -1025,12 +1080,18 @@ func (s *MemoryStore) rotateRefreshToken(requestID, signature string) error {
 
 	switch {
 	case !exists:
-		return oauth2.ErrNotFound
-	case !rel.active:
-		return oauth2.ErrInactiveToken
+		return "", oauth2.ErrNotFound
+	case !rel.isActive(s.now()):
+		return "", oauth2.ErrInactiveToken
+	case deadline.IsZero():
+		rel.active = false
+	case rel.graceDeadline.IsZero():
+		rel.graceDeadline = deadline
 	}
 
-	return s.deactivateRefreshToken(requestID)
+	s.RefreshTokens[signature] = rel
+
+	return rel.accessTokenSignature, nil
 }
 
 // RevokeAccessToken removes every access token issued for the request ID. RFC 7009 Section 2.1 requires revoking a

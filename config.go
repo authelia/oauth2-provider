@@ -159,6 +159,16 @@ type DisableRefreshTokenRotationProvider interface {
 	GetDisableRefreshTokenRotation(ctx context.Context) (disable bool)
 }
 
+// RefreshTokenGracePeriodProvider returns the provider for configuring the refresh token grace period.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+type RefreshTokenGracePeriodProvider interface {
+	// GetRefreshTokenGracePeriod returns the time a rotated refresh token remains redeemable after it is first
+	// redeemed, or a duration of 0 seconds or less for none. A client may override it with
+	// RefreshTokenGracePeriodClient.
+	GetRefreshTokenGracePeriod(ctx context.Context) (grace time.Duration)
+}
+
 // RefreshTokenMaximumLifespanProvider returns the provider for configuring the maximum lifespan of a grant's refresh
 // tokens.
 //

@@ -17,7 +17,9 @@ type TokenRevocationStorage interface {
 	// RevokeRefreshToken revokes a refresh token, and SHOULD also revoke all access tokens based on the same
 	// authorization grant. It MUST revoke the active refresh token of the grant identified by the request ID, including
 	// when the token presented for revocation was already deactivated by RotateRefreshToken and that active refresh token
-	// replaced it. A refresh token issued by rotation has the same request ID as the one it replaced.
+	// replaced it. A refresh token issued by rotation has the same request ID as the one it replaced. A store which
+	// implements RefreshTokenGracePeriodStorage MUST revoke every refresh token of the request ID, including each that
+	// is within its grace period.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 	RevokeRefreshToken(ctx context.Context, requestID string) error

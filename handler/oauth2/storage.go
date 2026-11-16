@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"time"
 
 	"authelia.com/provider/oauth2"
 )
@@ -64,7 +65,7 @@ type RefreshTokenStorage interface {
 	// GetRefreshTokenSession hydrates the session based on the given refresh token signature and returns the request.
 	// This method should return the oauth2.ErrNotFound error if no session exists for the given signature, and the
 	// oauth2.ErrInactiveToken error if the session exists but the refresh token has been deactivated by
-	// RotateRefreshToken or revoked.
+	// RotateRefreshToken or revoked, or the deadline RefreshTokenGracePeriodStorage recorded for it has passed.
 	//
 	// Make sure to also return the oauth2.Requester value when returning the oauth2.ErrInactiveToken error! The refresh
 	// token grant handler uses it to revoke every token derived from the same authorization grant when it detects that
@@ -102,8 +103,38 @@ type RefreshTokenStorage interface {
 	// then return oauth2.ErrInactiveToken if that transaction committed the rotation, when called with a context outside
 	// the transaction this request rolled back, so that the grant can be revoked.
 	//
-	// Implementations that support a refresh token grace period should instead mark the refresh token as expiring
-	// after the grace period rather than deactivating it immediately, so that concurrent requests made by the same
-	// client within that window continue to succeed.
+	// A refresh token grace period is not applied by this method. A store which supports one implements
+	// RefreshTokenGracePeriodStorage, and this method MUST then also deactivate a refresh token which is within its
+	// grace period, and return the oauth2.ErrInactiveToken error for one whose grace period has ended.
 	RotateRefreshToken(ctx context.Context, requestID string, signature string) (err error)
+}
+
+// RefreshTokenGracePeriodStorage is optionally implemented by a TokenRevocationStorage which supports a refresh token
+// grace period. The refresh token grant handler rotates the refresh token with RotateRefreshToken, without a grace
+// period, when the store does not implement it.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+type RefreshTokenGracePeriodStorage interface {
+	// RotateRefreshTokenWithGracePeriod rotates the refresh token with the given signature as RotateRefreshToken does,
+	// except the refresh token stays active until the given deadline. It is called in place of RotateRefreshToken when
+	// a grace period applies to the request, with the same request ID, and has the same concurrency contract: it
+	// returns the oauth2.ErrNotFound error when the signature does not exist, may return the
+	// oauth2.ErrSerializationFailure error, and takes part in the transaction of a store which implements
+	// storage.Transactional.
+	//
+	// The first call for a signature MUST record the deadline. A later call before the recorded deadline MUST succeed
+	// and MUST NOT replace it, so that redeeming the refresh token again does not extend the grace period. This method,
+	// RotateRefreshToken and GetRefreshTokenSession MUST return the oauth2.ErrInactiveToken error once the recorded
+	// deadline has passed, and when the refresh token was deactivated by RotateRefreshToken or revoked. The refresh
+	// token grant handler treats that as a reused refresh token and revokes every token derived from the same
+	// authorization grant.
+	//
+	// It MUST only revoke the access token whose signature was given to CreateRefreshTokenSession alongside the
+	// refresh token with the given signature. Every refresh token issued by redeeming a refresh token within its grace
+	// period has the same request ID, so revoking the access tokens of the request ID would revoke the access token a
+	// concurrent redemption was just issued.
+	//
+	// RevokeRefreshToken MUST deactivate every refresh token of the request ID, including each that is within its
+	// grace period, and RevokeAccessToken every access token of the request ID.
+	RotateRefreshTokenWithGracePeriod(ctx context.Context, requestID string, signature string, deadline time.Time) (err error)
 }

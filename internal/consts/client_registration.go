@@ -70,6 +70,15 @@ const (
 	ClientMetadataAccessTokenEncryptedResponseEnc   = "access_token_encrypted_response_enc"
 )
 
+// Client metadata parameters naming the key of the authorization server which signs a response.
+const (
+	ClientMetadataIDTokenSignedResponseKeyID       = "id_token_signed_response_kid"
+	ClientMetadataUserinfoSignedResponseKeyID      = "userinfo_signed_response_kid"
+	ClientMetadataAuthorizationSignedResponseKeyID = "authorization_signed_response_kid"
+	ClientMetadataIntrospectionSignedResponseKeyID = "introspection_signed_response_kid"
+	ClientMetadataAccessTokenSignedResponseKeyID   = "access_token_signed_response_kid"
+)
+
 // Client metadata parameters naming a client authentication method, validated by name.
 const (
 	ClientMetadataTokenEndpointAuthMethod         = "token_endpoint_auth_method"

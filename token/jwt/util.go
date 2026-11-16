@@ -260,7 +260,7 @@ func SearchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict bool) (ke
 }
 
 func searchJWKS(jwks *jose.JSONWebKeySet, kid, alg, use string, strict, optional bool) (key *jose.JSONWebKey, err error) {
-	if len(jwks.Keys) == 0 {
+	if jwks == nil || len(jwks.Keys) == 0 {
 		return nil, &JWKLookupError{Description: "The retrieved JSON Web Key Set does not contain any key."}
 	}
 

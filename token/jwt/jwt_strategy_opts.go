@@ -24,9 +24,10 @@ type StrategyOpts struct {
 	jwsKeyFunc KeyFuncJWS
 	jweKeyFunc KeyFuncJWE
 
-	allowUnverified  bool
-	idTokenHint      bool
-	issuerSigningAlg string
+	allowUnverified    bool
+	idTokenHint        bool
+	issuerSigningAlg   string
+	issuerSigningKeyID string
 }
 
 type (
@@ -227,6 +228,17 @@ func WithKeyFuncJWE(f KeyFuncJWE) StrategyOpt {
 func WithIssuerSigningAlg(alg string) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.issuerSigningAlg = alg
+
+		return nil
+	}
+}
+
+// WithIssuerSigningKeyID selects the issuer key by 'kid' when no client is supplied. The key must have the algorithm
+// WithIssuerSigningAlg selects and a 'use' of 'sig', and encoding fails rather than use another key when none matches.
+// An empty kid selects the first issuer key for the algorithm.
+func WithIssuerSigningKeyID(kid string) StrategyOpt {
+	return func(opts *StrategyOpts) (err error) {
+		opts.issuerSigningKeyID = kid
 
 		return nil
 	}

@@ -12,9 +12,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestTxnTokenTrustDomains(t *testing.T) {
@@ -85,6 +89,40 @@ func TestTxnTokenTrustDomains(t *testing.T) {
 
 				require.Len(t, f.scopes.calls, 1)
 				assert.Equal(t, txnOtherTrustDomain, f.scopes.calls[0].trustDomain)
+			})
+
+			t.Run("ShouldSignWithTheKeyOfTheRequestedTrustDomain", func(t *testing.T) {
+				f := newTxnTrustDomainFixture(t, store)
+
+				issuer, err := jwt.NewDefaultIssuer(
+					jose.JSONWebKey{Key: key, KeyID: "default", Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature},
+					jose.JSONWebKey{Key: gen.MustRSAKey(), KeyID: "txn-b", Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature},
+				)
+				require.NoError(t, err)
+
+				f.strategy.Issuer = issuer
+				f.txnType.Domains[txnOtherTrustDomain].SigningKeyID = "txn-b"
+
+				for audience, kid := range map[string]string{txnTrustDomain: "default", txnOtherTrustDomain: "txn-b"} {
+					f.audience = audience
+
+					response, err := f.exchange(t, f.hookExchange(t, nil))
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+					parsed, err := jose.ParseSignedCompact(response.GetAccessToken(), []jose.SignatureAlgorithm{jose.RS256})
+					require.NoError(t, err)
+
+					assert.Equal(t, kid, parsed.Signatures[0].Header.KeyID)
+				}
+			})
+
+			t.Run("ShouldRefuseAnUnknownSigningKeyID", func(t *testing.T) {
+				f := newTxnTrustDomainFixture(t, store)
+				f.txnType.Domains[txnOtherTrustDomain].SigningKeyID = "unknown"
+				f.audience = txnOtherTrustDomain
+
+				_, err := f.exchange(t, f.hookExchange(t, nil))
+				require.ErrorIs(t, err, oauth2.ErrServerError)
 			})
 
 			t.Run("ShouldRefuseTheIssuerOfThisServerInTheRequestedTrustDomain", func(t *testing.T) {

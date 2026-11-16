@@ -177,7 +177,13 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 			alg = string(jose.RS256)
 		}
 
-		if keySig, err = j.issuerJWK(ctx, "", alg, JSONWebTokenUseSignature); err != nil {
+		if o.issuerSigningKeyID != "" {
+			keySig, err = j.issuerStrictJWK(ctx, o.issuerSigningKeyID, alg, JSONWebTokenUseSignature)
+		} else {
+			keySig, err = j.issuerJWK(ctx, "", alg, JSONWebTokenUseSignature)
+		}
+
+		if err != nil {
 			return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
 		}
 	} else {

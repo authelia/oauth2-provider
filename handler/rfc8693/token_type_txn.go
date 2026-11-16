@@ -58,6 +58,14 @@ type TxnTokenTrustDomain struct {
 	// SigningAlg is the JWS algorithm selecting the issuer key. RS256 is used when empty.
 	SigningAlg string `json:"signing_alg"`
 
+	// SigningKeyID is the 'kid' of the issuer key which signs the tokens, so a workload can trust that key alone. The key
+	// must have the algorithm SigningAlg and a 'use' of 'sig', and no other key is used when none matches. When empty
+	// the first issuer key for SigningAlg signs them, which is also the key of other tokens this server signs.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-13.11
+	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
+	SigningKeyID string `json:"signing_key_id"`
+
 	// ClientAuthenticationMethods are the token endpoint authentication methods a client may use to request a token, such
 	// as 'private_key_jwt', 'tls_client_auth' and 'self_signed_tls_client_auth'. Empty permits any method. When set, a
 	// request that does not implement oauth2.ClientAuthenticationMethodRequester is refused.

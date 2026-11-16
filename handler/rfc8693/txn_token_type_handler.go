@@ -86,9 +86,9 @@ func (c *TxnTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, re
 		return nil
 	}
 
-	session, ok := request.GetSession().(Session)
-	if !ok || session == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	session, err := exchangeSession(request)
+	if err != nil {
+		return err
 	}
 
 	var name string
@@ -382,12 +382,10 @@ func (c *TxnTokenTypeHandler) storedScopes(ctx context.Context, request oauth2.A
 }
 
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-9
-//
-//nolint:gocyclo
 func (c *TxnTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRequester, tokenType *TxnTokenType, response oauth2.AccessResponder) (err error) {
-	session, ok := request.GetSession().(Session)
-	if !ok || session == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	session, err := exchangeSession(request)
+	if err != nil {
+		return err
 	}
 
 	if err = requireSubjectToken(request); err != nil {

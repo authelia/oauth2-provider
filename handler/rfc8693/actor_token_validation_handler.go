@@ -48,8 +48,8 @@ func (c *ActorTokenValidationHandler) HandleTokenEndpointRequest(ctx context.Con
 		ok      bool
 	)
 
-	if session, ok = request.GetSession().(Session); !ok || session == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	if session, err = exchangeSession(request); err != nil {
+		return err
 	}
 
 	subjectTokenObject := session.GetSubjectToken()

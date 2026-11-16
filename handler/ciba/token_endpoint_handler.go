@@ -9,7 +9,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -240,7 +239,7 @@ func (c *TokenHandler) longPollingTimeout(ctx context.Context, receivedAt time.T
 		return timeout
 	}
 
-	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
+	r := oauth2.RequestFromContext(ctx)
 	if r == nil {
 		return timeout
 	}

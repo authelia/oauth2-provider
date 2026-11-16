@@ -6,6 +6,7 @@ package jwt
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -288,37 +289,44 @@ func toNumericDate(v any) (date *NumericDate, err error) {
 		return nil, nil
 	case *NumericDate:
 		return value, nil
-	case float64:
-		if value == 0 {
-			return nil, nil
-		}
-
-		return newNumericDateFromSeconds(value), nil
-	case int64:
-		if value == 0 {
-			return nil, nil
-		}
-
-		return newNumericDateFromSeconds(float64(value)), nil
-	case int32:
-		if value == 0 {
-			return nil, nil
-		}
-
-		return newNumericDateFromSeconds(float64(value)), nil
-	case int:
-		if value == 0 {
-			return nil, nil
-		}
-
-		return newNumericDateFromSeconds(float64(value)), nil
 	case json.Number:
 		vv, _ := value.Float64()
 
 		return newNumericDateFromSeconds(vv), nil
 	}
 
-	return nil, newError("value has invalid type", ErrInvalidType)
+	seconds, ok := claimvalue.Number[float64](v)
+	if !ok {
+		return nil, newError("value has invalid type", ErrInvalidType)
+	}
+
+	if seconds == 0 {
+		return nil, nil
+	}
+
+	return newNumericDateFromSeconds(seconds), nil
+}
+
+func mapNumericDate(m map[string]any, key string) (date *NumericDate, err error) {
+	v, ok := m[key]
+	if !ok {
+		return nil, nil
+	}
+
+	return toNumericDate(v)
+}
+
+func mapString(m map[string]any, key string) (value string, err error) {
+	raw, ok := m[key]
+	if !ok {
+		return "", nil
+	}
+
+	if value, ok = raw.(string); !ok {
+		return "", newError(fmt.Sprintf("%s is invalid", key), ErrInvalidType)
+	}
+
+	return value, nil
 }
 
 // Add will add a key-value pair to the extra field.

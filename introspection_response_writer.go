@@ -57,7 +57,7 @@ func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWr
 	if !errors.Is(err, ErrInactiveToken) && IsBearerCredentialError(err) {
 		// The request is present when the caller writes the error from the context NewIntrospectionRequest derived,
 		// and absent otherwise. WriteBearerAuthorizationChallenge accepts either.
-		r, _ := ctx.Value(RequestContextKey).(*http.Request)
+		r := RequestFromContext(ctx)
 
 		rfc := f.WriteBearerAuthorizationChallenge(ctx, rw, r, err)
 

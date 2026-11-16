@@ -69,8 +69,8 @@ func (c *TokenExchangeGrantHandler) HandleTokenEndpointRequest(ctx context.Conte
 		ok      bool
 	)
 
-	if session, ok = request.GetSession().(Session); !ok || session == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	if session, err = exchangeSession(request); err != nil {
+		return err
 	}
 
 	// Only a subject or actor token validated by a token type handler for this request may be issued against, and only
@@ -330,9 +330,9 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	session, _ := request.GetSession().(Session)
-	if session == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	session, err := exchangeSession(request)
+	if err != nil {
+		return err
 	}
 
 	form := request.GetRequestForm()
@@ -1331,8 +1331,18 @@ func inheritTokenBinding(ctx context.Context, config any, request oauth2.AccessR
 	return nil
 }
 
+func exchangeSession(request oauth2.Requester) (session Session, err error) {
+	var ok bool
+
+	if session, ok = request.GetSession().(Session); !ok {
+		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	}
+
+	return session, nil
+}
+
 func requireSubjectToken(request oauth2.AccessRequester) (err error) {
-	if session, ok := request.GetSession().(Session); ok && session != nil && session.GetSubjectToken() != nil {
+	if session, ok := request.GetSession().(Session); ok && session.GetSubjectToken() != nil {
 		return nil
 	}
 
@@ -1350,7 +1360,7 @@ func requireActorToken(request oauth2.AccessRequester) (err error) {
 		return nil
 	}
 
-	if session, ok := request.GetSession().(Session); ok && session != nil && session.GetActorToken() != nil {
+	if session, ok := request.GetSession().(Session); ok && session.GetActorToken() != nil {
 		return nil
 	}
 
@@ -1367,7 +1377,7 @@ func isRefreshTokenSubject(request oauth2.Requester) bool {
 
 func subjectTokenExpiry(request oauth2.Requester) time.Time {
 	session, ok := request.GetSession().(Session)
-	if !ok || session == nil {
+	if !ok {
 		return time.Time{}
 	}
 

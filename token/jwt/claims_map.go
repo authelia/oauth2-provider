@@ -26,7 +26,7 @@ type MapClaims map[string]any
 
 // GetIssuer returns the 'iss' claim.
 func (m MapClaims) GetIssuer() (iss string, err error) {
-	return m.toString(ClaimIssuer)
+	return mapString(m, ClaimIssuer)
 }
 
 // VerifyIssuer compares the iss claim against cmp.
@@ -50,7 +50,7 @@ func (m MapClaims) VerifyIssuer(cmp string, required bool) (ok bool) {
 
 // GetAuthorizedParty returns the 'azp' claim.
 func (m MapClaims) GetAuthorizedParty() (azp string, err error) {
-	return m.toString(ClaimAuthorizedParty)
+	return mapString(m, ClaimAuthorizedParty)
 }
 
 // VerifyAuthorizedParty compares the 'azp' claim against cmp.
@@ -74,7 +74,7 @@ func (m MapClaims) VerifyAuthorizedParty(cmp string, required bool) (ok bool) {
 
 // GetSubject returns the 'sub' claim.
 func (m MapClaims) GetSubject() (sub string, err error) {
-	return m.toString(ClaimSubject)
+	return mapString(m, ClaimSubject)
 }
 
 // VerifySubject compares the syv claim against cmp.
@@ -162,7 +162,7 @@ func (m MapClaims) VerifyAudienceAny(cmp []string, required bool) (ok bool) {
 
 // GetExpirationTime returns the 'exp' claim.
 func (m MapClaims) GetExpirationTime() (exp *NumericDate, err error) {
-	return m.toNumericDate(ClaimExpirationTime)
+	return mapNumericDate(m, ClaimExpirationTime)
 }
 
 // VerifyExpirationTime compares the exp claim against cmp, which RFC 7519 Section 4.1.4 requires be before exp.
@@ -186,7 +186,7 @@ func (m MapClaims) VerifyExpirationTime(cmp int64, required bool) (ok bool) {
 
 // GetIssuedAt returns the 'iat' claim.
 func (m MapClaims) GetIssuedAt() (iat *NumericDate, err error) {
-	return m.toNumericDate(ClaimIssuedAt)
+	return mapNumericDate(m, ClaimIssuedAt)
 }
 
 // VerifyIssuedAt compares the iat claim against cmp.
@@ -210,7 +210,7 @@ func (m MapClaims) VerifyIssuedAt(cmp int64, required bool) (ok bool) {
 
 // GetNotBefore returns the 'nbf' claim.
 func (m MapClaims) GetNotBefore() (nbf *NumericDate, err error) {
-	return m.toNumericDate(ClaimNotBefore)
+	return mapNumericDate(m, ClaimNotBefore)
 }
 
 // VerifyNotBefore compares the nbf claim against cmp.
@@ -349,36 +349,6 @@ func (m MapClaims) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
-}
-
-func (m MapClaims) toNumericDate(key string) (date *NumericDate, err error) {
-	var (
-		v  any
-		ok bool
-	)
-
-	if v, ok = m[key]; !ok {
-		return nil, nil
-	}
-
-	return toNumericDate(v)
-}
-
-func (m MapClaims) toString(key string) (value string, err error) {
-	var (
-		ok  bool
-		raw any
-	)
-
-	if raw, ok = m[key]; !ok {
-		return "", nil
-	}
-
-	if value, ok = raw.(string); !ok {
-		return "", newError(fmt.Sprintf("%s is invalid", key), ErrInvalidType)
-	}
-
-	return value, nil
 }
 
 func (m MapClaims) toClaimsString(key string) (ClaimStrings, error) {

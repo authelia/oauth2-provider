@@ -20,6 +20,7 @@ import (
 	"authelia.com/provider/oauth2/handler/rfc7523"
 	"authelia.com/provider/oauth2/handler/rfc8705"
 	"authelia.com/provider/oauth2/handler/rfc9449"
+	"authelia.com/provider/oauth2/internal/slicesx"
 )
 
 const (
@@ -306,17 +307,7 @@ func fapi2Permitted(values, permitted []string) []string {
 }
 
 func fapi2Subset(values, permitted []string) bool {
-	if len(values) == 0 {
-		return false
-	}
-
-	for _, value := range values {
-		if !slices.Contains(permitted, value) {
-			return false
-		}
-	}
-
-	return true
+	return len(values) != 0 && slicesx.Subset(permitted, values)
 }
 
 func fapi2Registered[T any, S ~[]E, E any](handlers S) bool {

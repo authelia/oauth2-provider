@@ -437,7 +437,7 @@ func (s *MemoryStore) SetOpenIDConnectNonceUsed(_ context.Context, clientID, non
 		s.OpenIDConnectNonces = make(map[ClientValueMarker]time.Time)
 	}
 
-	if !setClientValue(s.OpenIDConnectNonces, &s.openIDConnectNoncesPruneAt, ClientValueMarker{ClientID: clientID, Value: nonce}, expiresAt) {
+	if !setUnexpired(s.OpenIDConnectNonces, &s.openIDConnectNoncesPruneAt, ClientValueMarker{ClientID: clientID, Value: nonce}, expiresAt) {
 		return oauth2.ErrOpenIDConnectNonceReused
 	}
 
@@ -666,29 +666,23 @@ func (s *MemoryStore) setJTI(jtis map[JTIMarker]time.Time, pruneAt *time.Time, m
 	s.jtisMutex.Lock()
 	defer s.jtisMutex.Unlock()
 
-	now := time.Now()
-
-	pruneExpired(jtis, pruneAt, now)
-
-	if e, exists := jtis[marker]; exists && !e.Before(now) {
+	if !setUnexpired(jtis, pruneAt, marker, exp) {
 		return oauth2.ErrJTIKnown
 	}
-
-	jtis[marker] = exp
 
 	return nil
 }
 
-func setClientValue(values map[ClientValueMarker]time.Time, pruneAt *time.Time, marker ClientValueMarker, expiresAt time.Time) (ok bool) {
+func setUnexpired[K comparable](entries map[K]time.Time, pruneAt *time.Time, key K, expiresAt time.Time) (ok bool) {
 	now := time.Now()
 
-	pruneExpired(values, pruneAt, now)
+	pruneExpired(entries, pruneAt, now)
 
-	if e, exists := values[marker]; exists && !e.Before(now) {
+	if e, exists := entries[key]; exists && !e.Before(now) {
 		return false
 	}
 
-	values[marker] = expiresAt
+	entries[key] = expiresAt
 
 	return true
 }
@@ -792,7 +786,7 @@ func (s *MemoryStore) SetPKCEChallengeUsed(_ context.Context, clientID, challeng
 		s.PKCEChallenges = make(map[ClientValueMarker]time.Time)
 	}
 
-	if !setClientValue(s.PKCEChallenges, &s.pkceChallengesPruneAt, ClientValueMarker{ClientID: clientID, Value: challenge}, expiresAt) {
+	if !setUnexpired(s.PKCEChallenges, &s.pkceChallengesPruneAt, ClientValueMarker{ClientID: clientID, Value: challenge}, expiresAt) {
 		return oauth2.ErrPKCEChallengeReused
 	}
 

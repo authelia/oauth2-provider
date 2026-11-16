@@ -12,6 +12,40 @@ type AccessRequest struct {
 	Request
 
 	refreshTokenRotationDisabled *bool
+
+	clientAuthenticationMethod string
+}
+
+// ClientAuthenticationMethodRequester is an AccessRequester that records the method the client authenticated with.
+type ClientAuthenticationMethodRequester interface {
+	// GetClientAuthenticationMethod returns the method the client authenticated with, such as 'private_key_jwt', or an
+	// empty string when it did not authenticate.
+	GetClientAuthenticationMethod() (method string)
+
+	// SetClientAuthenticationMethod records the method the client authenticated with.
+	SetClientAuthenticationMethod(method string)
+}
+
+// GetClientAuthenticationMethod returns the method the client of the request authenticated with at the token endpoint,
+// or an empty string when it did not authenticate or the request does not implement ClientAuthenticationMethodRequester.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7591#section-2
+func GetClientAuthenticationMethod(request Requester) (method string) {
+	if r, ok := request.(ClientAuthenticationMethodRequester); ok {
+		return r.GetClientAuthenticationMethod()
+	}
+
+	return ""
+}
+
+// GetClientAuthenticationMethod returns the method the client authenticated with.
+func (a *AccessRequest) GetClientAuthenticationMethod() (method string) {
+	return a.clientAuthenticationMethod
+}
+
+// SetClientAuthenticationMethod records the method the client authenticated with.
+func (a *AccessRequest) SetClientAuthenticationMethod(method string) {
+	a.clientAuthenticationMethod = method
 }
 
 func (a *AccessRequest) getRefreshTokenRotationDisabled() (disable, ok bool) {

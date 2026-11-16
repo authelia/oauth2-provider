@@ -64,9 +64,10 @@ func (f *Fosite) NewAccessRequest(ctx context.Context, r *http.Request, session 
 		return requester, errorsx.WithStack(ErrInvalidAuthorizationDetails.WithHintf("The 'authorization_details' parameter is not supported for grant type '%s'.", strings.Join(requester.GrantTypes, " ")))
 	}
 
-	client, _, clientErr := f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, f.Config.GetTokenEndpointClientAuthStrategy(ctx))
+	client, method, clientErr := f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, f.Config.GetTokenEndpointClientAuthStrategy(ctx))
 	if clientErr == nil {
 		requester.Client = client
+		requester.SetClientAuthenticationMethod(method)
 	}
 
 	presented := hasClientCredentials(r, r.PostForm)

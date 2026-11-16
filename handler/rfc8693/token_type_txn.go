@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -50,6 +51,13 @@ type TxnTokenType struct {
 
 	// SigningAlg is the JWS algorithm selecting the issuer key. RS256 is used when empty.
 	SigningAlg string `json:"signing_alg"`
+
+	// ClientAuthenticationMethods are the token endpoint authentication methods a client may use to request a token, such
+	// as 'private_key_jwt', 'tls_client_auth' and 'self_signed_tls_client_auth'. Empty permits any method. When set, a
+	// request that does not implement oauth2.ClientAuthenticationMethodRequester is refused.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.5
+	ClientAuthenticationMethods []string `json:"client_authentication_methods"`
 
 	// TranscribeClaims is the only way 'rctx' and 'tctx' reach a token, so without it the 'request_context' and
 	// 'request_details' parameters are validated and then dropped, and the token has neither claim, which the draft says it
@@ -319,6 +327,13 @@ func validateTxnTokenRequest(ctx context.Context, request oauth2.AccessRequester
 	// The 'requested_token_type' must be sent, so a configured default does not satisfy section 11.1.
 	if form.Get(consts.FormParameterRequestedTokenType) == "" {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' parameter is required and must be '%s'.", consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693TxnToken))
+	}
+
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.5
+	if len(tokenType.ClientAuthenticationMethods) != 0 {
+		if method := oauth2.GetClientAuthenticationMethod(request); method == "" || !slices.Contains(tokenType.ClientAuthenticationMethods, method) {
+			return errorsx.WithStack(oauth2.ErrInvalidClient.WithHintf("The OAuth 2.0 Client authenticated with the method '%s' which is not permitted when the '%s' is '%s'.", method, consts.FormParameterRequestedTokenType, consts.TokenTypeRFC8693TxnToken))
+		}
 	}
 
 	// A refresh token must not be exchanged for a Txn-Token (section 11.2, section 13.3), and a Txn-Token is exchanged

@@ -35,6 +35,7 @@ func TestNewAccessRequest(t *testing.T) {
 		expectErr    error
 		expectStrErr string
 		expect       func(client *DefaultClient) *AccessRequest
+		authMethod   string
 		handlers     func(handler *mock.MockTokenEndpointHandler) TokenEndpointHandlers
 	}{
 		{
@@ -169,6 +170,7 @@ func TestNewAccessRequest(t *testing.T) {
 					},
 				}
 			},
+			authMethod: consts.ClientAuthMethodClientSecretBasic,
 		},
 		{
 			name: "ShouldHandlePublicClientTypeSuccessfully",
@@ -196,6 +198,7 @@ func TestNewAccessRequest(t *testing.T) {
 					},
 				}
 			},
+			authMethod: consts.ClientAuthMethodNone,
 		},
 	}
 
@@ -243,6 +246,7 @@ func TestNewAccessRequest(t *testing.T) {
 			require.NoError(t, ErrorToDebugRFC6749Error(err))
 			AssertObjectKeysEqual(t, tc.expect(client), actual, "GrantTypes", "Client")
 			assert.NotNil(t, actual.GetRequestedAt())
+			assert.Equal(t, tc.authMethod, GetClientAuthenticationMethod(actual))
 		})
 	}
 }

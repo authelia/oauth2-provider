@@ -705,6 +705,8 @@ func TestRefreshFlow_PopulateTokenEndpointResponse(t *testing.T) {
 
 			tc.setup(areq, store, config)
 
+			oauth2.GetRefreshTokenGraceDeadlineForRequest(t.Context(), config, areq, time.Now().UTC())
+
 			err := h.PopulateTokenEndpointResponse(t.Context(), areq, aresp)
 			if tc.err != "" {
 				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
@@ -2087,6 +2089,12 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 
 			tc.setup(request, mockTransactional, mockRevocationStore)
 
+			config := &oauth2.Config{
+				AccessTokenLifespan: time.Hour,
+				ScopeStrategy:       oauth2.HierarchicScopeStrategy,
+				AudienceStrategy:    oauth2.DefaultAudienceStrategy,
+			}
+
 			handler := RefreshTokenGrantHandler{
 				TokenRevocationStorage: transactionalStore{
 					mockTransactional,
@@ -2094,12 +2102,10 @@ func TestRefreshFlowTransactional_PopulateTokenEndpointResponse(t *testing.T) {
 				},
 				AccessTokenStrategy:  &hmacshaStrategy,
 				RefreshTokenStrategy: &hmacshaStrategy,
-				Config: &oauth2.Config{
-					AccessTokenLifespan: time.Hour,
-					ScopeStrategy:       oauth2.HierarchicScopeStrategy,
-					AudienceStrategy:    oauth2.DefaultAudienceStrategy,
-				},
+				Config:               config,
 			}
+
+			oauth2.GetRefreshTokenGraceDeadlineForRequest(propagatedContext, config, request, time.Now().UTC())
 
 			err := handler.PopulateTokenEndpointResponse(propagatedContext, request, response)
 			if tc.err != "" {

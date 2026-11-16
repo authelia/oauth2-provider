@@ -617,6 +617,14 @@ type AccessRequester interface {
 	// GetGrantTypes returns the requests grant type.
 	GetGrantTypes() (grantTypes Arguments)
 
+	// GetRefreshTokenRotationDisabled returns the decision IsRefreshTokenRotationDisabledForRequest recorded for the
+	// presented refresh token, with ok false when none is recorded.
+	GetRefreshTokenRotationDisabled() (disable, ok bool)
+
+	// SetRefreshTokenRotationDisabled records the decision IsRefreshTokenRotationDisabledForRequest makes for the
+	// presented refresh token, which every later call returns.
+	SetRefreshTokenRotationDisabled(disable bool)
+
 	ClaimsRequester
 
 	Requester

@@ -421,14 +421,14 @@ func IsRefreshTokenRotationDisabled(ctx context.Context, config DisableRefreshTo
 // refresh tokens of public clients to be sender-constrained or rotated so that a replay can be detected.
 //
 // The binding is that of the presented refresh token, not one a token endpoint binding handler records on the session
-// for this request, so an *AccessRequest keeps the result of the first call and returns it on every later call. The
+// for this request, so an AccessRequester records the result of the first call and returns it on every later call. The
 // refresh token grant makes that call from HandleTokenEndpointRequest, before any binding handler runs.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 func IsRefreshTokenRotationDisabledForRequest(ctx context.Context, config DisableRefreshTokenRotationProvider, request Requester) (disable bool) {
-	recorder, ok := request.(refreshTokenRotationRecorder)
+	recorder, ok := request.(AccessRequester)
 	if ok {
-		if disable, ok = recorder.getRefreshTokenRotationDisabled(); ok {
+		if disable, ok = recorder.GetRefreshTokenRotationDisabled(); ok {
 			return disable
 		}
 	}
@@ -436,15 +436,10 @@ func IsRefreshTokenRotationDisabledForRequest(ctx context.Context, config Disabl
 	disable = isRefreshTokenRotationDisabledForRequest(ctx, config, request)
 
 	if recorder != nil {
-		recorder.setRefreshTokenRotationDisabled(disable)
+		recorder.SetRefreshTokenRotationDisabled(disable)
 	}
 
 	return disable
-}
-
-type refreshTokenRotationRecorder interface {
-	getRefreshTokenRotationDisabled() (disable, ok bool)
-	setRefreshTokenRotationDisabled(disable bool)
 }
 
 func isRefreshTokenRotationDisabledForRequest(ctx context.Context, config DisableRefreshTokenRotationProvider, request Requester) (disable bool) {
@@ -512,6 +507,16 @@ func GetRefreshTokenGraceDeadlineForRequest(ctx context.Context, config RefreshT
 type RefreshTokenGracePeriodConfigProvider interface {
 	DisableRefreshTokenRotationProvider
 	RefreshTokenGracePeriodProvider
+}
+
+// GetRecordedRefreshTokenGraceDeadlineForRequest returns the deadline GetRefreshTokenGraceDeadlineForRequest recorded on
+// the request. There is none when it has not been called with the request or the request cannot record one.
+func GetRecordedRefreshTokenGraceDeadlineForRequest(request Requester) (deadline time.Time, ok bool) {
+	if recorder, ok := request.(refreshTokenGraceDeadlineRecorder); ok {
+		return recorder.getRefreshTokenGraceDeadline()
+	}
+
+	return time.Time{}, false
 }
 
 type refreshTokenGraceDeadlineRecorder interface {

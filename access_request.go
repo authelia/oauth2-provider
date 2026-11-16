@@ -53,7 +53,8 @@ func (a *AccessRequest) SetClientAuthenticationMethod(method string) {
 	a.clientAuthenticationMethod = method
 }
 
-func (a *AccessRequest) getRefreshTokenRotationDisabled() (disable, ok bool) {
+// GetRefreshTokenRotationDisabled implements AccessRequester.
+func (a *AccessRequest) GetRefreshTokenRotationDisabled() (disable, ok bool) {
 	if a.refreshTokenRotationDisabled == nil {
 		return false, false
 	}
@@ -61,7 +62,8 @@ func (a *AccessRequest) getRefreshTokenRotationDisabled() (disable, ok bool) {
 	return *a.refreshTokenRotationDisabled, true
 }
 
-func (a *AccessRequest) setRefreshTokenRotationDisabled(disable bool) {
+// SetRefreshTokenRotationDisabled implements AccessRequester.
+func (a *AccessRequest) SetRefreshTokenRotationDisabled(disable bool) {
 	a.refreshTokenRotationDisabled = &disable
 }
 

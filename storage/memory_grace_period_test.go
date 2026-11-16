@@ -155,6 +155,31 @@ func TestRotateRefreshTokenDeactivatesARefreshTokenWithinItsGracePeriod(t *testi
 	})
 }
 
+func TestRevokeRefreshTokenDeactivatesTheGrantWhenTheLatestRefreshTokenIsDeleted(t *testing.T) {
+	forEachGracePeriodStore(t, func(t *testing.T, store gracePeriodStore, _ *MemoryStore) {
+		request := &oauth2.Request{ID: "req-id", Client: &oauth2.DefaultClient{ID: "foo"}, Session: &oauth2.DefaultSession{}}
+
+		require.NoError(t, store.CreateRefreshTokenSession(t.Context(), "rt-1", "", request))
+		require.NoError(t, store.RotateRefreshTokenWithGracePeriod(t.Context(), "req-id", "rt-1", time.Now().Add(time.Hour)))
+		require.NoError(t, store.CreateRefreshTokenSession(t.Context(), "rt-2", "", request))
+		require.NoError(t, store.CreateRefreshTokenSession(t.Context(), "rt-3", "", request))
+		require.NoError(t, store.DeleteRefreshTokenSession(t.Context(), "rt-3"))
+
+		_, err := store.GetRefreshTokenSession(t.Context(), "rt-1", &oauth2.DefaultSession{})
+		require.NoError(t, err)
+
+		assert.ErrorIs(t, store.RevokeRefreshToken(t.Context(), "req-id"), oauth2.ErrNotFound)
+
+		for _, signature := range []string{"rt-1", "rt-2"} {
+			_, err = store.GetRefreshTokenSession(t.Context(), signature, &oauth2.DefaultSession{})
+			assert.ErrorIs(t, err, oauth2.ErrInactiveToken, signature)
+		}
+
+		_, err = store.GetRefreshTokenSession(t.Context(), "rt-3", &oauth2.DefaultSession{})
+		assert.ErrorIs(t, err, oauth2.ErrNotFound)
+	})
+}
+
 type gracePeriodStore interface {
 	CreateAccessTokenSession(ctx context.Context, signature string, request oauth2.Requester) (err error)
 	GetAccessTokenSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error)
@@ -163,6 +188,7 @@ type gracePeriodStore interface {
 	RotateRefreshToken(ctx context.Context, requestID, signature string) (err error)
 	RotateRefreshTokenWithGracePeriod(ctx context.Context, requestID, signature string, deadline time.Time) (err error)
 	RevokeRefreshToken(ctx context.Context, requestID string) (err error)
+	DeleteRefreshTokenSession(ctx context.Context, signature string) (err error)
 }
 
 func forEachGracePeriodStore(t *testing.T, test func(t *testing.T, store gracePeriodStore, memory *MemoryStore)) {

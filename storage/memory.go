@@ -1004,7 +1004,8 @@ func (s *MemoryStore) Authenticate(ctx context.Context, name string, secret stri
 }
 
 // RevokeRefreshToken deactivates every refresh token recorded against the request ID, including one which is within
-// the grace period it was rotated with. A request ID with no recorded refresh token is not an error.
+// the grace period it was rotated with. A request ID with no recorded refresh token is not an error. It returns
+// oauth2.ErrNotFound when the session of the most recent refresh token has been deleted, having deactivated the rest.
 func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) error {
 	s.refreshTokenRequestIDsMutex.Lock()
 	defer s.refreshTokenRequestIDsMutex.Unlock()
@@ -1016,15 +1017,15 @@ func (s *MemoryStore) RevokeRefreshToken(ctx context.Context, requestID string) 
 }
 
 func (s *MemoryStore) deactivateRefreshTokens(requestID string) error {
+	for signature := range s.refreshTokenFamilies[requestID] {
+		s.deactivateRefreshToken(signature)
+	}
+
 	if signature, exists := s.RefreshTokenRequestIDs[requestID]; exists {
 		if _, ok := s.RefreshTokens[signature]; !ok {
 			return oauth2.ErrNotFound
 		}
 
-		s.deactivateRefreshToken(signature)
-	}
-
-	for signature := range s.refreshTokenFamilies[requestID] {
 		s.deactivateRefreshToken(signature)
 	}
 

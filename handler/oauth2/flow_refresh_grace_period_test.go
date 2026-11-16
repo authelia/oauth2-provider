@@ -276,6 +276,139 @@ func TestRefreshFlow_GracePeriodRevocationCoversTheWholeGrant(t *testing.T) {
 	})
 }
 
+func TestRefreshFlow_GracePeriodIsDecidedForThePresentedRefreshToken(t *testing.T) {
+	testCases := []struct {
+		name     string
+		setup    func(f *gracePeriodFixture)
+		change   func(f *gracePeriodFixture, session *oauth2.DefaultSession)
+		expected func(f *gracePeriodFixture) (deadline time.Time, ok bool)
+	}{
+		{
+			name: "ShouldNotApplyWhenTheSessionIsBoundAfterTheDecision",
+			setup: func(f *gracePeriodFixture) {
+				f.client.Public = true
+				f.config.DPoPEnabled = true
+			},
+			change: func(f *gracePeriodFixture, session *oauth2.DefaultSession) {
+				session.JWKThumbprint = "jkt"
+			},
+			expected: func(f *gracePeriodFixture) (deadline time.Time, ok bool) {
+				return time.Time{}, false
+			},
+		},
+		{
+			name: "ShouldApplyWhenTheBindingIsRemovedAfterTheDecision",
+			setup: func(f *gracePeriodFixture) {
+				f.client.Public = true
+				f.config.DPoPEnabled = true
+				f.session.JWKThumbprint = "jkt"
+				f.expires = time.Now().UTC().Add(time.Minute).Truncate(time.Second)
+			},
+			change: func(f *gracePeriodFixture, session *oauth2.DefaultSession) {
+				session.JWKThumbprint = ""
+			},
+			expected: func(f *gracePeriodFixture) (deadline time.Time, ok bool) {
+				return f.expires, true
+			},
+		},
+		{
+			name: "ShouldEndWithThePresentedRefreshTokenWhenTheExpiryChangesAfterTheDecision",
+			setup: func(f *gracePeriodFixture) {
+				f.expires = time.Now().UTC().Add(time.Minute).Truncate(time.Second)
+			},
+			change: func(f *gracePeriodFixture, session *oauth2.DefaultSession) {
+				session.SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(24*time.Hour))
+			},
+			expected: func(f *gracePeriodFixture) (deadline time.Time, ok bool) {
+				return f.expires, true
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			forEachGracePeriodStore(t, func(t *testing.T, f *gracePeriodFixture) {
+				f.config.RefreshTokenGracePeriod = time.Hour
+
+				tc.setup(f)
+
+				f.issue()
+
+				recorder := &gracePeriodRecordingStore{TokenRevocationStorage: f.store}
+				f.handler.TokenRevocationStorage = recorder
+
+				request := f.request(f.token)
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.handler.HandleTokenEndpointRequest(t.Context(), request)))
+
+				tc.change(f, request.GetSession().(*oauth2.DefaultSession))
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.handler.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())))
+
+				deadline, ok := tc.expected(f)
+				if !ok {
+					assert.Empty(t, recorder.deadlines)
+					assert.ErrorIs(t, f.refreshTokenError(f.token), oauth2.ErrInactiveToken)
+
+					return
+				}
+
+				require.Len(t, recorder.deadlines, 1)
+				assert.True(t, recorder.deadlines[0].Equal(deadline))
+				assert.NoError(t, f.refreshTokenError(f.token))
+			})
+		})
+	}
+}
+
+func TestRefreshFlow_RotationIsDecidedForThePresentedRefreshToken(t *testing.T) {
+	forEachGracePeriodStore(t, func(t *testing.T, f *gracePeriodFixture) {
+		f.client.Public = true
+		f.config.DPoPEnabled = true
+		f.config.DisableRefreshTokenRotation = true
+
+		f.issue()
+
+		request := f.request(f.token)
+
+		require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.handler.HandleTokenEndpointRequest(t.Context(), request)))
+
+		request.GetSession().(*oauth2.DefaultSession).JWKThumbprint = "jkt"
+
+		response := oauth2.NewAccessResponse()
+
+		require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.handler.PopulateTokenEndpointResponse(t.Context(), request, response)))
+
+		assert.NotEmpty(t, refreshTokenOf(response))
+		assert.ErrorIs(t, f.refreshTokenError(f.token), oauth2.ErrInactiveToken)
+	})
+}
+
+func TestRefreshFlow_ShouldRefuseARequestWhichCannotRecordTheDecisions(t *testing.T) {
+	forEachGracePeriodStore(t, func(t *testing.T, f *gracePeriodFixture) {
+		f.config.RefreshTokenGracePeriod = time.Minute
+
+		f.issue()
+
+		request := f.request(f.token)
+
+		err := f.handler.HandleTokenEndpointRequest(t.Context(), struct{ oauth2.AccessRequester }{request})
+		require.ErrorIs(t, err, oauth2.ErrServerError)
+
+		err = f.handler.PopulateTokenEndpointResponse(t.Context(), struct{ oauth2.AccessRequester }{request}, oauth2.NewAccessResponse())
+		require.ErrorIs(t, err, oauth2.ErrServerError)
+
+		err = f.handler.PopulateTokenEndpointResponse(t.Context(), f.request(f.token), oauth2.NewAccessResponse())
+		require.ErrorIs(t, err, oauth2.ErrServerError)
+
+		assert.NoError(t, f.refreshTokenError(f.token))
+		assert.NoError(t, f.accessTokenError(f.accessToken))
+
+		_, err = f.redeem(f.token)
+		assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+	})
+}
+
 var (
 	_ RefreshTokenGracePeriodStorage = (*storage.MemoryStore)(nil)
 	_ RefreshTokenGracePeriodStorage = (*storage.HydratingMemoryStore)(nil)
@@ -291,7 +424,7 @@ type gracePeriodFixture struct {
 	expires time.Time
 	offset  time.Duration
 
-	token, signature, accessSignature string
+	token, signature, accessToken, accessSignature string
 }
 
 func forEachGracePeriodStore(t *testing.T, test func(t *testing.T, f *gracePeriodFixture)) {
@@ -366,20 +499,26 @@ func (f *gracePeriodFixture) issue() {
 	f.token, f.signature, err = f.handler.RefreshTokenStrategy.GenerateRefreshToken(f.t.Context(), nil)
 	require.NoError(f.t, err)
 
-	_, f.accessSignature, err = f.handler.AccessTokenStrategy.GenerateAccessToken(f.t.Context(), nil)
+	f.accessToken, f.accessSignature, err = f.handler.AccessTokenStrategy.GenerateAccessToken(f.t.Context(), nil)
 	require.NoError(f.t, err)
 
 	require.NoError(f.t, f.store.CreateAccessTokenSession(f.t.Context(), f.accessSignature, original))
 	require.NoError(f.t, f.store.CreateRefreshTokenSession(f.t.Context(), f.signature, f.accessSignature, original))
 }
 
-func (f *gracePeriodFixture) redeem(token string) (response *oauth2.AccessResponse, err error) {
-	f.t.Helper()
-
-	request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+func (f *gracePeriodFixture) request(token string) (request *oauth2.AccessRequest) {
+	request = oauth2.NewAccessRequest(&oauth2.DefaultSession{})
 	request.Client = f.client
 	request.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
 	request.Form = url.Values{consts.FormParameterRefreshToken: {token}}
+
+	return request
+}
+
+func (f *gracePeriodFixture) redeem(token string) (response *oauth2.AccessResponse, err error) {
+	f.t.Helper()
+
+	request := f.request(token)
 
 	response = oauth2.NewAccessResponse()
 

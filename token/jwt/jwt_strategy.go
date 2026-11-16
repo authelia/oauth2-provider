@@ -127,7 +127,8 @@ type JWKSFetcherStrategy interface {
 // DefaultStrategy is responsible for providing JWK encoding and cryptographic functionality.
 type DefaultStrategy struct {
 	Config StrategyConfig
-	// Issuer provides the JSON Web Keys and algorithms used to issue tokens.
+	// Issuer provides the JSON Web Keys and algorithms used to issue tokens. When it implements
+	// IssuerVerificationJWKProvider its verification only keys also verify and decrypt tokens.
 	Issuer Issuer
 }
 
@@ -282,7 +283,7 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 		if key, err = decryptClientSecretJWK(ctx, o.client, kid, alg, enc); err != nil {
 			return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}
-	} else if key, err = j.issuerStrictJWK(ctx, kid, alg, JSONWebTokenUseEncryption); err != nil {
+	} else if key, err = j.issuerVerificationJWK(ctx, kid, alg, JSONWebTokenUseEncryption); err != nil {
 		return "", "", nil, errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 	}
 
@@ -447,6 +448,18 @@ func (j *DefaultStrategy) issuerStrictJWK(ctx context.Context, kid, alg, use str
 	return j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, use)
 }
 
+func (j *DefaultStrategy) issuerVerificationJWK(ctx context.Context, kid, alg, use string) (jwk *jose.JSONWebKey, err error) {
+	if j.Issuer == nil {
+		return nil, errNoIssuer
+	}
+
+	if provider, ok := j.Issuer.(IssuerVerificationJWKProvider); ok {
+		return provider.GetIssuerVerificationJWK(ctx, kid, alg, use)
+	}
+
+	return j.Issuer.GetIssuerStrictJWK(ctx, kid, alg, use)
+}
+
 //nolint:gocyclo
 func (j *DefaultStrategy) validate(ctx context.Context, t *jwt.JSONWebToken, dest any, o *StrategyOpts) (err error) {
 	var (
@@ -482,7 +495,7 @@ func (j *DefaultStrategy) validate(ctx context.Context, t *jwt.JSONWebToken, des
 		if key, err = NewClientSecretJWKFromClient(ctx, o.client, "", alg, "", JSONWebTokenUseSignature); err != nil {
 			return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 		}
-	} else if key, err = j.issuerStrictJWK(ctx, kid, alg, JSONWebTokenUseSignature); err != nil {
+	} else if key, err = j.issuerVerificationJWK(ctx, kid, alg, JSONWebTokenUseSignature); err != nil {
 		return errorsx.WithStack(&ValidationError{Errors: ValidationErrorUnverifiable, Inner: err})
 	}
 

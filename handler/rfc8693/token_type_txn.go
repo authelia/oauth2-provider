@@ -66,10 +66,11 @@ type TxnTokenType struct {
 	// It runs after all validation and before signing, including when neither 'request_context' nor
 	// 'request_details' was sent. It may add any claim, change 'sub', narrow 'scope', and set 'rctx' and 'tctx'.
 	//
-	// 'txn', 'aud', 'iat', 'exp', 'req_wl', 'iss', 'act' and 'cnf' are restored afterwards, so a 'cnf' is always removed as
-	// the draft never contains one. A deleted or widened 'scope', a 'sub' that is empty, or an 'rctx' or 'tctx' that is not
-	// a JSON object is a server_error, and an empty 'rctx' or 'tctx' is omitted. A returned error denies the request, and should be an error RFC 8693 Section 2.2.2 defines such as
-	// oauth2.ErrInvalidRequest. A panic is not recovered.
+	// 'txn', 'aud', 'iat', 'exp', 'req_wl', 'req_wl_chain', 'iss', 'act', 'cnf' and 'may_act' are restored afterwards, and
+	// one the draft does not contain is removed, so 'cnf' and 'may_act' are always removed. A deleted or widened 'scope', a
+	// 'sub' that is empty, or an 'rctx' or 'tctx' that is not a JSON object is a server_error, and an empty 'rctx' or
+	// 'tctx' is omitted. A returned error denies the request, and should be an error RFC 8693 Section 2.2.2 defines such
+	// as oauth2.ErrInvalidRequest. A panic is not recovered.
 	//
 	// The full copy of the request parameters is one line, and signs whatever the caller sent:
 	//
@@ -184,7 +185,11 @@ type SelfSignedTokenType struct {
 	// uses 5 minutes.
 	ToleranceWindow time.Duration `json:"tolerance_window"`
 
-	// ValidateJTI requires a 'jti' claim and consumes it.
+	// ValidateJTI requires a 'jti' claim and consumes it, so a self-signed token is accepted once. Without it the same
+	// client can present a token again until its 'exp', which the window limits. It requires
+	// TxnTokenTypeHandler.JTIStorage.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-11.2.1
 	ValidateJTI bool `json:"validate_jti"`
 }
 

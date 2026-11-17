@@ -54,7 +54,7 @@ In an effort to assist users who wish to use this library we aim to maintain the
   - [x] Write Revocation Response does not correctly error
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/6dffe2d9bdc3fc974f7c2c865aef2a8b2cb78402)</sup>
   - ~~Invalid Token base 64 error not mapped to RFC~~
-  - [ ] Auth Request omitted Response Mode not validated
+  - [x] Auth Request omitted Response Mode not validated
   - [x] Refresh Grant if Token Invalid/Expired status is not 400
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/8e58bcae054dffbad1c920e0bbaa022dfac71f66)</sup>
   - [x] Access Token iat and nbf in JWT Profile always original claims
@@ -85,9 +85,9 @@ In an effort to assist users who wish to use this library we aim to maintain the
   - [x] [RFC9449: OAuth 2.0 Demonstrating Proof of Possession (DPoP)](https://datatracker.ietf.org/doc/html/rfc9449)
         support
   - [x] [OpenID Connect Key Binding 1.0](https://openid.net/specs/openid-connect-key-binding-1_0.html)
-  - [ ] [RFC9396: OAuth 2.0 Rich Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9396) support
+  - [x] [RFC9396: OAuth 2.0 Rich Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9396) support
   - Claims:
-    - [ ] Standard Claims Parameter
+    - [x] Standard Claims Parameter
     - [ ] [OpenID Connect Advanced Syntax for Claims (ASC) 1.0](https://openid.net/specs/openid-connect-advanced-syntax-for-claims-1_0-ID1.html)
   - [x] [RFC9101: OAuth 2.0 JWT-Secured Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9101)
   - Sessions:
@@ -119,7 +119,7 @@ In an effort to assist users who wish to use this library we aim to maintain the
   - [x] Testing Package (mocks, etc)
   - Time / Clock etc:
     - [ ] Clock Configurator
-    - [ ] Clock Skew
+    - [x] Clock Skew
   - [x] Key Management
   - [x] Support `s_hash`
         <sup>[commit](https://github.com/authelia/oauth2-provider/commit/edbbbe9467c70a2578db4b9af4d6cd319f74886e)</sup>

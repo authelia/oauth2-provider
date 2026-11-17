@@ -364,11 +364,14 @@ type JWTSecuredAuthorizeResponseModeStrategyProvider interface {
 
 // JWTStrategyProvider returns the provider for configuring the jwt.Strategy.
 type JWTStrategyProvider interface {
+	// GetJWTStrategy returns the jwt.Strategy used where no more specific strategy is configured.
 	GetJWTStrategy(ctx context.Context) jwt.Strategy
 }
 
 // JWTSecuredAuthorizeResponseModeLifespanProvider returns the provider for configuring the JWT Secured Authorize Response Mode token lifespan.
 type JWTSecuredAuthorizeResponseModeLifespanProvider interface {
+	// GetJWTSecuredAuthorizeResponseModeLifespan returns how long a JWT issued by the JWT Secured Authorize Response Mode
+	// is valid.
 	GetJWTSecuredAuthorizeResponseModeLifespan(ctx context.Context) time.Duration
 }
 

@@ -13,8 +13,12 @@ import (
 
 // Storage persists the PKCE request sessions and challenge use records.
 type Storage interface {
+	// GetPKCERequestSession returns the PKCE request stored for the authorization code signature, or oauth2.ErrNotFound
+	// when there is none.
 	GetPKCERequestSession(ctx context.Context, signature string, session oauth2.Session) (oauth2.Requester, error)
+	// CreatePKCERequestSession stores the PKCE request for the authorization code signature.
 	CreatePKCERequestSession(ctx context.Context, signature string, request oauth2.Requester) error
+	// DeletePKCERequestSession removes the PKCE request stored for the authorization code signature.
 	DeletePKCERequestSession(ctx context.Context, signature string) error
 
 	// SetPKCEChallengeUsed atomically records that the client used the 'code_challenge' in an accepted authorization

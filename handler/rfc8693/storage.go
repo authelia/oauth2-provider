@@ -28,6 +28,8 @@ type CustomJWTStorage interface {
 // An 'audience' which identifies no known Resource Authorization Server MUST return oauth2.ErrNotFound, which skips the
 // comparison. A client-facing oauth2.RFC6749Error is returned unchanged. Any other error is answered as a server error.
 type IDJAGRelationshipStorage interface {
+	// GetIDJAGRelationship returns the relationship with the Resource Authorization Server the audience identifies, or
+	// oauth2.ErrNotFound when it identifies none.
 	GetIDJAGRelationship(ctx context.Context, request oauth2.AccessRequester, audience string) (relationship *oauth2.IDJAGRelationship, err error)
 }
 

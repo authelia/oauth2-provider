@@ -272,6 +272,8 @@ func isMatchingRedirectURI(needle string, haystack []string, strategy URICompari
 
 // RedirectURICustomComparisonClient is implemented by a client that selects its own redirect URI comparison strategy.
 type RedirectURICustomComparisonClient interface {
+	// GetRedirectURIComparisonStrategy returns the strategy which compares the redirect URIs of the client. A nil strategy
+	// selects BestPracticeURIComparisonStrategy.
 	GetRedirectURIComparisonStrategy() URIComparisonStrategy
 }
 
@@ -297,7 +299,10 @@ type uriPair struct {
 
 // URIComparisonStrategy is used to compare URIs.
 type URIComparisonStrategy interface {
+	// Compare reports whether the requested URI of the pair matches the registered URI. It is not called when
+	// UseSimpleStringComparison returns true.
 	Compare(pair *uriPair) bool
+	// UseSimpleStringComparison returns true if the registered URIs are matched as raw strings without being parsed.
 	UseSimpleStringComparison() bool
 }
 

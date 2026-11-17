@@ -10,5 +10,6 @@ package idjag
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4.1
 type RedeemSession interface {
+	// SetIDJAGClaims records the verified claims of the redeemed grant on the session.
 	SetIDJAGClaims(claims map[string]any)
 }

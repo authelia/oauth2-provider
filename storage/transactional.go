@@ -33,8 +33,11 @@ import (
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
 // See: https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 type Transactional interface {
+	// BeginTX begins a transaction and returns a context which carries it.
 	BeginTX(ctx context.Context) (context.Context, error)
+	// Commit commits the transaction carried by the context.
 	Commit(ctx context.Context) error
+	// Rollback rolls back the transaction carried by the context.
 	Rollback(ctx context.Context) error
 }
 

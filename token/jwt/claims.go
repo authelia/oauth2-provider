@@ -13,20 +13,31 @@ import (
 
 // Claims is the set of registered claim accessors implemented by the claim types of this package.
 type Claims interface {
+	// GetExpirationTime returns the 'exp' claim (RFC 7519 Section 4.1.4).
 	GetExpirationTime() (exp *NumericDate, err error)
+	// GetIssuedAt returns the 'iat' claim (RFC 7519 Section 4.1.6).
 	GetIssuedAt() (iat *NumericDate, err error)
+	// GetNotBefore returns the 'nbf' claim (RFC 7519 Section 4.1.5).
 	GetNotBefore() (nbf *NumericDate, err error)
+	// GetIssuer returns the 'iss' claim (RFC 7519 Section 4.1.1).
 	GetIssuer() (iss string, err error)
+	// GetSubject returns the 'sub' claim (RFC 7519 Section 4.1.2).
 	GetSubject() (sub string, err error)
+	// GetAudience returns the 'aud' claim (RFC 7519 Section 4.1.3).
 	GetAudience() (aud ClaimStrings, err error)
+	// ToMapClaims returns the claims as MapClaims.
 	ToMapClaims() MapClaims
+	// Valid validates the claims, with the validation tuned by the opts.
 	Valid(opts ...ClaimValidationOption) (err error)
 }
 
 // Mapper is the interface used internally to map key-value pairs.
 type Mapper interface {
+	// ToMap returns the key-value pairs as a map.
 	ToMap() map[string]any
+	// Add adds a key-value pair.
 	Add(key string, value any)
+	// Get returns the value of the key.
 	Get(key string) any
 }
 

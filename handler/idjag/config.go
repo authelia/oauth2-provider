@@ -33,7 +33,9 @@ type RedeemConfig interface {
 	oauth2.IDJAGConfigProvider
 	oauth2.MTLSConfigProvider
 	oauth2.GrantAssertionAlgorithmsProvider
+	// GetDPoPEnabled returns true if DPoP handling is enabled.
 	GetDPoPEnabled(ctx context.Context) (enabled bool)
+	// GetDPoPEnforce returns true if DPoP is required for all clients regardless of client metadata.
 	GetDPoPEnforce(ctx context.Context) (enforce bool)
 }
 

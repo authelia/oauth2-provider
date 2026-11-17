@@ -690,12 +690,16 @@ type DeviceAuthorizeRequester interface {
 	// GetUserCodeSignature returns the user code signature.
 	GetUserCodeSignature() (signature string)
 
+	// SetStatus sets the end user's authorization status of the request.
 	SetStatus(status DeviceAuthorizeStatus)
 
+	// GetStatus returns the end user's authorization status of the request.
 	GetStatus() (status DeviceAuthorizeStatus)
 
+	// SetLastChecked sets the time the device last polled the token endpoint for the request.
 	SetLastChecked(lastChecked time.Time)
 
+	// GetLastChecked returns the time the device last polled the token endpoint for the request.
 	GetLastChecked() (lastChecked time.Time)
 
 	Requester
@@ -709,8 +713,10 @@ type AccessResponder interface {
 	// GetExtra returns a key's value.
 	GetExtra(key string) (extra any)
 
+	// SetExpiresIn sets the 'expires_in' response parameter to the lifetime of the access token.
 	SetExpiresIn(time.Duration)
 
+	// SetScopes sets the 'scope' response parameter to the granted scopes.
 	SetScopes(scopes Arguments)
 
 	// SetAccessToken sets the responses mandatory access token.
@@ -805,8 +811,10 @@ type BackChannelAuthenticationResponder interface {
 
 // DeviceAuthorizeResponder is the RFC 8628 device authorization response.
 type DeviceAuthorizeResponder interface {
+	// GetDeviceCode returns the 'device_code' of the response.
 	GetDeviceCode() string
 
+	// SetDeviceCode sets the 'device_code' of the response.
 	SetDeviceCode(code string)
 
 	// GetHeader returns the response's header.
@@ -815,24 +823,34 @@ type DeviceAuthorizeResponder interface {
 	// AddHeader adds an header key value pair to the response.
 	AddHeader(key, value string)
 
+	// GetUserCode returns the 'user_code' of the response.
 	GetUserCode() (code string)
 
+	// SetUserCode sets the 'user_code' of the response.
 	SetUserCode(code string)
 
+	// GetVerificationURI returns the 'verification_uri' of the response.
 	GetVerificationURI() (uri string)
 
+	// SetVerificationURI sets the 'verification_uri' of the response.
 	SetVerificationURI(uri string)
 
+	// GetVerificationURIComplete returns the 'verification_uri_complete' of the response.
 	GetVerificationURIComplete() (completeURI string)
 
+	// SetVerificationURIComplete sets the 'verification_uri_complete' of the response.
 	SetVerificationURIComplete(uri string)
 
+	// GetExpiresIn returns the lifetime of the device code and user code in seconds.
 	GetExpiresIn() (expires int64)
 
+	// SetExpiresIn sets the lifetime of the device code and user code in seconds.
 	SetExpiresIn(seconds int64)
 
+	// GetInterval returns the minimum polling interval in seconds.
 	GetInterval() (interval int)
 
+	// SetInterval sets the minimum polling interval in seconds.
 	SetInterval(seconds int)
 
 	// SetExtra sets a key value pair for the access response.
@@ -883,8 +901,10 @@ type G11NContext interface {
 
 // RFC8693TokenType identifies an RFC 8693 token type by name and type URN.
 type RFC8693TokenType interface {
+	// GetName returns the name of the token type.
 	GetName(ctx context.Context) (name string)
 
+	// GetType returns the token type identifier, such as an RFC 8693 Section 3 token type URI.
 	GetType(ctx context.Context) (tokenType string)
 }
 

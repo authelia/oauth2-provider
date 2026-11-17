@@ -165,7 +165,9 @@ func headerValidateJWE(header jose.Header, minimum, maximum int) (kid, alg, enc,
 
 // PrivateKey properly describes [crypto.PrivateKey].
 type PrivateKey interface {
+	// Public returns the public key corresponding to the private key.
 	Public() crypto.PublicKey
+	// Equal reports whether x is the same key as the private key.
 	Equal(x crypto.PrivateKey) bool
 }
 

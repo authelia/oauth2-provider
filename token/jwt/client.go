@@ -85,12 +85,19 @@ func NewStatelessJWTProfileIntrospectionClient(client any) Client {
 
 // Client represents a client which can be used to sign, verify, encrypt, and decrypt JWT's.
 type Client interface {
+	// GetSigningKeyID returns the 'kid' of the key registered for signing the JWT, if any.
 	GetSigningKeyID() (kid string)
+	// GetSigningAlg returns the JWS 'alg' registered for signing the JWT.
 	GetSigningAlg() (alg string)
+	// GetEncryptionKeyID returns the 'kid' of the key registered for encrypting the JWT, if any.
 	GetEncryptionKeyID() (kid string)
+	// GetEncryptionAlg returns the JWE 'alg' registered for encrypting the JWT, if any.
 	GetEncryptionAlg() (alg string)
+	// GetEncryptionEnc returns the JWE 'enc' registered for encrypting the JWT, if any.
 	GetEncryptionEnc() (enc string)
 
+	// IsClientSigned returns true if the JWT is signed by the client rather than the issuer, so its signature is verified
+	// with the keys of the client.
 	IsClientSigned() (is bool)
 
 	BaseClient
@@ -134,6 +141,7 @@ type BaseClient interface {
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1
 type ExpiringClientSecretClient interface {
+	// GetClientSecretExpiresAt returns the time the client secret expires, or the zero time when it does not expire.
 	GetClientSecretExpiresAt() (expires time.Time)
 }
 

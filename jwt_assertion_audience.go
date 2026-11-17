@@ -35,6 +35,7 @@ func JWTBearerGrantAudiences(ctx context.Context, config JWTAssertionAudienceCon
 // endpoint whose URL and RFC 8705 mutual TLS alias may be the 'aud' of a client assertion presented there when
 // DisableClientAssertionIssuerAudience is set. A strategy which does not implement it uses the endpoint of its name.
 type ClientAssertionAudienceEndpointProvider interface {
+	// GetClientAssertionAudienceEndpoint returns the name of the endpoint the client assertion is presented to.
 	GetClientAssertionAudienceEndpoint() (endpoint EndpointName)
 }
 

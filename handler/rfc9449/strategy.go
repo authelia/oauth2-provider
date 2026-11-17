@@ -18,12 +18,20 @@ import (
 
 // StrategyConfig is the configuration required by DefaultStrategy.
 type StrategyConfig interface {
+	// GetDPoPAllowedJWSAlgorithms returns the permitted asymmetric DPoP proof signing algorithms.
 	GetDPoPAllowedJWSAlgorithms(ctx context.Context) (algs []string)
+	// GetDPoPClockSkew returns the tolerance allowed when judging the 'iat' claim of a DPoP proof.
 	GetDPoPClockSkew(ctx context.Context) (skew time.Duration)
+	// GetDPoPProofLifespan returns how long a DPoP proof remains valid after its 'iat' claim.
 	GetDPoPProofLifespan(ctx context.Context) (lifespan time.Duration)
+	// GetDPoPNonceLifespan returns the lifespan of issued DPoP server nonces.
 	GetDPoPNonceLifespan(ctx context.Context) (lifespan time.Duration)
+	// GetDPoPNonceStateless returns true if DPoP server nonces are authenticated with a key derived from the global secret
+	// rather than stored.
 	GetDPoPNonceStateless(ctx context.Context) (stateless bool)
+	// GetGlobalSecret returns the global secret.
 	GetGlobalSecret(ctx context.Context) (secret []byte, err error)
+	// GetRotatedGlobalSecrets returns the rotated global secrets.
 	GetRotatedGlobalSecrets(ctx context.Context) (secrets [][]byte, err error)
 }
 

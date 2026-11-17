@@ -69,7 +69,7 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 		return nil
 	}
 
-	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
+	r := oauth2.RequestFromContext(ctx)
 	if r == nil {
 		// Resolved before the certificate is read so that a binding which must be enforced is never silently
 		// skipped because the request needed to enforce it is absent.

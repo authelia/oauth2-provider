@@ -5,7 +5,6 @@
 package jwt
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,7 +47,7 @@ func (c *JARMClaims) GetIssuedAt() (iat *NumericDate, err error) {
 
 // GetNotBefore returns the 'nbf' claim, which is read from the Extra claims.
 func (c *JARMClaims) GetNotBefore() (nbf *NumericDate, err error) {
-	return c.toNumericDate(ClaimNotBefore)
+	return mapNumericDate(c.Extra, ClaimNotBefore)
 }
 
 // GetIssuer returns the 'iss' claim.
@@ -59,7 +58,7 @@ func (c *JARMClaims) GetIssuer() (iss string, err error) {
 // GetSubject returns the 'sub' claim, which is read from the Extra claims. It returns an error if the claim is not a
 // string.
 func (c *JARMClaims) GetSubject() (sub string, err error) {
-	return c.toString(ClaimSubject)
+	return mapString(c.Extra, ClaimSubject)
 }
 
 // GetAudience returns the 'aud' claim.
@@ -159,36 +158,6 @@ func (c *JARMClaims) Add(key string, value any) {
 // Get will get a value from the extra field based on a given key.
 func (c JARMClaims) Get(key string) any {
 	return c.ToMap()[key]
-}
-
-func (c JARMClaims) toNumericDate(key string) (date *NumericDate, err error) {
-	var (
-		v  any
-		ok bool
-	)
-
-	if v, ok = c.Extra[key]; !ok {
-		return nil, nil
-	}
-
-	return toNumericDate(v)
-}
-
-func (c JARMClaims) toString(key string) (value string, err error) {
-	var (
-		ok  bool
-		raw any
-	)
-
-	if raw, ok = c.Extra[key]; !ok {
-		return "", nil
-	}
-
-	if value, ok = raw.(string); !ok {
-		return "", newError(fmt.Sprintf("%s is invalid", key), ErrInvalidType)
-	}
-
-	return value, nil
 }
 
 var (

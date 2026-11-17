@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -751,7 +750,7 @@ func (h *RedeemHandler) confirmCertificate(ctx context.Context, session oauth2.S
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The Identity Assertion JWT Authorization Grant requires proof of possession, which is not enabled."))
 	}
 
-	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
+	r := oauth2.RequestFromContext(ctx)
 	if r == nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The HTTP request needed to read the client certificate is not available."))
 	}
@@ -794,7 +793,7 @@ func (h *RedeemHandler) requireCertificate(ctx context.Context, client oauth2.Cl
 		return nil
 	}
 
-	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
+	r := oauth2.RequestFromContext(ctx)
 	if r == nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The HTTP request needed to read the client certificate is not available."))
 	}
@@ -837,7 +836,7 @@ func (h *RedeemHandler) requireProof(ctx context.Context, request oauth2.AccessR
 		return nil
 	}
 
-	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
+	r := oauth2.RequestFromContext(ctx)
 	if r == nil {
 		return nil
 	}

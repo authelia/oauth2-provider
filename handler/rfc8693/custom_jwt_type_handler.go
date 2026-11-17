@@ -55,13 +55,10 @@ func (c *CustomJWTTypeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	var (
-		session Session
-		ok      bool
-	)
+	var session Session
 
-	if session, ok = request.GetSession().(Session); !ok || session == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	if session, err = exchangeSession(request); err != nil {
+		return err
 	}
 
 	form := request.GetRequestForm()
@@ -118,13 +115,8 @@ func (c *CustomJWTTypeHandler) PopulateTokenEndpointResponse(ctx context.Context
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	var (
-		session Session
-		ok      bool
-	)
-
-	if session, ok = request.GetSession().(Session); !ok || session == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	if _, err = exchangeSession(request); err != nil {
+		return err
 	}
 
 	form := request.GetRequestForm()
@@ -455,9 +447,9 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 //
 //nolint:gocyclo
 func (c *CustomJWTTypeHandler) issueAuthorizationGrant(ctx context.Context, request oauth2.AccessRequester, jwtType *JWTType, response oauth2.AccessResponder) (err error) {
-	session, ok := request.GetSession().(Session)
-	if !ok || session == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	session, err := exchangeSession(request)
+	if err != nil {
+		return err
 	}
 
 	targets := oauth2.JoinGrantedAudienceAndResource(request.GetGrantedAudience(), request.GetGrantedResource())

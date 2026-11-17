@@ -12,6 +12,7 @@ import (
 	"slices"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/slicesx"
 )
 
 // AuthorizationDetailsTypePaymentInitiation is the RFC 9396 authorization details type of the payment initiation example.
@@ -100,23 +101,13 @@ func containsPaymentInitiation(granted, requested oauth2.AuthorizationDetail) bo
 		return false
 	}
 
-	if !isSubset(granted.Actions, requested.Actions) || !isSubset(granted.Locations, requested.Locations) ||
-		!isSubset(granted.DataTypes, requested.DataTypes) || !isSubset(granted.Privileges, requested.Privileges) {
+	if !slicesx.Subset(granted.Actions, requested.Actions) || !slicesx.Subset(granted.Locations, requested.Locations) ||
+		!slicesx.Subset(granted.DataTypes, requested.DataTypes) || !slicesx.Subset(granted.Privileges, requested.Privileges) {
 		return false
 	}
 
 	for key, value := range requested.Extra {
 		if !reflect.DeepEqual(granted.Extra[key], value) {
-			return false
-		}
-	}
-
-	return true
-}
-
-func isSubset(superset, subset []string) bool {
-	for _, value := range subset {
-		if !slices.Contains(superset, value) {
 			return false
 		}
 	}

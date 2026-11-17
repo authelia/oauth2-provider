@@ -4,7 +4,11 @@
 
 package oauth2
 
-import "slices"
+import (
+	"slices"
+
+	"authelia.com/provider/oauth2/internal/slicesx"
+)
 
 // Arguments is a list of strings with helpers for set-style comparisons.
 type Arguments []string
@@ -53,13 +57,7 @@ func (r Arguments) MatchesFold(items ...string) bool {
 // Has checks, in a case-sensitive manner, that all of the items
 // provided exists in arguments.
 func (r Arguments) Has(items ...string) bool {
-	for _, item := range items {
-		if !slices.Contains(r, item) {
-			return false
-		}
-	}
-
-	return true
+	return slicesx.Subset(r, items)
 }
 
 // HasFold checks, in a case-insensitive manner, that all of the items

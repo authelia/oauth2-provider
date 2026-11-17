@@ -42,20 +42,15 @@ type IDTokenTypeHandler struct {
 // HandleTokenEndpointRequest implements RFC8693 Section 2.1 and the oauth2.TokenEndpointHandler.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
-//
-//nolint:gocyclo
 func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	var (
-		session Session
-		ok      bool
-	)
+	var session Session
 
-	if session, ok = request.GetSession().(Session); !ok || session == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	if session, err = exchangeSession(request); err != nil {
+		return err
 	}
 
 	form := request.GetRequestForm()
@@ -128,13 +123,8 @@ func (c *IDTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Context, 
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	var (
-		session Session
-		ok      bool
-	)
-
-	if session, ok = request.GetSession().(Session); !ok || session == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	if _, err = exchangeSession(request); err != nil {
+		return err
 	}
 
 	form := request.GetRequestForm()

@@ -7,6 +7,7 @@ package rfc7591
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"reflect"
 	"regexp"
 	"slices"
@@ -90,7 +91,7 @@ func ParseRegistrationPolicy(claim any, custom []string, patterns bool) (policy 
 		}
 	}
 
-	for _, member := range sortedKeys(root) {
+	for _, member := range slices.Sorted(maps.Keys(root)) {
 		if member == policyMemberMaxRegistrations {
 			if policy.maxRegistrations, err = parsePolicyMaxRegistrations(root[member]); err != nil {
 				return nil, err
@@ -357,7 +358,7 @@ func parsePolicyRule(member string, value any) (rule policyRule, err error) {
 		return rule, policyErrorf("The registration policy member '%s' must hold exactly one of '%s', '%s' or '%s'.", member, policyRulePattern, policyRuleOneOf, policyRuleSubsetOf)
 	}
 
-	keys := sortedKeys(object)
+	keys := slices.Sorted(maps.Keys(object))
 
 	for _, key := range keys {
 		switch key {
@@ -410,19 +411,6 @@ func parsePolicyRule(member string, value any) (rule policyRule, err error) {
 
 	return rule, nil
 }
-
-func sortedKeys(m map[string]any) (keys []string) {
-	keys = make([]string, 0, len(m))
-
-	for key := range m {
-		keys = append(keys, key)
-	}
-
-	slices.Sort(keys)
-
-	return keys
-}
-
 func policyReflectStandardMembers() (members []string) {
 	t := reflect.TypeOf(oauth2.ClientRegistrationMetadata{})
 

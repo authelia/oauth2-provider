@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"net/http"
 )
 
 // NewContext returns a fresh background context suitable for use as the root context of an OAuth 2.0 request flow.
@@ -32,3 +33,10 @@ const (
 	// DPoPProofContextKey is the context key for the DPoP proof.
 	DPoPProofContextKey = ContextKey("dpopProof")
 )
+
+// RequestFromContext returns the [http.Request] stored under RequestContextKey, or nil if there is none.
+func RequestFromContext(ctx context.Context) *http.Request {
+	r, _ := ctx.Value(RequestContextKey).(*http.Request)
+
+	return r
+}

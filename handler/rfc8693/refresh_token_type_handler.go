@@ -62,13 +62,10 @@ func (c *RefreshTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	var (
-		session Session
-		ok      bool
-	)
+	var session Session
 
-	if session, ok = request.GetSession().(Session); !ok || session == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	if session, err = exchangeSession(request); err != nil {
+		return err
 	}
 
 	form := request.GetRequestForm()
@@ -133,9 +130,8 @@ func (c *RefreshTokenTypeHandler) PopulateTokenEndpointResponse(ctx context.Cont
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	session, _ := request.GetSession().(Session)
-	if session == nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	if _, err = exchangeSession(request); err != nil {
+		return err
 	}
 
 	form := request.GetRequestForm()
@@ -167,8 +163,8 @@ func (c *RefreshTokenTypeHandler) CanHandleTokenEndpointRequest(_ context.Contex
 }
 
 func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string, role tokenRole) (original oauth2.Requester, claims map[string]any, err error) {
-	if session, _ := request.GetSession().(Session); session == nil {
-		return nil, nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the session is not of the right type."))
+	if _, err = exchangeSession(request); err != nil {
+		return nil, nil, err
 	}
 
 	client := request.GetClient()

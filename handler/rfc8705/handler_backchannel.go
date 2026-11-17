@@ -32,7 +32,7 @@ func (h *Handler) BindBackChannelAuthenticationRequest(ctx context.Context, requ
 	client := request.GetClient()
 	required := h.required(ctx, client)
 
-	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
+	r := oauth2.RequestFromContext(ctx)
 
 	if h.hasDPoPKeyMaterial(ctx, request, r) {
 		if required {

@@ -18,13 +18,7 @@ type ResponseModeHandlers []ResponseModeHandler
 
 // Append adds an ResponseModeHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (a *ResponseModeHandlers) Append(h ResponseModeHandler) {
-	for _, this := range *a {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*a = append(*a, h)
+	appendUniqueType(a, h)
 }
 
 // ResponseModeParameterHandlers is a list of ResponseModeParameterHandler.
@@ -32,13 +26,7 @@ type ResponseModeParameterHandlers []ResponseModeParameterHandler
 
 // Append adds an ResponseModeParameterHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (a *ResponseModeParameterHandlers) Append(h ResponseModeParameterHandler) {
-	for _, this := range *a {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*a = append(*a, h)
+	appendUniqueType(a, h)
 }
 
 // AuthorizeEndpointHandlers is a list of AuthorizeEndpointHandler.
@@ -46,13 +34,7 @@ type AuthorizeEndpointHandlers []AuthorizeEndpointHandler
 
 // Append adds an AuthorizeEndpointHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (a *AuthorizeEndpointHandlers) Append(h AuthorizeEndpointHandler) {
-	for _, this := range *a {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*a = append(*a, h)
+	appendUniqueType(a, h)
 }
 
 // TokenEndpointHandlers is a list of TokenEndpointHandler.
@@ -60,13 +42,7 @@ type TokenEndpointHandlers []TokenEndpointHandler
 
 // Append adds an TokenEndpointHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (t *TokenEndpointHandlers) Append(h TokenEndpointHandler) {
-	for _, this := range *t {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*t = append(*t, h)
+	appendUniqueType(t, h)
 }
 
 // AuthorizeEndpointBindingHandlers is a list of AuthorizeEndpointBindingHandler.
@@ -74,13 +50,7 @@ type AuthorizeEndpointBindingHandlers []AuthorizeEndpointBindingHandler
 
 // Append adds an AuthorizeEndpointBindingHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (a *AuthorizeEndpointBindingHandlers) Append(h AuthorizeEndpointBindingHandler) {
-	for _, this := range *a {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*a = append(*a, h)
+	appendUniqueType(a, h)
 }
 
 // TokenEndpointBindingHandlers is a list of TokenEndpointBindingHandler.
@@ -88,13 +58,7 @@ type TokenEndpointBindingHandlers []TokenEndpointBindingHandler
 
 // Append adds a TokenEndpointBindingHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (t *TokenEndpointBindingHandlers) Append(h TokenEndpointBindingHandler) {
-	for _, this := range *t {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*t = append(*t, h)
+	appendUniqueType(t, h)
 }
 
 // RFC8628DeviceAuthorizeEndpointBindingHandlers is a list of RFC8628DeviceAuthorizeEndpointBindingHandler.
@@ -102,13 +66,7 @@ type RFC8628DeviceAuthorizeEndpointBindingHandlers []RFC8628DeviceAuthorizeEndpo
 
 // Append adds an RFC8628DeviceAuthorizeEndpointBindingHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (a *RFC8628DeviceAuthorizeEndpointBindingHandlers) Append(h RFC8628DeviceAuthorizeEndpointBindingHandler) {
-	for _, this := range *a {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*a = append(*a, h)
+	appendUniqueType(a, h)
 }
 
 // BackChannelAuthenticationDecisionHandlers is a list of BackChannelAuthenticationDecisionHandler.
@@ -116,13 +74,7 @@ type BackChannelAuthenticationDecisionHandlers []BackChannelAuthenticationDecisi
 
 // Append adds a BackChannelAuthenticationDecisionHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (a *BackChannelAuthenticationDecisionHandlers) Append(h BackChannelAuthenticationDecisionHandler) {
-	for _, this := range *a {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*a = append(*a, h)
+	appendUniqueType(a, h)
 }
 
 // BackChannelAuthenticationEndpointHandlers is a list of BackChannelAuthenticationEndpointHandler.
@@ -130,13 +82,7 @@ type BackChannelAuthenticationEndpointHandlers []BackChannelAuthenticationEndpoi
 
 // Append adds a BackChannelAuthenticationEndpointHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (a *BackChannelAuthenticationEndpointHandlers) Append(h BackChannelAuthenticationEndpointHandler) {
-	for _, this := range *a {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*a = append(*a, h)
+	appendUniqueType(a, h)
 }
 
 // BackChannelAuthenticationEndpointBindingHandlers is a list of BackChannelAuthenticationEndpointBindingHandler.
@@ -145,13 +91,7 @@ type BackChannelAuthenticationEndpointBindingHandlers []BackChannelAuthenticatio
 // Append adds a BackChannelAuthenticationEndpointBindingHandler to this list. Ignores duplicates based on
 // [reflect.TypeOf].
 func (a *BackChannelAuthenticationEndpointBindingHandlers) Append(h BackChannelAuthenticationEndpointBindingHandler) {
-	for _, this := range *a {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*a = append(*a, h)
+	appendUniqueType(a, h)
 }
 
 // TokenIntrospectionHandlers is a list of TokenValidator.
@@ -159,13 +99,7 @@ type TokenIntrospectionHandlers []TokenIntrospector
 
 // Append adds an AccessTokenValidator to this list. Ignores duplicates based on [reflect.TypeOf].
 func (t *TokenIntrospectionHandlers) Append(h TokenIntrospector) {
-	for _, this := range *t {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*t = append(*t, h)
+	appendUniqueType(t, h)
 }
 
 // RevocationHandlers is a list of RevocationHandler.
@@ -173,13 +107,7 @@ type RevocationHandlers []RevocationHandler
 
 // Append adds an RevocationHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (t *RevocationHandlers) Append(h RevocationHandler) {
-	for _, this := range *t {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*t = append(*t, h)
+	appendUniqueType(t, h)
 }
 
 // PushedAuthorizeEndpointHandlers is a list of PushedAuthorizeEndpointHandler.
@@ -187,13 +115,7 @@ type PushedAuthorizeEndpointHandlers []PushedAuthorizeEndpointHandler
 
 // Append adds an AuthorizeEndpointHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (a *PushedAuthorizeEndpointHandlers) Append(h PushedAuthorizeEndpointHandler) {
-	for _, this := range *a {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*a = append(*a, h)
+	appendUniqueType(a, h)
 }
 
 // RFC8628DeviceAuthorizeEndpointHandlers is a list of RFC8628DeviceAuthorizeEndpointHandler.
@@ -201,13 +123,7 @@ type RFC8628DeviceAuthorizeEndpointHandlers []RFC8628DeviceAuthorizeEndpointHand
 
 // Append adds an RFC8628DeviceAuthorizeEndpointHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (a *RFC8628DeviceAuthorizeEndpointHandlers) Append(h RFC8628DeviceAuthorizeEndpointHandler) {
-	for _, this := range *a {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*a = append(*a, h)
+	appendUniqueType(a, h)
 }
 
 // RFC8628UserAuthorizeEndpointHandlers is a list of RFC8628UserAuthorizeEndpointHandler.
@@ -215,13 +131,7 @@ type RFC8628UserAuthorizeEndpointHandlers []RFC8628UserAuthorizeEndpointHandler
 
 // Append adds an RFC8628UserAuthorizeEndpointHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (a *RFC8628UserAuthorizeEndpointHandlers) Append(h RFC8628UserAuthorizeEndpointHandler) {
-	for _, this := range *a {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*a = append(*a, h)
+	appendUniqueType(a, h)
 }
 
 // RFC7591ClientRegistrationEndpointHandlers is a list of RFC7591ClientRegistrationEndpointHandler.
@@ -229,13 +139,7 @@ type RFC7591ClientRegistrationEndpointHandlers []RFC7591ClientRegistrationEndpoi
 
 // Append adds an RFC7591ClientRegistrationEndpointHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (a *RFC7591ClientRegistrationEndpointHandlers) Append(h RFC7591ClientRegistrationEndpointHandler) {
-	for _, this := range *a {
-		if reflect.TypeOf(this) == reflect.TypeOf(h) {
-			return
-		}
-	}
-
-	*a = append(*a, h)
+	appendUniqueType(a, h)
 }
 
 // RFC7592ClientConfigurationEndpointHandlers is a list of RFC7592ClientConfigurationEndpointHandler.
@@ -243,13 +147,17 @@ type RFC7592ClientConfigurationEndpointHandlers []RFC7592ClientConfigurationEndp
 
 // Append adds an RFC7592ClientConfigurationEndpointHandler to this list. Ignores duplicates based on [reflect.TypeOf].
 func (a *RFC7592ClientConfigurationEndpointHandlers) Append(h RFC7592ClientConfigurationEndpointHandler) {
-	for _, this := range *a {
+	appendUniqueType(a, h)
+}
+
+func appendUniqueType[S ~[]E, E any](s *S, h E) {
+	for _, this := range *s {
 		if reflect.TypeOf(this) == reflect.TypeOf(h) {
 			return
 		}
 	}
 
-	*a = append(*a, h)
+	*s = append(*s, h)
 }
 
 // Configurator is the full configuration surface a Provider requires.

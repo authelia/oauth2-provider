@@ -35,7 +35,7 @@ func (h *Handler) BindBackChannelAuthenticationRequest(ctx context.Context, requ
 
 	var header string
 
-	r, _ := ctx.Value(oauth2.RequestContextKey).(*http.Request)
+	r := oauth2.RequestFromContext(ctx)
 	if r != nil {
 		if header, err = singleDPoPHeader(r); err != nil {
 			return err

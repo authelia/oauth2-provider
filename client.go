@@ -59,6 +59,8 @@ type Client interface {
 
 // RotatedClientSecretsClient extends Client interface by a method providing a slice of rotated secrets.
 type RotatedClientSecretsClient interface {
+	// GetRotatedClientSecrets returns the rotated client secrets, which are compared when the current client secret does
+	// not match. Nil values are skipped.
 	GetRotatedClientSecrets() (secrets []ClientSecret)
 
 	Client
@@ -67,6 +69,7 @@ type RotatedClientSecretsClient interface {
 // ClientIDIssuedAtClient extends Client interface by a method providing the time the client identifier was issued,
 // being the RFC 7591 Section 3.2.1 'client_id_issued_at' value.
 type ClientIDIssuedAtClient interface {
+	// GetClientIDIssuedAt returns the time the client identifier was issued.
 	GetClientIDIssuedAt() (issued time.Time)
 
 	Client
@@ -77,6 +80,8 @@ type ClientIDIssuedAtClient interface {
 // treated as self-asserted, so a consent screen or a registration check that relies on a value being vouched for by
 // the statement issuer consults this rather than the presence of a 'software_statement'.
 type SoftwareStatementClient interface {
+	// GetSoftwareStatementMembers returns the names of the metadata members whose values were taken from a verified
+	// software statement.
 	GetSoftwareStatementMembers() (members []string)
 
 	Client
@@ -86,6 +91,7 @@ type SoftwareStatementClient interface {
 // zero time means the secret does not expire, which RFC 7591 Section 3.2.1 also assigns to a
 // 'client_secret_expires_at' of 0.
 type ExpiringClientSecretClient interface {
+	// GetClientSecretExpiresAt returns the time the client secret expires, or the zero time when it does not expire.
 	GetClientSecretExpiresAt() (expires time.Time)
 
 	Client
@@ -93,8 +99,13 @@ type ExpiringClientSecretClient interface {
 
 // ProofKeyCodeExchangeClient is a Client implementation which provides PKCE client policy values.
 type ProofKeyCodeExchangeClient interface {
+	// GetEnforcePKCE returns true if PKCE is required for this client.
 	GetEnforcePKCE() (enforce bool)
+	// GetEnforcePKCEChallengeMethod returns true if the 'code_challenge_method' of an authorization request must be the
+	// method GetPKCEChallengeMethod returns.
 	GetEnforcePKCEChallengeMethod() (enforce bool)
+	// GetPKCEChallengeMethod returns the 'code_challenge_method' required when GetEnforcePKCEChallengeMethod returns true.
+	// An omitted method satisfies 'plain'.
 	GetPKCEChallengeMethod() (method string)
 
 	Client
@@ -783,7 +794,11 @@ type IntrospectionJWTResponseClient interface {
 // ClientAssertionJWTValidationOptionsClient allows extending the client assertion validation and strengthening the
 // security posture of client assertion through strict typing.
 type ClientAssertionJWTValidationOptionsClient interface {
+	// GetClientAssertionJWTValidationHeaderAllowEmptyType returns true if a client assertion without a 'typ' header is
+	// accepted.
 	GetClientAssertionJWTValidationHeaderAllowEmptyType() (allow bool)
+	// GetClientAssertionJWTValidationHeaderAllowTypes returns the 'typ' header values accepted for a client assertion. An
+	// empty value accepts 'client-authentication+jwt' and 'JWT'.
 	GetClientAssertionJWTValidationHeaderAllowTypes() (algs []string)
 
 	Client
@@ -792,7 +807,11 @@ type ClientAssertionJWTValidationOptionsClient interface {
 // JWTSecuredAuthorizationRequestJWTValidationOptionsClient allows extending the JWT-Secured Authorization Request (JAR)
 // validation and strengthening the security posture of JAR through strict typing.
 type JWTSecuredAuthorizationRequestJWTValidationOptionsClient interface {
+	// GetJWTSecuredAuthorizationRequestJWTValidationHeaderAllowEmptyType returns true if a request object without a 'typ'
+	// header is accepted.
 	GetJWTSecuredAuthorizationRequestJWTValidationHeaderAllowEmptyType() (allow bool)
+	// GetJWTSecuredAuthorizationRequestJWTValidationHeaderAllowTypes returns the 'typ' header values accepted for a
+	// request object. An empty value accepts 'oauth-authz-req+jwt' and 'JWT'.
 	GetJWTSecuredAuthorizationRequestJWTValidationHeaderAllowTypes() (algs []string)
 
 	Client

@@ -19,13 +19,25 @@ import (
 
 // CodeTokenEndpointHandler is the grant specific behavior GenericCodeTokenEndpointHandler delegates to.
 type CodeTokenEndpointHandler interface {
+	// ValidateGrantTypes returns an error unless the client may use the grant type of the handler.
 	ValidateGrantTypes(ctx context.Context, request oauth2.AccessRequester) (err error)
+	// ValidateCodeAndSession validates the code against the stored request it was issued for.
 	ValidateCodeAndSession(ctx context.Context, request oauth2.AccessRequester, authorizeRequest oauth2.Requester, code string) (err error)
+	// GetCodeAndSession returns the code presented in the request, its signature and the stored request it was issued for.
+	// An error which reports an invalidated code must be returned with the stored request, so the tokens issued from the
+	// code can be revoked. An unknown code returns oauth2.ErrNotFound, which is answered with invalid_grant.
 	GetCodeAndSession(ctx context.Context, request oauth2.AccessRequester) (code string, signature string, r oauth2.Requester, err error)
+	// UpdateLastChecked records the time of the request as the last poll of the stored request. It is called when the
+	// token request fails after the stored request was loaded.
 	UpdateLastChecked(ctx context.Context, request oauth2.AccessRequester, authorizeRequest oauth2.Requester) (err error)
+	// InvalidateSession invalidates the stored request with the given code signature, so the code cannot be redeemed
+	// again.
 	InvalidateSession(ctx context.Context, signature string, request oauth2.Requester) error
+	// CanSkipClientAuth reports whether the request may be handled without client authentication.
 	CanSkipClientAuth(ctx context.Context, request oauth2.AccessRequester) bool
+	// CanHandleTokenEndpointRequest reports whether the handler is responsible for the token endpoint request.
 	CanHandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) bool
+	// DeviceCodeSignature returns the signature of the code.
 	DeviceCodeSignature(ctx context.Context, code string) (signature string, err error)
 }
 

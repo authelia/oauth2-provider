@@ -31,6 +31,8 @@ type ClientAuthenticationStrategy interface {
 	// See: https://www.rfc-editor.org/rfc/rfc8414#section-2
 	AuthMethodsSupported(ctx context.Context) (methods []string)
 
+	// AuthenticateClient authenticates the client from the credentials presented in the request and form, as the strategy
+	// of the endpoint permits. It returns the client and the authentication method used.
 	AuthenticateClient(ctx context.Context, r *http.Request, form url.Values, strategy EndpointClientAuthStrategy) (client Client, method string, err error)
 }
 
@@ -626,7 +628,9 @@ func (s *RevocationEndpointClientAuthStrategy) AllowMethodNone() bool {
 
 // PrivateKey properly describes [crypto.PrivateKey].
 type PrivateKey interface {
+	// Public returns the public key corresponding to the private key.
 	Public() crypto.PublicKey
+	// Equal reports whether x is the same key as the private key.
 	Equal(x crypto.PrivateKey) bool
 }
 

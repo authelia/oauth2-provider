@@ -11,8 +11,11 @@ import (
 
 // Transactional has the method set of storage.Transactional.
 type Transactional interface {
+	// BeginTX begins a transaction and returns a context which carries it.
 	BeginTX(ctx context.Context) (context.Context, error)
+	// Commit commits the transaction carried by the context.
 	Commit(ctx context.Context) error
+	// Rollback rolls back the transaction carried by the context.
 	Rollback(ctx context.Context) error
 }
 

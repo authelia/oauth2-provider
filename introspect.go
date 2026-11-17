@@ -17,6 +17,10 @@ import (
 
 // TokenIntrospector introspects a token and reports its use.
 type TokenIntrospector interface {
+	// IntrospectToken validates the token and populates the request with the request the token was issued for, returning
+	// the use of the token. It returns ErrUnknownRequest when the token is not one the introspector resolves, which leaves
+	// it to the next introspector. The tokenUseHint is the token use to try first, and the scopes are those the token is
+	// required to have been granted.
 	IntrospectToken(ctx context.Context, token string, tokenUseHint TokenUse, request AccessRequester, scopes []string) (tokenUse TokenUse, err error)
 }
 

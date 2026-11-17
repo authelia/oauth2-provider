@@ -35,43 +35,61 @@ const (
 
 // The initiating_entity values (CAEP 1.0 §2).
 const (
-	SecurityEventInitiatingEntityAdmin  = "admin"
-	SecurityEventInitiatingEntityUser   = "user"
+	// SecurityEventInitiatingEntityAdmin means an administrative action triggered the event (CAEP 1.0 §2).
+	SecurityEventInitiatingEntityAdmin = "admin"
+	// SecurityEventInitiatingEntityUser means an end-user action triggered the event (CAEP 1.0 §2).
+	SecurityEventInitiatingEntityUser = "user"
+	// SecurityEventInitiatingEntityPolicy means a policy evaluation triggered the event (CAEP 1.0 §2).
 	SecurityEventInitiatingEntityPolicy = "policy"
+	// SecurityEventInitiatingEntitySystem means a system or platform assertion triggered the event (CAEP 1.0 §2).
 	SecurityEventInitiatingEntitySystem = "system"
 )
 
 // The change_type values (CAEP 1.0 §3.3.1).
 const (
+	// CAEPChangeTypeCreate is the change_type value for a credential that was created (CAEP 1.0 §3.3.1).
 	CAEPChangeTypeCreate = "create"
+	// CAEPChangeTypeRevoke is the change_type value for a credential that was revoked (CAEP 1.0 §3.3.1).
 	CAEPChangeTypeRevoke = "revoke"
+	// CAEPChangeTypeUpdate is the change_type value for a credential that was updated (CAEP 1.0 §3.3.1).
 	CAEPChangeTypeUpdate = "update"
+	// CAEPChangeTypeDelete is the change_type value for a credential that was deleted (CAEP 1.0 §3.3.1).
 	CAEPChangeTypeDelete = "delete"
 )
 
 // The change_direction values (CAEP 1.0 §3.4.1).
 const (
+	// CAEPChangeDirectionIncrease is the change_direction value for an assurance level that increased (CAEP 1.0 §3.4.1).
 	CAEPChangeDirectionIncrease = "increase"
+	// CAEPChangeDirectionDecrease is the change_direction value for an assurance level that decreased (CAEP 1.0 §3.4.1).
 	CAEPChangeDirectionDecrease = "decrease"
 )
 
 // The device compliance status values (CAEP 1.0 §3.5.1).
 const (
-	CAEPDeviceComplianceCompliant    = "compliant"
+	// CAEPDeviceComplianceCompliant is the status value for a device that is compliant (CAEP 1.0 §3.5.1).
+	CAEPDeviceComplianceCompliant = "compliant"
+	// CAEPDeviceComplianceNotCompliant is the status value for a device that is not compliant (CAEP 1.0 §3.5.1).
 	CAEPDeviceComplianceNotCompliant = "not-compliant"
 )
 
 // The risk level values (CAEP 1.0 §3.8.1).
 const (
-	CAEPRiskLevelLow    = "LOW"
+	// CAEPRiskLevelLow is the risk level value 'LOW' (CAEP 1.0 §3.8.1).
+	CAEPRiskLevelLow = "LOW"
+	// CAEPRiskLevelMedium is the risk level value 'MEDIUM' (CAEP 1.0 §3.8.1).
 	CAEPRiskLevelMedium = "MEDIUM"
-	CAEPRiskLevelHigh   = "HIGH"
+	// CAEPRiskLevelHigh is the risk level value 'HIGH' (CAEP 1.0 §3.8.1).
+	CAEPRiskLevelHigh = "HIGH"
 )
 
 // The stream status values (SSF 1.0 §8.1.2).
 const (
-	SSFStreamStatusEnabled  = "enabled"
-	SSFStreamStatusPaused   = "paused"
+	// SSFStreamStatusEnabled means the Transmitter delivers events on the stream (SSF 1.0 §8.1.2).
+	SSFStreamStatusEnabled = "enabled"
+	// SSFStreamStatusPaused means the Transmitter withholds events on the stream and should keep them (SSF 1.0 §8.1.2).
+	SSFStreamStatusPaused = "paused"
+	// SSFStreamStatusDisabled means the Transmitter neither delivers nor holds events on the stream (SSF 1.0 §8.1.2).
 	SSFStreamStatusDisabled = "disabled"
 )
 
@@ -80,6 +98,7 @@ var ErrInvalidSecurityEvent = errors.New("invalid security event")
 
 // SecurityEvent is the payload of one event in the events claim of a SET (RFC 8417 §2.2).
 type SecurityEvent interface {
+	// SecurityEventType returns the event type URI of the event.
 	SecurityEventType() (uri string)
 }
 

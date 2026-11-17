@@ -12,7 +12,9 @@ import (
 
 // MessageCatalog declares the interface to get globalized messages.
 type MessageCatalog interface {
+	// GetMessage returns the message with the given ID in the language of the tag, formatted with v.
 	GetMessage(ID string, tag language.Tag, v ...any) string
+	// GetLangFromRequest returns the language to use for the request.
 	GetLangFromRequest(r *http.Request) language.Tag
 }
 

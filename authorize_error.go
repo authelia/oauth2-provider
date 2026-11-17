@@ -58,6 +58,8 @@ func (f *Fosite) handleWriteAuthorizeErrorFieldResponseJSON(ctx context.Context,
 
 // AuthorizeErrorFieldResponseStrategy writes an authorization error as a field response.
 type AuthorizeErrorFieldResponseStrategy interface {
+	// WriteErrorFieldResponse writes the error to the response writer directly, for an authorization error which is not
+	// returned to the client through a response mode.
 	WriteErrorFieldResponse(ctx context.Context, rw http.ResponseWriter, request AuthorizeRequester, rfc *RFC6749Error)
 }
 

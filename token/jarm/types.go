@@ -13,8 +13,11 @@ import (
 
 // Configurator is the configuration required to generate JWT Secured Authorization Responses.
 type Configurator interface {
+	// GetIssuer returns the issuer identifier of the authorization server.
 	GetIssuer(ctx context.Context) (issuer string)
+	// GetJWTSecuredAuthorizeResponseModeStrategy returns the jwt.Strategy which encodes the response.
 	GetJWTSecuredAuthorizeResponseModeStrategy(ctx context.Context) jwt.Strategy
+	// GetJWTSecuredAuthorizeResponseModeLifespan returns how long the response is valid.
 	GetJWTSecuredAuthorizeResponseModeLifespan(ctx context.Context) time.Duration
 }
 
@@ -67,12 +70,16 @@ type Client interface {
 
 // OpenIDSession is a session that carries ID Token headers and claims.
 type OpenIDSession interface {
+	// IDTokenHeaders returns the ID Token headers.
 	IDTokenHeaders() *jwt.Headers
+	// IDTokenClaims returns the ID Token claims.
 	IDTokenClaims() *jwt.IDTokenClaims
 }
 
 // JWTSessionContainer is a session that carries JWT headers and claims.
 type JWTSessionContainer interface {
+	// GetJWTHeader returns the JWT headers.
 	GetJWTHeader() *jwt.Headers
+	// GetJWTClaims returns the JWT claims container.
 	GetJWTClaims() jwt.JWTClaimsContainer
 }

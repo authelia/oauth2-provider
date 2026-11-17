@@ -63,6 +63,8 @@ type IssueAuthorizationDetailsStorage interface {
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-3.2.2
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-9.8
 type RedeemStorage interface {
+	// GetIDJAGTrustedIssuer returns the trust configuration for the issuer of the grant. It returns oauth2.ErrNotFound
+	// when the issuer is not trusted, which answers invalid_grant. Any other error, or a nil result, answers server_error.
 	GetIDJAGTrustedIssuer(ctx context.Context, issuer string) (trusted *oauth2.IDJAGTrustedIssuer, err error)
 
 	// IsIDJAGTenantTrusted reports whether the 'iss' and 'tenant' claims of the grant are trusted together for the
@@ -91,6 +93,11 @@ type RedeemStorage interface {
 	// of the grant (Section 3.2.2). The 'issuer' member of the claim MUST NOT establish trust: it is used only when
 	// configuration associates it with the 'iss' claim of the grant (Section 9.8).
 	ResolveIDJAGSubject(ctx context.Context, client oauth2.Client, claims map[string]any) (subject string, err error)
+	// IsIDJAGUsed reports whether the 'jti' of a grant from the issuer has already been redeemed. It is only called when
+	// grants are single use, and an error answers server_error.
 	IsIDJAGUsed(ctx context.Context, issuer, jti string) (used bool, err error)
+	// MarkIDJAGUsed records the 'jti' of a grant from the issuer as redeemed until exp. It is only called when grants are
+	// single use. It returns oauth2.ErrJTIKnown when the 'jti' is already recorded, which answers invalid_grant, and any
+	// other error answers server_error.
 	MarkIDJAGUsed(ctx context.Context, issuer, jti string, exp time.Time) (err error)
 }

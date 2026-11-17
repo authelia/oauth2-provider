@@ -18,14 +18,22 @@ type CodeStrategy interface {
 
 // DeviceCodeStrategy generates and validates RFC 8628 device codes.
 type DeviceCodeStrategy interface {
+	// RFC8628DeviceCodeSignature returns the signature of the device code.
 	RFC8628DeviceCodeSignature(ctx context.Context, code string) (signature string, err error)
+	// GenerateRFC8628DeviceCode generates a device code (RFC 8628 Section 3.2) and returns it with its signature.
 	GenerateRFC8628DeviceCode(ctx context.Context) (code string, signature string, err error)
+	// ValidateRFC8628DeviceCode validates the device code issued for the request, and returns an error when it is not
+	// valid or has expired.
 	ValidateRFC8628DeviceCode(ctx context.Context, r oauth2.Requester, code string) (err error)
 }
 
 // UserCodeStrategy generates and validates RFC 8628 user codes.
 type UserCodeStrategy interface {
+	// RFC8628UserCodeSignature returns the signature of the user code.
 	RFC8628UserCodeSignature(ctx context.Context, code string) (signature string, err error)
+	// GenerateRFC8628UserCode generates a user code (RFC 8628 Section 3.2) and returns it with its signature.
 	GenerateRFC8628UserCode(ctx context.Context) (code string, signature string, err error)
+	// ValidateRFC8628UserCode validates the user code issued for the request, and returns an error when it is not valid or
+	// has expired.
 	ValidateRFC8628UserCode(ctx context.Context, r oauth2.Requester, code string) (err error)
 }

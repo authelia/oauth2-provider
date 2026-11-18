@@ -220,6 +220,11 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 
 	iss, _ := claims[consts.ClaimIssuer].(string)
 
+	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
+	if oauth2.IsAuthorizationGrantIssuer(ctx, c.Config.GetRFC8693TokenTypes(ctx), iss) {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("A JWT authorization grant issued by this authorization server cannot be used as %s.", role.hint()))
+	}
+
 	if err = c.validateIssuerIsNotIDTokenIssuer(ctx, iss); err != nil {
 		return nil, err
 	}
@@ -443,6 +448,8 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	return nil
 }
 
+const defaultAuthorizationGrantLifespan = 5 * time.Minute
+
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.3.3
 //
 //nolint:gocyclo
@@ -466,7 +473,7 @@ func (c *CustomJWTTypeHandler) issueAuthorizationGrant(ctx context.Context, requ
 	}
 
 	now := time.Now().UTC()
-	expires := capToSubjectTokenExpiry(request, now.Add(c.expiry(ctx, request.GetClient(), jwtType)))
+	expires := capToSubjectTokenExpiry(request, now.Add(c.grantExpiry(request.GetClient(), jwtType)))
 
 	if expires.Unix() <= now.Unix() {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' expires too soon to issue a JWT authorization grant.", consts.FormParameterSubjectToken))
@@ -586,6 +593,14 @@ func (c *CustomJWTTypeHandler) expiry(ctx context.Context, client oauth2.Client,
 	}
 
 	return oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeTokenExchange, oauth2.AccessToken, fallback)
+}
+
+func (c *CustomJWTTypeHandler) grantExpiry(client oauth2.Client, jwtType *JWTType) time.Duration {
+	if jwtType.Issue != nil && jwtType.Issue.Expiry > 0 {
+		return jwtType.Issue.Expiry
+	}
+
+	return oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeTokenExchange, oauth2.AccessToken, defaultAuthorizationGrantLifespan)
 }
 
 // GrantTypesSupported returns nil because the handler only augments another grant.

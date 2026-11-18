@@ -14,7 +14,7 @@ import (
 	reflect "reflect"
 	time "time"
 
-	jose "authelia.com/provider/jose"
+	oauth2 "authelia.com/provider/oauth2"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -42,49 +42,19 @@ func (m *MockRFC7523Storage) EXPECT() *MockRFC7523StorageMockRecorder {
 	return m.recorder
 }
 
-// GetRFC7523PublicKey mocks base method.
-func (m *MockRFC7523Storage) GetRFC7523PublicKey(ctx context.Context, issuer, subject, keyId string) (*jose.JSONWebKey, error) {
+// GetRFC7523TrustedIssuer mocks base method.
+func (m *MockRFC7523Storage) GetRFC7523TrustedIssuer(ctx context.Context, issuer string) (*oauth2.RFC7523TrustedIssuer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRFC7523PublicKey", ctx, issuer, subject, keyId)
-	ret0, _ := ret[0].(*jose.JSONWebKey)
+	ret := m.ctrl.Call(m, "GetRFC7523TrustedIssuer", ctx, issuer)
+	ret0, _ := ret[0].(*oauth2.RFC7523TrustedIssuer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetRFC7523PublicKey indicates an expected call of GetRFC7523PublicKey.
-func (mr *MockRFC7523StorageMockRecorder) GetRFC7523PublicKey(ctx, issuer, subject, keyId any) *gomock.Call {
+// GetRFC7523TrustedIssuer indicates an expected call of GetRFC7523TrustedIssuer.
+func (mr *MockRFC7523StorageMockRecorder) GetRFC7523TrustedIssuer(ctx, issuer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRFC7523PublicKey", reflect.TypeOf((*MockRFC7523Storage)(nil).GetRFC7523PublicKey), ctx, issuer, subject, keyId)
-}
-
-// GetRFC7523PublicKeyScopes mocks base method.
-func (m *MockRFC7523Storage) GetRFC7523PublicKeyScopes(ctx context.Context, issuer, subject, keyId string) ([]string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRFC7523PublicKeyScopes", ctx, issuer, subject, keyId)
-	ret0, _ := ret[0].([]string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetRFC7523PublicKeyScopes indicates an expected call of GetRFC7523PublicKeyScopes.
-func (mr *MockRFC7523StorageMockRecorder) GetRFC7523PublicKeyScopes(ctx, issuer, subject, keyId any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRFC7523PublicKeyScopes", reflect.TypeOf((*MockRFC7523Storage)(nil).GetRFC7523PublicKeyScopes), ctx, issuer, subject, keyId)
-}
-
-// GetRFC7523PublicKeys mocks base method.
-func (m *MockRFC7523Storage) GetRFC7523PublicKeys(ctx context.Context, issuer, subject string) (*jose.JSONWebKeySet, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRFC7523PublicKeys", ctx, issuer, subject)
-	ret0, _ := ret[0].(*jose.JSONWebKeySet)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetRFC7523PublicKeys indicates an expected call of GetRFC7523PublicKeys.
-func (mr *MockRFC7523StorageMockRecorder) GetRFC7523PublicKeys(ctx, issuer, subject any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRFC7523PublicKeys", reflect.TypeOf((*MockRFC7523Storage)(nil).GetRFC7523PublicKeys), ctx, issuer, subject)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRFC7523TrustedIssuer", reflect.TypeOf((*MockRFC7523Storage)(nil).GetRFC7523TrustedIssuer), ctx, issuer)
 }
 
 // IsRFC7523JWTUsed mocks base method.
@@ -114,4 +84,19 @@ func (m *MockRFC7523Storage) MarkRFC7523JWTUsedForTime(ctx context.Context, issu
 func (mr *MockRFC7523StorageMockRecorder) MarkRFC7523JWTUsedForTime(ctx, issuer, jti, exp any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkRFC7523JWTUsedForTime", reflect.TypeOf((*MockRFC7523Storage)(nil).MarkRFC7523JWTUsedForTime), ctx, issuer, jti, exp)
+}
+
+// ResolveRFC7523Subject mocks base method.
+func (m *MockRFC7523Storage) ResolveRFC7523Subject(ctx context.Context, client oauth2.Client, trusted *oauth2.RFC7523TrustedIssuer, keyID string, claims map[string]any) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResolveRFC7523Subject", ctx, client, trusted, keyID, claims)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResolveRFC7523Subject indicates an expected call of ResolveRFC7523Subject.
+func (mr *MockRFC7523StorageMockRecorder) ResolveRFC7523Subject(ctx, client, trusted, keyID, claims any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveRFC7523Subject", reflect.TypeOf((*MockRFC7523Storage)(nil).ResolveRFC7523Subject), ctx, client, trusted, keyID, claims)
 }

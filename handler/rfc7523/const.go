@@ -4,10 +4,8 @@
 
 package rfc7523
 
-import (
-	"authelia.com/provider/oauth2"
+const (
+	grantName               = "JWT authorization grant"
+	hintAssertionUnverified = "Unable to verify the integrity of the 'assertion' value."
+	hintSubjectUnresolved   = "The subject of the JWT in 'assertion' request parameter could not be resolved."
 )
-
-const hintAssertionUnverified = "Unable to verify the integrity of the 'assertion' value."
-
-var errJWTUsed = oauth2.ErrInvalidGrant.WithHint("The JWT in 'assertion' request parameter has already been used and its 'jti' (JWT ID) claim can not be used again until it expires.")

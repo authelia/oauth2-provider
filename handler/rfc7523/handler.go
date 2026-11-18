@@ -9,6 +9,8 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,19 +19,25 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/internal/clone"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/jwtgrant"
 	oauth2jwt "authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// Handler implements the RFC 7523 JWT Profile for OAuth 2.0 Authorization Grants at the token endpoint.
+// Handler implements the RFC 7523 JWT Profile for OAuth 2.0 Authorization Grants at the token endpoint. An assertion is
+// accepted from an issuer the Storage trusts, see oauth2.RFC7523TrustedIssuer, and the access token is issued to the
+// local subject the Storage resolves from its claims. An assertion whose issuer is one this authorization server issues
+// JWT authorization grants as is refused, see oauth2.IsAuthorizationGrantIssuer.
 //
-// It does not rate limit. The public key for an assertion is looked up before its signature is verified, so the time
-// taken to reject an assertion can reveal whether a key is registered for its issuer and subject, and a caller that
-// may repeat the request can measure it. Deployments SHOULD rate limit failed assertions per client, and per source
-// when oauth2.GrantTypeJWTBearerCanSkipClientAuthProvider allows the client to go unauthenticated.
+// It does not rate limit. The trusted issuer of an assertion is looked up before its signature is verified, so the
+// time taken to reject an assertion can reveal whether its issuer is trusted, and a caller that may repeat the request
+// can measure it. Deployments SHOULD rate limit failed assertions per client, and per source when
+// oauth2.GrantTypeJWTBearerCanSkipClientAuthProvider allows the client to go unauthenticated.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7523#section-2.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.4.2
 type Handler struct {
 	Storage Storage
 
@@ -47,15 +55,22 @@ type Handler struct {
 		oauth2.ResourceStrategyProvider
 		oauth2.ScopeStrategyProvider
 		oauth2.GrantAssertionAlgorithmsProvider
+		oauth2.JWKSFetcherStrategyProvider
+		oauth2.RFC8693ConfigProvider
 	}
 
 	*hoauth2.HandleHelper
 }
 
-// HandleTokenEndpointRequest implements https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3 (everything) and
-// https://datatracker.ietf.org/doc/html/rfc7523#section-2.1 (everything)
+// HandleTokenEndpointRequest validates the assertion of a JWT bearer grant against its trusted issuer, resolves its
+// subject, and grants the audience and resources the issuer permits and the scope the assertion, the issuer and the
+// client permit. The access token expires no later than the assertion, the 'offline' and 'offline_access' scopes are
+// never granted as no refresh token is issued, and the verified claims are handed to a GrantClaimsSession.
 //
-// TODO: Refactor time permitting.
+// See: https://datatracker.ietf.org/doc/html/rfc7523#section-3
+// See: https://datatracker.ietf.org/doc/html/rfc7521#section-4.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-5.4
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.4.2
 //
 //nolint:gocyclo
 func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2.AccessRequester) (err error) {
@@ -73,69 +88,59 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The assertion request parameter must be set when using grant_type of '%s'.", consts.GrantTypeOAuthJWTBearer))
 	}
 
-	token, err := jwt.ParseSigned(assertion, oauth2jwt.ToSignatureAlgorithms(c.Config.GetRFC7523AssertionSigningAlgValues(ctx)))
+	token, issuer, err := jwtgrant.Parse(grantName, oauth2jwt.ToAsymmetricSignatureAlgorithms(c.Config.GetRFC7523AssertionSigningAlgValues(ctx)), assertion)
 	if err != nil {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse JSON Web Token passed in 'assertion' request parameter.").WithWrap(err).WithDebugError(err))
+		return err
 	}
 
-	// Reject anything whose JOSE 'typ' header explicitly declares it is not a JWT (RFC 7519
-	// §5.1; RFC 8725 §3.11). Defends against cross-profile substitution where a token minted
-	// for a different purpose (e.g. 'secevent+jwt', 'dpop+jwt') is replayed as an assertion.
 	if err = c.validateTokenType(token); err != nil {
 		return err
 	}
 
-	// Check for required claims in token, so we can later find public key based on them.
-	if err = c.validateTokenPreRequisites(token); err != nil {
-		return err
+	unverified := jwt.Claims{}
+
+	if err = token.UnsafeClaimsWithoutVerification(&unverified); err != nil || unverified.Subject == "" {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The JWT in 'assertion' request parameter MUST contain a 'sub' (subject) claim."))
 	}
 
-	key, err := c.findPublicKeyForToken(ctx, token)
+	trusted, err := c.trust(ctx, token, issuer)
 	if err != nil {
 		return err
 	}
 
-	claims, extra := jwt.Claims{}, map[string]any{}
+	keys := jwtgrant.Keys{Issuer: trusted.Issuer, JSONWebKeys: trusted.JSONWebKeys, JSONWebKeysURI: trusted.JSONWebKeysURI, SigningAlgs: trusted.SigningAlgs}
 
-	if err = token.Claims(key, &claims, &extra); err != nil {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hintAssertionUnverified).WithWrap(err).WithDebugError(err))
+	claims, raw, keyID, err := jwtgrant.Verify(ctx, grantName, token, keys, c.Config.GetJWKSFetcherStrategy)
+	if err != nil {
+		return unverifiedError(err)
+	}
+
+	if err = c.validateClient(request, trusted); err != nil {
+		return err
 	}
 
 	// A bearer assertion has no proof of possession, so a key bound assertion is never accepted as one.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-parecki-oauth-jwt-dpop-grant-02#section-5.2
-	if _, bound := extra[consts.ClaimConfirmation]; bound {
+	if _, bound := raw[consts.ClaimConfirmation]; bound {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The JWT in 'assertion' request parameter contains a '%s' (confirmation) claim, which cannot be used with authorization grant '%s'.", consts.ClaimConfirmation, consts.GrantTypeOAuthJWTBearer))
 	}
 
-	if err = c.validateTokenClaims(ctx, claims, key); err != nil {
+	if err = c.validateTokenClaims(ctx, claims); err != nil {
 		return err
 	}
 
-	scopes, err := c.Storage.GetRFC7523PublicKeyScopes(ctx, claims.Issuer, claims.Subject, key.KeyID)
+	subject, err := c.resolve(ctx, request, trusted, keyID, claims, raw)
 	if err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	}
-
-	for _, scope := range request.GetRequestedScopes() {
-		if !c.Config.GetScopeStrategy(ctx)(scopes, scope) {
-			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The public key registered for issuer '%s' and subject '%s' is not allowed to request scope '%s'.", claims.Issuer, claims.Subject, scope))
-		}
-	}
-
-	if err = c.validateClientScopes(ctx, request); err != nil {
 		return err
 	}
 
-	// RFC 7523 Section 3: the 'aud' claim identifies the authorization server as the intended audience of the
-	// assertion, not the audience of the access token, so only a requested audience or resource registered for the
-	// public key is granted.
-	if err = c.validateRequestedAudience(ctx, request, claims, key); err != nil {
+	if err = c.grantScopes(ctx, request, trusted, raw); err != nil {
 		return err
 	}
 
-	for _, scope := range request.GetRequestedScopes() {
-		request.GrantScope(scope)
+	if err = c.validateRequestedAudience(ctx, request, trusted.Audience); err != nil {
+		return err
 	}
 
 	for _, audience := range request.GetRequestedAudience() {
@@ -153,8 +158,12 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeJWTBearer, oauth2.AccessToken, c.HandleHelper.Config.GetAccessTokenLifespan(ctx))
 
-	session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(atLifespan).Round(time.Second))
-	session.SetSubject(claims.Subject)
+	session.SetExpiresAt(oauth2.AccessToken, jwtgrant.CapExpiry(time.Now().UTC().Add(atLifespan).Round(time.Second), claims.Expiry.Time(), 0))
+	session.SetSubject(subject)
+
+	if s, ok := session.(GrantClaimsSession); ok {
+		s.SetRFC7523GrantClaims(maps.Clone(raw))
+	}
 
 	return nil
 }
@@ -186,30 +195,18 @@ func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oau
 }
 
 func (c *Handler) consume(ctx context.Context, assertion string) (err error) {
-	token, err := jwt.ParseSigned(assertion, oauth2jwt.ToSignatureAlgorithms(c.Config.GetRFC7523AssertionSigningAlgValues(ctx)))
+	claims, _, err := jwtgrant.UnverifiedClaims(grantName, oauth2jwt.ToAsymmetricSignatureAlgorithms(c.Config.GetRFC7523AssertionSigningAlgValues(ctx)), assertion)
 	if err != nil {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse JSON Web Token passed in 'assertion' request parameter.").WithWrap(err).WithDebugError(err))
-	}
-
-	claims := jwt.Claims{}
-
-	if err = token.UnsafeClaimsWithoutVerification(&claims); err != nil {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse JSON Web Token passed in 'assertion' request parameter.").WithWrap(err).WithDebugError(err))
+		return err
 	}
 
 	if claims.ID == "" {
 		return nil
 	}
 
-	if err = c.Storage.MarkRFC7523JWTUsedForTime(ctx, claims.Issuer, claims.ID, claims.Expiry.Time()); err != nil {
-		if errors.Is(err, oauth2.ErrJTIKnown) {
-			return errorsx.WithStack(errJWTUsed.WithWrap(err))
-		}
-
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	}
-
-	return nil
+	return jwtgrant.Consume(ctx, grantName, func(ctx context.Context) error {
+		return c.Storage.MarkRFC7523JWTUsedForTime(ctx, claims.Issuer, claims.ID, claims.Expiry.Time())
+	})
 }
 
 // CanSkipClientAuth reports whether the configuration permits the JWT bearer grant without client authentication.
@@ -271,75 +268,47 @@ func (c *Handler) validateTokenType(token *jwt.JSONWebToken) error {
 	return nil
 }
 
-func (c *Handler) validateTokenPreRequisites(token *jwt.JSONWebToken) error {
-	unverifiedClaims := jwt.Claims{}
+func (c *Handler) trust(ctx context.Context, token *jwt.JSONWebToken, issuer string) (trusted *oauth2.RFC7523TrustedIssuer, err error) {
+	if oauth2.IsAuthorizationGrantIssuer(ctx, c.Config.GetRFC8693TokenTypes(ctx), issuer) {
+		verifyDecoy(token)
 
-	if err := token.UnsafeClaimsWithoutVerification(&unverifiedClaims); err != nil {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Looks like there are no claims in JWT in 'assertion' request parameter.").WithWrap(err).WithDebugError(err))
+		return nil, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hintAssertionUnverified).WithDebug("The issuer of the JWT in 'assertion' request parameter is one this authorization server issues JWT authorization grants as, which are issued for another trust domain."))
 	}
 
-	if unverifiedClaims.Issuer == "" {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The JWT in 'assertion' request parameter MUST contain an 'iss' (issuer) claim."))
+	if trusted, err = c.Storage.GetRFC7523TrustedIssuer(ctx, issuer); err != nil {
+		if errors.Is(err, oauth2.ErrNotFound) {
+			verifyDecoy(token)
+
+			return nil, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hintAssertionUnverified).WithWrap(err).WithDebugError(err))
+		}
+
+		return nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if unverifiedClaims.Subject == "" {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The JWT in 'assertion' request parameter MUST contain a 'sub' (subject) claim."))
+	if trusted == nil {
+		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("The storage returned no trusted issuer and no error."))
+	}
+
+	if trusted.Issuer != issuer {
+		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("The storage returned a trusted issuer whose issuer is not the one requested."))
+	}
+
+	return trusted, nil
+}
+
+func (c *Handler) validateClient(request oauth2.AccessRequester, trusted *oauth2.RFC7523TrustedIssuer) (err error) {
+	if len(trusted.Clients) == 0 {
+		return nil
+	}
+
+	if client := request.GetClient(); !isAuthenticatedClient(client) || client.IsPublic() || !slices.Contains(trusted.Clients, client.GetID()) {
+		return errorsx.WithStack(oauth2.ErrAccessDenied.WithHint("The OAuth 2.0 Client is not allowed to use an authorization grant from this issuer."))
 	}
 
 	return nil
 }
 
-func (c *Handler) findPublicKeyForToken(ctx context.Context, token *jwt.JSONWebToken) (*jose.JSONWebKey, error) {
-	unverifiedClaims := jwt.Claims{}
-	if err := token.UnsafeClaimsWithoutVerification(&unverifiedClaims); err != nil {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithWrap(err).WithDebugError(err))
-	}
-
-	var keyID string
-
-	for _, header := range token.Headers {
-		if header.KeyID != "" {
-			keyID = header.KeyID
-			break
-		}
-	}
-
-	keyNotFound := fmt.Sprintf("No public JWK was registered for issuer '%s' and subject '%s', and public key is required to check signature of JWT in 'assertion' request parameter.", unverifiedClaims.Issuer, unverifiedClaims.Subject)
-	keyNotFoundErr := oauth2.ErrInvalidGrant.WithHint(hintAssertionUnverified).WithDebug(keyNotFound)
-
-	if keyID != "" {
-		key, err := c.Storage.GetRFC7523PublicKey(ctx, unverifiedClaims.Issuer, unverifiedClaims.Subject, keyID)
-		if err != nil {
-			verifyDecoy(token)
-
-			return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebugf("%s %s", keyNotFound, oauth2.ErrorToDebugRFC6749Error(err).Error()))
-		}
-
-		return key, nil
-	}
-
-	keys, err := c.Storage.GetRFC7523PublicKeys(ctx, unverifiedClaims.Issuer, unverifiedClaims.Subject)
-	if err != nil {
-		verifyDecoy(token)
-
-		return nil, errorsx.WithStack(keyNotFoundErr.WithWrap(err).WithDebugf("%s %s", keyNotFound, oauth2.ErrorToDebugRFC6749Error(err).Error()))
-	}
-
-	claims := jwt.Claims{}
-
-	for _, key := range keys.Keys {
-		if err = token.Claims(key, &claims); err == nil {
-			return &key, nil
-		}
-	}
-
-	return nil, errorsx.WithStack(keyNotFoundErr)
-}
-
-// TODO: Refactor time permitting.
-//
-//nolint:gocyclo,unparam
-func (c *Handler) validateTokenClaims(ctx context.Context, claims jwt.Claims, key *jose.JSONWebKey) error {
+func (c *Handler) validateTokenClaims(ctx context.Context, claims jwt.Claims) (err error) {
 	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
 	audiences := oauth2.JWTBearerGrantAudiences(ctx, c.Config)
 
@@ -371,54 +340,61 @@ verify:
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The JWT in 'assertion' request parameter MUST contain an 'exp' (expiration time) claim."))
 	}
 
-	now := time.Now()
-
-	if claims.Expiry.Time().Before(now) {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The JWT provided in the 'assertion' request parameter is expired."))
-	}
-
-	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
-	skewed := now.Add(max(c.Config.GetJWTClockSkew(ctx), 0))
-
-	if claims.NotBefore != nil && claims.NotBefore.Time().After(skewed) {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The JWT in 'assertion' request parameter contains an 'nbf' (not before) claim, that identifies the time '%s' before which the token MUST NOT be accepted.", claims.NotBefore.Time().Format(time.RFC3339)))
-	}
-
-	if claims.IssuedAt != nil {
-		if claims.IssuedAt.Time().After(skewed) {
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The JWT in 'assertion' request parameter contains an 'iat' (issued at) claim, that identifies the time '%s' which is after the current time", claims.IssuedAt.Time().Format(time.RFC3339)))
-		}
-	} else if !c.Config.GetGrantTypeJWTBearerIssuedDateOptional(ctx) {
+	if claims.IssuedAt == nil && !c.Config.GetGrantTypeJWTBearerIssuedDateOptional(ctx) {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The JWT in 'assertion' request parameter MUST contain an 'iat' (issued at) claim."))
 	}
 
-	var issuedDate time.Time
-	if claims.IssuedAt != nil {
-		issuedDate = claims.IssuedAt.Time()
-	} else {
-		issuedDate = time.Now()
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	if err = jwtgrant.ValidateTime(grantName, claims, jwtgrant.TimeOptions{Skew: max(c.Config.GetJWTClockSkew(ctx), 0), MaxDuration: c.Config.GetJWTMaxDuration(ctx)}); err != nil {
+		return err
 	}
 
-	if claims.Expiry.Time().Sub(issuedDate) > c.Config.GetJWTMaxDuration(ctx) {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The JWT in 'assertion' request parameter contains an 'exp' (expiration time) claim with value '%s' that is unreasonably far in the future, considering token issued at '%s'.", claims.Expiry.Time().Format(time.RFC3339), issuedDate.Format(time.RFC3339)))
-	}
+	if claims.ID == "" {
+		if c.Config.GetGrantTypeJWTBearerIDOptional(ctx) {
+			return nil
+		}
 
-	if !c.Config.GetGrantTypeJWTBearerIDOptional(ctx) && claims.ID == "" {
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The JWT in 'assertion' request parameter MUST contain an 'jti' (JWT ID) claim."))
 	}
 
-	if claims.ID != "" {
-		used, err := c.Storage.IsRFC7523JWTUsed(ctx, claims.Issuer, claims.ID)
-		if err != nil {
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-		}
+	return jwtgrant.CheckUnused(ctx, grantName, func(ctx context.Context) (bool, error) {
+		return c.Storage.IsRFC7523JWTUsed(ctx, claims.Issuer, claims.ID)
+	})
+}
 
-		if used {
-			return errorsx.WithStack(errJWTUsed)
-		}
+func (c *Handler) resolve(ctx context.Context, request oauth2.AccessRequester, trusted *oauth2.RFC7523TrustedIssuer, keyID string, claims jwt.Claims, raw map[string]any) (subject string, err error) {
+	if len(trusted.Subjects) != 0 && !slices.Contains(trusted.Subjects, claims.Subject) {
+		return "", errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The subject of the JWT in 'assertion' request parameter is not accepted from its issuer."))
 	}
 
-	return nil
+	var client oauth2.Client
+
+	if isAuthenticatedClient(request.GetClient()) {
+		client = request.GetClient()
+	}
+
+	subject, err = c.Storage.ResolveRFC7523Subject(ctx, client, trusted, keyID, clone.Map(raw))
+
+	switch {
+	case err == nil && subject != "":
+		return subject, nil
+	case err == nil:
+		return "", errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hintSubjectUnresolved))
+	case errors.Is(err, oauth2.ErrNotFound):
+		return "", errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hintSubjectUnresolved).WithWrap(err).WithDebugError(err))
+	case errors.Is(err, oauth2.ErrAccessDenied):
+		return "", err
+	default:
+		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebugError(err))
+	}
+}
+
+func unverifiedError(err error) error {
+	if errors.Is(err, oauth2.ErrInvalidGrant) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hintAssertionUnverified).WithWrap(err).WithDebugError(err))
+	}
+
+	return err
 }
 
 type extendedSession interface {
@@ -435,32 +411,74 @@ func (c *Handler) getSessionFromRequest(request oauth2.AccessRequester) (extende
 	}
 }
 
-func (c *Handler) validateClientScopes(ctx context.Context, request oauth2.AccessRequester) (err error) {
-	client := request.GetClient()
-	if !isAuthenticatedClient(client) {
+func (c *Handler) grantScopes(ctx context.Context, request oauth2.AccessRequester, trusted *oauth2.RFC7523TrustedIssuer, raw map[string]any) (err error) {
+	var claim []string
+
+	value, present := raw[consts.ClaimScope]
+
+	if present {
+		scope, ok := value.(string)
+		if !ok {
+			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The JWT in 'assertion' request parameter contains a '%s' claim which is not a string.", consts.ClaimScope))
+		}
+
+		claim = strings.Fields(scope)
+	}
+
+	refusal := c.scopeRefusal(ctx, request.GetClient(), trusted, claim, present)
+
+	requested := request.GetRequestedScopes()
+
+	if len(requested) == 0 {
+		for _, scope := range claim {
+			if refusal(scope) == "" {
+				request.GrantScope(scope)
+			}
+		}
+
 		return nil
 	}
 
-	strategy := oauth2.GetScopeStrategy(ctx, c.Config, client)
-
-	for _, scope := range request.GetRequestedScopes() {
-		if !strategy(client.GetScopes(), scope) {
-			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope))
+	for _, scope := range requested {
+		if hint := refusal(scope); hint != "" {
+			return errorsx.WithStack(oauth2.ErrInvalidScope.WithHint(hint))
 		}
+	}
+
+	for _, scope := range requested {
+		request.GrantScope(scope)
 	}
 
 	return nil
 }
 
-func (c *Handler) validateRequestedAudience(ctx context.Context, request oauth2.AccessRequester, claims jwt.Claims, key *jose.JSONWebKey) (err error) {
-	var audience []string
+func (c *Handler) scopeRefusal(ctx context.Context, client oauth2.Client, trusted *oauth2.RFC7523TrustedIssuer, claim []string, present bool) (refusal func(scope string) (hint string)) {
+	authenticated := isAuthenticatedClient(client)
 
-	if storage, ok := c.Storage.(AudienceStorage); ok {
-		if audience, err = storage.GetRFC7523PublicKeyAudience(ctx, claims.Issuer, claims.Subject, key.KeyID); err != nil {
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-		}
+	issuerStrategy := oauth2.GetScopeStrategy(ctx, c.Config, nil)
+	clientStrategy := issuerStrategy
+
+	if authenticated {
+		clientStrategy = oauth2.GetScopeStrategy(ctx, c.Config, client)
 	}
 
+	return func(scope string) (hint string) {
+		switch {
+		case scope == consts.ScopeOffline || scope == consts.ScopeOfflineAccess:
+			return fmt.Sprintf("The scope '%s' is not available with authorization grant '%s' as it does not issue a refresh token.", scope, consts.GrantTypeOAuthJWTBearer)
+		case present && !slices.Contains(claim, scope):
+			return fmt.Sprintf("The JWT in 'assertion' request parameter does not grant scope '%s'.", scope)
+		case !issuerStrategy(trusted.Scopes, scope):
+			return fmt.Sprintf("The issuer '%s' is not allowed to grant scope '%s'.", trusted.Issuer, scope)
+		case authenticated && !clientStrategy(client.GetScopes(), scope):
+			return fmt.Sprintf("The OAuth 2.0 Client is not allowed to request scope '%s'.", scope)
+		default:
+			return ""
+		}
+	}
+}
+
+func (c *Handler) validateRequestedAudience(ctx context.Context, request oauth2.AccessRequester, audience []string) (err error) {
 	if err = oauth2.ExactAudienceStrategy(audience, request.GetRequestedAudience()); err != nil {
 		return err
 	}

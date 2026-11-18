@@ -164,6 +164,37 @@ func TestJWTTypeValidateRole(t *testing.T) {
 	})
 }
 
+func TestJWTTypeGetAuthorizationGrantIssuer(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     *JWTType
+		expected string
+	}{
+		{
+			name: "ShouldReturnEmptyForANilType",
+		},
+		{
+			name: "ShouldReturnEmptyWithoutIssue",
+			have: &JWTType{Name: consts.TokenTypeRFC8693JWT},
+		},
+		{
+			name: "ShouldReturnEmptyWhenTheTypeIssuesNoAuthorizationGrant",
+			have: &JWTType{Name: consts.TokenTypeRFC8693JWT, Issue: &JWTIssueConfig{Issuer: "https://op.a.example/grants"}},
+		},
+		{
+			name:     "ShouldReturnTheIssuerOfAnAuthorizationGrant",
+			have:     &JWTType{Name: consts.TokenTypeRFC8693JWT, Issue: &JWTIssueConfig{Issuer: "https://op.a.example/grants", AuthorizationGrant: true}},
+			expected: "https://op.a.example/grants",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.have.GetAuthorizationGrantIssuer(t.Context()))
+		})
+	}
+}
+
 func issueRoleJWT(t *testing.T, config *oauth2.Config, sessionIssuer string) (*oauth2.AccessResponse, error) {
 	t.Helper()
 

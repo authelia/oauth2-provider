@@ -21,6 +21,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/rfc7523"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/jwtgrant"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -55,7 +56,7 @@ type RedeemHandler struct {
 }
 
 const (
-	hintIDJAGRedeemed = "The Identity Assertion JWT Authorization Grant was already redeemed."
+	grantName = "Identity Assertion JWT Authorization Grant"
 )
 
 // HandleTokenEndpointRequest validates the grant. A 'jwt-dpop' grant MUST carry a 'cnf' claim and a DPoP proof. A
@@ -91,22 +92,18 @@ func (h *RedeemHandler) HandleTokenEndpointRequest(ctx context.Context, request 
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", grantType))
 	}
 
-	token, issuer, err := parseAssertion(h.algorithms(ctx), assertion)
+	token, issuer, err := jwtgrant.Parse(grantName, h.algorithms(ctx), assertion)
 	if err != nil {
 		return err
 	}
 
-	trusted, header, err := h.trust(ctx, token, issuer)
+	trusted, err := h.trust(ctx, issuer)
 	if err != nil {
 		return err
 	}
 
-	var (
-		claims josejwt.Claims
-		raw    = map[string]any{}
-	)
-
-	if err = h.verify(ctx, token, trusted, header, &claims, &raw); err != nil {
+	claims, raw, _, err := jwtgrant.Verify(ctx, grantName, token, jwtgrant.Keys{Issuer: trusted.Issuer, JSONWebKeys: trusted.JSONWebKeys, JSONWebKeysURI: trusted.JSONWebKeysURI, SigningAlgs: trusted.SigningAlgs}, h.Config.GetJWKSFetcherStrategy)
+	if err != nil {
 		return err
 	}
 
@@ -249,9 +246,7 @@ func (h *RedeemHandler) finish(ctx context.Context, request oauth2.AccessRequest
 
 	// RFC 7521 Section 4.1: the access token SHOULD NOT outlive the assertion by a significant period.
 	if allowance := h.Config.GetIDJAGAccessTokenAllowance(ctx); allowance >= 0 {
-		if limit := expiry.UTC().Add(allowance); limit.Before(expires) {
-			expires = limit.Truncate(time.Second)
-		}
+		expires = jwtgrant.CapExpiry(expires, expiry, allowance)
 	}
 
 	session.SetExpiresAt(oauth2.AccessToken, expires)
@@ -272,15 +267,9 @@ func (h *RedeemHandler) unused(ctx context.Context, claims josejwt.Claims) (err 
 		return nil
 	}
 
-	var used bool
-
-	if used, err = h.Storage.IsIDJAGUsed(ctx, claims.Issuer, claims.ID); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	} else if used {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hintIDJAGRedeemed))
-	}
-
-	return nil
+	return jwtgrant.CheckUnused(ctx, grantName, func(ctx context.Context) (bool, error) {
+		return h.Storage.IsIDJAGUsed(ctx, claims.Issuer, claims.ID)
+	})
 }
 
 // algorithms returns the JWS algorithms an ID-JAG may be signed with. 'none' and the HMAC algorithms are never
@@ -296,7 +285,7 @@ func (h *RedeemHandler) consume(ctx context.Context, assertion string) (err erro
 		return nil
 	}
 
-	claims, _, err := unverifiedClaims(h.algorithms(ctx), assertion)
+	claims, _, err := jwtgrant.UnverifiedClaims(grantName, h.algorithms(ctx), assertion)
 	if err != nil {
 		return err
 	}
@@ -305,110 +294,24 @@ func (h *RedeemHandler) consume(ctx context.Context, assertion string) (err erro
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The Identity Assertion JWT Authorization Grant must contain an 'exp' claim."))
 	}
 
-	if err = h.Storage.MarkIDJAGUsed(ctx, claims.Issuer, claims.ID, claims.Expiry.Time()); err != nil {
-		if errors.Is(err, oauth2.ErrJTIKnown) {
-			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hintIDJAGRedeemed))
-		}
-
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	}
-
-	return nil
+	return jwtgrant.Consume(ctx, grantName, func(ctx context.Context) error {
+		return h.Storage.MarkIDJAGUsed(ctx, claims.Issuer, claims.ID, claims.Expiry.Time())
+	})
 }
 
-func (h *RedeemHandler) trust(ctx context.Context, token *josejwt.JSONWebToken, issuer string) (trusted *oauth2.IDJAGTrustedIssuer, header jose.Header, err error) {
+func (h *RedeemHandler) trust(ctx context.Context, issuer string) (trusted *oauth2.IDJAGTrustedIssuer, err error) {
 	trusted, err = h.Storage.GetIDJAGTrustedIssuer(ctx, issuer)
 
 	switch {
 	case errors.Is(err, oauth2.ErrNotFound):
-		return nil, header, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The issuer '%s' is not trusted.", issuer))
+		return nil, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The issuer '%s' is not trusted.", issuer))
 	case err != nil:
-		return nil, header, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		return nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	case trusted == nil:
-		return nil, header, errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The trusted issuer '%s' is nil.", issuer))
+		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The trusted issuer '%s' is nil.", issuer))
 	}
 
-	header = token.Headers[0]
-
-	algs := trusted.SigningAlgs
-	if len(algs) == 0 {
-		algs = []string{string(jose.RS256)}
-	}
-
-	if !slices.Contains(algs, header.Algorithm) {
-		return nil, header, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The algorithm '%s' is not permitted for the issuer '%s'.", header.Algorithm, issuer))
-	}
-
-	return trusted, header, nil
-}
-
-func (h *RedeemHandler) verify(ctx context.Context, token *josejwt.JSONWebToken, trusted *oauth2.IDJAGTrustedIssuer, header jose.Header, claims *josejwt.Claims, raw *map[string]any) (err error) {
-	switch {
-	case trusted.JSONWebKeys != nil:
-		err = verifyWithKeys(token, trusted.JSONWebKeys, header, claims, raw)
-	case trusted.JSONWebKeysURI == "":
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebugf("The trusted issuer '%s' has no keys.", trusted.Issuer))
-	default:
-		fetcher := h.Config.GetJWKSFetcherStrategy(ctx)
-
-		for _, ignoreCache := range []bool{false, true} {
-			var jwks *jose.JSONWebKeySet
-
-			if jwks, err = fetcher.Resolve(ctx, trusted.JSONWebKeysURI, ignoreCache); err != nil {
-				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-			}
-
-			// A grant without a 'kid' header matches every cached key, so only a failure of a key the grant names is
-			// final.
-			if err = verifyWithKeys(token, jwks, header, claims, raw); err == nil || (header.KeyID != "" && !errors.Is(err, errNoCandidateKey)) {
-				break
-			}
-		}
-	}
-
-	if err != nil {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("No key of the issuer verifies the Identity Assertion JWT Authorization Grant.").WithWrap(err).WithDebugError(err))
-	}
-
-	return nil
-}
-
-var errNoCandidateKey = errors.New("no candidate key matches the token header")
-
-func verifyWithKeys(token *josejwt.JSONWebToken, jwks *jose.JSONWebKeySet, header jose.Header, claims *josejwt.Claims, raw *map[string]any) (err error) {
-	if jwks == nil {
-		return errNoCandidateKey
-	}
-
-	err = errNoCandidateKey
-
-	for _, candidate := range jwks.Keys {
-		if header.KeyID != "" && candidate.KeyID != header.KeyID {
-			continue
-		}
-
-		if candidate.Use != "" && candidate.Use != consts.JSONWebTokenUseSignature {
-			continue
-		}
-
-		if candidate.Algorithm != "" && candidate.Algorithm != header.Algorithm {
-			continue
-		}
-
-		verified := map[string]any{}
-
-		var verifiedClaims josejwt.Claims
-
-		if err = token.Claims(&candidate, &verifiedClaims, &verified); err != nil {
-			continue
-		}
-
-		*claims, *raw = verifiedClaims, verified
-
-		return nil
-	}
-
-	return err
+	return trusted, nil
 }
 
 func (h *RedeemHandler) validate(ctx context.Context, client oauth2.Client, claims josejwt.Claims, raw map[string]any) (err error) {
@@ -437,21 +340,7 @@ func (h *RedeemHandler) validate(ctx context.Context, client oauth2.Client, clai
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The '%s' claim is not supported.", consts.ClaimAuthorizationDetails))
 	}
 
-	now := time.Now()
-	skewed := now.Add(max(h.Config.GetJWTClockSkew(ctx), 0))
-
-	switch {
-	case claims.Expiry.Time().Before(now):
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The Identity Assertion JWT Authorization Grant is expired."))
-	case claims.NotBefore != nil && claims.NotBefore.Time().After(skewed):
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The Identity Assertion JWT Authorization Grant is not yet valid."))
-	case claims.IssuedAt.Time().After(skewed):
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'iat' claim of the Identity Assertion JWT Authorization Grant is in the future."))
-	case claims.Expiry.Time().Sub(claims.IssuedAt.Time()) > h.Config.GetJWTMaxDuration(ctx):
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'exp' claim of the Identity Assertion JWT Authorization Grant is unreasonably far in the future."))
-	}
-
-	return nil
+	return jwtgrant.ValidateTime(grantName, claims, jwtgrant.TimeOptions{Skew: h.Config.GetJWTClockSkew(ctx), MaxDuration: h.Config.GetJWTMaxDuration(ctx)})
 }
 
 func (h *RedeemHandler) validateTenant(ctx context.Context, trusted *oauth2.IDJAGTrustedIssuer, raw map[string]any) (err error) {
@@ -498,7 +387,7 @@ func authorizationDetailsClaim(assertion string) (claim []byte, err error) {
 }
 
 func confirmationJWKThumbprint(algs []jose.SignatureAlgorithm, assertion string) (jkt string, err error) {
-	_, raw, err := unverifiedClaims(algs, assertion)
+	_, raw, err := jwtgrant.UnverifiedClaims(grantName, algs, assertion)
 	if err != nil {
 		return "", err
 	}
@@ -507,40 +396,6 @@ func confirmationJWKThumbprint(algs []jose.SignatureAlgorithm, assertion string)
 	jkt, _ = cnf[consts.ClaimConfirmationJWKThumbprint].(string)
 
 	return jkt, nil
-}
-
-func unverifiedClaims(algs []jose.SignatureAlgorithm, assertion string) (claims josejwt.Claims, raw map[string]any, err error) {
-	token, err := josejwt.ParseSigned(assertion, algs)
-	if err != nil {
-		return claims, nil, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse the Identity Assertion JWT Authorization Grant.").WithWrap(err).WithDebugError(err))
-	}
-
-	raw = map[string]any{}
-
-	if err = token.UnsafeClaimsWithoutVerification(&claims, &raw); err != nil {
-		return claims, nil, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse the Identity Assertion JWT Authorization Grant.").WithWrap(err).WithDebugError(err))
-	}
-
-	return claims, raw, nil
-}
-
-func parseAssertion(algs []jose.SignatureAlgorithm, assertion string) (token *josejwt.JSONWebToken, issuer string, err error) {
-	token, err = josejwt.ParseSigned(assertion, algs)
-	if err != nil {
-		return nil, "", errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Unable to parse the Identity Assertion JWT Authorization Grant.").WithWrap(err).WithDebugError(err))
-	}
-
-	if len(token.Headers) != 1 {
-		return nil, "", errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The Identity Assertion JWT Authorization Grant must have exactly one signature."))
-	}
-
-	var unverified josejwt.Claims
-
-	if err = token.UnsafeClaimsWithoutVerification(&unverified); err != nil || unverified.Issuer == "" {
-		return nil, "", errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The Identity Assertion JWT Authorization Grant must contain an 'iss' claim."))
-	}
-
-	return token, unverified.Issuer, nil
 }
 
 func requireClaims(client oauth2.Client, claims josejwt.Claims, raw map[string]any) (err error) {

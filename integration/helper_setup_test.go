@@ -21,7 +21,6 @@ import (
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/integration/clients"
 	"authelia.com/provider/oauth2/internal/randx"
-	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -92,26 +91,22 @@ func newDefaultSession() *defaultSession {
 	return &defaultSession{DefaultSession: &openid.DefaultSession{}}
 }
 
-func createIssuerPublicKey(issuer, subject, keyID string, key crypto.PublicKey, scopes, audience []string) storage.IssuerPublicKeys {
-	return storage.IssuerPublicKeys{
+func createRFC7523TrustedIssuer(issuer, keyID string, key crypto.PublicKey, scopes, audience []string) oauth2.RFC7523TrustedIssuer {
+	return oauth2.RFC7523TrustedIssuer{
 		Issuer: issuer,
-		KeysBySub: map[string]storage.SubjectPublicKeys{
-			subject: {
-				Subject: subject,
-				Keys: map[string]storage.PublicKeyScopes{
-					keyID: {
-						Key: &jose.JSONWebKey{
-							Key:       key,
-							Algorithm: string(jose.RS256),
-							Use:       "sig",
-							KeyID:     keyID,
-						},
-						Scopes:   scopes,
-						Audience: audience,
-					},
+		JSONWebKeys: &jose.JSONWebKeySet{
+			Keys: []jose.JSONWebKey{
+				{
+					Key:       key,
+					Algorithm: string(jose.RS256),
+					Use:       "sig",
+					KeyID:     keyID,
 				},
 			},
 		},
+		SigningAlgs: []string{string(jose.RS256)},
+		Scopes:      scopes,
+		Audience:    audience,
 	}
 }
 

@@ -145,17 +145,12 @@ func newAssertionProvider(t *testing.T, nonceRequired bool) (provider oauth2.Pro
 	assertionKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	store.IssuerPublicKeys[issuer] = storage.IssuerPublicKeys{
-		Issuer: issuer,
-		KeysBySub: map[string]storage.SubjectPublicKeys{
-			subject: {
-				Subject: subject,
-				Keys: map[string]storage.PublicKeyScopes{
-					kid: {Key: &jose.JSONWebKey{Key: assertionKey.Public(), KeyID: kid, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}},
-				},
-			},
-		},
+	store.RFC7523TrustedIssuers[issuer] = oauth2.RFC7523TrustedIssuer{
+		Issuer:      issuer,
+		JSONWebKeys: &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: assertionKey.Public(), KeyID: kid, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}}},
+		SigningAlgs: []string{string(jose.RS256)},
 	}
+	store.RFC7523Subjects[storage.RFC7523SubjectKey{Issuer: issuer, Subject: subject}] = subject
 
 	signer, err := jose.NewSigner(
 		jose.SigningKey{Algorithm: jose.RS256, Key: jose.JSONWebKey{Key: assertionKey, KeyID: kid}},

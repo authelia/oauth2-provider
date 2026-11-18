@@ -30,8 +30,8 @@ const defaultSSFMaxRequestBytes int64 = 1 << 16
 // A SET that carries personally identifiable information, or that is distributed through a third party, must be
 // encrypted with JWE or kept confidential by other means (RFC 8417 Section 5.1). A signed SET is not confidential: it
 // relies on the TLS of each delivery, and it is readable by anything that terminates that TLS or stores the token, such
-// as a queue. An application that cannot rely on that returns a JWE from its own strategy, encrypted to a key of the
-// receiver. DefaultSecurityEventTokenStrategy only signs.
+// as a queue. An application that cannot rely on that registers an encryption algorithm for the client that owns the
+// stream, see SecurityEventTokenClient, or returns a JWE from its own strategy, encrypted to a key of the receiver.
 //
 // See: https://www.rfc-editor.org/rfc/rfc8417.html
 // See: https://www.rfc-editor.org/rfc/rfc8417.html#section-5.1
@@ -40,13 +40,17 @@ type SecurityEventTokenStrategy interface {
 	// GenerateSecurityEventToken returns the compact serialization of the claims as a JWS, or as a JWE that nests that
 	// JWS, or Provider.GenerateSecurityEventToken refuses the token.
 	//
+	// The client is the owner of the stream, and Provider.GenerateSecurityEventToken never passes nil. When it is a
+	// SecurityEventTokenClient with an encryption algorithm the strategy must return the JWE, encrypted to a key of the
+	// client (RFC 8417 Section 5.1), or Provider.GenerateSecurityEventToken refuses the token.
+	//
 	// The protected header of the JWS must have a 'typ' of 'secevent+jwt' (SSF Section 4.1.1) and an 'alg' other than
 	// 'none', and its signature must not be empty (RFC 8417 Section 5.1).
 	//
 	// The protected header of the JWE must have 'alg', 'enc' and a 'cty' of 'JWT' (RFC 7519 Section 5.2), and a 'typ',
 	// when it has one, of 'JWT' or 'secevent+jwt'. The nested JWS is not inspected, so the strategy must sign it and
 	// give it a 'typ' of 'secevent+jwt' (RFC 8725 Section 3.11).
-	GenerateSecurityEventToken(ctx context.Context, claims *jwt.SecurityEventTokenClaims) (token string, err error)
+	GenerateSecurityEventToken(ctx context.Context, client Client, claims *jwt.SecurityEventTokenClaims) (token string, err error)
 }
 
 // SSFConfig configures the OpenID Shared Signals Framework transmitter.
@@ -114,7 +118,9 @@ type SSFConfig struct {
 	//
 	//   - Provider.GenerateSecurityEventToken gives ErrServerError for a token that is not a JWS signed with RS256 by an
 	//     RSA key of at least 2048 bits, measured by the length of the signature. A JWE is refused, as the signature of
-	//     the token it nests cannot be inspected (Profile Section 2.6).
+	//     the token it nests cannot be inspected (Profile Section 2.6). Encryption and the profile are mutually
+	//     exclusive, so a stream whose client is configured for an encrypted token, as a SecurityEventTokenClient with
+	//     an encryption algorithm, gives ErrServerError.
 	//   - Provider.ValidateSSFConfiguration, and so Provider.WriteSSFConfiguration, gives ErrServerError for Transmitter
 	//     Configuration Metadata without a 'spec_version' of '1_0' or greater, 'delivery_methods_supported',
 	//     'configuration_endpoint', 'status_endpoint', 'verification_endpoint', or the SSFAuthorizationSchemeOAuth2 entry

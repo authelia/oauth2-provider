@@ -78,3 +78,7 @@ func (r *decoratedJWTProfileAccessTokenClient) IsClientIDMetadataDocumentClient(
 func (r *decoratedIntrospectionClient) IsClientIDMetadataDocumentClient() (is bool) {
 	return IsClientIDMetadataDocumentClient(r.IntrospectionClient)
 }
+
+func (r *decoratedSecurityEventTokenClient) IsClientIDMetadataDocumentClient() (is bool) {
+	return IsClientIDMetadataDocumentClient(r.SecurityEventTokenClient)
+}

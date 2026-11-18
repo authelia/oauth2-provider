@@ -791,6 +791,32 @@ type IntrospectionJWTResponseClient interface {
 	JSONWebKeysClient
 }
 
+// SecurityEventTokenClient is a client which can receive encrypted Security Event Tokens. The token is always signed by
+// the issuer, and is nested in a JWE when the client has an encryption algorithm. A type which wraps such a client must
+// forward the three methods, as without them the token is signed and not encrypted.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8417.html#section-5.1
+type SecurityEventTokenClient interface {
+	// GetSecurityEventTokenEncryptedResponseKeyID is equivalent to the 'security_event_token_encrypted_response_kid'
+	// client metadata value which is the specific key identifier used to satisfy JWE requirements for Security Event
+	// Tokens. If unspecified the other available parameters will be utilized to select an appropriate key.
+	GetSecurityEventTokenEncryptedResponseKeyID() (kid string)
+
+	// GetSecurityEventTokenEncryptedResponseAlg is equivalent to the 'security_event_token_encrypted_response_alg'
+	// client metadata value which determines the JWE [RFC7516] algorithm (alg value) as defined in JWA [RFC7518] for
+	// content key encryption of Security Event Tokens. The default, if omitted, is that no encryption is performed.
+	// The value 'none' is refused by DefaultSecurityEventTokenStrategy.
+	GetSecurityEventTokenEncryptedResponseAlg() (alg string)
+
+	// GetSecurityEventTokenEncryptedResponseEnc is equivalent to the 'security_event_token_encrypted_response_enc'
+	// client metadata value which determines the JWE [RFC7516] algorithm (enc value) as defined in JWA [RFC7518] for
+	// content encryption of Security Event Tokens. The default, if omitted, is A128CBC-HS256. Note: This parameter
+	// has no effect without setting security_event_token_encrypted_response_alg.
+	GetSecurityEventTokenEncryptedResponseEnc() (enc string)
+
+	JSONWebKeysClient
+}
+
 // ClientAssertionJWTValidationOptionsClient allows extending the client assertion validation and strengthening the
 // security posture of client assertion through strict typing.
 type ClientAssertionJWTValidationOptionsClient interface {

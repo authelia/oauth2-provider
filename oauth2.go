@@ -376,8 +376,13 @@ type Provider interface {
 	// same event should reuse the same 'jti', which is also the key of a poll response and of an acknowledgement. It
 	// does not deliver the token.
 	//
+	// The client that owns the stream is loaded from the store, and a stream with no owner or one that does not load
+	// is ErrServerError. The token is a JWE nesting the signed Security Event Token when the owner configures
+	// 'security_event_token_encrypted_response_alg', and a token that is not a JWE is then ErrServerError.
+	//
 	// The following specs must be considered in any implementation of this method:
-	// * https://www.rfc-editor.org/rfc/rfc8417.html#section-2 (everything MUST be implemented).
+	// * https://www.rfc-editor.org/rfc/rfc8417.html#section-2 (everything MUST be implemented)
+	// * https://www.rfc-editor.org/rfc/rfc8417.html#section-5.1 (everything MUST be implemented).
 	GenerateSecurityEventToken(ctx context.Context, stream *SSFStream, subject *jwt.SubjectIdentifier, event jwt.SecurityEvent, jti, txn string) (token, usedJTI string, err error)
 
 	// PushSecurityEventToken makes one RFC 8935 push attempt of the Security Event Token to the delivery endpoint and

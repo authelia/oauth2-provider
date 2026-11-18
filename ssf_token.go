@@ -13,6 +13,7 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/reflection"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -23,7 +24,18 @@ const ssfInteroperabilityProfileSignatureBytes = 2048 / 8
 // the 'typ' header to 'secevent+jwt'. Claims that are nil or that fail SecurityEventTokenClaims.Valid are not signed and
 // give ErrServerError.
 //
+// The signed token is nested in a JWE when the client is a SecurityEventTokenClient with an encryption algorithm, which
+// selects a key from the JSON Web Key Set of the client, or derives one from the secret of a confidential client for a
+// symmetric algorithm (RFC 8417 Section 5.1). A client with no key the algorithm can use gives an error. The JWE has a
+// 'cty' and a 'typ' of 'JWT'.
+//
+// An encryption algorithm of 'none' gives ErrServerError rather than a signed token. So does a SigningAlg of HS256,
+// HS384 or HS512 for a client with an encryption algorithm, as the key would be the client secret and not the issuer
+// key. So does a Strategy that returns anything other than a JWE for a client with an encryption algorithm, and a
+// client that is a nil pointer.
+//
 // See: https://www.rfc-editor.org/rfc/rfc8417.html#section-2.2
+// See: https://www.rfc-editor.org/rfc/rfc8417.html#section-5.1
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-4.1.1
 type DefaultSecurityEventTokenStrategy struct {
 	// Strategy encodes the token. It must have an issuer that holds the signing key.
@@ -35,7 +47,7 @@ type DefaultSecurityEventTokenStrategy struct {
 }
 
 // GenerateSecurityEventToken implements SecurityEventTokenStrategy.
-func (s *DefaultSecurityEventTokenStrategy) GenerateSecurityEventToken(ctx context.Context, claims *jwt.SecurityEventTokenClaims) (token string, err error) {
+func (s *DefaultSecurityEventTokenStrategy) GenerateSecurityEventToken(ctx context.Context, client Client, claims *jwt.SecurityEventTokenClaims) (token string, err error) {
 	if s.Strategy == nil {
 		return "", errorsx.WithStack(ErrServerError.WithDebug("The Security Event Token strategy has no JWT strategy."))
 	}
@@ -48,11 +60,37 @@ func (s *DefaultSecurityEventTokenStrategy) GenerateSecurityEventToken(ctx conte
 		return "", errorsx.WithStack(ErrServerError.WithHint("The Security Event Token claims are not valid.").WithWrap(err).WithDebugError(err))
 	}
 
-	if token, _, err = s.Strategy.Encode(ctx, claims,
+	if client != nil && reflection.IsNil(client) {
+		return "", errorsx.WithStack(ErrServerError.WithDebug("The Security Event Token client is a nil pointer."))
+	}
+
+	opts := []jwt.StrategyOpt{
 		jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: jwt.JSONWebTokenTypeSecurityEventToken}}),
-		jwt.WithIssuerSigningAlg(s.SigningAlg),
-	); err != nil {
+	}
+
+	enc := jwt.NewSecurityEventTokenClient(client, s.SigningAlg)
+
+	if enc != nil {
+		if jwt.IsNoneAlg(enc.GetEncryptionAlg()) {
+			return "", errorsx.WithStack(ErrServerError.WithDebug("The Security Event Token encryption algorithm of the client must not be 'none'."))
+		}
+
+		if jwt.IsSignedJWTClientSecretAlgStr(enc.GetSigningAlg()) {
+			return "", errorsx.WithStack(ErrServerError.WithDebugf("The Security Event Token signing algorithm '%s' is symmetric, which would sign the token with the client secret rather than the issuer key.", enc.GetSigningAlg()))
+		}
+
+		opts = append(opts, jwt.WithClient(enc))
+	} else {
+		opts = append(opts, jwt.WithIssuerSigningAlg(s.SigningAlg))
+	}
+
+	if token, _, err = s.Strategy.Encode(ctx, claims, opts...); err != nil {
 		return "", errorsx.WithStack(err)
+	}
+
+	// RFC 8417 Section 5.1: a client that configures encryption is never given a token that is only signed.
+	if enc != nil && !isSecurityEventTokenCompactJWE(token) {
+		return "", errorsx.WithStack(ErrServerError.WithDebug("The JWT strategy returned a Security Event Token that is not a JWE for a client that configures encryption."))
 	}
 
 	return token, nil
@@ -84,8 +122,14 @@ func (s *DefaultSecurityEventTokenStrategy) GenerateSecurityEventToken(ctx conte
 // 'secevent+jwt'. The nested token is not visible here, so its signature and its 'typ' of 'secevent+jwt' are the duty
 // of the strategy. A token that is neither a compact serialized JWS nor JWE gives ErrServerError.
 //
+// The client that owns the stream, its ClientID, is loaded from the store and passed to the strategy, which is how the
+// strategy encrypts the token to that client. A stream with no ClientID, or one whose client does not load, gives
+// ErrServerError. So does a token that is not a JWE when that client is a SecurityEventTokenClient with an encryption
+// algorithm, whichever strategy returned it.
+//
 // With SSFConfig.EnforceCAEPInteroperabilityProfile, a token that is not a JWS signed with RS256 by an RSA key of at
-// least 2048 bits gives ErrServerError, and so does a JWE (CAEP Interoperability Profile Section 2.6).
+// least 2048 bits gives ErrServerError, and so does a JWE (CAEP Interoperability Profile Section 2.6). A client
+// configured for encryption therefore gives ErrServerError with it enabled.
 //
 // See: https://www.rfc-editor.org/rfc/rfc8417.html#section-2
 // See: https://www.rfc-editor.org/rfc/rfc8417.html#section-5.1
@@ -113,6 +157,12 @@ func (f *Fosite) GenerateSecurityEventToken(ctx context.Context, stream *SSFStre
 		return "", "", errorsx.WithStack(ErrServerError.WithDebug("Failed to generate the Security Event Token because the stream has no valid issuer."))
 	}
 
+	var client Client
+
+	if client, err = f.ssfStreamOwner(ctx, stream); err != nil {
+		return "", "", err
+	}
+
 	var claims *jwt.SecurityEventTokenClaims
 
 	if claims, err = jwt.NewSecurityEventTokenClaims(stream.Issuer, stream.Audience, subject, event, txn); err != nil {
@@ -127,7 +177,7 @@ func (f *Fosite) GenerateSecurityEventToken(ctx context.Context, stream *SSFStre
 		claims.JTI = jti
 	}
 
-	if token, err = config.TokenStrategy.GenerateSecurityEventToken(ctx, claims); err != nil {
+	if token, err = config.TokenStrategy.GenerateSecurityEventToken(ctx, client, claims); err != nil {
 		return "", "", errorsx.WithStack(ErrServerError.WithHint("Failed to generate the Security Event Token.").WithWrap(err).WithDebugError(err))
 	}
 
@@ -135,7 +185,28 @@ func (f *Fosite) GenerateSecurityEventToken(ctx context.Context, stream *SSFStre
 		return "", "", errorsx.WithStack(ErrServerError.WithDebugf("The Security Event Token strategy returned a token %s.", fault))
 	}
 
+	// RFC 8417 Section 5.1: a client that configures encryption is never given a token that is only signed.
+	if isSecurityEventTokenEncryptionClient(client) && !isSecurityEventTokenCompactJWE(token) {
+		return "", "", errorsx.WithStack(ErrServerError.WithDebug("The Security Event Token strategy returned a token that is not a JWE for a client that configures encryption."))
+	}
+
 	return token, claims.JTI, nil
+}
+
+func (f *Fosite) ssfStreamOwner(ctx context.Context, stream *SSFStream) (client Client, err error) {
+	if stream.ClientID == "" || f.Store == nil {
+		return nil, errorsx.WithStack(ErrServerError.WithDebug("Failed to generate the Security Event Token because the stream has no owner or the store is not configured."))
+	}
+
+	if client, err = f.Store.GetClient(ctx, stream.ClientID); err != nil {
+		return nil, errorsx.WithStack(ErrServerError.WithHint("Failed to load the client that owns the stream.").WithWrap(err).WithDebugError(err))
+	}
+
+	if reflection.IsNil(client) {
+		return nil, errorsx.WithStack(ErrServerError.WithDebug("Failed to generate the Security Event Token because the store returned no client for the owner of the stream."))
+	}
+
+	return client, nil
 }
 
 func isSSFStreamEvent(claims *jwt.SecurityEventTokenClaims) (is bool) {
@@ -213,6 +284,18 @@ func securityEventTokenFaultCAEPInteroperabilityProfile(header *securityEventTok
 	}
 
 	return ""
+}
+
+func isSecurityEventTokenEncryptionClient(client Client) (is bool) {
+	c, ok := client.(interface{ GetSecurityEventTokenEncryptedResponseAlg() string })
+
+	return ok && c.GetSecurityEventTokenEncryptedResponseAlg() != ""
+}
+
+func isSecurityEventTokenCompactJWE(token string) (is bool) {
+	segments := strings.Split(token, ".")
+
+	return len(segments) == 5 && isSecurityEventTokenCompact(segments)
 }
 
 func isSecurityEventTokenCompact(segments []string) (is bool) {

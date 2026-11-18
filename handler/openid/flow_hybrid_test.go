@@ -16,6 +16,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/handler/openid/asc"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
@@ -798,6 +799,42 @@ func TestHybrid_HandleAuthorizeEndpointRequestRequiresImplicitGrant(t *testing.T
 			assert.NotEmpty(t, response.GetParameters().Get(consts.ResponseTypeImplicitFlowIDToken))
 		})
 	}
+}
+
+func TestHybrid_HandleAuthorizeEndpointRequestEnforcesClaimsASC(t *testing.T) {
+	t.Run("ShouldAbortWhenRuleNotFulfilled", func(t *testing.T) {
+		handler := makeOpenIDConnectHybridHandler(oauth2.MinParameterEntropy)
+		handler.OpenIDConnectRequestValidator = NewOpenIDConnectRequestValidator(nil, &oauth2.Config{ClaimsASC: oauth2.ClaimsASC{SelectiveAbortOmit: true, Evaluator: asc.NewEvaluator()}, MinParameterEntropy: oauth2.MinParameterEntropy})
+
+		request := oauth2.NewAuthorizeRequest()
+		request.Form.Set(consts.FormParameterNonce, testNonce)
+		request.Form.Set(consts.FormParameterRedirectURI, "https://example.com")
+		request.RedirectURI, _ = url.ParseRequestURI("https://example.com")
+		request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken}
+		request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+			DefaultClient: &oauth2.DefaultClient{
+				GrantTypes:    oauth2.Arguments{consts.GrantTypeAuthorizationCode, consts.GrantTypeImplicit},
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeAuthorizationCodeFlow, consts.ResponseTypeImplicitFlowIDToken},
+				Scopes:        []string{consts.ScopeOpenID},
+			},
+		}
+		request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+		request.Session = &DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				Subject:                             testSubjectPeter,
+				AuthenticationContextClassReference: "bronze",
+			},
+			Headers: &jwt.Headers{},
+			Subject: testSubjectPeter,
+		}
+
+		request.SetClaims(&oauth2.ClaimsRequest{ASC: &oauth2.ClaimsRequestASC{SAO: &oauth2.SelectiveAbortOmit{IDToken: []oauth2.SelectiveAbortOmitRule{{Loc: "/email", Else: oauth2.SelectiveAbortOmitActionAbort}}}}})
+
+		err := handler.HandleAuthorizeEndpointRequest(t.Context(), request, oauth2.NewAuthorizeResponse())
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrAccessDenied)
+	})
 }
 
 func makeOpenIDConnectHybridHandler(minParameterEntropy int) OpenIDConnectHybridHandler {

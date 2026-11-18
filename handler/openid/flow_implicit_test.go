@@ -16,6 +16,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/handler/openid/asc"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
@@ -362,6 +363,46 @@ func TestImplicit_HandleAuthorizeEndpointRequestEnforcesClaims(t *testing.T) {
 			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 		})
 	}
+}
+
+func TestImplicit_HandleAuthorizeEndpointRequestEnforcesClaimsASC(t *testing.T) {
+	t.Run("ShouldAbortWhenRuleNotFulfilled", func(t *testing.T) {
+		handler := makeOpenIDConnectImplicitHandler(oauth2.MinParameterEntropy)
+		handler.OpenIDConnectRequestValidator = NewOpenIDConnectRequestValidator(nil, &oauth2.Config{ClaimsASC: oauth2.ClaimsASC{SelectiveAbortOmit: true, Evaluator: asc.NewEvaluator()}, MinParameterEntropy: oauth2.MinParameterEntropy})
+
+		request := oauth2.NewAuthorizeRequest()
+		request.Session = &DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				Subject:                             testSubjectPeter,
+				AuthenticationContextClassReference: "bronze",
+			},
+			Headers: &jwt.Headers{},
+			Subject: testSubjectPeter,
+		}
+		request.Client = &oauth2.DefaultClientWithCustomTokenLifespans{
+			DefaultClient: &oauth2.DefaultClient{
+				Scopes:        oauth2.Arguments{consts.ScopeOpenID},
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowToken, consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowBoth},
+				GrantTypes:    oauth2.Arguments{consts.GrantTypeImplicit},
+			},
+		}
+		request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowToken}
+		request.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
+		request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+		request.Form = url.Values{
+			consts.FormParameterRedirectURI: {"https://example.com"},
+			consts.FormParameterState:       {"test-state-value"},
+			consts.FormParameterNonce:       {"test-nonce-value"},
+		}
+		request.RedirectURI, _ = url.Parse("https://example.com")
+
+		request.SetClaims(&oauth2.ClaimsRequest{ASC: &oauth2.ClaimsRequestASC{SAO: &oauth2.SelectiveAbortOmit{IDToken: []oauth2.SelectiveAbortOmitRule{{Loc: "/email", Else: oauth2.SelectiveAbortOmitActionAbort}}}}})
+
+		err := handler.HandleAuthorizeEndpointRequest(t.Context(), request, oauth2.NewAuthorizeResponse())
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrAccessDenied)
+	})
 }
 
 func makeOpenIDConnectImplicitHandler(minParameterEntropy int) OpenIDConnectImplicitHandler {

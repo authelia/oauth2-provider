@@ -117,7 +117,9 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	//
 	// All other parse methods should come afterwards so that we ensure that the data is taken
 	// from the request_object if set.
-	if err = f.authorizeRequestParametersFromJAR(ctx, request, isPARRequest); err != nil {
+	var signedClaims bool
+
+	if signedClaims, err = f.authorizeRequestParametersFromJAR(ctx, request, isPARRequest); err != nil {
 		return request, err
 	}
 
@@ -155,6 +157,13 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	var claims *ClaimsRequest
 
 	if claims, err = ParseRequestedClaims(ctx, f.Config, request.Form); err != nil {
+		return request, err
+	}
+
+	// A pushed request is protected when the client authenticated.
+	//
+	// See: https://openid.net/specs/openid-connect-advanced-syntax-for-claims-1_0.html#section-9.1
+	if err = validateClaimsRequestIntegrity(ctx, f.Config, request.Client, claims, signedClaims || (isPARRequest && !request.Client.IsPublic())); err != nil {
 		return request, err
 	}
 
@@ -244,7 +253,7 @@ func setAuthorizeErrorDefaultResponseMode(request *AuthorizeRequest) {
 // TODO: Refactor time permitting.
 //
 //nolint:gocyclo
-func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request *AuthorizeRequest, isPARRequest bool) (err error) {
+func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request *AuthorizeRequest, isPARRequest bool) (signedClaims bool, err error) {
 	var scope Arguments = RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
 
 	openid := scope.Has(consts.ScopeOpenID)
@@ -263,12 +272,12 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	switch nrequest, nrequestURI = len(request.Form.Get(consts.FormParameterRequest)), len(request.Form.Get(consts.FormParameterRequestURI)); {
 	case nrequest+nrequestURI == 0:
 		if required {
-			return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequired, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' is subject to a policy which requires a signed request object but neither the 'request' nor 'request_uri' parameter was included in the request.", request.GetClient().GetID()))
+			return false, errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequired, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' is subject to a policy which requires a signed request object but neither the 'request' nor 'request_uri' parameter was included in the request.", request.GetClient().GetID()))
 		}
 
-		return nil
+		return false, nil
 	case nrequest > 0 && nrequestURI > 0:
-		return errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameters 'request' and 'request_uri' were both used, but only one may be used in any given request.", hintRequestObjectPrefix(openid)))
+		return false, errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameters 'request' and 'request_uri' were both used, but only one may be used in any given request.", hintRequestObjectPrefix(openid)))
 	case nrequest > 0:
 		parameter = consts.FormParameterRequest
 	case nrequestURI > 0:
@@ -278,24 +287,24 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	client, ok := request.Client.(JARClient)
 	if !ok {
 		if nrequestURI > 0 {
-			return errorsx.WithStack(ErrRequestURINotSupported.WithHintf(hintRequestObjectClientCapabilities, hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't implement the correct functionality for this request.", request.GetClient().GetID()))
+			return false, errorsx.WithStack(ErrRequestURINotSupported.WithHintf(hintRequestObjectClientCapabilities, hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't implement the correct functionality for this request.", request.GetClient().GetID()))
 		}
 
-		return errorsx.WithStack(ErrRequestNotSupported.WithHintf(hintRequestObjectClientCapabilities, hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't implement the correct functionality for this request.", request.GetClient().GetID()))
+		return false, errorsx.WithStack(ErrRequestNotSupported.WithHintf(hintRequestObjectClientCapabilities, hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't implement the correct functionality for this request.", request.GetClient().GetID()))
 	}
 
 	if request.Form.Get(consts.FormParameterClientID) == "" {
 		// The 'client_id' parameter must be included using the OAuth 2.0 request syntax.
 		//
 		// See: https://www.rfc-editor.org/rfc/rfc9101#section-5
-		return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredRequestSyntaxParameter, hintRequestObjectPrefix(openid), parameter, consts.FormParameterClientID).WithDebugf("The OAuth 2.0 client with id '%s' provided the '%s' with value but did not include the 'client_id' parameter.", request.GetClient().GetID(), parameter))
+		return false, errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredRequestSyntaxParameter, hintRequestObjectPrefix(openid), parameter, consts.FormParameterClientID).WithDebugf("The OAuth 2.0 client with id '%s' provided the '%s' with value but did not include the 'client_id' parameter.", request.GetClient().GetID(), parameter))
 	}
 
 	if openid && !isPARRequest && request.Form.Get(consts.FormParameterResponseType) == "" {
 		// OpenID Connect requires the 'response_type' parameter be included using the OAuth 2.0 request syntax.
 		//
 		// See: https://openid.net/specs/openid-connect-core-1_0.html#RequestObject
-		return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredRequestSyntaxParameter, hintRequestObjectPrefix(openid), parameter, consts.FormParameterResponseType).WithDebugf("The OAuth 2.0 client with id '%s' provided the '%s' with value but did not include the 'response_type' parameter.", request.GetClient().GetID(), parameter))
+		return false, errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredRequestSyntaxParameter, hintRequestObjectPrefix(openid), parameter, consts.FormParameterResponseType).WithDebugf("The OAuth 2.0 client with id '%s' provided the '%s' with value but did not include the 'response_type' parameter.", request.GetClient().GetID(), parameter))
 	}
 
 	var (
@@ -309,19 +318,19 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		// unsigned request object as the registered value is strictly enforced by the header validation below, so this
 		// requirement can never be satisfied by such a client.
 		if required {
-			return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredSigned, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' is subject to a policy which requires a signed request object but the client is registered with a 'request_object_signing_alg' value of 'none'.", request.GetClient().GetID()))
+			return false, errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredSigned, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' is subject to a policy which requires a signed request object but the client is registered with a 'request_object_signing_alg' value of 'none'.", request.GetClient().GetID()))
 		}
 	case "":
 		algAny = true
 	case consts.JSONWebTokenAlgHMACSHA256, consts.JSONWebTokenAlgHMACSHA384, consts.JSONWebTokenAlgHMACSHA512:
 		if _, ok, err = client.GetClientSecretPlainText(); err != nil {
-			return errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameter '%s' was used, but the OAuth 2.0 Client does not have a compatible secret for the 'request_object_signing_alg' value registered for this client.", hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't have a secret or the secret is a digest which is not compatible with a 'request_object_signing_alg' value of '%s'. Error occurred retrieving the client secret: %+v", request.GetClient().GetID(), alg, err))
+			return false, errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameter '%s' was used, but the OAuth 2.0 Client does not have a compatible secret for the 'request_object_signing_alg' value registered for this client.", hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't have a secret or the secret is a digest which is not compatible with a 'request_object_signing_alg' value of '%s'. Error occurred retrieving the client secret: %+v", request.GetClient().GetID(), alg, err))
 		} else if !ok {
-			return errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameter '%s' was used, but the OAuth 2.0 Client does not have a compatible secret for the 'request_object_signing_alg' value registered for this client.", hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't have a secret or the secret is a digest which is not compatible with a 'request_object_signing_alg' value of '%s'.", request.GetClient().GetID(), alg))
+			return false, errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameter '%s' was used, but the OAuth 2.0 Client does not have a compatible secret for the 'request_object_signing_alg' value registered for this client.", hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't have a secret or the secret is a digest which is not compatible with a 'request_object_signing_alg' value of '%s'.", request.GetClient().GetID(), alg))
 		}
 	default:
 		if client.GetJSONWebKeys() == nil && len(client.GetJSONWebKeysURI()) == 0 {
-			return errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameter '%s' was used, but the OAuth 2.0 Client does not have any JSON Web Keys registered which is required for the 'request_object_signing_alg' value registered for this client.", hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' or an empty value but it's registered with '%s'.", request.GetClient().GetID(), alg))
+			return false, errorsx.WithStack(ErrInvalidRequest.WithHintf("%s parameter '%s' was used, but the OAuth 2.0 Client does not have any JSON Web Keys registered which is required for the 'request_object_signing_alg' value registered for this client.", hintRequestObjectPrefix(openid), parameter).WithDebugf("The OAuth 2.0 client with id '%s' doesn't have any known JSON Web Keys but requires them when not explicitly registered with a 'request_object_signing_alg' with the value of 'none' or an empty value but it's registered with '%s'.", request.GetClient().GetID(), alg))
 		}
 	}
 
@@ -330,13 +339,13 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	if nrequestURI > 0 {
 		// Reject the request if the "request_uri" authorization request parameter is provided.
 		if isPARRequest {
-			return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter within a Pushed Authorization Request which is invalid.", request.GetClient().GetID()))
+			return false, errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter within a Pushed Authorization Request which is invalid.", request.GetClient().GetID()))
 		}
 
 		requestURI := request.Form.Get(consts.FormParameterRequestURI)
 
 		if !slices.Contains(client.GetRequestURIs(), requestURI) {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter with value '%s' which is not whitelisted.", request.GetClient().GetID(), requestURI))
+			return false, errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter with value '%s' which is not whitelisted.", request.GetClient().GetID(), requestURI))
 		}
 
 		// The 'request_uri' fetch is bounded: the location must be registered, the request carries the caller's
@@ -346,14 +355,14 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		// See: https://www.rfc-editor.org/rfc/rfc9101#section-10.4.1
 		base, err := httpClientForClient(ctx, f.Config, f.Config.GetHTTPClient(ctx), client)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		hc := HTTPClientWithoutRedirects(base)
 
 		req, err := retryablehttp.NewRequest(http.MethodGet, requestURI, nil)
 		if err != nil {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter with value '%s' which could not be used to build a request: %+v.", request.GetClient().GetID(), requestURI, err))
+			return false, errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' provided the 'request_uri' parameter with value '%s' which could not be used to build a request: %+v.", request.GetClient().GetID(), requestURI, err))
 		}
 
 		fetch, cancel := context.WithTimeout(ctx, FetchTimeout)
@@ -361,17 +370,17 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 
 		response, err := hc.Do(req.WithContext(fetch))
 		if err != nil {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' failed to fetch the request object from the URI '%s' with an error: %+v.", request.GetClient().GetID(), requestURI, err))
+			return false, errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' failed to fetch the request object from the URI '%s' with an error: %+v.", request.GetClient().GetID(), requestURI, err))
 		}
 		defer response.Body.Close()
 
 		if response.StatusCode != http.StatusOK {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' failed to fetch the request object as the response code was %d %s but a 200 OK is expected.", request.GetClient().GetID(), response.StatusCode, http.StatusText(response.StatusCode)))
+			return false, errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' failed to fetch the request object as the response code was %d %s but a 200 OK is expected.", request.GetClient().GetID(), response.StatusCode, http.StatusText(response.StatusCode)))
 		}
 
 		body, err := io.ReadAll(io.LimitReader(response.Body, MaxFetchedBodyBytes))
 		if err != nil {
-			return errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' provided a response body that could not be read with error: %+v.", request.GetClient().GetID(), err))
+			return false, errorsx.WithStack(ErrInvalidRequestURI.WithHintf(hintRequestObjectFetchRequestURI, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugf("The OAuth 2.0 client with id '%s' provided a response body that could not be read with error: %+v.", request.GetClient().GetID(), err))
 		}
 
 		assertion = string(body)
@@ -385,7 +394,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 
 	token, err := strategy.Decode(ctx, assertion, jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(fapi2SigningAlgValues(client, f.Config.GetRequestObjectSigningAlgValues(ctx)))...), jwt.WithKeyAlgorithm(jwt.ToKeyAlgorithms(f.Config.GetRequestObjectEncryptionAlgValues(ctx))...), jwt.WithContentEncryption(jwt.ToContentEncryptions(f.Config.GetRequestObjectEncryptionEncValues(ctx))...), jwt.WithJARClient(client))
 	if err != nil {
-		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
+		return false, errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
 	var (
@@ -419,14 +428,14 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	// reason its unsigned request object was refused. An unsigned token is never marked as having a verified
 	// signature, so token.Valid would otherwise reject it first with a generic signature error.
 	if algAny && token.SignatureAlgorithm == consts.JSONWebTokenAlgNone {
-		return errorsx.WithStack(
+		return false, errorsx.WithStack(
 			ErrInvalidRequestObject.
 				WithHintf("%s client provided a request object that has an invalid 'kid' or 'alg' header value.", hintRequestObjectPrefix(openid)).
 				WithDebugf("%s client with id '%s' was not explicitly registered with a 'request_object_signing_alg' value of 'none' but the request object had the 'alg' value 'none' in the header.", hintRequestObjectPrefix(openid), client.GetID()))
 	}
 
 	if err = token.Valid(optsHeader...); err != nil {
-		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
+		return false, errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
 	claims := token.Claims
@@ -442,7 +451,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	)
 
 	if err = token.UnsafeClaimsWithoutVerification(&raw); err != nil {
-		return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugError(err))
+		return false, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithWrap(err).WithDebugError(err))
 	}
 
 	for k, v = range claims.ToMapClaims() {
@@ -450,13 +459,13 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		case consts.FormParameterAuthorizationDetails, consts.FormParameterClaims:
 			// These claims are JSON values whose numbers must reach the parameter exactly as the client signed them.
 			if value, err = requestObjectJSONFormValue(raw[k]); err != nil {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object with a '%s' claim whose value could not be represented as an authorization request parameter: %v.", request.GetClient().GetID(), k, err))
+				return false, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object with a '%s' claim whose value could not be represented as an authorization request parameter: %v.", request.GetClient().GetID(), k, err))
 			}
 
 			request.Form.Set(k, value)
 		case consts.FormParameterRequest, consts.FormParameterRequestURI:
 			// The request and request_uri parameters MUST NOT be included in Request Objects.
-			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' included a request object which contained the 'request' or 'request_uri' claims but this is not permitted.", request.GetClient().GetID()))
+			return false, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' included a request object which contained the 'request' or 'request_uri' claims but this is not permitted.", request.GetClient().GetID()))
 		case consts.ClaimIssuer, consts.ClaimAudience, consts.ClaimSubject:
 			// The subject is not relevant, and the issuer and audience are validated below.
 			continue
@@ -467,11 +476,11 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			rsyntax := request.Form.Get(consts.FormParameterClientID)
 
 			if value, ok = v.(string); !ok {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueTypeNotString, request.GetClient().GetID(), consts.FormParameterClientID, v, rsyntax, v))
+				return false, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueTypeNotString, request.GetClient().GetID(), consts.FormParameterClientID, v, rsyntax, v))
 			}
 
 			if rsyntax != value {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueMismatch, request.GetClient().GetID(), consts.FormParameterClientID, value, rsyntax))
+				return false, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueMismatch, request.GetClient().GetID(), consts.FormParameterClientID, value, rsyntax))
 			}
 		case consts.FormParameterResponseType:
 			// The request syntax 'response_type', if present, must match the Request Object value.
@@ -480,13 +489,13 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			rsyntax := request.Form.Get(consts.FormParameterResponseType)
 
 			if value, ok = v.(string); !ok {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueTypeNotString, request.GetClient().GetID(), consts.FormParameterResponseType, v, rsyntax, v))
+				return false, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueTypeNotString, request.GetClient().GetID(), consts.FormParameterResponseType, v, rsyntax, v))
 			}
 
 			if rsyntax == "" {
 				request.Form.Set(consts.FormParameterResponseType, value)
 			} else if rsyntax != value {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueMismatch, request.GetClient().GetID(), consts.FormParameterResponseType, value, rsyntax))
+				return false, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueMismatch, request.GetClient().GetID(), consts.FormParameterResponseType, value, rsyntax))
 			}
 		case consts.FormParameterResource, consts.FormParameterAudience:
 			// RFC 8707 Section 2.1: multiple values are an array of strings in a request object, which correspond to
@@ -496,13 +505,13 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			var values []string
 
 			if values, err = requestObjectFormValues(v); err != nil {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object with a '%s' claim which must be a string or an array of strings: %s.", request.GetClient().GetID(), k, err.Error()))
+				return false, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object with a '%s' claim which must be a string or an array of strings: %s.", request.GetClient().GetID(), k, err.Error()))
 			}
 
 			request.Form[k] = values
 		default:
 			if value, err = requestObjectFormValue(v); err != nil {
-				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object with a '%s' claim whose value could not be represented as an authorization request parameter: %v.", request.GetClient().GetID(), k, err))
+				return false, errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object with a '%s' claim whose value could not be represented as an authorization request parameter: %v.", request.GetClient().GetID(), k, err))
 			}
 
 			request.Form.Set(k, value)
@@ -510,7 +519,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	}
 
 	if len(issuer) == 0 {
-		return errorsx.WithStack(ErrServerError.WithHintf("%s request could not be processed due to an authorization server configuration issue.", hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object that was signed but the issuer for this authorization server is not known.", request.GetClient().GetID()))
+		return false, errorsx.WithStack(ErrServerError.WithHintf("%s request could not be processed due to an authorization server configuration issue.", hintRequestObjectPrefix(openid)).WithDebugf("The OAuth 2.0 client with id '%s' provided a request object that was signed but the issuer for this authorization server is not known.", request.GetClient().GetID()))
 	}
 
 	optsValidClaims := []jwt.ClaimValidationOption{
@@ -535,7 +544,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	}
 
 	if err = claims.Valid(optsValidClaims...); err != nil {
-		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
+		return false, errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
 	// The Request Object scope is authoritative and the request syntax scope is never merged into it. The sole
@@ -552,7 +561,9 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 	request.State = request.Form.Get(consts.FormParameterState)
 	request.Form.Set(consts.FormParameterScope, strings.Join(claimScope, " "))
 
-	return nil
+	_, signedClaims = claims.ToMapClaims()[consts.FormParameterClaims]
+
+	return signedClaims && token.SignatureAlgorithm != consts.JSONWebTokenAlgNone, nil
 }
 
 func requestObjectSyntaxForm(form url.Values) (syntax url.Values) {

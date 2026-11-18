@@ -813,6 +813,96 @@ func TestNewPushedAuthorizeRequestClaims(t *testing.T) {
 	}
 }
 
+func TestNewPushedAuthorizeRequestClaimsASCIntegrity(t *testing.T) {
+	const (
+		custom = `{"id_token":{":adult":null},"_asc":{"transformed_claims":{"adult":{"claim":"birthdate","fn":["years_ago"]}}}}`
+		sao    = `{"id_token":{"email":null},"_asc":{"sao":{"id_token":[{"loc":"/email","else":"abort"}]}}}`
+
+		hintTransformed = "The 'claims' parameter defines transformed claims, which requires a pushed authorization request or a signed request object."
+		hintSAO         = "The 'claims' parameter has selective abort and omit rules, which requires a pushed authorization request or a signed request object."
+	)
+
+	testCases := []struct {
+		name        string
+		public      bool
+		claims      string
+		allow       bool
+		clientAllow *bool
+		hint        string
+	}{
+		{name: "ShouldAcceptCustomTransformedClaimsFromConfidentialClient", claims: custom},
+		{name: "ShouldAcceptSAOFromConfidentialClient", claims: sao},
+		{name: "ShouldRejectCustomTransformedClaimsFromPublicClient", public: true, claims: custom, hint: hintTransformed},
+		{name: "ShouldRejectSAOFromPublicClient", public: true, claims: sao, hint: hintSAO},
+		{name: "ShouldAcceptSAOFromPublicClientWhenAllowed", public: true, claims: sao, allow: true},
+		{name: "ShouldAcceptSAOFromPublicClientWhichIsAllowed", public: true, claims: sao, clientAllow: new(true)},
+		{name: "ShouldRejectSAOFromPublicClientWhichIsNotAllowed", public: true, claims: sao, allow: true, clientAllow: new(false), hint: hintSAO},
+		{name: "ShouldRejectCustomTransformedClaimsFromPublicClientWhichIsAllowed", public: true, claims: custom, clientAllow: new(true), hint: hintTransformed},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &DefaultClient{ID: "1234", RedirectURIs: []string{"https://foo.bar/cb"}, Scopes: []string{"foo", "bar"}, ResponseTypes: []string{consts.ResponseTypeHybridFlowToken}}
+
+			form := url.Values{
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterClientID:     {"1234"},
+				consts.FormParameterResponseType: {consts.ResponseTypeHybridFlowToken},
+				consts.FormParameterState:        {"strong-state"},
+				consts.FormParameterScope:        {"foo bar"},
+				consts.FormParameterClaims:       {tc.claims},
+			}
+
+			if tc.public {
+				client.Public = true
+			} else {
+				client.ClientSecret = testClientSecret1234
+
+				form.Set(consts.FormParameterClientSecret, "1234")
+			}
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			var registered Client = client
+
+			if tc.clientAllow != nil {
+				registered = &testSelectiveAbortOmitIntegrityClient{DefaultClient: client, allow: *tc.clientAllow}
+			}
+
+			store := mock.NewMockStorage(ctrl)
+			store.EXPECT().GetClient(gomock.Any(), "1234").Return(registered, nil).MaxTimes(2)
+
+			provider := &Fosite{
+				Store: store,
+				Config: &Config{
+					ScopeStrategy:    ExactScopeStrategy,
+					AudienceStrategy: DefaultAudienceStrategy,
+					ClaimsASC: ClaimsASC{
+						SelectiveAbortOmit:                 true,
+						TransformedClaims:                  true,
+						AllowUnprotectedSelectiveAbortOmit: tc.allow,
+						Evaluator:                          testClaimsASCEvaluator{},
+					},
+				},
+			}
+
+			ar, err := provider.NewPushedAuthorizeRequest(NewContext(), &http.Request{Header: http.Header{}, Method: http.MethodPost, PostForm: form})
+
+			if tc.hint != "" {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, ErrInvalidRequest)
+				assert.Equal(t, tc.hint, ErrorToRFC6749Error(err).HintField)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			assert.NotNil(t, ar.GetClaims().ASC)
+		})
+	}
+}
+
 func TestNewPushedAuthorizeRequestWithRequestObject(t *testing.T) {
 	keyRSA, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
@@ -997,4 +1087,14 @@ func (s *staticClientAuthenticationStrategy) AuthenticateClient(_ context.Contex
 
 func (s *staticClientAuthenticationStrategy) AuthMethodsSupported(_ context.Context) []string {
 	return nil
+}
+
+type testSelectiveAbortOmitIntegrityClient struct {
+	*DefaultClient
+
+	allow bool
+}
+
+func (c *testSelectiveAbortOmitIntegrityClient) GetAllowUnprotectedSelectiveAbortOmit() bool {
+	return c.allow
 }

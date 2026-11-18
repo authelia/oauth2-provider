@@ -26,17 +26,19 @@ func (f *Fosite) isAuthenticationRequirementsEnforced(ctx context.Context) (enfo
 
 // GetRequestedACRValues returns the Authentication Context Class References requested for the End-User authentication
 // of request: the 'acr_values' parameter when present, otherwise the 'default_acr_values' of a DefaultACRValuesClient
-// unless the 'claims' parameter requests the 'acr' Claim with a 'value' or 'values' member.
+// unless the 'claims' parameter requests the 'acr' Claim with a 'value' or 'values' member. Those members are ignored
+// for a request with Selective Abort/Omit rules.
 //
 // See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest and
-// https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+// https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata and
+// https://openid.net/specs/openid-connect-advanced-syntax-for-claims-1_0.html#section-7.2.1
 func GetRequestedACRValues(request Requester) (values []string) {
 	if values = strings.Fields(request.GetRequestForm().Get(consts.FormParameterAuthenticationContextClassReferenceValues)); len(values) != 0 {
 		return values
 	}
 
 	if r, ok := request.(ClaimsRequester); ok {
-		if claims := r.GetClaims(); claims != nil && (claims.IDToken[consts.ClaimAuthenticationContextClassReference].HasValues() || claims.UserInfo[consts.ClaimAuthenticationContextClassReference].HasValues()) {
+		if claims := r.GetClaims(); claims != nil && !claims.HasSelectiveAbortOmit() && (claims.IDToken[consts.ClaimAuthenticationContextClassReference].HasValues() || claims.UserInfo[consts.ClaimAuthenticationContextClassReference].HasValues()) {
 			return nil
 		}
 	}

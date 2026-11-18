@@ -22,6 +22,7 @@ import (
 	"authelia.com/provider/oauth2/handler/ciba"
 	"authelia.com/provider/oauth2/handler/idjag"
 	"authelia.com/provider/oauth2/handler/openid"
+	"authelia.com/provider/oauth2/handler/openid/asc"
 	"authelia.com/provider/oauth2/handler/rfc7591"
 	"authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/handler/rfc8705"
@@ -969,6 +970,128 @@ func TestOpenIDMetadataClaimsParameterRequiresEnforcement(t *testing.T) {
 	assert.NotContains(t, marshalMembers(t, metadata), consts.DiscoveryClaimsParameterSupported)
 }
 
+func TestOpenIDMetadataAdvancedSyntaxForClaims(t *testing.T) {
+	withSchema := asc.NewEvaluator()
+	withSchema.SchemaValidator = discoverySchemaValidator{}
+
+	withPredefined := asc.NewEvaluator()
+	withPredefined.Predefined = map[string]*oauth2.TransformedClaim{
+		"age_18_or_over": {Claim: "birthdate", Fn: []oauth2.TransformedClaimFunction{{Name: "years_ago"}, {Name: "gte", Args: []any{float64(18)}}}},
+	}
+
+	withoutFunctions := asc.NewEvaluator()
+	withoutFunctions.Functions = nil
+
+	functions := []any{"all", "any", "contains", "ends_with", "eq", "get", "gt", "gte", "hash", "lt", "lte", "match", "none", "starts_with", "years_ago"}
+
+	testCases := []struct {
+		name     string
+		config   oauth2.ClaimsASC
+		expected map[string]any
+	}{
+		{name: "ShouldOmitWhenDisabled", config: oauth2.ClaimsASC{Evaluator: asc.NewEvaluator()}, expected: map[string]any{}},
+		{name: "ShouldOmitWithoutEvaluator", config: oauth2.ClaimsASC{SelectiveAbortOmit: true, TransformedClaims: true}, expected: map[string]any{}},
+		{
+			name:   "ShouldAdvertiseSelectiveAbortOmitWithoutSchema",
+			config: oauth2.ClaimsASC{SelectiveAbortOmit: true, Evaluator: asc.NewEvaluator()},
+			expected: map[string]any{
+				consts.DiscoverySelectiveAbortOmitSupported:       true,
+				consts.DiscoverySelectiveAbortOmitSchemaSupported: false,
+			},
+		},
+		{
+			name:   "ShouldAdvertiseSelectiveAbortOmitWithSchema",
+			config: oauth2.ClaimsASC{SelectiveAbortOmit: true, Evaluator: withSchema},
+			expected: map[string]any{
+				consts.DiscoverySelectiveAbortOmitSupported:       true,
+				consts.DiscoverySelectiveAbortOmitSchemaSupported: true,
+			},
+		},
+		{
+			name:   "ShouldAdvertiseTransformedClaimsWithDefaultLimits",
+			config: oauth2.ClaimsASC{TransformedClaims: true, Evaluator: asc.NewEvaluator()},
+			expected: map[string]any{
+				consts.DiscoveryTransformedClaimsFunctionsSupported: functions,
+				consts.DiscoveryTransformedClaimsMaxDepth:           float64(8),
+				consts.DiscoveryTransformedClaimsMaxCount:           float64(16),
+			},
+		},
+		{
+			name:   "ShouldAdvertiseConfiguredLimits",
+			config: oauth2.ClaimsASC{TransformedClaims: true, TransformedClaimsMaxDepth: 2, TransformedClaimsMaxCount: 3, Evaluator: asc.NewEvaluator()},
+			expected: map[string]any{
+				consts.DiscoveryTransformedClaimsFunctionsSupported: functions,
+				consts.DiscoveryTransformedClaimsMaxDepth:           float64(2),
+				consts.DiscoveryTransformedClaimsMaxCount:           float64(3),
+			},
+		},
+		{
+			name:   "ShouldOmitLimitsWhichWereRemoved",
+			config: oauth2.ClaimsASC{TransformedClaims: true, TransformedClaimsMaxDepth: -1, TransformedClaimsMaxCount: -1, Evaluator: asc.NewEvaluator()},
+			expected: map[string]any{
+				consts.DiscoveryTransformedClaimsFunctionsSupported: functions,
+			},
+		},
+		{
+			name:   "ShouldAdvertisePredefinedOnly",
+			config: oauth2.ClaimsASC{TransformedClaims: true, DisableCustomTransformedClaims: true, TransformedClaimsMaxCount: -1, Evaluator: withPredefined},
+			expected: map[string]any{
+				consts.DiscoveryTransformedClaimsFunctionsSupported: functions,
+				consts.DiscoveryTransformedClaimsMaxDepth:           float64(8),
+				consts.DiscoveryTransformedClaimsMaxCount:           float64(0),
+				consts.DiscoveryTransformedClaimsPredefined: map[string]any{
+					"age_18_or_over": map[string]any{"claim": "birthdate", "fn": []any{"years_ago", []any{"gte", float64(18)}}},
+				},
+			},
+		},
+		{
+			name:   "ShouldAdvertiseBothComponents",
+			config: oauth2.ClaimsASC{SelectiveAbortOmit: true, TransformedClaims: true, Evaluator: asc.NewEvaluator()},
+			expected: map[string]any{
+				consts.DiscoverySelectiveAbortOmitSupported:         true,
+				consts.DiscoverySelectiveAbortOmitSchemaSupported:   false,
+				consts.DiscoveryTransformedClaimsFunctionsSupported: functions,
+				consts.DiscoveryTransformedClaimsMaxDepth:           float64(8),
+				consts.DiscoveryTransformedClaimsMaxCount:           float64(16),
+			},
+		},
+		{name: "ShouldOmitTransformedClaimsWithoutFunctions", config: oauth2.ClaimsASC{TransformedClaims: true, Evaluator: withoutFunctions}, expected: map[string]any{}},
+	}
+
+	names := []string{
+		consts.DiscoverySelectiveAbortOmitSupported,
+		consts.DiscoverySelectiveAbortOmitSchemaSupported,
+		consts.DiscoveryTransformedClaimsFunctionsSupported,
+		consts.DiscoveryTransformedClaimsPredefined,
+		consts.DiscoveryTransformedClaimsMaxDepth,
+		consts.DiscoveryTransformedClaimsMaxCount,
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
+			config.ClaimsASC = tc.config
+
+			provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), gen.MustRSAKey())
+
+			metadata, err := provider.NewOpenIDConnectProviderMetadata(context.Background())
+			require.NoError(t, err)
+
+			members := marshalMembers(t, metadata)
+
+			actual := map[string]any{}
+
+			for _, name := range names {
+				if value, ok := members[name]; ok {
+					actual[name] = value
+				}
+			}
+
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
 func TestOpenIDMetadataNoBackChannelStrategy(t *testing.T) {
 	config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
 	config.BackChannelLogoutTokenStrategy = nil
@@ -1072,6 +1195,12 @@ func composeDiscoveryOpenID(config *oauth2.Config, strategy jwt.Strategy) oauth2
 		compose.OpenIDConnectExplicitFactory,
 		compose.OpenIDConnectRefreshFactory,
 	)
+}
+
+type discoverySchemaValidator struct{}
+
+func (discoverySchemaValidator) ValidateSchema(_ context.Context, _ json.RawMessage, _ any) error {
+	return nil
 }
 
 type noSubjectTypesConfig struct {

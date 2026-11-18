@@ -660,6 +660,20 @@ type TokenRequestRedirectURIOptionalClient interface {
 	Client
 }
 
+// SelectiveAbortOmitIntegrityClient is a client which decides whether its authorization requests may carry Selective
+// Abort/Omit rules without being pushed by the authenticated client or sent in a signed request object. When
+// implemented it overrides ClaimsASC.AllowUnprotectedSelectiveAbortOmit. Transformed Claim definitions always require
+// the protection.
+//
+// See: https://openid.net/specs/openid-connect-advanced-syntax-for-claims-1_0.html#section-9.1
+type SelectiveAbortOmitIntegrityClient interface {
+	// GetAllowUnprotectedSelectiveAbortOmit returns true if this client's requests may carry Selective Abort/Omit
+	// rules without integrity protection and authentication.
+	GetAllowUnprotectedSelectiveAbortOmit() (allow bool)
+
+	Client
+}
+
 // DPoPClient represents a client that can advertise the 'dpop_bound_access_tokens' metadata value per RFC 9449.
 type DPoPClient interface {
 	// GetEnableDPoPBoundAccessTokens returns the 'dpop_bound_access_tokens' client metadata value. When true, DPoP is

@@ -272,6 +272,7 @@ func (f *Fosite) newOpenIDConnectProviderMetadata(ctx context.Context) (metadata
 	metadata.OpenIDConnectBackChannelLogoutMetadata = f.backChannelLogoutMetadata(ctx)
 	metadata.OpenIDConnectPromptCreateMetadata = f.promptCreateMetadata(ctx)
 	metadata.OpenIDConnectCIBAMetadata = f.cibaMetadata(ctx, urls)
+	metadata.OpenIDConnectAdvancedSyntaxForClaimsMetadata = f.ascMetadata(ctx)
 	metadata.RFC8705MutualTLSMetadata = f.rfc8705Metadata(ctx, urls, openIDConnectAdvertisedEndpoints(metadata))
 
 	return metadata, nil
@@ -374,6 +375,57 @@ func (f *Fosite) promptCreateMetadata(ctx context.Context) *OpenIDConnectPromptC
 	return &OpenIDConnectPromptCreateMetadata{
 		PromptValuesSupported: prompts,
 	}
+}
+
+// ascMetadata advertises the components of OpenID Connect Advanced Syntax for Claims which ClaimsASC enables. The
+// 'selective_abort_omit_schema_supported' member is always present with Selective Abort/Omit, as it defaults to true
+// when omitted. The 'transformed_claims_max_depth' and 'transformed_claims_max_count' members are the configured
+// limits, a limit which was removed is omitted, and the count is 0 when only predefined Transformed Claims are accepted.
+//
+// See: https://openid.net/specs/openid-connect-advanced-syntax-for-claims-1_0.html#section-7.3
+// See: https://openid.net/specs/openid-connect-advanced-syntax-for-claims-1_0.html#section-8.6
+func (f *Fosite) ascMetadata(ctx context.Context) *OpenIDConnectAdvancedSyntaxForClaimsMetadata {
+	config := GetClaimsASC(ctx, f.Config)
+
+	if config.Evaluator == nil {
+		return nil
+	}
+
+	metadata := &OpenIDConnectAdvancedSyntaxForClaimsMetadata{}
+
+	if config.SelectiveAbortOmit {
+		metadata.SelectiveAbortOmitSupported = true
+		metadata.SelectiveAbortOmitSchemaSupported = new(config.Evaluator.SupportsSchema())
+	}
+
+	if names := sortedUnique(config.Evaluator.FunctionNames()); config.TransformedClaims && len(names) != 0 {
+		metadata.TransformedClaimsFunctionsSupported = names
+
+		if predefined := config.Evaluator.PredefinedTransformedClaims(); len(predefined) != 0 {
+			metadata.TransformedClaimsPredefined = make(map[string]any, len(predefined))
+
+			for name, definition := range predefined {
+				metadata.TransformedClaimsPredefined[name] = definition
+			}
+		}
+
+		if config.TransformedClaimsMaxDepth >= 0 {
+			metadata.TransformedClaimsMaxDepth = new(config.TransformedClaimsMaxDepth)
+		}
+
+		switch {
+		case config.DisableCustomTransformedClaims:
+			metadata.TransformedClaimsMaxCount = new(0)
+		case config.TransformedClaimsMaxCount >= 0:
+			metadata.TransformedClaimsMaxCount = new(config.TransformedClaimsMaxCount)
+		}
+	}
+
+	if !metadata.SelectiveAbortOmitSupported && metadata.TransformedClaimsFunctionsSupported == nil {
+		return nil
+	}
+
+	return metadata
 }
 
 // cibaMetadata advertises the OpenID Connect CIBA backchannel authentication endpoint when the ciba.EndpointHandler is

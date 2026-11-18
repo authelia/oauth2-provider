@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/openid/asc"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -65,7 +66,8 @@ func (v *OpenIDConnectRequestValidator) ValidateRedirectURIs(ctx context.Context
 }
 
 // ValidateClaims enforces the requirements the 'claims' request parameter places on the authorization server. It does
-// nothing unless the config enables the enforcement.
+// nothing unless the config enables the enforcement. The 'value' and 'values' restrictions are not enforced for a
+// request with Selective Abort/Omit rules, which replace them.
 //
 // See: https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
 func (v *OpenIDConnectRequestValidator) ValidateClaims(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
@@ -89,8 +91,17 @@ func (v *OpenIDConnectRequestValidator) ValidateClaims(ctx context.Context, requ
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect 1.0 request because the session is not of type 'openid.Session' which is required."))
 	}
 
-	actual := session.IDTokenClaims()
+	// The Selective Abort/Omit rules replace the 'value' and 'values' restrictions of the individual claim requests.
+	//
+	// See: https://openid.net/specs/openid-connect-advanced-syntax-for-claims-1_0.html#section-7.2.1
+	if _, requested, enabled := claimsASC(ctx, v.Config, claims); enabled && requested.HasSelectiveAbortOmit() {
+		return nil
+	}
 
+	return validateClaimValueRestrictions(claims, session.IDTokenClaims())
+}
+
+func validateClaimValueRestrictions(claims *oauth2.ClaimsRequest, actual *jwt.IDTokenClaims) (err error) {
 	// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequestValidation
 	if sub := claims.IDToken[consts.ClaimSubject]; sub.HasValues() && !sub.Matches(actual.Subject) {
 		return errorsx.WithStack(oauth2.ErrLoginRequired.WithHint("The subject requested by the 'claims' parameter does not match the current session's subject."))
@@ -101,6 +112,50 @@ func (v *OpenIDConnectRequestValidator) ValidateClaims(ctx context.Context, requ
 		if actual.AuthenticationContextClassReference == "" || !acr.Matches(actual.AuthenticationContextClassReference) {
 			return errorsx.WithStack(oauth2.ErrUnmetAuthenticationRequirements.WithHint("The Authentication Context Class Reference requested as an Essential Claim by the 'claims' parameter was not met."))
 		}
+	}
+
+	return nil
+}
+
+// ValidateClaimsASC evaluates the Selective Abort/Omit rules and the Transformed Claims of the 'claims' request
+// parameter against the claims of the session, and fails when a rule aborts the transaction. It does nothing unless
+// the config enables the Advanced Syntax for Claims. The session claims must hold only what the End-User consented to
+// release. A claim the ID Token will carry which the session does not hold yet, which is 'iss', 'aud', 'exp', 'iat',
+// 'nonce', 'at_hash', 'c_hash' or 's_hash', is evaluated as present, and a hash which is not computed yet has an empty
+// value.
+//
+// See: https://openid.net/specs/openid-connect-advanced-syntax-for-claims-1_0.html#section-7.2
+func (v *OpenIDConnectRequestValidator) ValidateClaimsASC(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
+	config, requested, enabled := claimsASC(ctx, v.Config, request.GetClaims())
+	if !enabled {
+		return nil
+	}
+
+	session, ok := request.GetSession().(Session)
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect 1.0 request because the session is not of type 'openid.Session' which is required."))
+	}
+
+	provisional := session.IDTokenClaims().ToMapClaims()
+
+	provisionalIDTokenClaims(ctx, v.Config, request, provisional)
+
+	if _, err = evaluateClaimsASC(ctx, config, requested, asc.DeliveryIDToken, provisional, session, idTokenProtectedClaims); err != nil {
+		return claimsASCError(err, oauth2.ErrAccessDenied)
+	}
+
+	provider, ok := request.GetSession().(ASCUserInfoClaimsSession)
+	if !ok {
+		return nil
+	}
+
+	claims := provider.GetASCUserInfoClaims()
+	if claims == nil {
+		return nil
+	}
+
+	if _, err = evaluateClaimsASC(ctx, config, requested, asc.DeliveryUserInfo, claims, session, userInfoProtectedClaims); err != nil {
+		return claimsASCError(err, oauth2.ErrAccessDenied)
 	}
 
 	return nil

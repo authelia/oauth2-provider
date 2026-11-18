@@ -189,7 +189,7 @@ func TestAuthorizeRequestParametersFromJARRequireSignedRequestObject(t *testing.
 
 			provider := &Fosite{Config: config}
 
-			actual := provider.authorizeRequestParametersFromJAR(context.Background(), r, tc.par)
+			_, actual := provider.authorizeRequestParametersFromJAR(context.Background(), r, tc.par)
 
 			if tc.err != nil {
 				require.Error(t, actual)

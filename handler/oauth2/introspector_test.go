@@ -438,6 +438,63 @@ func TestIntrospectTokenReturnsClaimsRequest(t *testing.T) {
 	assert.Equal(t, claims, requester.GetClaims())
 }
 
+func TestIntrospectTokenReturnsClaimsRequestASC(t *testing.T) {
+	testCases := []struct {
+		name     string
+		store    func() CoreStorage
+		username string
+	}{
+		{"MemoryStore", func() CoreStorage { return storage.NewMemoryStore() }, "mutated"},
+		{"HydratingMemoryStore", func() CoreStorage { return storage.NewHydratingMemoryStore() }, "stored"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{
+				GlobalSecret: []byte("super-duper-secret-that-is-at-least-32-bytes"),
+				TokenEntropy: 32,
+			}
+
+			store := tc.store()
+			strategy := NewHMACCoreStrategy(config, "authelia_%s_")
+
+			claims := &oauth2.ClaimsRequest{
+				UserInfo: map[string]*oauth2.ClaimRequest{"verified_claims": {Members: map[string]*oauth2.ClaimRequest{"claims": {Members: map[string]*oauth2.ClaimRequest{":adult": nil}}}}},
+				ASC: &oauth2.ClaimsRequestASC{
+					SAO:               &oauth2.SelectiveAbortOmit{UserInfo: []oauth2.SelectiveAbortOmitRule{{Loc: "/address/postal_code", Else: oauth2.SelectiveAbortOmitActionAbort}}},
+					TransformedClaims: map[string]*oauth2.TransformedClaim{"adult": {Claim: "birthdate", Fn: []oauth2.TransformedClaimFunction{{Name: "years_ago"}, {Name: "gte", Args: []any{float64(18)}}}}},
+				},
+			}
+
+			session := &oauth2.DefaultSession{Username: "stored"}
+
+			stored := oauth2.NewAccessRequest(session)
+			stored.SetClaims(claims)
+
+			token, signature, err := strategy.GenerateAccessToken(t.Context(), stored)
+			require.NoError(t, err)
+			require.NoError(t, store.CreateAccessTokenSession(t.Context(), signature, stored))
+
+			// The MemoryStore returns the stored session by pointer, so a later change shows through. The hydrating
+			// store unmarshals the blob taken at creation into the session of the caller.
+			session.Username = "mutated"
+
+			requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+
+			require.Nil(t, requester.GetClaims())
+
+			validator := &CoreValidator{CoreStrategy: strategy, CoreStorage: store, Config: config}
+
+			use, err := validator.IntrospectToken(t.Context(), token, oauth2.AccessToken, requester, nil)
+			require.NoError(t, err)
+
+			assert.Equal(t, oauth2.AccessToken, use)
+			assert.Equal(t, claims, requester.GetClaims())
+			assert.Equal(t, tc.username, requester.GetSession().GetUsername())
+		})
+	}
+}
+
 func TestCoreValidatorRoutesForeignPrefixedTokens(t *testing.T) {
 	ctx := t.Context()
 

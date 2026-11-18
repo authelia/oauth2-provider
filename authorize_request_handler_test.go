@@ -1509,6 +1509,65 @@ func TestAuthorizeRequestFromPARCarriesClaims(t *testing.T) {
 	assert.Equal(t, claims, ar.GetClaims())
 }
 
+func TestAuthorizeRequestFromPARCarriesClaimsASC(t *testing.T) {
+	const requestURI = "urn:ietf:params:oauth:request_uri:claimsasc"
+
+	redir, _ := url.Parse("https://foo.bar/cb")
+
+	client := &DefaultClient{
+		ID:            "foo",
+		RedirectURIs:  []string{"https://foo.bar/cb"},
+		Scopes:        []string{"foo"},
+		ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+	}
+
+	claims := &ClaimsRequest{
+		IDToken: map[string]*ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}},
+		ASC: &ClaimsRequestASC{
+			SAO: &SelectiveAbortOmit{IDToken: []SelectiveAbortOmitRule{{Loc: "/acr", Else: SelectiveAbortOmitActionAbort}}},
+			TransformedClaims: map[string]*TransformedClaim{
+				"adult": {Claim: "birthdate", Fn: []TransformedClaimFunction{{Name: "years_ago"}, {Name: "gte", Args: []any{float64(18)}}}},
+			},
+		},
+	}
+
+	par := NewAuthorizeRequest()
+	par.Client = client
+	par.Session = &DefaultSession{ExpiresAt: map[TokenType]time.Time{PushedAuthorizeRequestContext: time.Now().Add(time.Hour)}}
+	par.State = "strong-enough-state"
+	par.RedirectURI = redir
+	par.ResponseTypes = []string{consts.ResponseTypeAuthorizationCodeFlow}
+	par.RequestedScope = []string{"foo"}
+	par.SetClaims(claims)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStorage := mock.NewMockStorage(ctrl)
+	mockStorage.EXPECT().GetClient(gomock.Any(), "foo").Return(client, nil)
+
+	mockPAR := mock.NewMockPARStorage(ctrl)
+	mockPAR.EXPECT().GetPARSession(gomock.Any(), requestURI).Return(par, nil)
+	mockPAR.EXPECT().DeletePARSession(gomock.Any(), requestURI).Return(nil)
+
+	provider := &Fosite{
+		Store:  &parStorage{MockStorage: mockStorage, MockPARStorage: mockPAR},
+		Config: &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy},
+	}
+
+	query := url.Values{
+		consts.FormParameterRequestURI: {requestURI},
+		consts.FormParameterClientID:   {"foo"},
+	}
+
+	r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+	ar, err := provider.NewAuthorizeRequest(context.Background(), r)
+	require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+	assert.Equal(t, claims, ar.GetClaims())
+}
+
 func TestAuthorizeRequestFromPARParsesClaimsFromForm(t *testing.T) {
 	const requestURI = "urn:ietf:params:oauth:request_uri:claimsform"
 
@@ -1558,6 +1617,152 @@ func TestAuthorizeRequestFromPARParsesClaimsFromForm(t *testing.T) {
 	require.NoError(t, ErrorToDebugRFC6749Error(err))
 
 	assert.Equal(t, &ClaimsRequest{IDToken: map[string]*ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}}, ar.GetClaims())
+}
+
+func TestNewAuthorizeRequestClaimsASCIntegrity(t *testing.T) {
+	const (
+		custom     = `{"id_token":{":adult":null},"_asc":{"transformed_claims":{"adult":{"claim":"birthdate","fn":["years_ago"]}}}}`
+		predefined = `{"id_token":{"::adult":null}}`
+		sao        = `{"id_token":{"email":null},"_asc":{"sao":{"id_token":[{"loc":"/email","else":"abort"}]}}}`
+
+		hintTransformed = "The 'claims' parameter defines transformed claims, which requires a pushed authorization request or a signed request object."
+		hintSAO         = "The 'claims' parameter has selective abort and omit rules, which requires a pushed authorization request or a signed request object."
+	)
+
+	keyRSA, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	jwkPrivateSigRSA := jose.JSONWebKey{Key: keyRSA, KeyID: testRARKeyID, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}
+	jwkPublicSigRSA := jose.JSONWebKey{Key: keyRSA.Public(), KeyID: testRARKeyID, Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature}
+
+	const (
+		transportQuery = iota
+		transportSigned
+		transportUnsigned
+		transportSignedWithoutClaims
+	)
+
+	testCases := []struct {
+		name      string
+		transport int
+		claims    string
+		allow     bool
+		hint      string
+	}{
+		{name: "ShouldRejectCustomTransformedClaimsInQuery", transport: transportQuery, claims: custom, hint: hintTransformed},
+		{name: "ShouldRejectCustomTransformedClaimsInQueryWhenSAOAllowed", transport: transportQuery, claims: custom, allow: true, hint: hintTransformed},
+		{name: "ShouldAcceptPredefinedTransformedClaimsInQuery", transport: transportQuery, claims: predefined},
+		{name: "ShouldRejectSAOInQuery", transport: transportQuery, claims: sao, hint: hintSAO},
+		{name: "ShouldAcceptSAOInQueryWhenAllowed", transport: transportQuery, claims: sao, allow: true},
+		{name: "ShouldAcceptCustomTransformedClaimsInSignedRequestObject", transport: transportSigned, claims: custom},
+		{name: "ShouldAcceptSAOInSignedRequestObject", transport: transportSigned, claims: sao},
+		{name: "ShouldRejectCustomTransformedClaimsInUnsignedRequestObject", transport: transportUnsigned, claims: custom, hint: hintTransformed},
+		{name: "ShouldRejectSAOInUnsignedRequestObject", transport: transportUnsigned, claims: sao, hint: hintSAO},
+		{name: "ShouldRejectCustomTransformedClaimsBesideSignedRequestObject", transport: transportSignedWithoutClaims, claims: custom, hint: hintTransformed},
+		{name: "ShouldRejectSAOBesideSignedRequestObject", transport: transportSignedWithoutClaims, claims: sao, hint: hintSAO},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &DefaultJARClient{
+				JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwkPublicSigRSA}},
+				RequestObjectSigningAlg: string(jose.RS256),
+				DefaultClient: &DefaultClient{
+					ID:            "foo",
+					RedirectURIs:  []string{"https://foo.bar/cb"},
+					Scopes:        []string{consts.ScopeOpenID},
+					ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+				},
+			}
+
+			if tc.transport == transportUnsigned {
+				client.RequestObjectSigningAlg = consts.JSONWebTokenAlgNone
+			}
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mock.NewMockStorage(ctrl)
+			store.EXPECT().GetClient(gomock.Any(), "foo").Return(client, nil)
+
+			config := &Config{
+				ScopeStrategy:       ExactScopeStrategy,
+				AudienceStrategy:    DefaultAudienceStrategy,
+				Issuer:              testRARIssuer,
+				JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(),
+				ClaimsASC: ClaimsASC{
+					SelectiveAbortOmit:                 true,
+					TransformedClaims:                  true,
+					AllowUnprotectedSelectiveAbortOmit: tc.allow,
+					Evaluator:                          testClaimsASCEvaluator{},
+				},
+			}
+
+			strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwkPrivateSigRSA}})}
+			config.JWTStrategy = strategy
+
+			query := url.Values{
+				consts.FormParameterClientID:     {"foo"},
+				consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow},
+				consts.FormParameterScope:        {consts.ScopeOpenID},
+				consts.FormParameterRedirectURI:  {"https://foo.bar/cb"},
+				consts.FormParameterState:        {"strong-enough-state"},
+			}
+
+			object := jwt.MapClaims{
+				consts.ClaimIssuer:               "foo",
+				consts.ClaimAudience:             []string{testRARIssuer},
+				consts.FormParameterClientID:     "foo",
+				consts.FormParameterResponseType: consts.ResponseTypeAuthorizationCodeFlow,
+				consts.FormParameterScope:        consts.ScopeOpenID,
+				consts.FormParameterState:        "strong-enough-state",
+				consts.FormParameterRedirectURI:  "https://foo.bar/cb",
+			}
+
+			var requested map[string]any
+
+			require.NoError(t, json.Unmarshal([]byte(tc.claims), &requested))
+
+			switch tc.transport {
+			case transportQuery:
+				query.Set(consts.FormParameterClaims, tc.claims)
+			case transportSigned:
+				object[consts.FormParameterClaims] = requested
+
+				assertion, _, err := strategy.Encode(t.Context(), object)
+				require.NoError(t, err)
+
+				query.Set(consts.FormParameterRequest, assertion)
+			case transportUnsigned:
+				object[consts.FormParameterClaims] = requested
+
+				query.Set(consts.FormParameterRequest, mustGenerateNoneAssertion(t, object, keyRSA, testRARKeyID))
+			case transportSignedWithoutClaims:
+				assertion, _, err := strategy.Encode(t.Context(), object)
+				require.NoError(t, err)
+
+				query.Set(consts.FormParameterRequest, assertion)
+				query.Set(consts.FormParameterClaims, tc.claims)
+			}
+
+			provider := &Fosite{Store: store, Config: config}
+
+			r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+			ar, err := provider.NewAuthorizeRequest(context.Background(), r)
+
+			if tc.hint != "" {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, ErrInvalidRequest)
+				assert.Equal(t, tc.hint, ErrorToRFC6749Error(err).HintField)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			assert.NotNil(t, ar.GetClaims())
+		})
+	}
 }
 
 func TestNewAuthorizeRequestEarlyErrorResponseMode(t *testing.T) {
@@ -2024,4 +2229,18 @@ func TestAuthorizeRequestFromPARRejectsRedirectURIAuthorizationResponseParameter
 type parStorage struct {
 	*mock.MockStorage
 	*mock.MockPARStorage
+}
+
+type testClaimsASCEvaluator struct{}
+
+func (testClaimsASCEvaluator) ValidateTransformedClaimFunction(string, []any) error { return nil }
+
+func (testClaimsASCEvaluator) SupportsSchema() bool { return false }
+
+func (testClaimsASCEvaluator) FunctionNames() []string { return nil }
+
+func (testClaimsASCEvaluator) PredefinedTransformedClaims() map[string]*TransformedClaim { return nil }
+
+func (testClaimsASCEvaluator) Evaluate(_ context.Context, _ *ClaimsRequest, _ string, claims, _ map[string]any, _ []string) (map[string]any, error) {
+	return claims, nil
 }

@@ -735,6 +735,34 @@ func TestRequestClaimsJSONPersistence(t *testing.T) {
 	assert.NotContains(t, string(empty), `"claims"`)
 }
 
+func TestRequestClaimsASCJSONPersistence(t *testing.T) {
+	r := NewRequest()
+	r.SetClaims(&ClaimsRequest{
+		IDToken: map[string]*ClaimRequest{
+			"verified_claims": {Members: map[string]*ClaimRequest{"claims": {Members: map[string]*ClaimRequest{":adult": {Value: true}, "given_name": nil}}}},
+		},
+		ASC: &ClaimsRequestASC{
+			SAO: &SelectiveAbortOmit{
+				IDToken:  []SelectiveAbortOmitRule{{Loc: "", Method: SelectiveAbortOmitMethodSimple, Values: []any{"gold"}, Else: SelectiveAbortOmitActionAbort}},
+				UserInfo: []SelectiveAbortOmitRule{{Loc: "/email", Else: SelectiveAbortOmitActionOmit, What: []string{"/email", "/email_verified"}}},
+			},
+			TransformedClaims: map[string]*TransformedClaim{
+				"adult": {Claim: "birthdate", Fn: []TransformedClaimFunction{{Name: "years_ago"}, {Name: "gte", Args: []any{float64(18)}}}},
+			},
+		},
+	})
+
+	data, err := json.Marshal(r)
+	require.NoError(t, err)
+
+	decoded := &Request{}
+	require.NoError(t, json.Unmarshal(data, decoded))
+
+	assert.Equal(t, r.GetClaims(), decoded.GetClaims())
+	assert.Contains(t, decoded.GetClaims().IDToken["verified_claims"].Members["claims"].Members, "given_name")
+	assert.True(t, decoded.GetClaims().HasSelectiveAbortOmit())
+}
+
 func TestRequestSanitizeKeepsClaims(t *testing.T) {
 	r := NewRequest()
 	r.SetClaims(&ClaimsRequest{UserInfo: map[string]*ClaimRequest{"email": nil}})

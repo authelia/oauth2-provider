@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/openid/asc"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 )
@@ -542,6 +543,55 @@ func parse(u string) *url.URL {
 type validateClaimsPromptsOnlyConfig struct{}
 
 func (validateClaimsPromptsOnlyConfig) GetAllowedPrompts(_ context.Context) []string { return nil }
+
+func TestValidateClaimsWithSelectiveAbortOmit(t *testing.T) {
+	const (
+		subject = `{"id_token":{"sub":{"value":"peter"}},"_asc":{"sao":{"id_token":[]}}}`
+		acr     = `{"id_token":{"acr":{"essential":true,"values":["gold"]}},"_asc":{"sao":{}}}`
+		rule    = `{"id_token":{"sub":{"value":"alice"}},"_asc":{"sao":{"id_token":[{"loc":"/sub","method":"simple","value":"peter","else":"abort"}]}}}`
+	)
+
+	enabled := oauth2.ClaimsASC{SelectiveAbortOmit: true, Evaluator: asc.NewEvaluator()}
+
+	testCases := []struct {
+		name   string
+		config oauth2.ClaimsASC
+		raw    string
+		err    error
+	}{
+		{name: "ShouldIgnoreSubjectValue", config: enabled, raw: subject},
+		{name: "ShouldIgnoreEssentialACRValues", config: enabled, raw: acr},
+		{name: "ShouldLeaveSubjectToTheRules", config: enabled, raw: rule},
+		{name: "ShouldEnforceSubjectValueWhenSelectiveAbortOmitIsDisabled", config: oauth2.ClaimsASC{}, raw: subject, err: oauth2.ErrLoginRequired},
+		{name: "ShouldEnforceEssentialACRValuesWhenSelectiveAbortOmitIsDisabled", config: oauth2.ClaimsASC{TransformedClaims: true, Evaluator: asc.NewEvaluator()}, raw: acr, err: oauth2.ErrUnmetAuthenticationRequirements},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := NewOpenIDConnectRequestValidator(nil, &oauth2.Config{EnforceClaimsParameter: true, ClaimsASC: tc.config})
+
+			claims, err := oauth2.ParseRequestedClaims(t.Context(), &oauth2.Config{ClaimsASC: enabled}, url.Values{consts.FormParameterClaims: {tc.raw}})
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			request := &oauth2.AuthorizeRequest{
+				ResponseTypes: oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow},
+				Request:       oauth2.Request{Form: url.Values{}, Client: &oauth2.DefaultClient{}, Session: &DefaultSession{Subject: "alice", Claims: &jwt.IDTokenClaims{Subject: "alice", AuthenticationContextClassReference: "bronze"}}},
+			}
+			request.SetClaims(claims)
+
+			err = v.ValidateClaims(t.Context(), request)
+
+			if tc.err != nil {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+		})
+	}
+}
 
 func TestValidateClaims(t *testing.T) {
 	const (

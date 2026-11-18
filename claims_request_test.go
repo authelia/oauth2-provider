@@ -70,6 +70,16 @@ func TestParseClaimsRequest(t *testing.T) {
 			expected: &oauth2.ClaimsRequest{IDToken: map[string]*oauth2.ClaimRequest{"acr": {Essential: true}}},
 		},
 		{
+			name:     "ShouldIgnoreMalformedNestedEssential",
+			raw:      []string{`{"id_token":{"x":{"foo":{"essential":"yes"}}}}`},
+			expected: &oauth2.ClaimsRequest{IDToken: map[string]*oauth2.ClaimRequest{"x": {}}},
+		},
+		{
+			name:     "ShouldIgnoreMalformedNestedValues",
+			raw:      []string{`{"id_token":{"x":{"foo":{"values":"str"}}}}`},
+			expected: &oauth2.ClaimsRequest{IDToken: map[string]*oauth2.ClaimRequest{"x": {}}},
+		},
+		{
 			name:     "ShouldKeepEmptyMemberDistinctFromAbsent",
 			raw:      []string{`{"userinfo":{}}`},
 			expected: &oauth2.ClaimsRequest{UserInfo: map[string]*oauth2.ClaimRequest{}},

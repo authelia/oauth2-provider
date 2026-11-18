@@ -226,6 +226,10 @@ type Config struct {
 	// requests which do not grant the 'openid' scope. Defaults to false.
 	RFC9470StepUpAuthenticationEnabled bool
 
+	// ClaimsASC configures OpenID Connect Advanced Syntax for Claims 1.0, the '_asc' member of the 'claims' request
+	// parameter. It is disabled by default. See ClaimsASC for what an integrator must do when enabling it.
+	ClaimsASC ClaimsASC
+
 	// EnablePKCEPlainChallengeMethod sets whether or not to allow the plain challenge method (S256 should be used whenever possible, plain is really discouraged). Defaults to false.
 	EnablePKCEPlainChallengeMethod bool
 
@@ -1315,6 +1319,11 @@ func (c *Config) GetAllowPostLogoutRedirectWithoutIDTokenHint(_ context.Context)
 // GetEnforceClaimsParameter returns the value of EnforceClaimsParameter.
 func (c *Config) GetEnforceClaimsParameter(ctx context.Context) bool {
 	return c.EnforceClaimsParameter
+}
+
+// GetClaimsASC returns the value of ClaimsASC.
+func (c *Config) GetClaimsASC(ctx context.Context) ClaimsASC {
+	return c.ClaimsASC
 }
 
 // GetRFC9470StepUpAuthenticationEnabled returns the value of RFC9470StepUpAuthenticationEnabled.
@@ -2502,6 +2511,7 @@ var (
 	_ AllowInsecureRedirectURIForPublicClientsProvider         = (*Config)(nil)
 	_ EnablePKCEPlainChallengeMethodProvider                   = (*Config)(nil)
 	_ ClaimsParameterEnforcementProvider                       = (*Config)(nil)
+	_ ClaimsASCProvider                                        = (*Config)(nil)
 	_ RedirectFragmentGuardProvider                            = (*Config)(nil)
 	_ PostLogoutRedirectWithoutIDTokenHintProvider             = (*Config)(nil)
 	_ AuthenticationRequirementsEnforcementProvider            = (*Config)(nil)

@@ -14,6 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/openid/asc"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/testing/mock"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -249,6 +250,43 @@ func TestExplicit_HandleAuthorizeEndpointRequestEnforcesClaims(t *testing.T) {
 			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 		})
 	}
+}
+
+func TestExplicit_HandleAuthorizeEndpointRequestEnforcesClaimsASC(t *testing.T) {
+	t.Run("ShouldAbortWhenRuleNotFulfilled", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		handler, store := makeOpenIDConnectExplicitHandler(ctrl, oauth2.MinParameterEntropy)
+		handler.OpenIDConnectRequestValidator = NewOpenIDConnectRequestValidator(nil, &oauth2.Config{ClaimsASC: oauth2.ClaimsASC{SelectiveAbortOmit: true, Evaluator: asc.NewEvaluator()}, MinParameterEntropy: oauth2.MinParameterEntropy})
+
+		responder := mock.NewMockAuthorizeResponder(ctrl)
+		responder.EXPECT().GetCode().AnyTimes().Return("codeexample")
+		store.EXPECT().CreateOpenIDConnectSession(gomock.Any(), "codeexample", gomock.Any()).AnyTimes().Return(nil)
+
+		session := NewDefaultSession()
+		session.Claims.Subject = "foo"
+		session.Claims.AuthenticationContextClassReference = "bronze"
+
+		request := oauth2.NewAuthorizeRequest()
+		request.RequestedScope = oauth2.Arguments{consts.ScopeOpenID}
+		request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+		request.ResponseTypes = oauth2.Arguments{consts.ResponseTypeAuthorizationCodeFlow}
+		request.Session = session
+		request.RedirectURI, _ = url.ParseRequestURI("https://example.com")
+		request.Form = url.Values{
+			consts.FormParameterRedirectURI:  {"https://example.com"},
+			consts.FormParameterScope:        {consts.ScopeOpenID},
+			consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow},
+		}
+
+		request.SetClaims(&oauth2.ClaimsRequest{ASC: &oauth2.ClaimsRequestASC{SAO: &oauth2.SelectiveAbortOmit{IDToken: []oauth2.SelectiveAbortOmitRule{{Loc: "/email", Else: oauth2.SelectiveAbortOmitActionAbort}}}}})
+
+		err := handler.HandleAuthorizeEndpointRequest(t.Context(), request, responder)
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, oauth2.ErrAccessDenied)
+	})
 }
 
 func makeOpenIDConnectExplicitHandler(ctrl *gomock.Controller, minParameterEntropy int) (OpenIDConnectExplicitHandler, *mock.MockOpenIDConnectRequestStorage) {

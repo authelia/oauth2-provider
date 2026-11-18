@@ -470,6 +470,12 @@ type AllowPublicClientsWithoutPKCEProvider interface {
 	GetAllowPublicClientsWithoutPKCE(ctx context.Context) (allow bool)
 }
 
+// ClaimsASCProvider returns the provider for configuring OpenID Connect Advanced Syntax for Claims 1.0.
+type ClaimsASCProvider interface {
+	// GetClaimsASC returns the configuration of the Advanced Syntax for Claims. The zero value disables it.
+	GetClaimsASC(ctx context.Context) (config ClaimsASC)
+}
+
 // EnablePKCEPlainChallengeMethodProvider returns the provider for configuring the enable PKCE plain challenge method.
 type EnablePKCEPlainChallengeMethodProvider interface {
 	// GetEnablePKCEPlainChallengeMethod returns the enable PKCE plain challenge method.

@@ -51,6 +51,10 @@ func (c *OpenIDConnectExplicitHandler) HandleAuthorizeEndpointRequest(ctx contex
 		return err
 	}
 
+	if err = c.OpenIDConnectRequestValidator.ValidateClaimsASC(ctx, request); err != nil {
+		return err
+	}
+
 	if nonce := request.GetRequestForm().Get(consts.FormParameterNonce); len(nonce) > 0 && len(nonce) < c.Config.GetMinParameterEntropy(ctx) {
 		return errorsx.WithStack(oauth2.ErrInsufficientEntropy.WithHintf("Parameter 'nonce' is set but does not satisfy the minimum entropy of %d characters.", c.Config.GetMinParameterEntropy(ctx)))
 	}

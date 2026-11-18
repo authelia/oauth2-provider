@@ -425,6 +425,11 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		mapClaims[consts.ClaimAuthenticationContextClassReference] = acr
 	}
 
+	// See: https://openid.net/specs/openid-connect-advanced-syntax-for-claims-1_0.html#section-7.2
+	if mapClaims, err = applyIDTokenClaimsASC(ctx, h.Config, request, session, mapClaims); err != nil {
+		return "", err
+	}
+
 	token, _, err = h.Encode(ctx, mapClaims, jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))
 
 	return token, err

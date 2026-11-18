@@ -821,7 +821,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 
 			provider := &Fosite{Config: providerConfig}
 
-			actual := provider.authorizeRequestParametersFromJAR(context.Background(), r, tc.par)
+			_, actual := provider.authorizeRequestParametersFromJAR(context.Background(), r, tc.par)
 
 			if tc.err != nil {
 				assert.EqualError(t, actual, tc.err.Error())

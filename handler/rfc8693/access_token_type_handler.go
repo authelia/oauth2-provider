@@ -243,6 +243,10 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 	}
 
 	create := func(ctx context.Context) (err error) {
+		if err = propagateGrant(ctx, c.Storage, subjectTokenSession(request), request.GetSession(), request.GetID()); err != nil {
+			return err
+		}
+
 		if err = c.CreateAccessTokenSession(ctx, signature, request.Sanitize([]string{})); err != nil {
 			return err
 		}

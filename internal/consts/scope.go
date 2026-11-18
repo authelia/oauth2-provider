@@ -26,4 +26,13 @@ const (
 	ScopeIntrospection      = "authelia:oauth2:token_introspection"
 	ScopeSSFRead            = "ssf.read"
 	ScopeSSFManage          = "ssf.manage"
+
+	// ScopeGrantManagementQuery is the scope an access token needs to query a grant.
+	//
+	// See: https://openid.net/specs/oauth-v2-grant-management.html#section-6.1
+	ScopeGrantManagementQuery = "grant_management_query"
+	// ScopeGrantManagementRevoke is the scope an access token needs to revoke a grant.
+	//
+	// See: https://openid.net/specs/oauth-v2-grant-management.html#section-6.1
+	ScopeGrantManagementRevoke = "grant_management_revoke"
 )

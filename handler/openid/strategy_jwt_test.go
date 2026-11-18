@@ -104,6 +104,22 @@ func TestDefaultSession_Clone(t *testing.T) {
 					RequestedAuthenticationContextClaims: []string{"acr"},
 					ExpiryDeadline:                       time.Unix(1700003600, 0).UTC(),
 					RequestedAt:                          now,
+					GrantID:                              "grant-1",
+					GrantManagementAction:                oauth2.GrantManagementActionMerge,
+					GrantPermissions: &oauth2.GrantPermissions{
+						Scopes:   []oauth2.GrantScope{{Scope: "read", Resource: []string{"https://rs1"}}},
+						Audience: []string{"https://rs1"},
+						Claims:   []string{"email"},
+						AuthorizationDetails: oauth2.AuthorizationDetails{{
+							Type:       "account_information",
+							Locations:  []string{"https://rs1"},
+							Actions:    []string{"read"},
+							DataTypes:  []string{"balances"},
+							Identifier: new("account-1"),
+							Privileges: []string{"admin"},
+							Extra:      map[string]any{"limit": map[string]any{"currency": "EUR"}},
+						}},
+					},
 				}
 
 				clonetest.AssertDeepCopy(t, s, s.Clone())

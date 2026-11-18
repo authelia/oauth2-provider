@@ -498,5 +498,6 @@ func isSenderConstrained(ctx context.Context, config any, session Session) bool 
 }
 
 var (
-	_ Provider = (*Fosite)(nil)
+	_ Provider                = (*Fosite)(nil)
+	_ GrantManagementProvider = (*Fosite)(nil)
 )

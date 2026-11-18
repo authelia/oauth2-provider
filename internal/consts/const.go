@@ -16,6 +16,7 @@ const (
 	valueIDToken              = "id_token"
 	valueAccessToken          = "access_token"
 	valueAuthorizationDetails = "authorization_details"
+	valueGrantID              = "grant_id"
 	valueIss                  = "iss"
 	valueCode                 = "code"
 	valuePassword             = "password"

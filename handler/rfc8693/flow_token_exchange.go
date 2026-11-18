@@ -1108,6 +1108,7 @@ func (s *storedTokenSession) UnmarshalJSON(data []byte) (err error) {
 		ExpiresAt                   map[oauth2.TokenType]time.Time `json:"ExpiresAt"`
 		JWKThumbprint               string                         `json:"JWKThumbprint"`
 		ClientCertificateThumbprint string                         `json:"ClientCertificateThumbprint"`
+		GrantID                     string                         `json:"GrantID"`
 	}
 
 	if err = json.Unmarshal(data, &stored); err != nil {
@@ -1124,6 +1125,10 @@ func (s *storedTokenSession) UnmarshalJSON(data []byte) (err error) {
 
 	if bound, ok := s.Session.(oauth2.MTLSBoundSession); ok && stored.ClientCertificateThumbprint != "" {
 		bound.SetClientCertificateSHA256Thumbprint(stored.ClientCertificateThumbprint)
+	}
+
+	if managed, ok := s.Session.(oauth2.GrantManagementSession); ok && stored.GrantID != "" {
+		managed.SetGrantID(stored.GrantID)
 	}
 
 	return nil

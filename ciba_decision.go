@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"authelia.com/provider/oauth2/internal/consts"
@@ -180,6 +181,8 @@ func (f *Fosite) ApproveBackChannelAuthentication(ctx context.Context, request B
 
 	RecordAuthenticationContextRequirements(request, session)
 
+	granted := newBackChannelAuthenticationGrant(request)
+
 	if request.GetDeliveryMode() == consts.CIBAModePush {
 		result, err = f.approveBackChannelAuthenticationPush(ctx, request, restored)
 	} else {
@@ -188,6 +191,7 @@ func (f *Fosite) ApproveBackChannelAuthentication(ctx context.Context, request B
 
 	if err != nil {
 		request.SetSession(restored)
+		granted.restore(request)
 
 		return result, err
 	}
@@ -221,6 +225,28 @@ func (f *Fosite) FailBackChannelAuthentication(ctx context.Context, request Back
 	}
 
 	return f.decideBackChannelAuthentication(ctx, request, CIBAStatusFailed, cause)
+}
+
+type backChannelAuthenticationGrant struct {
+	scopes, audience, resources Arguments
+	details                     AuthorizationDetails
+}
+
+func newBackChannelAuthenticationGrant(request BackChannelAuthenticationRequester) (grant backChannelAuthenticationGrant) {
+	return backChannelAuthenticationGrant{
+		scopes:    slices.Clone(request.GetGrantedScopes()),
+		audience:  slices.Clone(request.GetGrantedAudience()),
+		resources: slices.Clone(request.GetGrantedResource()),
+		details:   request.GetGrantedAuthorizationDetails().Clone(),
+	}
+}
+
+func (g backChannelAuthenticationGrant) restore(request BackChannelAuthenticationRequester) {
+	request.SetGrantedAuthorizationDetails(g.details)
+
+	if r, ok := request.(*BackChannelAuthenticationRequest); ok {
+		r.GrantedScope, r.GrantedAudience, r.GrantedResource = g.scopes, g.audience, g.resources
+	}
 }
 
 var errBackChannelAuthenticationDecided = ErrInvalidRequest.WithHint("The backchannel authentication request is already decided.")

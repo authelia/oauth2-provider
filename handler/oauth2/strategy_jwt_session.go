@@ -37,6 +37,10 @@ type JWTSession struct {
 	PublicKeyJWK                []byte    `json:",omitempty"`
 	KeyBindingGranted           bool      `json:",omitempty"`
 	ExpiryDeadline              time.Time `json:",omitzero"`
+
+	GrantID               string                       `json:",omitempty"`
+	GrantManagementAction oauth2.GrantManagementAction `json:",omitempty"`
+	GrantPermissions      *oauth2.GrantPermissions     `json:",omitempty"`
 }
 
 // SetRequestedDPoPJWKThumbprint implements oauth2.DPoPBoundSession for JWTSession.
@@ -194,6 +198,7 @@ func (j *JWTSession) Clone() oauth2.Session {
 	cloned.JWTHeader = j.JWTHeader.Clone()
 	cloned.ExpiresAt = maps.Clone(j.ExpiresAt)
 	cloned.PublicKeyJWK = slices.Clone(j.PublicKeyJWK)
+	cloned.GrantPermissions = j.GrantPermissions.Clone()
 
 	return &cloned
 }
@@ -223,7 +228,50 @@ func (j *JWTSession) GetExtraClaims() map[string]any {
 	return j.Clone().(*JWTSession).GetJWTClaims().WithScopeField(jwt.JWTScopeFieldString).ToMapClaims()
 }
 
+// SetGrantID implements oauth2.GrantManagementSession for JWTSession.
+func (j *JWTSession) SetGrantID(id string) {
+	j.GrantID = id
+}
+
+// GetGrantID implements oauth2.GrantManagementSession for JWTSession.
+func (j *JWTSession) GetGrantID() (id string) {
+	if j == nil {
+		return ""
+	}
+
+	return j.GrantID
+}
+
+// SetGrantManagementAction implements oauth2.GrantManagementSession for JWTSession.
+func (j *JWTSession) SetGrantManagementAction(action oauth2.GrantManagementAction) {
+	j.GrantManagementAction = action
+}
+
+// GetGrantManagementAction implements oauth2.GrantManagementSession for JWTSession.
+func (j *JWTSession) GetGrantManagementAction() (action oauth2.GrantManagementAction) {
+	if j == nil {
+		return ""
+	}
+
+	return j.GrantManagementAction
+}
+
+// SetGrantPermissions implements oauth2.GrantManagementSession for JWTSession.
+func (j *JWTSession) SetGrantPermissions(permissions *oauth2.GrantPermissions) {
+	j.GrantPermissions = permissions
+}
+
+// GetGrantPermissions implements oauth2.GrantManagementSession for JWTSession.
+func (j *JWTSession) GetGrantPermissions() (permissions *oauth2.GrantPermissions) {
+	if j == nil {
+		return nil
+	}
+
+	return j.GrantPermissions
+}
+
 var (
-	_ oauth2.DPoPBoundSession = (*JWTSession)(nil)
-	_ oauth2.MTLSBoundSession = (*JWTSession)(nil)
+	_ oauth2.DPoPBoundSession       = (*JWTSession)(nil)
+	_ oauth2.MTLSBoundSession       = (*JWTSession)(nil)
+	_ oauth2.GrantManagementSession = (*JWTSession)(nil)
 )

@@ -56,6 +56,8 @@ var (
 		consts.FormParameterDPoPJKT,
 		consts.FormParameterNonce,
 		consts.FormParameterClaims,
+		consts.FormParameterGrantManagementAction,
+		consts.FormParameterGrantID,
 	}
 )
 

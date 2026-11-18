@@ -156,6 +156,16 @@ type TokenEndpointBindingHandler interface {
 	PopulateBoundTokenEndpointResponse(ctx context.Context, request AccessRequester, response AccessResponder) (err error)
 }
 
+// TokenEndpointBindingCommitHandler is optionally implemented by a TokenEndpointBindingHandler which writes state that
+// must only change once the access request has passed every check before issuance.
+type TokenEndpointBindingCommitHandler interface {
+	// CommitAccessRequest writes the state. It runs in list order once every TokenEndpointBindingHandler has bound the
+	// request and the sender-constraint check has passed, and not at all when any of them rejected the request; any
+	// error rejects the request. It runs before NewAccessResponse and is not rolled back if issuance or a later commit
+	// handler fails, so implementations must be repeat-safe.
+	CommitAccessRequest(ctx context.Context, requester AccessRequester) (err error)
+}
+
 // RFC8628DeviceAuthorizeEndpointBindingHandler records a proof-of-possession binding onto the session of a device
 // authorization request before any handler persists that session.
 //

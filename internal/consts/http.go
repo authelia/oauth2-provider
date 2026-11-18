@@ -77,6 +77,10 @@ const (
 	PragmaNoCache = "no-cache"
 	// CacheControlNoStore is the no-store Cache-Control header value from RFC 9111.
 	CacheControlNoStore = "no-store"
+	// CacheControlNoCacheNoStore is the Cache-Control header value of a Grant Management API response.
+	//
+	// See: https://openid.net/specs/oauth-v2-grant-management.html#section-6.4
+	CacheControlNoCacheNoStore = "no-cache, no-store"
 )
 
 const (

@@ -477,6 +477,40 @@ type Provider interface {
 	WriteDiscoveryResponse(ctx context.Context, rw http.ResponseWriter, metadata any)
 }
 
+// GrantManagementProvider is the Grant Management API of OpenID Grant Management for OAuth 2.0. It is implemented by
+// *Fosite and is not part of Provider.
+//
+// See: https://openid.net/specs/oauth-v2-grant-management.html#section-6
+type GrantManagementProvider interface {
+	// NewGrantManagementRequest authorizes a request to the Grant Management API for the grant with the given ID,
+	// which the caller takes from the grant resource URL.
+	//
+	// See: https://openid.net/specs/oauth-v2-grant-management.html#section-6.3
+	NewGrantManagementRequest(ctx context.Context, r *http.Request, grantID string, session Session) (requester GrantManagementRequester, err error)
+
+	// NewGrantManagementResponse queries or revokes the grant of the request.
+	//
+	// See: https://openid.net/specs/oauth-v2-grant-management.html#section-6.4
+	// See: https://openid.net/specs/oauth-v2-grant-management.html#section-6.5
+	NewGrantManagementResponse(ctx context.Context, requester GrantManagementRequester) (responder GrantManagementResponder, err error)
+
+	// WriteGrantManagementResponse writes the Grant Management API response.
+	//
+	// See: https://openid.net/specs/oauth-v2-grant-management.html#section-6.4
+	WriteGrantManagementResponse(ctx context.Context, rw http.ResponseWriter, requester GrantManagementRequester, responder GrantManagementResponder)
+
+	// WriteGrantManagementError writes a Grant Management API error, with the bearer challenge for a rejected
+	// credential.
+	//
+	// See: https://openid.net/specs/oauth-v2-grant-management.html#section-6.6
+	WriteGrantManagementError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error)
+
+	// RevokeGrant revokes the tokens issued under the grant with the given ID and deletes it.
+	//
+	// See: https://openid.net/specs/oauth-v2-grant-management.html#section-6.5
+	RevokeGrant(ctx context.Context, id string) (err error)
+}
+
 // IntrospectionResponder is the response object that will be returned when token introspection was successful,
 // for example when the client is allowed to perform token introspection. Refer to
 // https://datatracker.ietf.org/doc/html/rfc7662#section-2.2 for more details.

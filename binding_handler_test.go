@@ -182,6 +182,94 @@ func TestTokenBindingHandlersShareAPublishedDPoPProof(t *testing.T) {
 	assert.Equal(t, "published", reader.saw)
 }
 
+func TestTokenBindingCommitHandler(t *testing.T) {
+	testCases := []struct {
+		name     string
+		enforce  bool
+		bound    bool
+		binder   error
+		commit   error
+		err      error
+		expected []string
+	}{
+		{name: "ShouldRunAfterEveryBindingHandlerInListOrder", expected: []string{"bind first", "bind second", "bind last", "commit first", "commit second"}},
+		{name: "ShouldRunAfterTheSenderConstraintCheck", enforce: true, bound: true, expected: []string{"bind first", "bind second", "bind last", "commit first", "commit second"}},
+		{name: "ShouldBeSkippedWhenTheSenderConstraintCheckFails", enforce: true, err: oauth2.ErrInvalidRequest, expected: []string{"bind first", "bind second", "bind last"}},
+		{name: "ShouldBeSkippedWhenALaterBindingHandlerFails", binder: oauth2.ErrInvalidGrant, err: oauth2.ErrInvalidGrant, expected: []string{"bind first", "bind second", "bind last"}},
+		{name: "ShouldAbortTheRequestOnACommitError", commit: oauth2.ErrServerError, err: oauth2.ErrServerError, expected: []string{"bind first", "bind second", "bind last", "commit first"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls []string
+
+			config := &oauth2.Config{EnforceSenderConstrainedAccessTokens: tc.enforce, DPoPEnabled: true}
+			config.TokenEndpointHandlers.Append(&grantHandler{handles: true})
+			config.TokenEndpointBindingHandlers = oauth2.TokenEndpointBindingHandlers{
+				&committingTokenBinder{name: "first", calls: &calls, err: tc.commit},
+				&committingTokenBinder{name: "second", calls: &calls},
+				&lastTokenBinder{calls: &calls, bound: tc.bound, err: tc.binder},
+			}
+
+			provider := oauth2.New(storage.NewMemoryStore(), config)
+
+			_, err := provider.NewAccessRequest(context.Background(), newBindingAccessRequest(t), &oauth2.DefaultSession{})
+
+			if tc.err == nil {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			} else {
+				require.ErrorIs(t, err, tc.err)
+			}
+
+			assert.Equal(t, tc.expected, calls)
+		})
+	}
+}
+
+type committingTokenBinder struct {
+	name  string
+	calls *[]string
+	err   error
+}
+
+func (b *committingTokenBinder) BindAccessRequest(context.Context, oauth2.AccessRequester) error {
+	*b.calls = append(*b.calls, "bind "+b.name)
+
+	return nil
+}
+
+func (b *committingTokenBinder) PopulateBoundTokenEndpointResponse(context.Context, oauth2.AccessRequester, oauth2.AccessResponder) error {
+	return nil
+}
+
+func (b *committingTokenBinder) CommitAccessRequest(context.Context, oauth2.AccessRequester) error {
+	*b.calls = append(*b.calls, "commit "+b.name)
+
+	return b.err
+}
+
+type lastTokenBinder struct {
+	calls *[]string
+	bound bool
+	err   error
+}
+
+func (b *lastTokenBinder) BindAccessRequest(ctx context.Context, request oauth2.AccessRequester) error {
+	*b.calls = append(*b.calls, "bind last")
+
+	if session, ok := request.GetSession().(oauth2.DPoPBoundSession); ok && b.bound {
+		oauth2.PublishDPoPProof(ctx, &oauth2.DPoPProof{Thumbprint: "published"})
+
+		session.SetDPoPJWKThumbprint("published")
+	}
+
+	return b.err
+}
+
+func (b *lastTokenBinder) PopulateBoundTokenEndpointResponse(context.Context, oauth2.AccessRequester, oauth2.AccessResponder) error {
+	return nil
+}
+
 type stubAuthorizeBinder struct {
 	err error
 }

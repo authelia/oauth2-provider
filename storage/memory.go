@@ -180,6 +180,7 @@ type MemoryStore struct {
 	SSFStreams                map[string]*oauth2.SSFStream
 	ClientRegistrationCounts  map[string]int64
 	ClientIDMetadataDocuments map[string]StoreClientIDMetadataDocument
+	Grants                    map[string]oauth2.Grant
 
 	Clock func() time.Time
 
@@ -203,6 +204,7 @@ type MemoryStore struct {
 	rfc7523Mutex                  sync.RWMutex
 	clientRegistrationCountsMutex sync.Mutex
 	ssfStreamsMutex               sync.RWMutex
+	grantsMutex                   sync.RWMutex
 
 	clientIDMetadataDocumentsMutex sync.RWMutex
 
@@ -267,6 +269,7 @@ func NewMemoryStore() *MemoryStore {
 		IDJAGJTIs:                make(map[JTIMarker]time.Time),
 		ClientRegistrationCounts: make(map[string]int64),
 		SSFStreams:               make(map[string]*oauth2.SSFStream),
+		Grants:                   make(map[string]oauth2.Grant),
 
 		ClientIDMetadataDocuments: make(map[string]StoreClientIDMetadataDocument),
 	}
@@ -1524,8 +1527,10 @@ func (s *MemoryStore) CreateCIBASession(_ context.Context, signature string, req
 		s.CIBARequestIDs = make(map[string]string)
 	}
 
+	id := request.GetID()
+
 	s.CIBASessions[signature] = cloneCIBARequest(request)
-	s.CIBARequestIDs[request.GetID()] = signature
+	s.CIBARequestIDs[id] = signature
 
 	return nil
 }
@@ -1603,8 +1608,10 @@ func (s *MemoryStore) DecideCIBASession(_ context.Context, signature string, req
 		return oauth2.ErrCIBADecided
 	}
 
+	id := request.GetID()
+
 	s.CIBASessions[signature] = cloneCIBARequest(request)
-	s.CIBARequestIDs[request.GetID()] = signature
+	s.CIBARequestIDs[id] = signature
 
 	return nil
 }
@@ -1830,3 +1837,116 @@ func (s *MemoryStore) DeleteSSFStream(ctx context.Context, clientID, streamID st
 }
 
 var _ oauth2.SSFStreamStorage = (*MemoryStore)(nil)
+
+// CreateGrant implements oauth2.GrantManagementStorage.
+func (s *MemoryStore) CreateGrant(_ context.Context, grant *oauth2.Grant) (err error) {
+	if grant == nil || grant.ID == "" {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The grant and its ID are required."))
+	}
+
+	s.grantsMutex.Lock()
+	defer s.grantsMutex.Unlock()
+
+	if s.Grants == nil {
+		s.Grants = make(map[string]oauth2.Grant)
+	}
+
+	if _, ok := s.Grants[grant.ID]; ok {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The grant already exists."))
+	}
+
+	s.Grants[grant.ID] = *grant.Clone()
+
+	return nil
+}
+
+// GetGrant implements oauth2.GrantManagementStorage.
+func (s *MemoryStore) GetGrant(_ context.Context, id string) (grant *oauth2.Grant, err error) {
+	s.grantsMutex.RLock()
+	defer s.grantsMutex.RUnlock()
+
+	stored, ok := s.Grants[id]
+	if !ok {
+		return nil, errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	return stored.Clone(), nil
+}
+
+// UpdateGrant implements oauth2.GrantManagementStorage.
+func (s *MemoryStore) UpdateGrant(_ context.Context, grant *oauth2.Grant) (err error) {
+	if grant == nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The grant is required."))
+	}
+
+	s.grantsMutex.Lock()
+	defer s.grantsMutex.Unlock()
+
+	stored, ok := s.Grants[grant.ID]
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	updated := *grant.Clone()
+	updated.RequestIDs = stored.RequestIDs
+
+	s.Grants[grant.ID] = updated
+
+	return nil
+}
+
+// AppendGrantRequestID implements oauth2.GrantManagementStorage.
+func (s *MemoryStore) AppendGrantRequestID(_ context.Context, id string, requestID string) (err error) {
+	s.grantsMutex.Lock()
+	defer s.grantsMutex.Unlock()
+
+	grant, ok := s.Grants[id]
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	if slices.Contains(grant.RequestIDs, requestID) {
+		return nil
+	}
+
+	grant.RequestIDs = append(slices.Clone(grant.RequestIDs), requestID)
+
+	s.Grants[id] = grant
+
+	return nil
+}
+
+// ReplaceGrantRequestIDs implements oauth2.GrantManagementStorage.
+func (s *MemoryStore) ReplaceGrantRequestIDs(_ context.Context, id string, requestIDs []string) (previous []string, err error) {
+	s.grantsMutex.Lock()
+	defer s.grantsMutex.Unlock()
+
+	grant, ok := s.Grants[id]
+	if !ok {
+		return nil, errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	previous = slices.Clone(grant.RequestIDs)
+	grant.RequestIDs = slices.Clone(requestIDs)
+
+	s.Grants[id] = grant
+
+	return previous, nil
+}
+
+// DeleteGrant implements oauth2.GrantManagementStorage.
+func (s *MemoryStore) DeleteGrant(_ context.Context, id string) (requestIDs []string, err error) {
+	s.grantsMutex.Lock()
+	defer s.grantsMutex.Unlock()
+
+	grant, ok := s.Grants[id]
+	if !ok {
+		return nil, errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	delete(s.Grants, id)
+
+	return slices.Clone(grant.RequestIDs), nil
+}
+
+var _ oauth2.GrantManagementStorage = (*MemoryStore)(nil)

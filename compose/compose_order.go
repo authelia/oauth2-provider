@@ -11,6 +11,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/ciba"
+	"authelia.com/provider/oauth2/handler/grantmgmt"
 	"authelia.com/provider/oauth2/handler/idjag"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/oidckb"
@@ -62,6 +63,9 @@ var ErrHandlerOrder = errors.New("oauth2: handlers are registered in an order wh
 //     endpoint handlers, so a reused 'nonce' is rejected before the request is persisted, and must follow the
 //     ciba.DecisionHandler in the backchannel authentication decision handlers, so only the decision which was
 //     recorded writes an OpenID Connect session.
+//   - Every grantmgmt.Handler must precede the ciba.DecisionHandler in the backchannel authentication decision
+//     handlers, so the permissions of a merged grant are granted on the request before the ciba.DecisionHandler
+//     persists it.
 //   - Every oidckb.Handler must follow the rfc9449.Handler in the backchannel authentication endpoint binding
 //     handlers, as it reads the DPoP proof key rfc9449.Handler records on the session.
 //   - Every openid.OpenIDConnectCIBAHandler must follow the ciba.TokenEndpointHandler in the token endpoint handlers,
@@ -303,7 +307,7 @@ func validateRFC8628UserAuthorizeHandlerOrder(config *oauth2.Config) (err error)
 
 // validateCIBAHandlerOrder returns an error when an openid.OpenIDConnectCIBAHandler follows the ciba.EndpointHandler
 // in the backchannel authentication endpoint handlers, or precedes the ciba.DecisionHandler in the backchannel
-// authentication decision handlers.
+// authentication decision handlers, or when a grantmgmt.Handler follows the ciba.DecisionHandler in them.
 func validateCIBAHandlerOrder(config *oauth2.Config) (err error) {
 	if handlerFollows[*openid.OpenIDConnectCIBAHandler, *ciba.EndpointHandler](config.BackChannelAuthenticationEndpointHandlers) {
 		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectCIBAHandler (OpenIDConnectCIBAFactory) must be registered before the ciba.EndpointHandler (CIBAEndpointFactory) in the backchannel authentication endpoint handlers, as it rejects a reused 'nonce' before the ciba.EndpointHandler persists the request", ErrHandlerOrder))
@@ -311,6 +315,10 @@ func validateCIBAHandlerOrder(config *oauth2.Config) (err error) {
 
 	if handlerPrecedes[*openid.OpenIDConnectCIBAHandler, *ciba.DecisionHandler](config.BackChannelAuthenticationDecisionHandlers) {
 		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectCIBAHandler (OpenIDConnectCIBAFactory) must be registered after the ciba.DecisionHandler (CIBADecisionFactory) in the backchannel authentication decision handlers, as it writes the OpenID Connect session only for the decision the ciba.DecisionHandler records", ErrHandlerOrder))
+	}
+
+	if handlerFollows[*grantmgmt.Handler, *ciba.DecisionHandler](config.BackChannelAuthenticationDecisionHandlers) {
+		err = errors.Join(err, fmt.Errorf("%w: the grantmgmt.Handler (GrantManagementFactory) must be registered before the ciba.DecisionHandler (CIBADecisionFactory) in the backchannel authentication decision handlers, as it grants the permissions of a merged grant on the request the ciba.DecisionHandler persists", ErrHandlerOrder))
 	}
 
 	return err

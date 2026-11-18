@@ -25,6 +25,8 @@ const (
 	AccessResponseTokenType = "token_type"
 	// AccessResponseAuthorizationDetails is the authorization_details token response parameter from RFC 9396.
 	AccessResponseAuthorizationDetails = valueAuthorizationDetails
+	// AccessResponseGrantID is the grant_id token response parameter from Grant Management for OAuth 2.0.
+	AccessResponseGrantID = valueGrantID
 )
 
 const (
@@ -43,6 +45,32 @@ const (
 	// DeviceCodeResponseInterval is the interval device authorization response parameter from RFC 8628.
 	DeviceCodeResponseInterval = "interval"
 )
+
+// Grant management actions.
+//
+// See: https://openid.net/specs/oauth-v2-grant-management.html#section-5.2
+//
+// See: https://openid.net/specs/oauth-v2-grant-management.html#section-7.1
+const (
+	GrantManagementActionCreate  = "create"
+	GrantManagementActionMerge   = "merge"
+	GrantManagementActionReplace = "replace"
+	GrantManagementActionQuery   = "query"
+	GrantManagementActionRevoke  = "revoke"
+)
+
+// Parties which update a grant.
+//
+// See: https://openid.net/specs/oauth-v2-grant-management.html#section-5.6
+const (
+	GrantUpdatedByClient              = "client"
+	GrantUpdatedByAuthorizationServer = "authorization_server"
+)
+
+// ErrorInvalidGrantID is the invalid_grant_id authorization error code from Grant Management for OAuth 2.0.
+//
+// See: https://openid.net/specs/oauth-v2-grant-management.html#section-5.4
+const ErrorInvalidGrantID = "invalid_grant_id"
 
 // CIBA token delivery modes.
 //

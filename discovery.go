@@ -44,6 +44,7 @@ type OAuth2AuthorizationServerMetadata struct {
 	*RFC9701JWTIntrospectionResponseMetadata
 	*RFC9728ProtectedResourceMetadata
 	*OpenIDConnectJARMMetadata
+	*OpenIDGrantManagementMetadata
 	*DraftClientIDMetadataDocumentMetadata
 	*DraftIdentityChainingMetadata
 	*DraftIDJAGMetadata
@@ -91,7 +92,6 @@ type OpenIDConnectProviderMetadata struct {
 	*OpenIDConnectPromptCreateMetadata
 	*OpenIDConnectNativeSSOMetadata
 	*OpenIDConnectCIBAMetadata
-	*OpenIDGrantManagementMetadata
 	*OpenIDConnectIdentityAssuranceMetadata
 	*OpenIDConnectAdvancedSyntaxForClaimsMetadata
 	*OpenID4VPMetadata

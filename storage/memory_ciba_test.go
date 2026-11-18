@@ -259,6 +259,50 @@ func TestMemoryStoreCIBA(t *testing.T) {
 	}
 }
 
+func TestMemoryStoreCIBAKeepsTheRequestID(t *testing.T) {
+	stores := []struct {
+		name string
+		new  func() cibaTestStore
+	}{
+		{"MemoryStore", func() cibaTestStore { return NewMemoryStore() }},
+		{"HydratingMemoryStore", func() cibaTestStore { return NewHydratingMemoryStore() }},
+	}
+
+	for _, sc := range stores {
+		t.Run(sc.name, func(t *testing.T) {
+			ctx := context.Background()
+			store := sc.new()
+
+			request := newCIBATestRequest()
+			request.ID = ""
+
+			require.NoError(t, store.CreateCIBASession(ctx, "sig", request))
+
+			id := request.GetID()
+			require.NotEmpty(t, id)
+
+			first, err := store.GetCIBASession(ctx, "sig", &oauth2.DefaultSession{})
+			require.NoError(t, err)
+
+			assert.Equal(t, id, first.GetID())
+
+			second, err := store.GetCIBASessionByRequestID(ctx, id, &oauth2.DefaultSession{})
+			require.NoError(t, err)
+
+			assert.Equal(t, id, second.GetID())
+
+			second.SetStatus(oauth2.CIBAStatusApproved)
+
+			require.NoError(t, store.DecideCIBASession(ctx, "sig", second))
+
+			decided, err := store.GetCIBASession(ctx, "sig", &oauth2.DefaultSession{})
+			require.NoError(t, err)
+
+			assert.Equal(t, id, decided.GetID())
+		})
+	}
+}
+
 func TestHydratingMemoryStoreCIBADecideConcurrently(t *testing.T) {
 	ctx := t.Context()
 	store := NewHydratingMemoryStore()

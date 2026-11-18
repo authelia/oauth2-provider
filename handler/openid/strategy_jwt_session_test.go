@@ -6,6 +6,7 @@ package openid
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,6 +15,42 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/token/jwt"
 )
+
+func TestDefaultSessionGrantManagementJSON(t *testing.T) {
+	var session *DefaultSession
+
+	assert.Empty(t, session.GetGrantID())
+	assert.Empty(t, session.GetGrantManagementAction())
+	assert.Nil(t, session.GetGrantPermissions())
+
+	data, err := json.Marshal(NewDefaultSession())
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "grant_id")
+	assert.NotContains(t, string(data), "grant_management_action")
+	assert.NotContains(t, string(data), "grant_permissions")
+
+	permissions := &oauth2.GrantPermissions{
+		Scopes:               []oauth2.GrantScope{{Scope: "read", Resource: []string{"https://rs1"}}},
+		Audience:             []string{"https://rs1"},
+		Claims:               []string{"email"},
+		AuthorizationDetails: oauth2.AuthorizationDetails{{Type: "account_information", Actions: []string{"read"}}},
+	}
+
+	have := NewDefaultSession()
+	have.SetGrantID("grant-1")
+	have.SetGrantManagementAction(oauth2.GrantManagementActionMerge)
+	have.SetGrantPermissions(permissions)
+
+	data, err = json.Marshal(have)
+	require.NoError(t, err)
+
+	session = NewDefaultSession()
+	require.NoError(t, json.Unmarshal(data, session))
+
+	assert.Equal(t, "grant-1", session.GetGrantID())
+	assert.Equal(t, oauth2.GrantManagementActionMerge, session.GetGrantManagementAction())
+	assert.Equal(t, permissions, session.GetGrantPermissions())
+}
 
 func TestDefaultSessionMTLSBinding(t *testing.T) {
 	var session *DefaultSession

@@ -663,6 +663,12 @@ type Config struct {
 	// SSF is the OpenID Shared Signals Framework transmitter configuration. Has no default and may be nil.
 	SSF *SSFConfig
 
+	// GrantManagement is the OpenID Grant Management for OAuth 2.0 configuration. Has no default; nil disables grant
+	// management.
+	//
+	// See: https://openid.net/specs/oauth-v2-grant-management.html#section-7.1
+	GrantManagement *GrantManagementConfig
+
 	// ClientAssertionSigningAlgValues is the JWS algorithms accepted for a client assertion. Defaults to every
 	// supported signature algorithm except 'none'.
 	ClientAssertionSigningAlgValues []string
@@ -2097,6 +2103,26 @@ func (c *Config) GetSSFConfig(ctx context.Context) (config *SSFConfig) {
 	return &cfg
 }
 
+// GetGrantManagementConfig returns a copy of the grant management configuration with Audience defaulted to the issuer,
+// or nil if it is not configured.
+//
+// See: https://openid.net/specs/oauth-v2-grant-management.html#section-7.1
+func (c *Config) GetGrantManagementConfig(ctx context.Context) (config *GrantManagementConfig) {
+	if c.GrantManagement == nil {
+		return nil
+	}
+
+	cfg := *c.GrantManagement
+
+	cfg.Actions = slices.Clone(cfg.Actions)
+
+	if cfg.Audience == "" {
+		cfg.Audience = c.GetIssuer(ctx)
+	}
+
+	return &cfg
+}
+
 // GetProtectedResources returns the resource identifiers of the protected resources that can be used with this
 // authorization server.
 //
@@ -2567,6 +2593,7 @@ var (
 	_ AccessTokenURIQueryParameterEnabledProvider              = (*Config)(nil)
 	_ RevocationEndpointClientAuthStrategyProvider             = (*Config)(nil)
 	_ SSFConfigProvider                                        = (*Config)(nil)
+	_ GrantManagementConfigProvider                            = (*Config)(nil)
 	_ DPoPConfigProvider                                       = (*Config)(nil)
 	_ ClientAssertionAlgorithmsProvider                        = (*Config)(nil)
 	_ DiscoveryInformationProvider                             = (*Config)(nil)

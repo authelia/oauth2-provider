@@ -95,7 +95,19 @@ func (f *Fosite) handleAccessRequest(ctx context.Context, r *http.Request, reque
 		}
 	}
 
-	return requester, nil
+	return requester, f.commitAccessRequest(ctx, requester)
+}
+
+func (f *Fosite) commitAccessRequest(ctx context.Context, requester AccessRequester) (err error) {
+	for _, binding := range f.Config.GetTokenEndpointBindingHandlers(ctx) {
+		if commit, ok := binding.(TokenEndpointBindingCommitHandler); ok {
+			if err = commit.CommitAccessRequest(ctx, requester); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // issueInternalAccessResponse issues the token response for a stored grant without an HTTP token request. requester

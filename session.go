@@ -71,6 +71,15 @@ type DefaultSession struct {
 
 	// ExpiryDeadline is the latest time a token issued for the session may expire, if any.
 	ExpiryDeadline time.Time `json:"expiry_deadline,omitzero"`
+
+	// GrantID is the 'grant_id' of the grant this session's tokens are issued under, if any.
+	GrantID string `json:"grant_id,omitempty"`
+
+	// GrantManagementAction is the 'grant_management_action' the grant was authorized with, if any.
+	GrantManagementAction GrantManagementAction `json:"grant_management_action,omitempty"`
+
+	// GrantPermissions is the permission set of the grant resulting from the authorization, if any.
+	GrantPermissions *GrantPermissions `json:"grant_permissions,omitempty"`
 }
 
 // SetExpiresAt sets the expiration time of the token identified by key.
@@ -139,6 +148,7 @@ func (s *DefaultSession) Clone() Session {
 	cloned.ExpiresAt = maps.Clone(s.ExpiresAt)
 	cloned.Extra = clone.Map(s.Extra)
 	cloned.PublicKeyJWK = slices.Clone(s.PublicKeyJWK)
+	cloned.GrantPermissions = s.GrantPermissions.Clone()
 
 	return &cloned
 }
@@ -326,7 +336,50 @@ func (s *DefaultSession) GetOIDCKeyBindingGranted() (granted bool) {
 	return s.KeyBindingGranted
 }
 
+// SetGrantID implements GrantManagementSession for DefaultSession.
+func (s *DefaultSession) SetGrantID(id string) {
+	s.GrantID = id
+}
+
+// GetGrantID implements GrantManagementSession for DefaultSession.
+func (s *DefaultSession) GetGrantID() (id string) {
+	if s == nil {
+		return ""
+	}
+
+	return s.GrantID
+}
+
+// SetGrantManagementAction implements GrantManagementSession for DefaultSession.
+func (s *DefaultSession) SetGrantManagementAction(action GrantManagementAction) {
+	s.GrantManagementAction = action
+}
+
+// GetGrantManagementAction implements GrantManagementSession for DefaultSession.
+func (s *DefaultSession) GetGrantManagementAction() (action GrantManagementAction) {
+	if s == nil {
+		return ""
+	}
+
+	return s.GrantManagementAction
+}
+
+// SetGrantPermissions implements GrantManagementSession for DefaultSession.
+func (s *DefaultSession) SetGrantPermissions(permissions *GrantPermissions) {
+	s.GrantPermissions = permissions
+}
+
+// GetGrantPermissions implements GrantManagementSession for DefaultSession.
+func (s *DefaultSession) GetGrantPermissions() (permissions *GrantPermissions) {
+	if s == nil {
+		return nil
+	}
+
+	return s.GrantPermissions
+}
+
 var (
-	_ DPoPBoundSession = (*DefaultSession)(nil)
-	_ MTLSBoundSession = (*DefaultSession)(nil)
+	_ DPoPBoundSession       = (*DefaultSession)(nil)
+	_ MTLSBoundSession       = (*DefaultSession)(nil)
+	_ GrantManagementSession = (*DefaultSession)(nil)
 )

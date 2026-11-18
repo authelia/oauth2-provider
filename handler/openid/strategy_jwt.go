@@ -58,6 +58,9 @@ type DefaultSession struct {
 	RequestedAt                          time.Time                      `json:"requested_at"`
 	ExpiryDeadline                       time.Time                      `json:"expiry_deadline,omitzero"`
 	RequestedAuthenticationContextClaims []string                       `json:"requested_authentication_context_claims,omitempty"`
+	GrantID                              string                         `json:"grant_id,omitempty"`
+	GrantManagementAction                oauth2.GrantManagementAction   `json:"grant_management_action,omitempty"`
+	GrantPermissions                     *oauth2.GrantPermissions       `json:"grant_permissions,omitempty"`
 }
 
 // NewDefaultSession returns a DefaultSession with empty claims and headers, requested at the current time.
@@ -83,6 +86,7 @@ func (s *DefaultSession) Clone() oauth2.Session {
 	cloned.ExpiresAt = maps.Clone(s.ExpiresAt)
 	cloned.PublicKeyJWK = slices.Clone(s.PublicKeyJWK)
 	cloned.RequestedAuthenticationContextClaims = slices.Clone(s.RequestedAuthenticationContextClaims)
+	cloned.GrantPermissions = s.GrantPermissions.Clone()
 
 	return &cloned
 }
@@ -477,7 +481,50 @@ func (s *DefaultSession) GetOIDCKeyBindingGranted() (granted bool) {
 	return s.KeyBindingGranted
 }
 
+// SetGrantID implements oauth2.GrantManagementSession for DefaultSession.
+func (s *DefaultSession) SetGrantID(id string) {
+	s.GrantID = id
+}
+
+// GetGrantID implements oauth2.GrantManagementSession for DefaultSession.
+func (s *DefaultSession) GetGrantID() (id string) {
+	if s == nil {
+		return ""
+	}
+
+	return s.GrantID
+}
+
+// SetGrantManagementAction implements oauth2.GrantManagementSession for DefaultSession.
+func (s *DefaultSession) SetGrantManagementAction(action oauth2.GrantManagementAction) {
+	s.GrantManagementAction = action
+}
+
+// GetGrantManagementAction implements oauth2.GrantManagementSession for DefaultSession.
+func (s *DefaultSession) GetGrantManagementAction() (action oauth2.GrantManagementAction) {
+	if s == nil {
+		return ""
+	}
+
+	return s.GrantManagementAction
+}
+
+// SetGrantPermissions implements oauth2.GrantManagementSession for DefaultSession.
+func (s *DefaultSession) SetGrantPermissions(permissions *oauth2.GrantPermissions) {
+	s.GrantPermissions = permissions
+}
+
+// GetGrantPermissions implements oauth2.GrantManagementSession for DefaultSession.
+func (s *DefaultSession) GetGrantPermissions() (permissions *oauth2.GrantPermissions) {
+	if s == nil {
+		return nil
+	}
+
+	return s.GrantPermissions
+}
+
 var (
-	_ oauth2.DPoPBoundSession = (*DefaultSession)(nil)
-	_ oauth2.MTLSBoundSession = (*DefaultSession)(nil)
+	_ oauth2.DPoPBoundSession       = (*DefaultSession)(nil)
+	_ oauth2.MTLSBoundSession       = (*DefaultSession)(nil)
+	_ oauth2.GrantManagementSession = (*DefaultSession)(nil)
 )

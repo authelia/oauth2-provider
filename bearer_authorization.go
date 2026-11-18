@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -133,6 +134,28 @@ func validateBearerProofOfPossession(ctx context.Context, config BearerAuthoriza
 	}
 
 	return nil
+}
+
+func (f *Fosite) introspectBearerCredential(ctx context.Context, r *http.Request, session Session) (token string, requester AccessRequester, err error) {
+	if token, err = bearerCredentialFromRequest(r); err != nil {
+		return "", nil, err
+	}
+
+	if token == "" {
+		return "", nil, errorsx.WithStack(ErrInvalidToken.WithHint("The request did not include an Access Token."))
+	}
+
+	var use TokenUse
+
+	if use, requester, err = f.IntrospectToken(ctx, token, AccessToken, session); errors.Is(err, ErrServerError) {
+		return "", nil, err
+	} else if err != nil {
+		return "", nil, errorsx.WithStack(ErrInvalidToken.WithHint("The Access Token is missing, malformed, or invalid.").WithWrap(err).WithDebugError(err))
+	} else if use != "" && use != AccessToken {
+		return "", nil, errorsx.WithStack(ErrInvalidToken.WithHint("The Access Token is missing, malformed, or invalid.").WithDebugf("The credential was of type '%s' rather than 'access_token'.", use))
+	}
+
+	return token, requester, nil
 }
 
 func isDPoPAuthorizationScheme(r *http.Request) bool {

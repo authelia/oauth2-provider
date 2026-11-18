@@ -183,6 +183,7 @@ func (f *Fosite) newOAuth2AuthorizationServerMetadata(ctx context.Context, capab
 	metadata.RFC9701JWTIntrospectionResponseMetadata = f.rfc9701Metadata(ctx)
 	metadata.RFC9728ProtectedResourceMetadata = f.rfc9728Metadata(ctx)
 	metadata.OpenIDConnectJARMMetadata = f.jarmMetadata(ctx)
+	metadata.OpenIDGrantManagementMetadata = f.grantManagementMetadata(ctx)
 	metadata.DraftClientIDMetadataDocumentMetadata = f.cimdMetadata(ctx)
 	metadata.DraftIdentityChainingMetadata = f.identityChainingMetadata(ctx, capabilities.grantTypes)
 	metadata.DraftIDJAGMetadata = f.idjagMetadata(ctx)
@@ -402,6 +403,39 @@ func (f *Fosite) cibaMetadata(ctx context.Context, urls EndpointURLs) *OpenIDCon
 		BackChannelUserCodeParameterSupported:                     f.Config.GetCIBAUserCodeSupported(ctx),
 		BackChannelEndpointLoginHintTokenTypesSupported:           slices.Clone(f.Config.GetCIBALoginHintTokenTypes(ctx)),
 	}
+}
+
+func (f *Fosite) grantManagementMetadata(ctx context.Context) *OpenIDGrantManagementMetadata {
+	provider, ok := f.Config.(GrantManagementConfigProvider)
+	if !ok {
+		return nil
+	}
+
+	config := provider.GetGrantManagementConfig(ctx)
+	if config == nil || !f.hasGrantManagementHandler(ctx) {
+		return nil
+	}
+
+	metadata := &OpenIDGrantManagementMetadata{
+		GrantManagementEndpoint:       config.Endpoint,
+		GrantManagementActionRequired: config.ActionRequired,
+	}
+
+	for _, action := range config.Actions {
+		metadata.GrantManagementActionsSupported = append(metadata.GrantManagementActionsSupported, string(action))
+	}
+
+	return metadata
+}
+
+func (f *Fosite) hasGrantManagementHandler(ctx context.Context) bool {
+	for _, h := range f.Config.GetAuthorizeEndpointBindingHandlers(ctx) {
+		if handler, ok := h.(GrantManagementHandler); ok && handler.HandlesGrantManagement(ctx) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (f *Fosite) hasPublicTokenIntrospector(ctx context.Context) bool {

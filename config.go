@@ -1219,6 +1219,16 @@ type SSFConfigProvider interface {
 	GetSSFConfig(ctx context.Context) (config *SSFConfig)
 }
 
+// GrantManagementConfigProvider is the configuration provider for OpenID Grant Management for OAuth 2.0. It is not
+// part of the Configurator; a Configurator which does not implement it disables grant management.
+//
+// See: https://openid.net/specs/oauth-v2-grant-management.html#section-7.1
+type GrantManagementConfigProvider interface {
+	// GetGrantManagementConfig returns the grant management configuration. Has no default; nil disables grant
+	// management.
+	GetGrantManagementConfig(ctx context.Context) (config *GrantManagementConfig)
+}
+
 // DPoPConfigProvider is the configuration provider for RFC 9449 DPoP.
 type DPoPConfigProvider interface {
 	// GetDPoPEnabled returns true if DPoP handling is enabled.

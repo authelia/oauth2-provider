@@ -270,6 +270,22 @@ func TestDefaultSessionClone(t *testing.T) {
 					RequestedJWKThumbprint:      "requested-jkt",
 					KeyBindingGranted:           true,
 					ExpiryDeadline:              time.Unix(1700003600, 0).UTC(),
+					GrantID:                     "grant-1",
+					GrantManagementAction:       GrantManagementActionMerge,
+					GrantPermissions: &GrantPermissions{
+						Scopes:   []GrantScope{{Scope: "read", Resource: []string{"https://rs1"}}},
+						Audience: []string{"https://rs1"},
+						Claims:   []string{"email"},
+						AuthorizationDetails: AuthorizationDetails{{
+							Type:       "account_information",
+							Locations:  []string{"https://rs1"},
+							Actions:    []string{"read"},
+							DataTypes:  []string{"balances"},
+							Identifier: new("account-1"),
+							Privileges: []string{"admin"},
+							Extra:      map[string]any{"limit": map[string]any{"currency": "EUR"}},
+						}},
+					},
 				}
 
 				clonetest.AssertDeepCopy(t, s, s.Clone())

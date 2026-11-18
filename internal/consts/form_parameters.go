@@ -129,4 +129,8 @@ const (
 	FormParameterRequestContext = "request_context"
 	// FormParameterRequestDetails is the request_details parameter, a non-standard extension.
 	FormParameterRequestDetails = "request_details"
+	// FormParameterGrantID is the grant_id authorization request parameter from Grant Management for OAuth 2.0.
+	FormParameterGrantID = valueGrantID
+	// FormParameterGrantManagementAction is the grant_management_action authorization request parameter from Grant Management for OAuth 2.0.
+	FormParameterGrantManagementAction = "grant_management_action"
 )

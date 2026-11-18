@@ -5,6 +5,7 @@
 package oauth2_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/url"
 	"sync"
@@ -753,6 +754,65 @@ func TestDecisionRequestRequiresStorageAndHandlers(t *testing.T) {
 	})
 }
 
+func TestApproveRestoresTheGrantWhenADecisionHandlerFails(t *testing.T) {
+	for _, sc := range cibaDecisionTestStores {
+		t.Run(sc.name, func(t *testing.T) {
+			store := sc.new()
+			provider := newCIBADecisionTestProvider(store)
+
+			widening := &cibaWideningTestDecisionHandler{err: oauth2.ErrServerError}
+
+			config := provider.Config.(*oauth2.Config)
+			config.BackChannelAuthenticationDecisionHandlers = oauth2.BackChannelAuthenticationDecisionHandlers{widening, config.BackChannelAuthenticationDecisionHandlers[0]}
+
+			createCIBADecisionTestRequest(t, provider, newCIBADecisionTestRequest(newCIBADecisionTestSession("john")))
+
+			loaded, err := provider.NewBackChannelAuthenticationDecisionRequest(t.Context(), cibaDecisionTestRequestID, openid.NewDefaultSession())
+			require.NoError(t, err)
+
+			loaded.GrantScope(consts.ScopeOpenID)
+			loaded.GrantAudience("https://api.example.com")
+			loaded.SetGrantedAuthorizationDetails(oauth2.AuthorizationDetails{{Type: "payment", Actions: []string{"read"}}})
+
+			pending := loaded.GetSession()
+
+			_, err = provider.ApproveBackChannelAuthentication(t.Context(), loaded, newCIBADecisionTestSession("john"))
+			require.ErrorIs(t, err, oauth2.ErrServerError)
+
+			assert.Same(t, pending, loaded.GetSession())
+			assert.Equal(t, oauth2.CIBAStatusPending, loaded.GetStatus())
+			assert.Equal(t, oauth2.Arguments{consts.ScopeOpenID}, loaded.GetGrantedScopes())
+			assert.Equal(t, oauth2.Arguments{"https://api.example.com"}, loaded.GetGrantedAudience())
+			assert.Empty(t, loaded.GetGrantedResource())
+			assert.Equal(t, oauth2.AuthorizationDetails{{Type: "payment", Actions: []string{"read"}}}, loaded.GetGrantedAuthorizationDetails())
+
+			widening.err = nil
+
+			_, err = provider.ApproveBackChannelAuthentication(t.Context(), loaded, newCIBADecisionTestSession("john"))
+			require.NoError(t, err)
+
+			stored, err := store.GetCIBASessionByRequestID(t.Context(), cibaDecisionTestRequestID, openid.NewDefaultSession())
+			require.NoError(t, err)
+
+			assert.Equal(t, oauth2.CIBAStatusApproved, stored.GetStatus())
+			assert.Equal(t, oauth2.Arguments{consts.ScopeOpenID, "unrequested"}, stored.GetGrantedScopes())
+		})
+	}
+}
+
+type cibaWideningTestDecisionHandler struct {
+	err error
+}
+
+func (h *cibaWideningTestDecisionHandler) HandleBackChannelAuthenticationDecision(_ context.Context, request oauth2.BackChannelAuthenticationRequester, _ *oauth2.BackChannelAuthenticationDecisionResult) error {
+	request.GrantScope("unrequested")
+	request.GrantAudience("https://unrequested.example.com")
+	request.GrantResource("https://unrequested.example.com")
+	request.SetGrantedAuthorizationDetails(append(request.GetGrantedAuthorizationDetails(), oauth2.AuthorizationDetail{Type: "unrequested"}))
+
+	return h.err
+}
+
 // cibaUnboundTestSession is an oauth2.Session which carries neither a DPoP nor a certificate binding.
 type cibaUnboundTestSession struct {
 	oauth2.Session
@@ -768,6 +828,13 @@ func TestApproveRejectsASessionWhichCannotCarryTheBinding(t *testing.T) {
 			session.SetDPoPJWKThumbprint("0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I")
 		}, err: true},
 		{name: "ShouldRejectACertificateBinding", bind: func(session *openid.DefaultSession) { session.SetClientCertificateSHA256Thumbprint("x5t") }, err: true},
+		{name: "ShouldRejectAGrantID", bind: func(session *openid.DefaultSession) { session.SetGrantID("grant-1") }, err: true},
+		{name: "ShouldRejectAGrantManagementAction", bind: func(session *openid.DefaultSession) {
+			session.SetGrantManagementAction(oauth2.GrantManagementActionCreate)
+		}, err: true},
+		{name: "ShouldRejectGrantPermissions", bind: func(session *openid.DefaultSession) {
+			session.SetGrantPermissions(&oauth2.GrantPermissions{})
+		}, err: true},
 		{name: "ShouldAllowNoBinding", bind: func(_ *openid.DefaultSession) {}},
 	}
 

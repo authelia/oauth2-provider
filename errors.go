@@ -18,6 +18,7 @@ import (
 	"golang.org/x/text/language"
 
 	"authelia.com/provider/oauth2/i18n"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -391,6 +392,15 @@ var (
 		HintField:        "Ensure every authorization details object has a type supported by the authorization server, conforms to that type's definition, and is permitted for this client.",
 		CodeField:        http.StatusBadRequest,
 	}
+	// ErrInvalidGrantID is returned when the requested grant is unknown or invalid (the 'invalid_grant_id' error).
+	//
+	// See: https://openid.net/specs/oauth-v2-grant-management.html#section-5.4
+	ErrInvalidGrantID = &RFC6749Error{
+		ErrorField:       errInvalidGrantIDName,
+		DescriptionField: "The requested grant is unknown or invalid.",
+		HintField:        "Ensure the 'grant_id' parameter identifies a grant which was issued to this client and has not been revoked.",
+		CodeField:        http.StatusBadRequest,
+	}
 	// ErrInvalidClientMetadata is returned when a client metadata field value is invalid (the 'invalid_client_metadata' error per RFC 7591 Section 3.2.2).
 	ErrInvalidClientMetadata = &RFC6749Error{
 		ErrorField:       errInvalidClientMetadataName,
@@ -464,6 +474,7 @@ const (
 	errTransactionFailedName           = "transaction_failed"
 	errInvalidTargetName               = "invalid_target"
 	errInvalidAuthorizationDetailsName = "invalid_authorization_details"
+	errInvalidGrantIDName              = consts.ErrorInvalidGrantID
 
 	errInsufficientUserAuthenticationName  = "insufficient_user_authentication"
 	errUnmetAuthenticationRequirementsName = "unmet_authentication_requirements"

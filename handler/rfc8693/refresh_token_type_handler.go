@@ -446,6 +446,10 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 			return nil
 		}
 
+		if err = propagateGrant(ctx, c.Storage, subjectTokenSession(request), requester.GetSession(), request.GetID()); err != nil {
+			return err
+		}
+
 		// This exchange issues a refresh token only, so there is no paired access token signature to record.
 		if err = c.CreateRefreshTokenSession(ctx, signature, "", requester); err != nil {
 			return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))

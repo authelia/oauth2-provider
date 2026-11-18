@@ -18,6 +18,42 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+func TestJWTSessionGrantManagementJSON(t *testing.T) {
+	var session *JWTSession
+
+	assert.Empty(t, session.GetGrantID())
+	assert.Empty(t, session.GetGrantManagementAction())
+	assert.Nil(t, session.GetGrantPermissions())
+
+	data, err := json.Marshal(&JWTSession{})
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "GrantID")
+	assert.NotContains(t, string(data), "GrantManagementAction")
+	assert.NotContains(t, string(data), "GrantPermissions")
+
+	permissions := &oauth2.GrantPermissions{
+		Scopes:               []oauth2.GrantScope{{Scope: "read", Resource: []string{"https://rs1"}}},
+		Audience:             []string{"https://rs1"},
+		Claims:               []string{"email"},
+		AuthorizationDetails: oauth2.AuthorizationDetails{{Type: "account_information", Actions: []string{"read"}}},
+	}
+
+	have := &JWTSession{}
+	have.SetGrantID("grant-1")
+	have.SetGrantManagementAction(oauth2.GrantManagementActionMerge)
+	have.SetGrantPermissions(permissions)
+
+	data, err = json.Marshal(have)
+	require.NoError(t, err)
+
+	session = &JWTSession{}
+	require.NoError(t, json.Unmarshal(data, session))
+
+	assert.Equal(t, "grant-1", session.GetGrantID())
+	assert.Equal(t, oauth2.GrantManagementActionMerge, session.GetGrantManagementAction())
+	assert.Equal(t, permissions, session.GetGrantPermissions())
+}
+
 func TestJWTSessionMTLSBinding(t *testing.T) {
 	var session *JWTSession
 
@@ -97,6 +133,22 @@ func TestJWTSessionClone(t *testing.T) {
 					PublicKeyJWK:                []byte(`{"kty":"EC"}`),
 					KeyBindingGranted:           true,
 					ExpiryDeadline:              time.Unix(1700003600, 0).UTC(),
+					GrantID:                     "grant-1",
+					GrantManagementAction:       oauth2.GrantManagementActionMerge,
+					GrantPermissions: &oauth2.GrantPermissions{
+						Scopes:   []oauth2.GrantScope{{Scope: "read", Resource: []string{"https://rs1"}}},
+						Audience: []string{"https://rs1"},
+						Claims:   []string{"email"},
+						AuthorizationDetails: oauth2.AuthorizationDetails{{
+							Type:       "account_information",
+							Locations:  []string{"https://rs1"},
+							Actions:    []string{"read"},
+							DataTypes:  []string{"balances"},
+							Identifier: new("account-1"),
+							Privileges: []string{"admin"},
+							Extra:      map[string]any{"limit": map[string]any{"currency": "EUR"}},
+						}},
+					},
 				}
 
 				clonetest.AssertDeepCopy(t, s, s.Clone())

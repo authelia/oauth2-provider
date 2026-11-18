@@ -318,6 +318,29 @@ func TestBackChannelSignedRequest(t *testing.T) {
 			hint:   "'request_context'",
 		},
 		{
+			name: "ShouldDecodeTheGrantManagementParameters",
+			claims: func(claims jwt.MapClaims) {
+				claims[consts.FormParameterGrantManagementAction] = "merge"
+				claims[consts.FormParameterGrantID] = "grant-1"
+			},
+			check: func(t *testing.T, requester BackChannelAuthenticationRequester) {
+				assert.Equal(t, []string{"merge"}, requester.GetRequestForm()[consts.FormParameterGrantManagementAction])
+				assert.Equal(t, []string{"grant-1"}, requester.GetRequestForm()[consts.FormParameterGrantID])
+			},
+		},
+		{
+			name: "ShouldRejectTheGrantManagementActionOutsideTheSignedRequest",
+			form: func(form url.Values) { form.Set(consts.FormParameterGrantManagementAction, "create") },
+			err:  ErrInvalidRequest,
+			hint: "The 'grant_management_action' parameter must not be included outside of the signed authentication request.",
+		},
+		{
+			name: "ShouldRejectTheGrantIDOutsideTheSignedRequest",
+			form: func(form url.Values) { form.Set(consts.FormParameterGrantID, "grant-1") },
+			err:  ErrInvalidRequest,
+			hint: "The 'grant_id' parameter must not be included outside of the signed authentication request.",
+		},
+		{
 			name:   "ShouldRejectARequestClaim",
 			claims: func(claims jwt.MapClaims) { claims[consts.FormParameterRequest] = "a.b.c" },
 			err:    ErrInvalidRequest,

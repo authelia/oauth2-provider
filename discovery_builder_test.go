@@ -1331,6 +1331,134 @@ type cibaLessStore struct {
 	CreateCIBASession, GetCIBASession, GetCIBASessionByRequestID, UpdateCIBASession, DecideCIBASession, InvalidateCIBASession struct{}
 }
 
+func TestDiscoveryGrantManagement(t *testing.T) {
+	members := []string{
+		consts.DiscoveryGrantManagementActionsSupported,
+		consts.DiscoveryGrantManagementEndpoint,
+		consts.DiscoveryGrantManagementActionRequired,
+	}
+
+	testCases := []struct {
+		name     string
+		setup    func(config *oauth2.Config) oauth2.Configurator
+		expected map[string]any
+	}{
+		{
+			name: "ShouldOmitEveryMemberWithoutTheConfig",
+			setup: func(config *oauth2.Config) oauth2.Configurator {
+				return config
+			},
+		},
+		{
+			name: "ShouldOmitEveryMemberWhenTheConfiguratorIsNotAProvider",
+			setup: func(config *oauth2.Config) oauth2.Configurator {
+				config.GrantManagement = &oauth2.GrantManagementConfig{
+					Actions:  []oauth2.GrantManagementAction{oauth2.GrantManagementActionQuery},
+					Endpoint: "https://as.example.com/grants",
+				}
+
+				config.AuthorizeEndpointBindingHandlers.Append(grantManagementHandlerStub{enabled: true})
+
+				return struct{ oauth2.Configurator }{config}
+			},
+		},
+		{
+			name: "ShouldOmitEveryMemberWithoutTheHandler",
+			setup: func(config *oauth2.Config) oauth2.Configurator {
+				config.GrantManagement = &oauth2.GrantManagementConfig{
+					Actions:  []oauth2.GrantManagementAction{oauth2.GrantManagementActionQuery},
+					Endpoint: "https://as.example.com/grants",
+				}
+
+				return config
+			},
+		},
+		{
+			name: "ShouldOmitEveryMemberWhenTheHandlerIsNotEnabled",
+			setup: func(config *oauth2.Config) oauth2.Configurator {
+				config.GrantManagement = &oauth2.GrantManagementConfig{
+					Actions:  []oauth2.GrantManagementAction{oauth2.GrantManagementActionQuery},
+					Endpoint: "https://as.example.com/grants",
+				}
+
+				config.AuthorizeEndpointBindingHandlers.Append(grantManagementHandlerStub{})
+
+				return config
+			},
+		},
+		{
+			name: "ShouldAdvertiseTheConfig",
+			setup: func(config *oauth2.Config) oauth2.Configurator {
+				config.GrantManagement = &oauth2.GrantManagementConfig{
+					Actions: []oauth2.GrantManagementAction{
+						oauth2.GrantManagementActionQuery,
+						oauth2.GrantManagementActionRevoke,
+						oauth2.GrantManagementActionCreate,
+						oauth2.GrantManagementActionMerge,
+					},
+					Endpoint:       "https://as.example.com/grants",
+					ActionRequired: true,
+				}
+
+				config.AuthorizeEndpointBindingHandlers.Append(grantManagementHandlerStub{enabled: true})
+
+				return config
+			},
+			expected: map[string]any{
+				consts.DiscoveryGrantManagementActionsSupported: []any{"query", "revoke", "create", "merge"},
+				consts.DiscoveryGrantManagementEndpoint:         "https://as.example.com/grants",
+				consts.DiscoveryGrantManagementActionRequired:   true,
+			},
+		},
+		{
+			name: "ShouldOmitTheEmptyMembers",
+			setup: func(config *oauth2.Config) oauth2.Configurator {
+				config.GrantManagement = &oauth2.GrantManagementConfig{
+					Endpoint: "https://as.example.com/grants",
+				}
+
+				config.AuthorizeEndpointBindingHandlers.Append(grantManagementHandlerStub{enabled: true})
+
+				return config
+			},
+			expected: map[string]any{
+				consts.DiscoveryGrantManagementEndpoint: "https://as.example.com/grants",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
+			strategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
+
+			provider := composeDiscoveryOpenID(config, strategy)
+			provider.(*oauth2.Fosite).Config = tc.setup(config)
+
+			server, err := provider.NewOAuth2AuthorizationServerMetadata(context.Background())
+			require.NoError(t, err)
+
+			openid, err := provider.NewOpenIDConnectProviderMetadata(context.Background())
+			require.NoError(t, err)
+
+			documents := map[string]map[string]any{
+				"OAuth2AuthorizationServerMetadata": marshalMembers(t, server),
+				"OpenIDConnectProviderMetadata":     marshalMembers(t, openid),
+			}
+
+			for name, actual := range documents {
+				for _, member := range members {
+					if value, ok := tc.expected[member]; ok {
+						assert.Equal(t, value, actual[member], name)
+					} else {
+						assert.NotContains(t, actual, member, name)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestComposeAllEnabledExcludesCIBA(t *testing.T) {
 	store := &cibaLessStore{MemoryStore: storage.NewMemoryStore()}
 
@@ -1356,4 +1484,16 @@ func TestComposeAllEnabledExcludesCIBA(t *testing.T) {
 	assert.NotContains(t, members, consts.DiscoveryBackChannelAuthenticationRequestSigningAlgValuesSupported)
 	assert.NotContains(t, members, consts.DiscoveryBackChannelUserCodeParameterSupported)
 	assert.NotContains(t, metadata.GrantTypesSupported, consts.GrantTypeOpenIDCIBA)
+}
+
+type grantManagementHandlerStub struct {
+	enabled bool
+}
+
+func (h grantManagementHandlerStub) BindAuthorizeRequest(_ context.Context, _ oauth2.AuthorizeRequester) (err error) {
+	return nil
+}
+
+func (h grantManagementHandlerStub) HandlesGrantManagement(_ context.Context) (enabled bool) {
+	return h.enabled
 }

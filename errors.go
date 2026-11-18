@@ -62,6 +62,25 @@ var (
 	// back, and treat the request as a replay only if another request has invalidated it.
 	ErrSerializationFailure = errors.New("The request could not be completed due to concurrent access")
 
+	// ErrSSFStreamUpdatePending is returned by an SSFStreamPolicy that is unable to decide whether a Shared Signals
+	// Framework stream status update may complete. The update is answered with 202 and the stored status, which is not
+	// changed.
+	//
+	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2.2
+	ErrSSFStreamUpdatePending = errors.New("the stream status update is pending")
+
+	// ErrSSFStreamPaused is matched by the error of a delivery that was not attempted because the Shared Signals
+	// Framework stream is paused. The Security Event Token should be held and sent once the stream is enabled.
+	//
+	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2.1
+	ErrSSFStreamPaused = errors.New("the stream is paused")
+
+	// ErrSSFStreamDisabled is matched by the error of a delivery that was not attempted because the Shared Signals
+	// Framework stream is disabled. The Security Event Token is not held for later.
+	//
+	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2.1
+	ErrSSFStreamDisabled = errors.New("the stream is disabled")
+
 	// ErrUnknownRequest is returned when the handler is not responsible for the request.
 	ErrUnknownRequest = &RFC6749Error{
 		ErrorField:       errUnknownErrorName,

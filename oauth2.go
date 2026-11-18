@@ -186,10 +186,16 @@ type Provider interface {
 	// * https://www.rfc-editor.org/rfc/rfc9470#section-3
 	WriteBearerAuthorizationChallenge(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) (rfc *RFC6749Error)
 
-	// WriteSSFConfiguration writes the Transmitter Configuration Metadata.
+	// WriteSSFConfiguration writes the Transmitter Configuration Metadata, or a 'server_error' for metadata that
+	// ValidateSSFConfiguration refuses.
 	//
 	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-7.2.3
 	WriteSSFConfiguration(ctx context.Context, rw http.ResponseWriter, configuration *SSFConfiguration)
+
+	// ValidateSSFConfiguration returns an error for Transmitter Configuration Metadata that must not be published.
+	//
+	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-7.1
+	ValidateSSFConfiguration(ctx context.Context, configuration *SSFConfiguration) (err error)
 
 	// NewPushedAuthorizeRequest validates the request and produces an AuthorizeRequester object that can be stored.
 	NewPushedAuthorizeRequest(ctx context.Context, r *http.Request) (requester AuthorizeRequester, err error)
@@ -381,6 +387,13 @@ type Provider interface {
 	// See: https://www.rfc-editor.org/rfc/rfc8935.html
 	PushSecurityEventToken(ctx context.Context, client Client, delivery SSFDelivery, token string) (result SSFPushResult)
 
+	// PushSecurityEventTokenToStream makes one RFC 8935 push attempt on a stream of the client after reading its
+	// status again. Only a stream-updated event is sent on a stream that is not enabled: any other token is reported
+	// with ErrSSFStreamPaused, to be held, or ErrSSFStreamDisabled, to be dropped.
+	//
+	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2.1
+	PushSecurityEventTokenToStream(ctx context.Context, client Client, streamID, eventType, token string) (result SSFPushResult)
+
 	// NewSSFStreamRequest authorizes a request to the Shared Signals Framework stream configuration endpoint and
 	// decodes its body. The session must implement DPoPBoundSession and MTLSBoundSession.
 	//
@@ -391,6 +404,13 @@ type Provider interface {
 	//
 	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1
 	NewSSFStreamResponse(ctx context.Context, requester SSFStreamRequester) (responder SSFStreamResponder, err error)
+
+	// ReconcileSSFStream applies the current stream policy of the client to the 'events_supported' and
+	// 'events_delivered' of its stored stream, which a stream configuration update otherwise leaves alone, and returns
+	// the stream as it now stands. It is called by the application after it changes the policy of a client.
+	//
+	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1.3
+	ReconcileSSFStream(ctx context.Context, client Client, streamID string) (stream *SSFStream, err error)
 
 	// WriteSSFStreamResponse writes the stream configuration response.
 	WriteSSFStreamResponse(ctx context.Context, rw http.ResponseWriter, requester SSFStreamRequester, responder SSFStreamResponder)
@@ -404,7 +424,8 @@ type Provider interface {
 	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2
 	NewSSFStreamStatusRequest(ctx context.Context, r *http.Request, session Session) (requester SSFStreamStatusRequester, err error)
 
-	// NewSSFStreamStatusResponse reads or updates the status of a stream of the requesting client.
+	// NewSSFStreamStatusResponse reads or updates the status of a stream of the requesting client. An update the
+	// SSFStreamPolicy defers with ErrSSFStreamUpdatePending is answered with 202 and the stored status.
 	//
 	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2
 	NewSSFStreamStatusResponse(ctx context.Context, requester SSFStreamStatusRequester) (responder SSFStreamResponder, err error)
@@ -421,7 +442,11 @@ type Provider interface {
 	// NewSSFPollRequest authorizes an RFC 8936 poll request for the poll stream of the requesting client and parses its
 	// body. The session must implement DPoPBoundSession and MTLSBoundSession.
 	//
+	// The provider does not long poll: when the request does not set 'returnImmediately' and no SET is available, the
+	// application delays its response until one is or until its timeout elapses (RFC 8936 Section 2.5).
+	//
 	// See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.2
+	// See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.5
 	NewSSFPollRequest(ctx context.Context, r *http.Request, session Session, streamID string) (request *SSFPollRequest, err error)
 
 	// WriteSSFPollResponse writes the poll response of SETs keyed by 'jti'.

@@ -19,6 +19,7 @@ import (
 
 	. "authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 const ssfVerifyURL = "https://ssf.example.com/ssf/verify"
@@ -26,12 +27,12 @@ const ssfVerifyURL = "https://ssf.example.com/ssf/verify"
 type ssfVerifyRecorder struct {
 	calls   int
 	stream  *SSFStream
-	state   string
+	state   *string
 	failure error
 	onCall  func()
 }
 
-func (v *ssfVerifyRecorder) HandleSSFVerification(_ context.Context, stream *SSFStream, state string) (err error) {
+func (v *ssfVerifyRecorder) HandleSSFVerification(_ context.Context, stream *SSFStream, state *string) (err error) {
 	v.calls++
 	v.stream = stream
 	v.state = state
@@ -102,7 +103,8 @@ func TestSSFVerification(t *testing.T) {
 
 		require.Equal(t, 1, rec.calls)
 		assert.Equal(t, id, rec.stream.StreamID)
-		assert.Equal(t, "s-1", rec.state)
+		require.NotNil(t, rec.state)
+		assert.Equal(t, "s-1", *rec.state)
 		assert.False(t, h.stored(t, "a", id).LastVerificationAt.IsZero())
 	})
 
@@ -113,7 +115,69 @@ func TestSSFVerification(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, 1, rec.calls)
-		assert.Equal(t, "", rec.state)
+		assert.Nil(t, rec.state)
+	})
+
+	t.Run("ShouldPassState", func(t *testing.T) {
+		testCases := []struct {
+			name     string
+			state    string
+			expected *string
+		}{
+			{name: "ShouldPassEmptyState", state: `,"state":""`, expected: new("")},
+			{name: "ShouldPassWhitespaceState", state: `,"state":" "`, expected: new(" ")},
+			{name: "ShouldTreatNullStateAsAbsent", state: `,"state":null`},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				h, rec, id := newHarness(t, 0)
+
+				_, err := h.doVerify(t, "a", http.MethodPost, "application/json", `{"stream_id":"`+id+`"`+tc.state+`}`)
+				require.NoError(t, err)
+
+				require.Equal(t, 1, rec.calls)
+				assert.Equal(t, tc.expected, rec.state)
+
+				event, err := json.Marshal(jwt.SSFVerification{State: rec.state})
+				require.NoError(t, err)
+
+				if tc.expected == nil {
+					assert.JSONEq(t, `{}`, string(event))
+				} else {
+					assert.JSONEq(t, `{"state":"`+*tc.expected+`"}`, string(event))
+				}
+			})
+		}
+	})
+
+	t.Run("ShouldRejectStateThatIsNotAString", func(t *testing.T) {
+		h, rec, id := newHarness(t, 0)
+
+		rw, err := h.doVerify(t, "a", http.MethodPost, "application/json", `{"stream_id":"`+id+`","state":7}`)
+		require.Error(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, rw.Code)
+		assert.Equal(t, 0, rec.calls)
+	})
+
+	t.Run("ShouldAcceptMissingContentType", func(t *testing.T) {
+		h, rec, id := newHarness(t, 0)
+
+		_, err := h.doVerify(t, "a", http.MethodPost, "", `{"stream_id":"`+id+`","state":"s-1"}`)
+		require.NoError(t, err)
+
+		assert.Equal(t, 1, rec.calls)
+	})
+
+	t.Run("ShouldRejectEmptyBody", func(t *testing.T) {
+		h, rec, _ := newHarness(t, 0)
+
+		rw, err := h.doVerify(t, "a", http.MethodPost, "", "")
+		require.Error(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, rw.Code)
+		assert.Equal(t, 0, rec.calls)
 	})
 
 	t.Run("ShouldAllowPausedStream", func(t *testing.T) {
@@ -125,6 +189,32 @@ func TestSSFVerification(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, 1, rec.calls)
+	})
+
+	t.Run("ShouldRefuseDisabledStream", func(t *testing.T) {
+		h, rec, id := newHarness(t, time.Minute)
+
+		require.NoError(t, h.store.UpdateSSFStreamStatus(context.Background(), "a", id, SSFStreamStatusDisabled, ""))
+
+		rw, err := h.doVerify(t, "a", http.MethodPost, "application/json", `{"stream_id":"`+id+`"}`)
+		require.ErrorIs(t, err, ErrInvalidRequest)
+
+		assert.Equal(t, http.StatusBadRequest, rw.Code)
+		assert.Contains(t, rw.Body.String(), "invalid_request")
+		assert.Equal(t, 0, rec.calls)
+		assert.True(t, h.stored(t, "a", id).LastVerificationAt.IsZero())
+	})
+
+	t.Run("ShouldHideDisabledStreamOfAnotherClient", func(t *testing.T) {
+		h, rec, id := newHarness(t, 0)
+
+		require.NoError(t, h.store.UpdateSSFStreamStatus(context.Background(), "a", id, SSFStreamStatusDisabled, ""))
+
+		rw, err := h.doVerify(t, "b", http.MethodPost, "application/json", `{"stream_id":"`+id+`"}`)
+		require.Error(t, err)
+
+		assert.Equal(t, http.StatusNotFound, rw.Code)
+		assert.Equal(t, 0, rec.calls)
 	})
 
 	t.Run("ShouldRejectMissingStreamID", func(t *testing.T) {

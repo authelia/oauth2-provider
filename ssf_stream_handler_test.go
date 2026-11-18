@@ -55,6 +55,13 @@ func (v ssfHandlerValidator) ValidateSSFEndpoint(ctx context.Context, client Cli
 type ssfCountingStore struct {
 	*storage.MemoryStore
 	creates atomic.Int32
+	updates atomic.Int32
+}
+
+func (s *ssfCountingStore) UpdateSSFStream(ctx context.Context, stream *SSFStream) error {
+	s.updates.Add(1)
+
+	return s.MemoryStore.UpdateSSFStream(ctx, stream)
 }
 
 func (s *ssfCountingStore) CreateSSFStream(ctx context.Context, stream *SSFStream) error {
@@ -254,6 +261,329 @@ func TestSSFStreamHandlerCreate(t *testing.T) {
 	})
 }
 
+func TestSSFStreamHandlerContentType(t *testing.T) {
+	testCases := []struct {
+		name        string
+		contentType string
+		body        string
+		description string
+	}{
+		{name: "ShouldAcceptBodyWithoutContentType", body: `{"description":"d"}`, description: "d"},
+		{name: "ShouldAcceptEmptyBodyWithoutContentType"},
+		{name: "ShouldAcceptEmptyBodyWithContentType", contentType: "application/json"},
+		{name: "ShouldAcceptContentTypeWithParameters", contentType: "application/json; charset=utf-8", body: `{"description":"d"}`, description: "d"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newSSFHandlerHarness(t, nil)
+
+			rw := h.do(t, "a", http.MethodPost, ssfHandlerURL, tc.contentType, tc.body)
+			require.Equal(t, http.StatusCreated, rw.Code, rw.Body.String())
+
+			var got struct {
+				StreamID string `json:"stream_id"`
+			}
+
+			require.NoError(t, json.Unmarshal(rw.Body.Bytes(), &got))
+
+			stored := h.stored(t, "a", got.StreamID)
+			assert.Equal(t, SSFDeliveryMethodPoll, stored.Delivery.Method)
+			assert.Equal(t, tc.description, stored.Description)
+		})
+	}
+
+	t.Run("ShouldUpdateWithoutContentType", func(t *testing.T) {
+		for _, method := range []string{http.MethodPatch, http.MethodPut} {
+			h := newSSFHandlerHarness(t, nil)
+			id := h.createStream(t, "a", `{"description":"d"}`)
+
+			rw := h.do(t, "a", method, ssfHandlerURL, "", `{"stream_id":"`+id+`","description":"x","delivery":{"method":"`+SSFDeliveryMethodPoll+`"}}`)
+			require.Equal(t, http.StatusOK, rw.Code, method+rw.Body.String())
+			assert.Equal(t, "x", h.stored(t, "a", id).Description, method)
+		}
+	})
+
+	t.Run("ShouldRequireStreamIDOfEmptyUpdate", func(t *testing.T) {
+		for _, method := range []string{http.MethodPatch, http.MethodPut} {
+			h := newSSFHandlerHarness(t, nil)
+			h.createStream(t, "a", `{"description":"d"}`)
+
+			rw := h.do(t, "a", method, ssfHandlerURL, "", "")
+			assert.Equal(t, http.StatusBadRequest, rw.Code, method)
+			assert.Contains(t, rw.Body.String(), `"error":"invalid_request"`, method)
+		}
+	})
+}
+
+func TestSSFStreamHandlerEventsRequestedValues(t *testing.T) {
+	testCases := []struct {
+		name      string
+		requested string
+		status    int
+		expected  []string
+		delivered []string
+	}{
+		{name: "ShouldIgnoreNumber", requested: `[1,"` + ssfEventSessionRev + `"]`, status: http.StatusOK, expected: []string{ssfEventSessionRev}, delivered: []string{ssfEventSessionRev}},
+		{name: "ShouldIgnoreEveryOtherType", requested: `[null,true,1.5,{"a":"b"},["` + ssfEventCredChange + `"],"` + ssfEventSessionRev + `"]`, status: http.StatusOK, expected: []string{ssfEventSessionRev}, delivered: []string{ssfEventSessionRev}},
+		{name: "ShouldKeepUnknownStrings", requested: `["not a uri","` + ssfEventOther + `","` + ssfEventCredChange + `"]`, status: http.StatusOK, expected: []string{"not a uri", ssfEventOther, ssfEventCredChange}, delivered: []string{ssfEventCredChange}},
+		{name: "ShouldKeepEmptyArrayOfIgnoredValues", requested: `[1,2]`, status: http.StatusOK, expected: []string{}, delivered: []string{}},
+		{name: "ShouldRejectString", requested: `"` + ssfEventSessionRev + `"`, status: http.StatusBadRequest},
+		{name: "ShouldRejectObject", requested: `{}`, status: http.StatusBadRequest},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("Create", func(t *testing.T) {
+				h := newSSFHandlerHarness(t, nil)
+
+				rw := h.do(t, "a", http.MethodPost, ssfHandlerURL, "application/json", `{"events_requested":`+tc.requested+`}`)
+
+				if tc.status != http.StatusOK {
+					assert.Equal(t, tc.status, rw.Code, rw.Body.String())
+					assert.Contains(t, rw.Body.String(), `"error":"invalid_request"`)
+
+					return
+				}
+
+				require.Equal(t, http.StatusCreated, rw.Code, rw.Body.String())
+
+				var got struct {
+					StreamID string `json:"stream_id"`
+				}
+
+				require.NoError(t, json.Unmarshal(rw.Body.Bytes(), &got))
+
+				stored := h.stored(t, "a", got.StreamID)
+				assert.Equal(t, tc.expected, stored.EventsRequested)
+				assert.Equal(t, tc.delivered, stored.EventsDelivered)
+			})
+
+			for _, method := range []string{http.MethodPatch, http.MethodPut} {
+				t.Run(method, func(t *testing.T) {
+					h := newSSFHandlerHarness(t, nil)
+					id := h.createStream(t, "a", `{"events_requested":["`+ssfEventCredChange+`"]}`)
+
+					rw := h.do(t, "a", method, ssfHandlerURL, "application/json", `{"stream_id":"`+id+`","delivery":{"method":"`+SSFDeliveryMethodPoll+`"},"events_requested":`+tc.requested+`}`)
+					require.Equal(t, tc.status, rw.Code, rw.Body.String())
+
+					stored := h.stored(t, "a", id)
+
+					if tc.status != http.StatusOK {
+						assert.Contains(t, rw.Body.String(), `"error":"invalid_request"`)
+						assert.Equal(t, []string{ssfEventCredChange}, stored.EventsRequested)
+
+						return
+					}
+
+					assert.Equal(t, tc.expected, stored.EventsRequested)
+					assert.Equal(t, tc.delivered, stored.EventsDelivered)
+				})
+			}
+		})
+	}
+
+	t.Run("ShouldRejectNonStringTransmitterSuppliedValues", func(t *testing.T) {
+		for _, prop := range []string{`"events_supported":[1,"` + ssfEventSessionRev + `","` + ssfEventCredChange + `"]`, `"events_delivered":[1,"` + ssfEventCredChange + `"]`} {
+			h := newSSFHandlerHarness(t, nil)
+			id := h.createStream(t, "a", `{"description":"d","events_requested":["`+ssfEventCredChange+`"]}`)
+
+			rw := h.do(t, "a", http.MethodPatch, ssfHandlerURL, "application/json", `{"stream_id":"`+id+`","description":"x",`+prop+`}`)
+			assert.Equal(t, http.StatusBadRequest, rw.Code, prop)
+			assert.Equal(t, "d", h.stored(t, "a", id).Description, prop)
+		}
+	})
+
+	t.Run("ShouldTreatNullAsAbsent", func(t *testing.T) {
+		h := newSSFHandlerHarness(t, nil)
+		id := h.createStream(t, "a", `{"events_requested":["`+ssfEventCredChange+`"]}`)
+
+		rw := h.do(t, "a", http.MethodPatch, ssfHandlerURL, "application/json", `{"stream_id":"`+id+`","events_requested":null}`)
+		require.Equal(t, http.StatusOK, rw.Code, rw.Body.String())
+		assert.Equal(t, []string{ssfEventCredChange}, h.stored(t, "a", id).EventsRequested)
+	})
+}
+
+func TestSSFStreamUpdatePolicyChange(t *testing.T) {
+	const pushURL = "https://rx.example.com/push"
+
+	narrowed := &SSFClientPolicy{
+		Audience:        []string{"https://other.example.com"},
+		EventsSupported: []string{ssfEventCredChange, ssfEventOther},
+		DeliveryMethods: []string{SSFDeliveryMethodPush, SSFDeliveryMethodPoll},
+	}
+
+	created := []string{ssfEventSessionRev, ssfEventCredChange}
+	poll := `"delivery":{"method":"` + SSFDeliveryMethodPoll + `"}`
+
+	testCases := []struct {
+		name      string
+		method    string
+		body      string
+		requested []string
+		supported []string
+		delivered []string
+	}{
+		{name: "ShouldKeepEventsOnDescriptionPatch", method: http.MethodPatch, body: `"description":"x"`, requested: created, supported: created, delivered: created},
+		{name: "ShouldKeepEventsOnDeliveryPatch", method: http.MethodPatch, body: ssfPushBody(pushURL, ""), requested: created, supported: created, delivered: created},
+		{name: "ShouldKeepEventsOnEmptyPatch", method: http.MethodPatch, body: `"events_requested":null`, requested: created, supported: created, delivered: created},
+		{name: "ShouldKeepEventsOnMatchingTransmitterProperties", method: http.MethodPatch, body: `"events_supported":["` + ssfEventSessionRev + `","` + ssfEventCredChange + `"],"events_delivered":["` + ssfEventCredChange + `","` + ssfEventSessionRev + `"]`, requested: created, supported: created, delivered: created},
+		{name: "ShouldRecomputeOnEventsRequestedPatch", method: http.MethodPatch, body: `"events_requested":["` + ssfEventSessionRev + `","` + ssfEventOther + `"]`, requested: []string{ssfEventSessionRev, ssfEventOther}, supported: narrowed.EventsSupported, delivered: []string{ssfEventOther}},
+		{name: "ShouldRecomputeOnSameEventsRequestedPatch", method: http.MethodPatch, body: `"events_requested":["` + ssfEventSessionRev + `","` + ssfEventCredChange + `"]`, requested: created, supported: narrowed.EventsSupported, delivered: []string{ssfEventCredChange}},
+		{name: "ShouldRecomputeOnEmptyEventsRequestedPatch", method: http.MethodPatch, body: `"events_requested":[]`, requested: []string{}, supported: narrowed.EventsSupported, delivered: []string{}},
+		{name: "ShouldRecomputeOnPut", method: http.MethodPut, body: poll + `,"events_requested":["` + ssfEventSessionRev + `","` + ssfEventCredChange + `"]`, requested: created, supported: narrowed.EventsSupported, delivered: []string{ssfEventCredChange}},
+		{name: "ShouldRecomputeOnPutWithoutEventsRequested", method: http.MethodPut, body: poll, supported: narrowed.EventsSupported, delivered: []string{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newSSFHandlerHarness(t, nil)
+			id := h.createStream(t, "a", `{"events_requested":["`+ssfEventSessionRev+`","`+ssfEventCredChange+`"]}`)
+
+			h.config.Policy = ssfHandlerPolicy{policy: narrowed}
+
+			rw := h.do(t, "a", tc.method, ssfHandlerURL, "application/json", `{"stream_id":"`+id+`",`+tc.body+`}`)
+			require.Equal(t, http.StatusOK, rw.Code, rw.Body.String())
+
+			var got struct {
+				Audience        []string `json:"aud"`
+				EventsSupported []string `json:"events_supported"`
+				EventsDelivered []string `json:"events_delivered"`
+			}
+
+			require.NoError(t, json.Unmarshal(rw.Body.Bytes(), &got))
+			assert.Equal(t, tc.supported, got.EventsSupported)
+			assert.Equal(t, tc.delivered, got.EventsDelivered)
+			assert.Equal(t, []string{"https://rx.example.com"}, got.Audience)
+
+			stored := h.stored(t, "a", id)
+			assert.Equal(t, tc.requested, stored.EventsRequested)
+			assert.Equal(t, tc.supported, stored.EventsSupported)
+			assert.Equal(t, tc.delivered, stored.EventsDelivered)
+			assert.Equal(t, []string{"https://rx.example.com"}, stored.Audience)
+		})
+	}
+}
+
+func TestReconcileSSFStream(t *testing.T) {
+	const pushURL = "https://rx.example.com/push"
+
+	ctx := context.Background()
+	client := &DefaultClient{ID: "a"}
+	created := []string{ssfEventSessionRev, ssfEventCredChange}
+
+	testCases := []struct {
+		name      string
+		policy    *SSFClientPolicy
+		supported []string
+		delivered []string
+		updates   int32
+	}{
+		{
+			name:      "ShouldNarrow",
+			policy:    &SSFClientPolicy{EventsSupported: []string{ssfEventCredChange, ssfEventOther}},
+			supported: []string{ssfEventCredChange, ssfEventOther},
+			delivered: []string{ssfEventCredChange, ssfEventOther},
+			updates:   1,
+		},
+		{
+			name:      "ShouldWiden",
+			policy:    &SSFClientPolicy{EventsSupported: []string{ssfEventSessionRev, ssfEventCredChange, ssfEventOther}},
+			supported: []string{ssfEventSessionRev, ssfEventCredChange, ssfEventOther},
+			delivered: []string{ssfEventSessionRev, ssfEventCredChange, ssfEventOther},
+			updates:   1,
+		},
+		{
+			name:      "ShouldRemoveEveryEvent",
+			policy:    &SSFClientPolicy{},
+			supported: nil,
+			delivered: []string{},
+			updates:   1,
+		},
+		{
+			name:      "ShouldNotStoreWhenUnchanged",
+			policy:    &SSFClientPolicy{Audience: []string{"https://other.example.com"}, EventsSupported: created},
+			supported: created,
+			delivered: created,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newSSFHandlerHarness(t, nil)
+			id := h.createStream(t, "a", `{"description":"d","events_requested":["`+ssfEventSessionRev+`","`+ssfEventCredChange+`","`+ssfEventOther+`"],`+ssfPushBody(pushURL, ssfHandlerSecret)+`}`)
+			at := time.Unix(1700000000, 0).UTC()
+
+			require.NoError(t, h.store.UpdateSSFStreamStatus(ctx, "a", id, SSFStreamStatusPaused, "maintenance"))
+			require.NoError(t, h.store.UpdateSSFStreamLastVerification(ctx, "a", id, at))
+
+			h.config.Policy = ssfHandlerPolicy{policy: tc.policy}
+
+			stream, err := h.provider.ReconcileSSFStream(ctx, client, id)
+			require.NoError(t, err)
+
+			stored := h.stored(t, "a", id)
+
+			for _, got := range []*SSFStream{stream, stored} {
+				assert.Equal(t, tc.supported, got.EventsSupported)
+				assert.Equal(t, tc.delivered, got.EventsDelivered)
+				assert.Equal(t, []string{ssfEventSessionRev, ssfEventCredChange, ssfEventOther}, got.EventsRequested)
+				assert.Equal(t, []string{"https://rx.example.com"}, got.Audience)
+				assert.Equal(t, SSFDelivery{Method: SSFDeliveryMethodPush, EndpointURL: pushURL, AuthorizationHeader: ssfHandlerSecret}, got.Delivery)
+				assert.Equal(t, "d", got.Description)
+				assert.Equal(t, SSFStreamStatusPaused, got.Status)
+				assert.Equal(t, "maintenance", got.StatusReason)
+				assert.Equal(t, at, got.LastVerificationAt)
+			}
+
+			assert.Equal(t, tc.updates, h.store.updates.Load())
+		})
+	}
+
+	t.Run("ShouldNotRevealAnotherClientsStream", func(t *testing.T) {
+		h := newSSFHandlerHarness(t, nil)
+		id := h.createStream(t, "a", `{"events_requested":["`+ssfEventSessionRev+`"]}`)
+
+		h.config.Policy = ssfHandlerPolicy{policy: &SSFClientPolicy{}}
+
+		_, foreign := h.provider.ReconcileSSFStream(ctx, &DefaultClient{ID: "b"}, id)
+		_, unknown := h.provider.ReconcileSSFStream(ctx, &DefaultClient{ID: "b"}, "unknown")
+
+		require.ErrorIs(t, foreign, ErrNotFound)
+		require.ErrorIs(t, unknown, ErrNotFound)
+		assert.Equal(t, ErrorToDebugRFC6749Error(unknown).Error(), ErrorToDebugRFC6749Error(foreign).Error())
+		assert.Equal(t, []string{ssfEventSessionRev}, h.stored(t, "a", id).EventsDelivered)
+	})
+
+	t.Run("ShouldFail", func(t *testing.T) {
+		failures := []struct {
+			name     string
+			mutate   func(h *ssfHandlerHarness)
+			expected error
+		}{
+			{name: "ShouldDenyOnPolicyError", mutate: func(h *ssfHandlerHarness) { h.config.Policy = ssfHandlerPolicy{err: errors.New("denied")} }, expected: ErrAccessDenied},
+			{name: "ShouldFailWithoutPolicy", mutate: func(h *ssfHandlerHarness) { h.config.Policy = nil }, expected: ErrServerError},
+			{name: "ShouldFailWithoutConfig", mutate: func(h *ssfHandlerHarness) { h.root.SSF = nil }, expected: ErrServerError},
+			{name: "ShouldFailWithoutStorage", mutate: func(h *ssfHandlerHarness) { h.provider.Store = noSSFStore{} }, expected: ErrServerError},
+		}
+
+		for _, tc := range failures {
+			t.Run(tc.name, func(t *testing.T) {
+				h := newSSFHandlerHarness(t, nil)
+				id := h.createStream(t, "a", `{"events_requested":["`+ssfEventSessionRev+`"]}`)
+
+				tc.mutate(h)
+
+				stream, err := h.provider.ReconcileSSFStream(ctx, client, id)
+				require.ErrorIs(t, err, tc.expected)
+				assert.Nil(t, stream)
+				assert.Equal(t, []string{ssfEventSessionRev}, h.stored(t, "a", id).EventsDelivered)
+				assert.Zero(t, h.store.updates.Load())
+			})
+		}
+	})
+}
+
 func TestSSFStreamHandlerCreateRequiresIssuer(t *testing.T) {
 	h := newSSFHandlerHarness(t, nil)
 	h.root.Issuer = ""
@@ -433,6 +763,12 @@ func TestSSFStreamHandlerCreateRejects(t *testing.T) {
 		{name: "ShouldRejectEmptyPollEndpoint", mutate: func(c *SSFConfig) {
 			c.PollEndpointURL = func(ctx context.Context, streamID string) (string, error) { return "", nil }
 		}, contentType: "application/json", body: `{}`, code: http.StatusInternalServerError, errCode: "server_error"},
+		{name: "ShouldRejectHTTPPollEndpoint", mutate: ssfPollEndpoint("http://ssf.example.com/ssf/poll"), contentType: "application/json", body: `{}`, code: http.StatusInternalServerError, errCode: "server_error"},
+		{name: "ShouldRejectRelativePollEndpoint", mutate: ssfPollEndpoint("/ssf/poll"), contentType: "application/json", body: `{}`, code: http.StatusInternalServerError, errCode: "server_error"},
+		{name: "ShouldRejectHostlessPollEndpoint", mutate: ssfPollEndpoint("https:///ssf/poll"), contentType: "application/json", body: `{}`, code: http.StatusInternalServerError, errCode: "server_error"},
+		{name: "ShouldRejectUserinfoPollEndpoint", mutate: ssfPollEndpoint("https://u:p@ssf.example.com/ssf/poll"), contentType: "application/json", body: `{}`, code: http.StatusInternalServerError, errCode: "server_error"},
+		{name: "ShouldRejectFragmentPollEndpoint", mutate: ssfPollEndpoint("https://ssf.example.com/ssf/poll#frag"), contentType: "application/json", body: `{}`, code: http.StatusInternalServerError, errCode: "server_error"},
+		{name: "ShouldRejectUnparsablePollEndpoint", mutate: ssfPollEndpoint("https://ssf.example.com/%zz"), contentType: "application/json", body: `{}`, code: http.StatusInternalServerError, errCode: "server_error"},
 		{name: "ShouldRejectEmptyAudienceElement", mutate: func(c *SSFConfig) {
 			c.Policy = ssfHandlerPolicy{policy: &SSFClientPolicy{Audience: []string{"a", ""}, DeliveryMethods: []string{SSFDeliveryMethodPoll}}}
 		}, contentType: "application/json", body: `{}`, code: http.StatusInternalServerError, errCode: "server_error"},
@@ -447,7 +783,9 @@ func TestSSFStreamHandlerCreateRejects(t *testing.T) {
 		{name: "ShouldFailWithoutPolicy", mutate: func(c *SSFConfig) { c.Policy = nil }, contentType: "application/json", body: `{}`, code: http.StatusInternalServerError, errCode: "server_error"},
 		{name: "ShouldFailWithoutPollEndpointFunc", mutate: func(c *SSFConfig) { c.PollEndpointURL = nil }, contentType: "application/json", body: `{}`, code: http.StatusInternalServerError, errCode: "server_error"},
 		{name: "ShouldRejectWrongContentType", contentType: "text/plain", body: `{}`, code: http.StatusBadRequest, errCode: "invalid_request"},
-		{name: "ShouldRejectMissingContentType", body: `{}`, code: http.StatusBadRequest, errCode: "invalid_request"},
+		{name: "ShouldRejectEmptyBodyWithWrongContentType", contentType: "text/plain", code: http.StatusBadRequest, errCode: "invalid_request"},
+		{name: "ShouldRejectFormContentType", contentType: "application/x-www-form-urlencoded", body: `description=d`, code: http.StatusBadRequest, errCode: "invalid_request"},
+		{name: "ShouldRejectMalformedJSONWithoutContentType", body: `{"description":`, code: http.StatusBadRequest, errCode: "invalid_request"},
 		{name: "ShouldRejectMalformedJSON", contentType: "application/json", body: `{"description":`, code: http.StatusBadRequest, errCode: "invalid_request"},
 		{name: "ShouldRejectNullBody", contentType: "application/json", body: `null`, code: http.StatusBadRequest, errCode: "invalid_request"},
 		{name: "ShouldRejectTrailingData", contentType: "application/json", body: `{} {}`, code: http.StatusBadRequest, errCode: "invalid_request"},
@@ -701,6 +1039,12 @@ func TestSSFStreamRequestDeliveryRedaction(t *testing.T) {
 
 		assert.NotContains(t, out, ssfHandlerSecret, format)
 		assert.Contains(t, out, "[redacted]", format)
+	}
+}
+
+func ssfPollEndpoint(endpoint string) func(c *SSFConfig) {
+	return func(c *SSFConfig) {
+		c.PollEndpointURL = func(ctx context.Context, streamID string) (string, error) { return endpoint, nil }
 	}
 }
 

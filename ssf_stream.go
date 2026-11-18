@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"slices"
 	"time"
+
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 const (
@@ -21,13 +23,13 @@ const (
 
 const (
 	// SSFStreamStatusEnabled means the Transmitter delivers events on the stream.
-	SSFStreamStatusEnabled = "enabled"
+	SSFStreamStatusEnabled = jwt.SSFStreamStatusEnabled
 
 	// SSFStreamStatusPaused means the Transmitter does not deliver events on the stream.
-	SSFStreamStatusPaused = "paused"
+	SSFStreamStatusPaused = jwt.SSFStreamStatusPaused
 
 	// SSFStreamStatusDisabled means the Transmitter neither delivers nor holds events on the stream.
-	SSFStreamStatusDisabled = "disabled"
+	SSFStreamStatusDisabled = jwt.SSFStreamStatusDisabled
 )
 
 // SSFStreamStorage persists the streams of a Transmitter. Every method except create takes the owning client ID, and
@@ -102,8 +104,9 @@ type SSFStream struct {
 // stream-updated events are not filtered by this method.
 //
 // It is false for a paused stream, where SSF Section 8.1.2.1 says a Transmitter SHOULD hold events, so an application
-// holding events checks EventsDelivered instead. EventsDelivered reflects the policy at the last create or update, so
-// an application narrowing a policy must re-apply it in its emitter.
+// holding events checks EventsDelivered instead. EventsDelivered reflects the policy when the stream was created, last
+// replaced, last given new 'events_requested' or last passed to Provider.ReconcileSSFStream, so an application
+// narrowing a policy must reconcile the streams of the client.
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2
 func (s *SSFStream) Accepts(eventType string) bool {

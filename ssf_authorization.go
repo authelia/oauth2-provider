@@ -19,8 +19,8 @@ import (
 // 'ssf.read' or 'ssf.manage' and writes require 'ssf.manage'. The token audience must be the configured audience; the
 // request URL is never a fallback.
 //
-// The token is read only from the Authorization header, using the Bearer or DPoP scheme. An 'access_token' parameter
-// alongside it is 'invalid_request' (RFC 6750 Section 2).
+// The token is read only from the Authorization header, using the Bearer scheme, or the DPoP scheme when DPoP is
+// enabled (RFC 9449 Section 7.1). An 'access_token' parameter alongside it is 'invalid_request' (RFC 6750 Section 2).
 //
 // The session passed in must implement DPoPBoundSession and MTLSBoundSession, otherwise a bound token looks unbound and
 // its binding is not enforced.
@@ -28,6 +28,7 @@ import (
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8
 // See: https://openid.net/specs/openid-caep-interoperability-profile-1_0.html#section-2.7.2
 // See: https://openid.net/specs/openid-caep-interoperability-profile-1_0.html#section-2.7.3
+// See: https://www.rfc-editor.org/rfc/rfc9449.html#section-7.1
 func (f *Fosite) authorizeSSFRequest(ctx context.Context, r *http.Request, session Session, write bool) (requester AccessRequester, storage SSFStreamStorage, err error) {
 	var (
 		config   *SSFConfig
@@ -44,7 +45,7 @@ func (f *Fosite) authorizeSSFRequest(ctx context.Context, r *http.Request, sessi
 
 	var token string
 
-	if token, err = ssfCredentialFromRequest(r); err != nil {
+	if token, err = ssfCredentialFromRequest(r, f.Config.GetDPoPEnabled(ctx)); err != nil {
 		return nil, nil, err
 	}
 
@@ -101,17 +102,17 @@ func (f *Fosite) authorizeSSFRequest(ctx context.Context, r *http.Request, sessi
 	return ar, storage, nil
 }
 
-// ssfCredentialFromRequest returns the token of the Authorization header, or empty when it has no Bearer or DPoP
-// credential. An 'access_token' parameter is never used as the token (CAEP profile Section 2.7.3), and is rejected
+// ssfCredentialFromRequest returns the token of the Authorization header, or empty when it has no Bearer credential
+// and, where dpop permits the scheme, no DPoP credential. An 'access_token' parameter is never used as the token (CAEP profile Section 2.7.3), and is rejected
 // alongside a token in the header (RFC 6750 Section 2). A form body is not parsed here, as these endpoints reject one.
-func ssfCredentialFromRequest(r *http.Request) (token string, err error) {
+func ssfCredentialFromRequest(r *http.Request, dpop bool) (token string, err error) {
 	var scheme, value string
 
 	if scheme, value, err = AuthorizationCredentialFromRequest(r); err != nil {
 		return "", err
 	}
 
-	if !strings.EqualFold(scheme, BearerAccessToken) && !strings.EqualFold(scheme, DPoPAccessToken) {
+	if !strings.EqualFold(scheme, BearerAccessToken) && (!dpop || !strings.EqualFold(scheme, DPoPAccessToken)) {
 		return "", nil
 	}
 

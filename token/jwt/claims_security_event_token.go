@@ -9,7 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"math/big"
+	"reflect"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,17 +27,31 @@ import (
 
 // NewSecurityEventTokenClaims returns SecurityEventTokenClaims for exactly one event about the subject, with a
 // generated 'jti' and an 'iat' of the current time (RFC 8417 §2.2, SSF 1.0 §4). The 'iss', 'aud' and event type are
-// required and the txn is optional. A caller reusing a 'jti' sets JTI on the result.
+// required and the txn is optional. The event type is a URI (RFC 8417 §2.2), and the 'iss' and each 'aud' value is a
+// StringOrURI (RFC 7519 §2). The event is validated when it has a Validate method, against the subject when it is a
+// SecurityEventSubjectValidator, and as the typed event when its event type is one this package defines. A caller
+// reusing a 'jti' sets JTI on the result.
 func NewSecurityEventTokenClaims(issuer string, audience []string, subject *SubjectIdentifier, event SecurityEvent, txn string) (claims *SecurityEventTokenClaims, err error) {
 	if issuer == "" {
 		return nil, fmt.Errorf("%w: the 'iss' claim is required", ErrInvalidSecurityEvent)
+	}
+
+	// RFC 7519 §2: a StringOrURI value with a ':' is a URI.
+	if !isStringOrURI(issuer) {
+		return nil, fmt.Errorf("%w: the 'iss' claim value '%s' has a ':' and is not a URI", ErrInvalidSecurityEvent, issuer)
 	}
 
 	if len(audience) == 0 || slices.Contains(audience, "") {
 		return nil, fmt.Errorf("%w: the 'aud' claim is required", ErrInvalidSecurityEvent)
 	}
 
-	if event == nil {
+	for _, aud := range audience {
+		if !isStringOrURI(aud) {
+			return nil, fmt.Errorf("%w: the 'aud' claim value '%s' has a ':' and is not a URI", ErrInvalidSecurityEvent, aud)
+		}
+	}
+
+	if securityEventIsNil(event) {
 		return nil, fmt.Errorf("%w: the event is nil", ErrInvalidSecurityEvent)
 	}
 
@@ -40,45 +59,125 @@ func NewSecurityEventTokenClaims(issuer string, audience []string, subject *Subj
 		return nil, fmt.Errorf("%w: the event type is required", ErrInvalidSecurityEvent)
 	}
 
+	// RFC 8417 §2.2: the event identifier is a URI.
+	if !isURI(event.SecurityEventType()) {
+		return nil, fmt.Errorf("%w: the event type '%s' is not a URI", ErrInvalidSecurityEvent, event.SecurityEventType())
+	}
+
 	if err = subject.Validate(); err != nil {
 		return nil, err
 	}
 
-	if v, ok := event.(interface{ Validate() error }); ok {
-		if err = v.Validate(); err != nil {
-			return nil, err
-		}
+	if err = validateSecurityEvent(event, subject); err != nil {
+		return nil, err
 	}
 
-	var (
-		data    []byte
-		payload map[string]any
-	)
+	var payload map[string]any
+
+	if payload, err = securityEventPayload(event); err != nil {
+		return nil, err
+	}
+
+	if err = validateSecurityEventPayload(event.SecurityEventType(), payload, subject); err != nil {
+		return nil, err
+	}
+
+	return &SecurityEventTokenClaims{
+		JTI:               uuid.New().String(),
+		Issuer:            issuer,
+		Audience:          slices.Clone(audience),
+		IssuedAt:          Now(),
+		SubjectIdentifier: subject,
+		Transaction:       txn,
+		Events:            map[string]any{event.SecurityEventType(): payload},
+	}, nil
+}
+
+func securityEventPayload(event SecurityEvent) (payload map[string]any, err error) {
+	var data []byte
 
 	if data, err = json.Marshal(event); err != nil {
 		return nil, errorsx.WithStack(err)
 	}
 
 	decoder := jjson.NewDecoder(bytes.NewReader(data))
-	decoder.SetNumberType(jjson.UnmarshalIntOrFloat)
+	decoder.SetNumberType(jjson.UnmarshalJSONNumber)
 
 	if err = decoder.Decode(&payload); err != nil {
 		return nil, errorsx.WithStack(err)
 	}
 
 	if payload == nil {
-		payload = map[string]any{}
+		return map[string]any{}, nil
 	}
 
-	return &SecurityEventTokenClaims{
-		JTI:               uuid.New().String(),
-		Issuer:            issuer,
-		Audience:          audience,
-		IssuedAt:          Now(),
-		SubjectIdentifier: subject,
-		Transaction:       txn,
-		Events:            map[string]any{event.SecurityEventType(): payload},
-	}, nil
+	if _, err = securityEventNumbers(payload); err != nil {
+		return nil, err
+	}
+
+	return payload, nil
+}
+
+func securityEventNumbers(value any) (converted any, err error) {
+	switch v := value.(type) {
+	case map[string]any:
+		for key := range v {
+			if v[key], err = securityEventNumbers(v[key]); err != nil {
+				return nil, err
+			}
+		}
+	case []any:
+		for i := range v {
+			if v[i], err = securityEventNumbers(v[i]); err != nil {
+				return nil, err
+			}
+		}
+	case jjson.Number:
+		return securityEventNumber(string(v))
+	}
+
+	return value, nil
+}
+
+func securityEventNumber(literal string) (number any, err error) {
+	if i, err := strconv.ParseInt(literal, 10, 64); err == nil {
+		return i, nil
+	}
+
+	if u, err := strconv.ParseUint(literal, 10, 64); err == nil {
+		return u, nil
+	}
+
+	if !strings.ContainsAny(literal, ".eE") {
+		if b, ok := new(big.Int).SetString(literal, 10); ok {
+			return b, nil
+		}
+	}
+
+	var f float64
+
+	if f, err = strconv.ParseFloat(literal, 64); err != nil {
+		return nil, fmt.Errorf("%w: the number '%s' is out of range", ErrInvalidSecurityEvent, literal)
+	}
+
+	if whole, frac := math.Modf(f); frac == 0 && whole > math.MinInt64 && whole < math.MaxInt64 {
+		return int64(whole), nil
+	}
+
+	return f, nil
+}
+
+func securityEventIsNil(event SecurityEvent) bool {
+	if event == nil {
+		return true
+	}
+
+	switch v := reflect.ValueOf(event); v.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Interface, reflect.Func, reflect.Chan:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // SecurityEventTokenClaims represent the claims of a Security Event Token (RFC 8417 §2.2). The 'sub' and 'exp' claims
@@ -128,8 +227,10 @@ func (c *SecurityEventTokenClaims) GetAudience() (aud ClaimStrings, err error) {
 }
 
 // Valid validates the 'iat' claim, and the 'iss' and 'aud' claims when the respective option is provided. It rejects
-// a token with a 'sub' or 'exp' claim (SSF 1.0 §4), without exactly one event (SSF 1.0 §4), without an 'iss' claim or
-// without an 'aud', 'jti' or 'iat' claim, or with an invalid 'sub_id' claim.
+// a token with a 'sub' or 'exp' claim (SSF 1.0 §4), without exactly one event (SSF 1.0 §4), with an event type that
+// is not a URI or an event payload that is not an object (RFC 8417 §2.2), without an 'iss', 'aud', 'jti' or 'iat'
+// claim, with an 'iss' or 'aud' value that is not a StringOrURI (RFC 7519 §2), or with an invalid 'sub_id' claim. The
+// payload of an event type this package defines is validated as that type.
 //
 //nolint:gocyclo
 func (c SecurityEventTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
@@ -164,17 +265,37 @@ func (c SecurityEventTokenClaims) Valid(opts ...ClaimValidationOption) (err erro
 		vErr.Errors |= ValidationErrorClaimsInvalid
 	}
 
+	for uri, payload := range c.Events {
+		if !isURI(uri) {
+			vErr.Inner = errors.New("Token has an event type that is not a URI")
+			vErr.Errors |= ValidationErrorClaimsInvalid
+		}
+
+		object, ok := payload.(map[string]any)
+		if !ok || object == nil {
+			vErr.Inner = errors.New("Token has an event payload that is not an object")
+			vErr.Errors |= ValidationErrorClaimsInvalid
+
+			continue
+		}
+
+		if err = validateSecurityEventPayload(uri, object, c.SubjectIdentifier); err != nil {
+			vErr.Inner = err
+			vErr.Errors |= ValidationErrorClaimsInvalid
+		}
+	}
+
 	if err = c.SubjectIdentifier.Validate(); err != nil {
 		vErr.Inner = err
 		vErr.Errors |= ValidationErrorClaimsInvalid
 	}
 
-	if c.Issuer == "" {
+	if c.Issuer == "" || !isStringOrURI(c.Issuer) {
 		vErr.Inner = errors.New("Token has invalid issuer")
 		vErr.Errors |= ValidationErrorIssuer
 	}
 
-	if len(c.Audience) == 0 {
+	if len(c.Audience) == 0 || slices.ContainsFunc(c.Audience, func(aud string) bool { return aud == "" || !isStringOrURI(aud) }) {
 		vErr.Inner = errors.New("Token has invalid audience")
 		vErr.Errors |= ValidationErrorAudience
 	}

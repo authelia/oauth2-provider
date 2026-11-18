@@ -657,6 +657,99 @@ func TestLocalValidatorURIs(t *testing.T) {
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'backchannel_logout_uri' value 'https://example.com/logout#f' must not contain a fragment component.",
 		},
 		{
+			name:   "ShouldAcceptFrontChannelLogoutURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.FrontChannelLogoutURI = "https://example.com/logout" },
+		},
+		{
+			name: "ShouldAcceptFrontChannelLogoutURIWithQuery",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.FrontChannelLogoutURI = "https://example.com/logout?tenant=a&b=c"
+			},
+		},
+		{
+			name:   "ShouldAcceptFrontChannelLogoutURIWithExplicitDefaultPort",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.FrontChannelLogoutURI = "https://EXAMPLE.com:443/logout" },
+		},
+		{
+			name: "ShouldAcceptFrontChannelLogoutURIMatchingAnyRedirectURI",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.RedirectURIs = []string{"https://example.com/cb", "https://app.example.com:8443/cb"}
+				m.FrontChannelLogoutURI = "https://app.example.com:8443/logout"
+			},
+		},
+		{
+			name:     "ShouldRejectInsecureFrontChannelLogoutURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.FrontChannelLogoutURI = "http://example.com/logout" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'frontchannel_logout_uri' value 'http://example.com/logout' must use the 'https' scheme.",
+		},
+		{
+			name:     "ShouldRejectJavascriptFrontChannelLogoutURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.FrontChannelLogoutURI = "javascript:alert(1)" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'frontchannel_logout_uri' value 'javascript:alert(1)' must use the 'https' scheme.",
+		},
+		{
+			name:     "ShouldRejectRelativeFrontChannelLogoutURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.FrontChannelLogoutURI = "/logout" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'frontchannel_logout_uri' value '/logout' must be an absolute URI.",
+		},
+		{
+			name:     "ShouldRejectHostlessFrontChannelLogoutURI",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.FrontChannelLogoutURI = "https:/logout" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'frontchannel_logout_uri' value 'https:/logout' must include a host component.",
+		},
+		{
+			name:     "ShouldRejectFrontChannelLogoutURIWithFragment",
+			mutate:   func(m *oauth2.ClientRegistrationMetadata) { m.FrontChannelLogoutURI = "https://example.com/logout#f" },
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'frontchannel_logout_uri' value 'https://example.com/logout#f' must not contain a fragment component.",
+		},
+		{
+			name: "ShouldRejectFrontChannelLogoutURIWithIssuerParameter",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.FrontChannelLogoutURI = "https://example.com/logout?iss=a"
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'frontchannel_logout_uri' value 'https://example.com/logout?iss=a' must not include the 'iss' or 'sid' query parameter as they are added by the authorization server.",
+		},
+		{
+			name: "ShouldRejectFrontChannelLogoutURIWithSessionIDParameter",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.FrontChannelLogoutURI = "https://example.com/logout?a=b&sid=c"
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'frontchannel_logout_uri' value 'https://example.com/logout?a=b&sid=c' must not include the 'iss' or 'sid' query parameter as they are added by the authorization server.",
+		},
+		{
+			name: "ShouldRejectFrontChannelLogoutURIWithDifferentHost",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.FrontChannelLogoutURI = "https://other.example.com/logout"
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'frontchannel_logout_uri' value 'https://other.example.com/logout' must have the same scheme, host, and port as one of the 'redirect_uris' values.",
+		},
+		{
+			name: "ShouldRejectFrontChannelLogoutURIWithDifferentPort",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.FrontChannelLogoutURI = "https://example.com:8443/logout"
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'frontchannel_logout_uri' value 'https://example.com:8443/logout' must have the same scheme, host, and port as one of the 'redirect_uris' values.",
+		},
+		{
+			name: "ShouldRejectFrontChannelLogoutURIWithDifferentScheme",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.ApplicationType = "native"
+				m.RedirectURIs = []string{"http://127.0.0.1/cb"}
+				m.FrontChannelLogoutURI = "https://127.0.0.1/logout"
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'frontchannel_logout_uri' value 'https://127.0.0.1/logout' must have the same scheme, host, and port as one of the 'redirect_uris' values.",
+		},
+		{
+			name: "ShouldRejectFrontChannelLogoutURIWithoutRedirectURIs",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.RedirectURIs = nil
+				m.GrantTypes = []string{"client_credentials"}
+				m.ResponseTypes = nil
+				m.FrontChannelLogoutURI = "https://example.com/logout"
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'frontchannel_logout_uri' value 'https://example.com/logout' must have the same scheme, host, and port as one of the 'redirect_uris' values.",
+		},
+		{
 			name:   "ShouldAcceptSecureSectorIdentifierURI",
 			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.SectorIdentifierURI = "https://example.com/sector.json" },
 		},

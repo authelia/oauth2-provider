@@ -33,6 +33,7 @@ const (
 	ClientMetadataSectorIdentifierURI          = "sector_identifier_uri"
 	ClientMetadataRequestURIs                  = "request_uris"
 	ClientMetadataBackChannelLogoutURI         = "backchannel_logout_uri"
+	ClientMetadataFrontChannelLogoutURI        = "frontchannel_logout_uri"
 	ClientMetadataPostLogoutRedirectURIs       = "post_logout_redirect_uris"
 	ClientMetadataSubjectType                  = "subject_type"
 	ClientMetadataInitiateLoginURI             = "initiate_login_uri"

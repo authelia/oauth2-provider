@@ -106,6 +106,10 @@ func parseDocument(id string, body []byte) (metadata *oauth2.ClientRegistrationM
 		return nil, err
 	}
 
+	if err = validateFrontChannelLogoutURI(metadata); err != nil {
+		return nil, err
+	}
+
 	applyDefaults(metadata)
 
 	return metadata, nil
@@ -360,6 +364,50 @@ func validatePostLogoutRedirectURIs(metadata *oauth2.ClientRegistrationMetadata)
 	}
 
 	return nil
+}
+
+// validateFrontChannelLogoutURI requires the 'frontchannel_logout_uri' value to be an 'https' URL without a fragment
+// or an 'iss' or 'sid' query parameter, whose scheme, host, and port match one of the 'redirect_uris' values.
+//
+// See: https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+func validateFrontChannelLogoutURI(metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	if metadata.FrontChannelLogoutURI == "" {
+		return nil
+	}
+
+	uri, perr := url.Parse(metadata.FrontChannelLogoutURI)
+
+	if perr != nil || uri.Scheme != consts.SchemeHTTPS || uri.Hostname() == "" || uri.Fragment != "" {
+		return errDocument("The Client ID Metadata Document member %q has the value %q which is not an 'https' URL without a fragment.", consts.ClientMetadataFrontChannelLogoutURI, metadata.FrontChannelLogoutURI)
+	}
+
+	if query := uri.Query(); query.Has(consts.FormParameterIssuer) || query.Has(consts.ClaimSessionID) {
+		return errDocument("The Client ID Metadata Document member %q has the value %q which includes the %q or %q query parameter.", consts.ClientMetadataFrontChannelLogoutURI, metadata.FrontChannelLogoutURI, consts.FormParameterIssuer, consts.ClaimSessionID)
+	}
+
+	for _, raw := range metadata.RedirectURIs {
+		if redirect, rerr := url.Parse(raw); rerr == nil && isSameOrigin(uri, redirect) {
+			return nil
+		}
+	}
+
+	return errDocument("The Client ID Metadata Document member %q has the value %q which does not have the same scheme, host, and port as one of the %q values.", consts.ClientMetadataFrontChannelLogoutURI, metadata.FrontChannelLogoutURI, consts.ClientMetadataRedirectURIs)
+}
+
+func isSameOrigin(a, b *url.URL) bool {
+	return a.Scheme == b.Scheme && strings.EqualFold(a.Hostname(), b.Hostname()) && originPort(a) == originPort(b)
+}
+
+func originPort(uri *url.URL) (port string) {
+	if port = uri.Port(); port != "" {
+		return port
+	}
+
+	if uri.Scheme == consts.SchemeHTTPS {
+		return "443"
+	}
+
+	return ""
 }
 
 func isPermittedPostLogoutRedirectURI(uri *url.URL) bool {

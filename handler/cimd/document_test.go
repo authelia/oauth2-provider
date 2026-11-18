@@ -48,6 +48,15 @@ func TestParseDocumentAccepts(t *testing.T) {
 		assert.Equal(t, []string{"urn:ietf:params:oauth:grant-profile:id-jag"}, metadata.AuthorizationGrantProfilesSupported)
 	})
 
+	t.Run("ShouldAcceptFrontChannelLogoutURIOnARedirectURIOrigin", func(t *testing.T) {
+		metadata, err := parseDocument(testClientID, document(`"redirect_uris":["https://client.example.com/cb"],"frontchannel_logout_uri":"https://client.example.com:443/logout?a=b","frontchannel_logout_session_required":true`))
+
+		require.NoError(t, err)
+
+		assert.Equal(t, "https://client.example.com:443/logout?a=b", metadata.FrontChannelLogoutURI)
+		assert.True(t, metadata.FrontChannelLogoutSessionRequired)
+	})
+
 	t.Run("ShouldAcceptPublicJWKS", func(t *testing.T) {
 		_, err := parseDocument(testClientID, document(`"token_endpoint_auth_method":"private_key_jwt","jwks":{"keys":[{"kty":"EC","crv":"P-256","kid":"a","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"}]}`))
 
@@ -135,6 +144,15 @@ func TestParseDocumentRejects(t *testing.T) {
 		{"ShouldRejectHTTPSectorIdentifierURI", string(document(`"sector_identifier_uri":"http://client.example.com/sector.json"`))},
 		{"ShouldRejectHTTPInitiateLoginURI", string(document(`"initiate_login_uri":"http://client.example.com/login"`))},
 		{"ShouldRejectHTTPBackChannelLogoutURI", string(document(`"backchannel_logout_uri":"http://client.example.com/logout"`))},
+		{"ShouldRejectHTTPFrontChannelLogoutURI", string(document(`"redirect_uris":["https://client.example.com/cb"],"frontchannel_logout_uri":"http://client.example.com/logout"`))},
+		{"ShouldRejectJavascriptFrontChannelLogoutURI", string(document(`"redirect_uris":["https://client.example.com/cb"],"frontchannel_logout_uri":"javascript:alert(1)"`))},
+		{"ShouldRejectHostlessFrontChannelLogoutURI", string(document(`"redirect_uris":["https://client.example.com/cb"],"frontchannel_logout_uri":"https:/logout"`))},
+		{"ShouldRejectFrontChannelLogoutURIWithFragment", string(document(`"redirect_uris":["https://client.example.com/cb"],"frontchannel_logout_uri":"https://client.example.com/logout#f"`))},
+		{"ShouldRejectFrontChannelLogoutURIWithIssuerParameter", string(document(`"redirect_uris":["https://client.example.com/cb"],"frontchannel_logout_uri":"https://client.example.com/logout?iss=a"`))},
+		{"ShouldRejectFrontChannelLogoutURIWithSessionIDParameter", string(document(`"redirect_uris":["https://client.example.com/cb"],"frontchannel_logout_uri":"https://client.example.com/logout?sid=a"`))},
+		{"ShouldRejectFrontChannelLogoutURIOnAnotherHost", string(document(`"redirect_uris":["https://client.example.com/cb"],"frontchannel_logout_uri":"https://victim.example.com/logout"`))},
+		{"ShouldRejectFrontChannelLogoutURIOnAnotherPort", string(document(`"redirect_uris":["https://client.example.com/cb"],"frontchannel_logout_uri":"https://client.example.com:8443/logout"`))},
+		{"ShouldRejectFrontChannelLogoutURIWithoutRedirectURIs", string(document(`"grant_types":["client_credentials"],"token_endpoint_auth_method":"private_key_jwt","jwks_uri":"https://client.example.com/jwks.json","frontchannel_logout_uri":"https://client.example.com/logout"`))},
 		{"ShouldRejectHTTPRequestURI", string(document(`"request_uris":["https://client.example.com/a","http://client.example.com/b"]`))},
 		{"ShouldRejectJavascriptPostLogoutRedirectURI", string(document(`"post_logout_redirect_uris":["javascript:alert(1)"]`))},
 		{"ShouldRejectDataPostLogoutRedirectURI", string(document(`"post_logout_redirect_uris":["data:text/html,a"]`))},

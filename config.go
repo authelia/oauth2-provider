@@ -450,6 +450,16 @@ type ClaimsParameterEnforcementProvider interface {
 	GetEnforceClaimsParameter(ctx context.Context) (enforce bool)
 }
 
+// FrontChannelLogoutProvider returns the provider for configuring the advertisement of OpenID Connect Front-Channel
+// Logout 1.0 support in the OpenID Connect Discovery 1.0 metadata.
+//
+// See: https://openid.net/specs/openid-connect-frontchannel-1_0.html#OPLogout
+type FrontChannelLogoutProvider interface {
+	// GetFrontChannelLogoutEnabled returns true if the integrator renders the front-channel logout URIs of the
+	// participating clients when a session ends and includes the 'sid' claim in the ID Tokens it issues.
+	GetFrontChannelLogoutEnabled(ctx context.Context) (enabled bool)
+}
+
 // RFC9470StepUpAuthenticationProvider returns the provider for configuring the advertisement of OAuth 2.0 Step Up
 // Authentication Challenge Protocol support in the OAuth 2.0 Authorization Server Metadata.
 //

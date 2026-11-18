@@ -270,6 +270,7 @@ func (f *Fosite) newOpenIDConnectProviderMetadata(ctx context.Context) (metadata
 	metadata.ACRValuesSupported = config.GetACRValuesSupported(ctx)
 	metadata.OpenIDConnectRPInitiatedLogoutMetadata = rpInitiatedLogoutMetadata(urls)
 	metadata.OpenIDConnectBackChannelLogoutMetadata = f.backChannelLogoutMetadata(ctx)
+	metadata.OpenIDConnectFrontChannelLogoutMetadata = f.frontChannelLogoutMetadata(ctx)
 	metadata.OpenIDConnectPromptCreateMetadata = f.promptCreateMetadata(ctx)
 	metadata.OpenIDConnectCIBAMetadata = f.cibaMetadata(ctx, urls)
 	metadata.RFC8705MutualTLSMetadata = f.rfc8705Metadata(ctx, urls, openIDConnectAdvertisedEndpoints(metadata))
@@ -362,6 +363,18 @@ func (f *Fosite) backChannelLogoutMetadata(ctx context.Context) *OpenIDConnectBa
 	return &OpenIDConnectBackChannelLogoutMetadata{
 		BackChannelLogoutSupported:        true,
 		BackChannelLogoutSessionSupported: true,
+	}
+}
+
+func (f *Fosite) frontChannelLogoutMetadata(ctx context.Context) *OpenIDConnectFrontChannelLogoutMetadata {
+	provider, ok := f.Config.(FrontChannelLogoutProvider)
+	if !ok || !provider.GetFrontChannelLogoutEnabled(ctx) {
+		return nil
+	}
+
+	return &OpenIDConnectFrontChannelLogoutMetadata{
+		FrontChannelLogoutSupported:        true,
+		FrontChannelLogoutSessionSupported: true,
 	}
 }
 

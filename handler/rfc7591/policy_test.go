@@ -680,6 +680,7 @@ func TestRegistrationPolicyOmittedMembersClassified(t *testing.T) {
 		"userinfo_signed_response_alg", policyMemberDefaultMaxAge, "require_auth_time", "default_acr_values",
 		"initiate_login_uri", "request_uris", "require_signed_request_object", "post_logout_redirect_uris",
 		"backchannel_logout_uri", "backchannel_logout_session_required", "authorization_grant_profiles_supported",
+		"frontchannel_logout_uri", "frontchannel_logout_session_required",
 		"backchannel_token_delivery_mode", "backchannel_client_notification_endpoint",
 		"backchannel_authentication_request_signing_alg", "backchannel_user_code_parameter",
 		"backchannel_endpoint_login_hint_token_types",

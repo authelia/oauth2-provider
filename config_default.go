@@ -196,6 +196,11 @@ type Config struct {
 	// public clients and RFC 8252 Section 8.1 of native ones. Defaults to false.
 	AllowPublicClientsWithoutPKCE bool
 
+	// FrontChannelLogoutEnabled advertises OpenID Connect Front-Channel Logout 1.0 support, with session support, in
+	// the OpenID Connect Discovery 1.0 metadata. Rendering the front-channel logout URIs when a session ends and
+	// including the 'sid' claim in ID Tokens is the integrator's responsibility. Defaults to false.
+	FrontChannelLogoutEnabled bool
+
 	// EnforceClaimsParameter enforces the requirements of the OpenID Connect 1.0 'claims' request parameter: a
 	// requested 'sub' value, an Essential 'acr' value, and the access token needed for a 'userinfo' request. Defaults
 	// to false.
@@ -1310,6 +1315,11 @@ func (c *Config) GetEnableRedirectFragmentGuard(_ context.Context) (enable bool)
 // GetAllowPostLogoutRedirectWithoutIDTokenHint returns the value of AllowPostLogoutRedirectWithoutIDTokenHint.
 func (c *Config) GetAllowPostLogoutRedirectWithoutIDTokenHint(_ context.Context) (allow bool) {
 	return c.AllowPostLogoutRedirectWithoutIDTokenHint
+}
+
+// GetFrontChannelLogoutEnabled returns the value of FrontChannelLogoutEnabled.
+func (c *Config) GetFrontChannelLogoutEnabled(_ context.Context) (enabled bool) {
+	return c.FrontChannelLogoutEnabled
 }
 
 // GetEnforceClaimsParameter returns the value of EnforceClaimsParameter.
@@ -2502,6 +2512,7 @@ var (
 	_ AllowInsecureRedirectURIForPublicClientsProvider         = (*Config)(nil)
 	_ EnablePKCEPlainChallengeMethodProvider                   = (*Config)(nil)
 	_ ClaimsParameterEnforcementProvider                       = (*Config)(nil)
+	_ FrontChannelLogoutProvider                               = (*Config)(nil)
 	_ RedirectFragmentGuardProvider                            = (*Config)(nil)
 	_ PostLogoutRedirectWithoutIDTokenHintProvider             = (*Config)(nil)
 	_ AuthenticationRequirementsEnforcementProvider            = (*Config)(nil)

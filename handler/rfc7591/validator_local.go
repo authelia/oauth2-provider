@@ -290,15 +290,26 @@ func validateRedirectURI(rfc *oauth2.RFC6749Error, name, raw, applicationType st
 // the OP allows it, and permit an alternate scheme to call back into a native application, so a native client's
 // private-use scheme stays registrable and a scheme a user agent would execute, such as 'javascript', never is.
 //
+// 'frontchannel_logout_uri' is rendered in an iframe by the user agent on a page of this authorization server. OpenID
+// Connect Front-Channel Logout 1.0 Section 2 requires an absolute URI without a fragment whose scheme, host, and port
+// match a registered redirect URI. Only the https scheme is accepted, which also keeps a scheme a user agent would
+// execute from being registered. The 'iss' and 'sid' query parameters are added by this authorization server, so a
+// value which already carries either is rejected.
+//
 // See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 // See: https://openid.net/specs/openid-connect-rpinitiated-1_0.html#ClientMetadata
 // See: https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRegistration
+// See: https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
 func validateURIs(metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	if err = validateURI(consts.ClientMetadataJSONWebKeysURI, metadata.JSONWebKeysURI, true); err != nil {
 		return err
 	}
 
 	if err = validateURI(consts.ClientMetadataBackChannelLogoutURI, metadata.BackChannelLogoutURI, true); err != nil {
+		return err
+	}
+
+	if err = validateFrontChannelLogoutURI(metadata); err != nil {
 		return err
 	}
 
@@ -325,6 +336,49 @@ func validateURIs(metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	}
 
 	return nil
+}
+
+func validateFrontChannelLogoutURI(metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	if metadata.FrontChannelLogoutURI == "" {
+		return nil
+	}
+
+	if err = validateURI(consts.ClientMetadataFrontChannelLogoutURI, metadata.FrontChannelLogoutURI, true); err != nil {
+		return err
+	}
+
+	uri, _ := url.Parse(metadata.FrontChannelLogoutURI)
+
+	if query := uri.Query(); query.Has(consts.FormParameterIssuer) || query.Has(consts.ClaimSessionID) {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must not include the '%s' or '%s' query parameter as they are added by the authorization server.", consts.ClientMetadataFrontChannelLogoutURI, metadata.FrontChannelLogoutURI, consts.FormParameterIssuer, consts.ClaimSessionID))
+	}
+
+	for _, raw := range metadata.RedirectURIs {
+		if redirect, perr := url.Parse(raw); perr == nil && isSameOrigin(uri, redirect) {
+			return nil
+		}
+	}
+
+	return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must have the same scheme, host, and port as one of the '%s' values.", consts.ClientMetadataFrontChannelLogoutURI, metadata.FrontChannelLogoutURI, consts.ClientMetadataRedirectURIs))
+}
+
+func isSameOrigin(a, b *url.URL) bool {
+	return a.Scheme == b.Scheme && strings.EqualFold(a.Hostname(), b.Hostname()) && originPort(a) == originPort(b)
+}
+
+func originPort(uri *url.URL) (port string) {
+	if port = uri.Port(); port != "" {
+		return port
+	}
+
+	switch uri.Scheme {
+	case consts.SchemeHTTPS:
+		return "443"
+	case consts.SchemeHTTP:
+		return "80"
+	default:
+		return ""
+	}
 }
 
 // validateURIList applies validateURI to each member of a client metadata URI array. An empty member is rejected

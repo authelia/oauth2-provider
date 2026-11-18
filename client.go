@@ -527,6 +527,25 @@ type BackChannelLogoutClient interface {
 	GetBackChannelLogoutSessionRequired() (required bool)
 }
 
+// FrontChannelLogoutClient is a Client which has registered a front-channel logout URI for OpenID Connect
+// Front-Channel Logout.
+//
+// The registered frontchannel_logout_uri is rendered in an iframe by the user agent, so validating its scheme and
+// that its origin matches a registered redirect URI at registration time is the integrator's responsibility.
+//
+// See: https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+type FrontChannelLogoutClient interface {
+	Client
+
+	// GetFrontChannelLogoutURI returns the client's registered front-channel logout URI. A client with none
+	// registered does not participate in front-channel logout.
+	GetFrontChannelLogoutURI() (uri string)
+
+	// GetFrontChannelLogoutSessionRequired returns true when the client requires the 'iss' and 'sid' query
+	// parameters on the front-channel logout URI. When it does and either is unavailable the client is not notified.
+	GetFrontChannelLogoutSessionRequired() (required bool)
+}
+
 // CIBAClient is a Client which has registered the OpenID Connect CIBA client metadata.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.4
@@ -879,6 +898,14 @@ type DefaultBackChannelLogoutClient struct {
 	*DefaultClient
 }
 
+// DefaultFrontChannelLogoutClient is a client with front-channel logout metadata.
+type DefaultFrontChannelLogoutClient struct {
+	FrontChannelLogoutURI             string `json:"frontchannel_logout_uri"`
+	FrontChannelLogoutSessionRequired bool   `json:"frontchannel_logout_session_required"`
+
+	*DefaultClient
+}
+
 // DefaultCIBAClient is a client with CIBA metadata.
 type DefaultCIBAClient struct {
 	BackChannelTokenDeliveryMode               string   `json:"backchannel_token_delivery_mode"`
@@ -1110,6 +1137,16 @@ func (c *DefaultBackChannelLogoutClient) GetBackChannelLogoutSessionRequired() (
 	return c.BackChannelLogoutSessionRequired
 }
 
+// GetFrontChannelLogoutURI returns the 'frontchannel_logout_uri' client metadata value.
+func (c *DefaultFrontChannelLogoutClient) GetFrontChannelLogoutURI() (uri string) {
+	return c.FrontChannelLogoutURI
+}
+
+// GetFrontChannelLogoutSessionRequired returns the 'frontchannel_logout_session_required' client metadata value.
+func (c *DefaultFrontChannelLogoutClient) GetFrontChannelLogoutSessionRequired() (required bool) {
+	return c.FrontChannelLogoutSessionRequired
+}
+
 // GetBackChannelTokenDeliveryMode returns the 'backchannel_token_delivery_mode' client metadata value.
 func (c *DefaultCIBAClient) GetBackChannelTokenDeliveryMode() (mode string) {
 	return c.BackChannelTokenDeliveryMode
@@ -1167,6 +1204,7 @@ var (
 	_ RequestObjectLifetimeClient   = (*DefaultJARClient)(nil)
 	_ RPInitiatedLogoutClient       = (*DefaultRPInitiatedLogoutClient)(nil)
 	_ BackChannelLogoutClient       = (*DefaultBackChannelLogoutClient)(nil)
+	_ FrontChannelLogoutClient      = (*DefaultFrontChannelLogoutClient)(nil)
 	_ CIBAClient                    = (*DefaultCIBAClient)(nil)
 	_ CIBALoginHintTokenTypesClient = (*DefaultCIBAClient)(nil)
 	_ TLSClientAuthClient           = (*DefaultMTLSClient)(nil)

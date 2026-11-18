@@ -989,6 +989,44 @@ func TestOpenIDMetadataNoBackChannelStrategy(t *testing.T) {
 	assert.Contains(t, members, consts.DiscoveryPromptValuesSupported)
 }
 
+func TestOpenIDMetadataFrontChannelLogout(t *testing.T) {
+	testCases := []struct {
+		name    string
+		enabled bool
+	}{
+		{"ShouldAdvertiseWhenEnabled", true},
+		{"ShouldOmitWhenDisabled", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
+			config.FrontChannelLogoutEnabled = tc.enabled
+
+			provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), gen.MustRSAKey())
+
+			metadata, err := provider.NewOpenIDConnectProviderMetadata(context.Background())
+			require.NoError(t, err)
+
+			members := marshalMembers(t, metadata)
+
+			if !tc.enabled {
+				assert.Nil(t, metadata.OpenIDConnectFrontChannelLogoutMetadata)
+				assert.NotContains(t, members, consts.DiscoveryFrontChannelLogoutSupported)
+				assert.NotContains(t, members, consts.DiscoveryFrontChannelLogoutSessionSupported)
+
+				return
+			}
+
+			require.NotNil(t, metadata.OpenIDConnectFrontChannelLogoutMetadata)
+			assert.True(t, metadata.FrontChannelLogoutSupported)
+			assert.True(t, metadata.FrontChannelLogoutSessionSupported)
+			assert.Contains(t, members, consts.DiscoveryFrontChannelLogoutSupported)
+			assert.Contains(t, members, consts.DiscoveryFrontChannelLogoutSessionSupported)
+		})
+	}
+}
+
 func newDiscoveryAllEnabledConfig() *oauth2.Config {
 	config := &oauth2.Config{
 		Issuer: "https://auth.example.com",

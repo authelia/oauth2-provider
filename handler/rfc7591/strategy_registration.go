@@ -151,6 +151,9 @@ func (s *DefaultClientRegistrationStrategy) MetadataFromClient(ctx context.Conte
 		BackChannelLogoutURI:             registered.BackChannelLogoutURI,
 		BackChannelLogoutSessionRequired: registered.BackChannelLogoutSessionRequired,
 
+		FrontChannelLogoutURI:             registered.FrontChannelLogoutURI,
+		FrontChannelLogoutSessionRequired: registered.FrontChannelLogoutSessionRequired,
+
 		BackChannelTokenDeliveryMode:               registered.BackChannelTokenDeliveryMode,
 		BackChannelClientNotificationEndpoint:      registered.BackChannelClientNotificationEndpoint,
 		BackChannelAuthenticationRequestSigningAlg: registered.BackChannelAuthenticationRequestSigningAlg,
@@ -263,6 +266,8 @@ func (s *DefaultClientRegistrationStrategy) apply(registered *oauth2.DefaultRegi
 	registered.PostLogoutRedirectURIs = metadata.PostLogoutRedirectURIs
 	registered.BackChannelLogoutURI = metadata.BackChannelLogoutURI
 	registered.BackChannelLogoutSessionRequired = metadata.BackChannelLogoutSessionRequired
+	registered.FrontChannelLogoutURI = metadata.FrontChannelLogoutURI
+	registered.FrontChannelLogoutSessionRequired = metadata.FrontChannelLogoutSessionRequired
 
 	registered.BackChannelTokenDeliveryMode = metadata.BackChannelTokenDeliveryMode
 	registered.BackChannelClientNotificationEndpoint = metadata.BackChannelClientNotificationEndpoint

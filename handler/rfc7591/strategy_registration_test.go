@@ -322,6 +322,9 @@ func TestDefaultClientRegistrationStrategyRoundTripsRFC8705AndLogoutMetadata(t *
 		BackChannelLogoutURI:             "https://example.com/backchannel",
 		BackChannelLogoutSessionRequired: true,
 
+		FrontChannelLogoutURI:             "https://example.com/frontchannel",
+		FrontChannelLogoutSessionRequired: true,
+
 		TLSClientAuthSubjectDN:                "CN=client,O=Example",
 		TLSClientCertificateBoundAccessTokens: true,
 	}
@@ -336,6 +339,8 @@ func TestDefaultClientRegistrationStrategyRoundTripsRFC8705AndLogoutMetadata(t *
 	assert.Equal(t, []string{"https://example.com/logout"}, registered.GetPostLogoutRedirectURIs())
 	assert.Equal(t, "https://example.com/backchannel", registered.GetBackChannelLogoutURI())
 	assert.True(t, registered.GetBackChannelLogoutSessionRequired())
+	assert.Equal(t, "https://example.com/frontchannel", registered.GetFrontChannelLogoutURI())
+	assert.True(t, registered.GetFrontChannelLogoutSessionRequired())
 	assert.Equal(t, "CN=client,O=Example", registered.GetTLSClientAuthSubjectDN())
 	assert.True(t, registered.GetEnableTLSClientAuthBoundAccessTokens())
 
@@ -346,6 +351,8 @@ func TestDefaultClientRegistrationStrategyRoundTripsRFC8705AndLogoutMetadata(t *
 	assert.Equal(t, in.PostLogoutRedirectURIs, out.PostLogoutRedirectURIs)
 	assert.Equal(t, in.BackChannelLogoutURI, out.BackChannelLogoutURI)
 	assert.Equal(t, in.BackChannelLogoutSessionRequired, out.BackChannelLogoutSessionRequired)
+	assert.Equal(t, in.FrontChannelLogoutURI, out.FrontChannelLogoutURI)
+	assert.Equal(t, in.FrontChannelLogoutSessionRequired, out.FrontChannelLogoutSessionRequired)
 	assert.Equal(t, in.TLSClientAuthSubjectDN, out.TLSClientAuthSubjectDN)
 	assert.Equal(t, in.TLSClientCertificateBoundAccessTokens, out.TLSClientCertificateBoundAccessTokens)
 
@@ -359,6 +366,8 @@ func TestDefaultClientRegistrationStrategyRoundTripsRFC8705AndLogoutMetadata(t *
 	assert.Empty(t, registered.GetPostLogoutRedirectURIs())
 	assert.Empty(t, registered.GetBackChannelLogoutURI())
 	assert.False(t, registered.GetBackChannelLogoutSessionRequired())
+	assert.Empty(t, registered.GetFrontChannelLogoutURI())
+	assert.False(t, registered.GetFrontChannelLogoutSessionRequired())
 	assert.Empty(t, registered.GetTLSClientAuthSubjectDN())
 	assert.False(t, registered.GetEnableTLSClientAuthBoundAccessTokens())
 }

@@ -105,6 +105,32 @@ func TestDefaultBackChannelLogoutClientDefaults(t *testing.T) {
 	assert.False(t, client.GetBackChannelLogoutSessionRequired())
 }
 
+func TestDefaultFrontChannelLogoutClient(t *testing.T) {
+	client := &DefaultFrontChannelLogoutClient{
+		DefaultClient:                     &DefaultClient{ID: "rp-1"},
+		FrontChannelLogoutURI:             "https://rp.example/frontchannel-logout",
+		FrontChannelLogoutSessionRequired: true,
+	}
+
+	assert.Equal(t, "rp-1", client.GetID())
+	assert.Equal(t, "https://rp.example/frontchannel-logout", client.GetFrontChannelLogoutURI())
+	assert.True(t, client.GetFrontChannelLogoutSessionRequired())
+
+	var iface FrontChannelLogoutClient = client
+
+	assert.Equal(t, "https://rp.example/frontchannel-logout", iface.GetFrontChannelLogoutURI())
+
+	_, ok := any(&DefaultClient{}).(FrontChannelLogoutClient)
+	assert.False(t, ok, "DefaultClient must not satisfy FrontChannelLogoutClient")
+}
+
+func TestDefaultFrontChannelLogoutClientDefaults(t *testing.T) {
+	client := &DefaultFrontChannelLogoutClient{DefaultClient: &DefaultClient{ID: "rp-2"}}
+
+	assert.Equal(t, "", client.GetFrontChannelLogoutURI())
+	assert.False(t, client.GetFrontChannelLogoutSessionRequired())
+}
+
 func TestDefaultMTLSClient(t *testing.T) {
 	client := &DefaultMTLSClient{
 		DefaultJARClient: &DefaultJARClient{

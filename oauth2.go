@@ -365,6 +365,15 @@ type Provider interface {
 	// * https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest (everything MUST be implemented).
 	SendBackChannelLogout(ctx context.Context, requester BackChannelLogoutRequester) (results []BackChannelLogoutResult, err error)
 
+	// BuildFrontChannelLogout returns the front-channel logout URI of each client supplied by the requester, for the
+	// caller to render as the source of an iframe. A result is returned for every client, in the order supplied. The
+	// 'iss' and 'sid' query parameters are added, together, for a client which requires them.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout (everything MUST be implemented)
+	// * https://openid.net/specs/openid-connect-frontchannel-1_0.html#OPLogout (everything MUST be implemented).
+	BuildFrontChannelLogout(ctx context.Context, requester FrontChannelLogoutRequester) (results []FrontChannelLogoutResult)
+
 	// GenerateSecurityEventToken returns a signed Security Event Token carrying the event for the subject, issued by
 	// and addressed to the audience of the stream, and the 'jti' it used. An empty jti generates one. A retry of the
 	// same event should reuse the same 'jti', which is also the key of a poll response and of an acknowledgement. It

@@ -71,14 +71,18 @@ type ClientRegistrationMetadata struct {
 
 	RequireSignedRequestObject bool `json:"require_signed_request_object,omitempty"`
 
-	// OpenID Connect RP-Initiated Logout 1.0 and OpenID Connect Back-Channel Logout 1.0 client metadata.
+	// OpenID Connect RP-Initiated Logout 1.0, OpenID Connect Back-Channel Logout 1.0, and OpenID Connect Front-Channel
+	// Logout 1.0 client metadata.
 	//
 	// See: https://openid.net/specs/openid-connect-rpinitiated-1_0.html#ClientMetadata
 	// See: https://openid.net/specs/openid-connect-backchannel-1_0.html#ClientMetadata
+	// See: https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
 
-	PostLogoutRedirectURIs           []string `json:"post_logout_redirect_uris,omitempty"`
-	BackChannelLogoutURI             string   `json:"backchannel_logout_uri,omitempty"`
-	BackChannelLogoutSessionRequired bool     `json:"backchannel_logout_session_required,omitempty"`
+	PostLogoutRedirectURIs            []string `json:"post_logout_redirect_uris,omitempty"`
+	BackChannelLogoutURI              string   `json:"backchannel_logout_uri,omitempty"`
+	BackChannelLogoutSessionRequired  bool     `json:"backchannel_logout_session_required,omitempty"`
+	FrontChannelLogoutURI             string   `json:"frontchannel_logout_uri,omitempty"`
+	FrontChannelLogoutSessionRequired bool     `json:"frontchannel_logout_session_required,omitempty"`
 
 	// OpenID Connect CIBA Core 1.0 client metadata.
 	//

@@ -121,23 +121,25 @@ var store = &storage.MemoryStore{
 			Password: "secret",
 		},
 	},
-	IssuerPublicKeys: map[string]storage.IssuerPublicKeys{
-		firstJWTBearerIssuer: createIssuerPublicKey(
+	RFC7523TrustedIssuers: map[string]oauth2.RFC7523TrustedIssuer{
+		firstJWTBearerIssuer: createRFC7523TrustedIssuer(
 			firstJWTBearerIssuer,
-			firstJWTBearerSubject,
 			firstKeyID,
 			firstPrivateKey.Public(),
 			[]string{"oauth2", "gitlab", "example.com", "docker"},
 			[]string{tokenURL, "https://example.com"},
 		),
-		secondJWTBearerIssuer: createIssuerPublicKey(
+		secondJWTBearerIssuer: createRFC7523TrustedIssuer(
 			secondJWTBearerIssuer,
-			secondJWTBearerSubject,
 			secondKeyID,
 			secondPrivateKey.Public(),
 			[]string{"oauth2"},
 			[]string{tokenURL, "https://example.com"},
 		),
+	},
+	RFC7523Subjects: map[storage.RFC7523SubjectKey]string{
+		{Issuer: firstJWTBearerIssuer, Subject: firstJWTBearerSubject}:   firstJWTBearerSubject,
+		{Issuer: secondJWTBearerIssuer, Subject: secondJWTBearerSubject}: secondJWTBearerSubject,
 	},
 	ClientAssertionJTIs:    map[storage.JTIMarker]time.Time{},
 	RFC7523JTIs:            map[storage.JTIMarker]time.Time{},

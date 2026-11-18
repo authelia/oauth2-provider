@@ -45,7 +45,10 @@ type JWTIssueConfig struct {
 
 	// Expiry is the lifetime of an issued JWT, which never outlives the 'subject_token'. A value that is not positive
 	// uses the client's access token lifespan for the token exchange grant, then the configured access token lifespan,
-	// or one hour when the configuration does not provide one.
+	// or one hour when the configuration does not provide one. An AuthorizationGrant instead uses the client's access
+	// token lifespan for the token exchange grant, then five minutes.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-5.5
 	Expiry time.Duration `json:"exp"`
 
 	// AuthorizationGrant issues the JWT as a JWT authorization grant for an authorization server in another trust
@@ -53,8 +56,8 @@ type JWTIssueConfig struct {
 	// with 'audience' or 'resource', a client may exchange a token issued to itself, and the JWT carries only the 'iss', 'sub', 'aud', 'exp', 'iat', 'jti', 'scope' and 'act' claims.
 	// It is signed with the issuer key rather than the ID Token configuration of the client, as the other authorization
 	// server must be able to read and verify it. The type is refused as a 'subject_token' or 'actor_token' even when
-	// Validate is set, and the Validate of no other JWTType may trust the issuer and key of its grants, as a grant could
-	// then be exchanged for a new target. Set Expiry to keep grants short-lived, per Section 5.5.
+	// Validate is set, and a JWT with the Issuer of the grants is refused by every other JWTType, as a grant could
+	// then be exchanged for a new target. A grant lives for five minutes unless Expiry or the client sets its lifetime.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.3
 	AuthorizationGrant bool `json:"authorization_grant"`
@@ -109,6 +112,18 @@ func (c *JWTType) GetIdentifiers(_ context.Context) (identifiers []string) {
 	return identifiers
 }
 
+// GetAuthorizationGrantIssuer returns the issuer this type issues JWT authorization grants as, which is empty when it
+// issues none.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.3
+func (c *JWTType) GetAuthorizationGrantIssuer(_ context.Context) (issuer string) {
+	if c == nil || c.Issue == nil || !c.Issue.AuthorizationGrant {
+		return ""
+	}
+
+	return c.Issue.Issuer
+}
+
 // GetName returns the name of the token type.
 func (c *JWTType) GetName(ctx context.Context) string {
 	return c.Name
@@ -132,4 +147,6 @@ var (
 	_ oauth2.RFC8693TokenTypeIdentifiersProvider = (*JWTType)(nil)
 	_ oauth2.RFC8693TokenTypeIdentifiersProvider = (*TxnTokenType)(nil)
 	_ oauth2.RFC8693TokenTypeIdentifiersProvider = (*SelfSignedTokenType)(nil)
+
+	_ oauth2.AuthorizationGrantIssuerProvider = (*JWTType)(nil)
 )

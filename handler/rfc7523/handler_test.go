@@ -27,6 +27,7 @@ import (
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/storage"
 	"authelia.com/provider/oauth2/testing/mock"
 )
 
@@ -37,48 +38,55 @@ func TestHandlerGrantTypesSupported(t *testing.T) {
 }
 
 func TestRFC7523RejectsUnadvertisedAlg(t *testing.T) {
-	f := newJWTBearerFixture(t)
+	for _, store := range jwtBearerStores {
+		t.Run(store.name, func(t *testing.T) {
+			f := newJWTBearerFixture(t, store.new())
 
-	f.handler.Config.(*oauth2.Config).RFC7523AssertionSigningAlgValues = []string{"ES256"}
+			f.handler.Config.(*oauth2.Config).RFC7523AssertionSigningAlgValues = []string{"ES256"}
 
-	f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-	f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(f.createStandardClaim(), "unadvertised"))
+			f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+			f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(f.createStandardClaim(), "unadvertised"))
 
-	err := f.handler.HandleTokenEndpointRequest(f.ctx, f.requester)
+			err := f.handler.HandleTokenEndpointRequest(f.ctx, f.requester)
 
-	require.Error(t, err)
-	assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
-	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "Unable to parse JSON Web Token")
+			require.Error(t, err)
+			assert.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+			assert.Equal(t, "Unable to parse the JWT authorization grant.", oauth2.ErrorToRFC6749Error(err).HintField)
+		})
+	}
 }
 
 func TestRFC7523AcceptsEdDSA(t *testing.T) {
 	const keyID = "eddsa"
 
-	for _, alg := range []jose.SignatureAlgorithm{jose.EdDSA, jose.Ed25519} {
-		t.Run(string(alg), func(t *testing.T) {
-			f := newJWTBearerFixture(t)
+	for _, store := range jwtBearerStores {
+		t.Run(store.name, func(t *testing.T) {
+			for _, alg := range []jose.SignatureAlgorithm{jose.EdDSA, jose.Ed25519} {
+				t.Run(string(alg), func(t *testing.T) {
+					f := newJWTBearerFixture(t, store.new())
 
-			public, private, err := ed25519.GenerateKey(rand.Reader)
-			require.NoError(t, err)
+					public, private, err := ed25519.GenerateKey(rand.Reader)
+					require.NoError(t, err)
 
-			cl := f.createStandardClaim()
+					cl := f.createStandardClaim()
 
-			signer, err := jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: jose.JSONWebKey{Key: private, KeyID: keyID, Algorithm: string(alg)}}, (&jose.SignerOptions{}).WithType("JWT"))
-			require.NoError(t, err)
+					signer, err := jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: jose.JSONWebKey{Key: private, KeyID: keyID, Algorithm: string(alg)}}, (&jose.SignerOptions{}).WithType("JWT"))
+					require.NoError(t, err)
 
-			assertion, err := jwt.Signed(signer).Claims(cl).Serialize()
-			require.NoError(t, err)
+					assertion, err := jwt.Signed(signer).Claims(cl).Serialize()
+					require.NoError(t, err)
 
-			pubKey := jose.JSONWebKey{Key: public, KeyID: keyID, Algorithm: string(alg), Use: consts.JSONWebTokenUseSignature}
+					f.trust(func(trusted *oauth2.RFC7523TrustedIssuer) {
+						trusted.JSONWebKeys = f.createJWS(jose.JSONWebKey{Key: public, KeyID: keyID, Algorithm: string(alg), Use: consts.JSONWebTokenUseSignature})
+						trusted.SigningAlgs = []string{string(alg)}
+					})
 
-			f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-			f.requester.Form.Add(consts.FormParameterAssertion, assertion)
+					f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+					f.requester.Form.Add(consts.FormParameterAssertion, assertion)
 
-			f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-			f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-			f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-
-			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.handler.HandleTokenEndpointRequest(f.ctx, f.requester)))
+					assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.handler.HandleTokenEndpointRequest(f.ctx, f.requester)))
+				})
+			}
 		})
 	}
 }
@@ -87,7 +95,10 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 	const (
 		testClientID          = "my-client"
 		testWiderScope        = "wider_scope"
-		errKeyNotFoundMessage = "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to verify the integrity of the 'assertion' value. No public JWK was registered for issuer 'trusted_issuer' and subject 'some_ro', and public key is required to check signature of JWT in 'assertion' request parameter. Could not find the requested resource(s)."
+		hintUnparsed          = "Unable to parse the JWT authorization grant."
+		hintExpired           = "The JWT authorization grant is expired."
+		hintIssuedInTheFuture = "The 'iat' claim of the JWT authorization grant is in the future."
+		hintExpiryTooFar      = "The 'exp' claim of the JWT authorization grant is unreasonably far in the future."
 	)
 
 	testCases := []struct {
@@ -95,7 +106,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 		setup    func(f *jwtBearerFixture)
 		err      error
 		expected string
-		pattern  string
 		hint     string
 	}{
 		{
@@ -140,8 +150,8 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 				f.requester.Form.Add(consts.FormParameterAssertion, "fjigjgfkjgkf")
 			},
-			err:      oauth2.ErrInvalidGrant,
-			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to parse JSON Web Token passed in 'assertion' request parameter. go-jose/go-jose: compact JWS format must have three parts",
+			err:  oauth2.ErrInvalidGrant,
+			hint: hintUnparsed,
 		},
 		{
 			name: "ShouldRejectATransactionTokenBeforeAnyKeyLookup",
@@ -160,8 +170,8 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				cl.Issuer = ""
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
 			},
-			err:      oauth2.ErrInvalidGrant,
-			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The JWT in 'assertion' request parameter MUST contain an 'iss' (issuer) claim.",
+			err:  oauth2.ErrInvalidGrant,
+			hint: "The JWT authorization grant must contain an 'iss' claim.",
 		},
 		{
 			name: "ShouldRejectAnAssertionWithoutASubject",
@@ -175,31 +185,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The JWT in 'assertion' request parameter MUST contain a 'sub' (subject) claim.",
 		},
 		{
-			name: "ShouldRejectWhenNoPublicKeyIsRegistered",
-			setup: func(f *jwtBearerFixture) {
-				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				cl := f.createStandardClaim()
-				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(nil, oauth2.ErrNotFound)
-			},
-			err:      oauth2.ErrInvalidGrant,
-			expected: errKeyNotFoundMessage,
-			hint:     hintAssertionUnverified,
-		},
-		{
-			name: "ShouldRejectWhenNoPublicKeysAreRegistered",
-			setup: func(f *jwtBearerFixture) {
-				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				keyID := ""
-				cl := f.createStandardClaim()
-				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKeys(f.ctx, cl.Issuer, cl.Subject).Return(nil, oauth2.ErrNotFound)
-			},
-			err:      oauth2.ErrInvalidGrant,
-			expected: errKeyNotFoundMessage,
-			hint:     hintAssertionUnverified,
-		},
-		{
 			name: "ShouldRejectWhenThePublicKeyDoesNotVerify",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
@@ -207,11 +192,12 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
 				jwk := f.createRandomTestJWK()
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&jwk, nil)
+				jwk.KeyID = keyID
+
+				f.trust(func(trusted *oauth2.RFC7523TrustedIssuer) { trusted.JSONWebKeys = f.createJWS(jwk) })
 			},
-			err:      oauth2.ErrInvalidGrant,
-			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to verify the integrity of the 'assertion' value. go-jose/go-jose: error in cryptographic primitive",
-			hint:     hintAssertionUnverified,
+			err:  oauth2.ErrInvalidGrant,
+			hint: hintAssertionUnverified,
 		},
 		{
 			name: "ShouldRejectWhenNoneOfThePublicKeysVerify",
@@ -220,21 +206,20 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				keyID := ""
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKeys(f.ctx, cl.Issuer, cl.Subject).Return(f.createJWS(f.createRandomTestJWK(), f.createRandomTestJWK()), nil)
+				f.trust(func(trusted *oauth2.RFC7523TrustedIssuer) {
+					trusted.JSONWebKeys = f.createJWS(f.createRandomTestJWK(), f.createRandomTestJWK())
+				})
 			},
-			err:      oauth2.ErrInvalidGrant,
-			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. Unable to verify the integrity of the 'assertion' value. No public JWK was registered for issuer 'trusted_issuer' and subject 'some_ro', and public key is required to check signature of JWT in 'assertion' request parameter.",
-			hint:     hintAssertionUnverified,
+			err:  oauth2.ErrInvalidGrant,
+			hint: hintAssertionUnverified,
 		},
 		{
 			name: "ShouldRejectAnAssertionWithoutAnAudience",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				cl.Audience = []string{}
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 			},
 			err:      oauth2.ErrInvalidGrant,
 			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The JWT in 'assertion' request parameter MUST contain an 'aud' (audience) claim.",
@@ -243,11 +228,9 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			name: "ShouldRejectAnAssertionAudiencedElsewhere",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				cl.Audience = jwt.Audience{"leela", "fry"}
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 			},
 			err:      oauth2.ErrInvalidGrant,
 			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The JWT in 'assertion' request parameter MUST contain an 'aud' (audience) claim containing a value 'https://www.example.com/token' that identifies the authorization server as an intended audience.",
@@ -256,11 +239,9 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			name: "ShouldRejectAnAssertionWithoutAnExpiry",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				cl.Expiry = nil
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 			},
 			err:      oauth2.ErrInvalidGrant,
 			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The JWT in 'assertion' request parameter MUST contain an 'exp' (expiration time) claim.",
@@ -269,39 +250,33 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			name: "ShouldRejectAnExpiredAssertion",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				cl.Expiry = jwt.NewNumericDate(time.Now().AddDate(0, -1, 0))
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 			},
-			err:      oauth2.ErrInvalidGrant,
-			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The JWT provided in the 'assertion' request parameter is expired.",
+			err:  oauth2.ErrInvalidGrant,
+			hint: hintExpired,
 		},
 		{
 			name: "ShouldRejectAnAssertionBeforeItsNotBeforeDate",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				nbf := time.Now().AddDate(0, 1, 0)
 				cl := f.createStandardClaim()
 				cl.NotBefore = jwt.NewNumericDate(nbf)
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 			},
-			err:     oauth2.ErrInvalidGrant,
-			pattern: `^The\ provided\ authorization\ grant\ \(e\.g\.,\ authorization\ code,\ resource\ owner\ credentials\)\ or\ refresh\ token\ is\ invalid,\ expired,\ revoked,\ does\ not\ match\ the\ redirection\ URI\ used\ in\ the\ authorization\ request,\ or\ was\ issued\ to\ another\ client\. The JWT in 'assertion' request parameter contains an 'nbf' \(not before\) claim, that identifies the time '[^']+' before which the token MUST NOT be accepted\.$`,
+			err:  oauth2.ErrInvalidGrant,
+			hint: "The JWT authorization grant is not yet valid.",
 		},
 		{
 			name: "ShouldRejectAnAssertionWithoutARequiredIssuedAt",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				cl.IssuedAt = nil
 				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 			},
 			err:      oauth2.ErrInvalidGrant,
 			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The JWT in 'assertion' request parameter MUST contain an 'iat' (issued at) claim.",
@@ -310,36 +285,24 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			name: "ShouldAcceptAnAssertionWithNoTypeHeader",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertionWithType(cl, keyID, ""))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 			},
 		},
 		{
 			name: "ShouldAcceptAnApplicationJWTTypeHeader",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertionWithType(cl, keyID, "application/jwt"))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 			},
 		},
 		{
 			name: "ShouldAcceptALowercaseJWTTypeHeader",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertionWithType(cl, keyID, "jwt"))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 			},
 		},
 		{
@@ -356,7 +319,6 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			name: "ShouldRejectAnIssuedAtInTheFuture",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				issuedAt := time.Now().Add(2 * time.Hour)
 				cl := f.createStandardClaim()
 				cl.IssuedAt = jwt.NewNumericDate(issuedAt)
@@ -364,96 +326,81 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
 				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 			},
-			err:     oauth2.ErrInvalidGrant,
-			pattern: `^The\ provided\ authorization\ grant\ \(e\.g\.,\ authorization\ code,\ resource\ owner\ credentials\)\ or\ refresh\ token\ is\ invalid,\ expired,\ revoked,\ does\ not\ match\ the\ redirection\ URI\ used\ in\ the\ authorization\ request,\ or\ was\ issued\ to\ another\ client\. The JWT in 'assertion' request parameter contains an 'iat' \(issued at\) claim, that identifies the time '[^']+' which is after the current time$`,
+			err:  oauth2.ErrInvalidGrant,
+			hint: hintIssuedInTheFuture,
 		},
 		{
 			name: "ShouldAcceptAnIssuedAtAndNotBeforeWithinTheClockSkew",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				cl.IssuedAt = jwt.NewNumericDate(time.Now().Add(time.Second * 5))
 				cl.NotBefore = jwt.NewNumericDate(time.Now().Add(time.Second * 5))
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 			},
 		},
 		{
 			name: "ShouldRejectAnIssuedAtInTheNearFutureWhenClockSkewIsDisabled",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				cl.IssuedAt = jwt.NewNumericDate(time.Now().Add(time.Second * 5))
 				f.handler.Config.(*oauth2.Config).JWTClockSkew = -1
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 			},
-			err:     oauth2.ErrInvalidGrant,
-			pattern: `^The\ provided\ authorization\ grant\ \(e\.g\.,\ authorization\ code,\ resource\ owner\ credentials\)\ or\ refresh\ token\ is\ invalid,\ expired,\ revoked,\ does\ not\ match\ the\ redirection\ URI\ used\ in\ the\ authorization\ request,\ or\ was\ issued\ to\ another\ client\. The JWT in 'assertion' request parameter contains an 'iat' \(issued at\) claim, that identifies the time '[^']+' which is after the current time$`,
+			err:  oauth2.ErrInvalidGrant,
+			hint: hintIssuedInTheFuture,
 		},
 		{
 			name: "ShouldRejectAnIssuedAtFarInThePast",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				issuedAt := time.Now().AddDate(0, 0, -31)
 				cl := f.createStandardClaim()
 				cl.IssuedAt = jwt.NewNumericDate(issuedAt)
 				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
 				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 			},
-			err:     oauth2.ErrInvalidGrant,
-			pattern: `^The\ provided\ authorization\ grant\ \(e\.g\.,\ authorization\ code,\ resource\ owner\ credentials\)\ or\ refresh\ token\ is\ invalid,\ expired,\ revoked,\ does\ not\ match\ the\ redirection\ URI\ used\ in\ the\ authorization\ request,\ or\ was\ issued\ to\ another\ client\. The JWT in 'assertion' request parameter contains an 'exp' \(expiration time\) claim with value '[^']+' that is unreasonably far in the future, considering token issued at '[^']+'\.$`,
+			err:  oauth2.ErrInvalidGrant,
+			hint: hintExpiryTooFar,
 		},
 		{
 			name: "ShouldRejectAnExpiryFarInTheFuture",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				cl.IssuedAt = jwt.NewNumericDate(time.Now().AddDate(0, 0, -15))
 				cl.Expiry = jwt.NewNumericDate(time.Now().AddDate(0, 0, 20))
 				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = false
 				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 			},
-			err:     oauth2.ErrInvalidGrant,
-			pattern: `^The\ provided\ authorization\ grant\ \(e\.g\.,\ authorization\ code,\ resource\ owner\ credentials\)\ or\ refresh\ token\ is\ invalid,\ expired,\ revoked,\ does\ not\ match\ the\ redirection\ URI\ used\ in\ the\ authorization\ request,\ or\ was\ issued\ to\ another\ client\. The JWT in 'assertion' request parameter contains an 'exp' \(expiration time\) claim with value '[^']+' that is unreasonably far in the future, considering token issued at '[^']+'\.$`,
+			err:  oauth2.ErrInvalidGrant,
+			hint: hintExpiryTooFar,
 		},
 		{
 			name: "ShouldRejectAnExpiryFarInTheFutureWithNoIssuedAt",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				cl.IssuedAt = nil
 				cl.Expiry = jwt.NewNumericDate(time.Now().AddDate(0, 0, 31))
 				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = true
 				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerMaxDuration = time.Hour * 24 * 30
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 			},
-			err:     oauth2.ErrInvalidGrant,
-			pattern: `^The provided authorization grant \(e\.g\., authorization code, resource owner credentials\) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client\. The JWT in 'assertion' request parameter contains an 'exp' \(expiration time\) claim with value '[^']+' that is unreasonably far in the future, considering token issued at '[^']+'\.$`,
+			err:  oauth2.ErrInvalidGrant,
+			hint: hintExpiryTooFar,
 		},
 		{
 			name: "ShouldRejectAnAssertionWithoutARequiredTokenID",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				cl.ID = ""
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
 			},
 			err:      oauth2.ErrInvalidGrant,
 			expected: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The JWT in 'assertion' request parameter MUST contain an 'jti' (JWT ID) claim.",
@@ -462,68 +409,34 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			name: "ShouldRejectAnAssertionAlreadyUsed",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(true, nil)
+				require.NoError(f.t, f.store.MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()))
 			},
-			err:      oauth2.ErrInvalidGrant,
-			expected: errJWTUsedMessage,
+			err:  oauth2.ErrInvalidGrant,
+			hint: hintRedeemed,
 		},
 		{
-			name: "ShouldRejectWhenTheUsedCheckFails",
+			name: "ShouldRejectScopesTheIssuerIsNotGranted",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
-				cl := f.createStandardClaim()
-				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, oauth2.ErrServerError)
-			},
-			err:      oauth2.ErrServerError,
-			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
-		},
-		{
-			name: "ShouldRejectWhenFetchingThePublicKeyScopesFails",
-			setup: func(f *jwtBearerFixture) {
-				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
-				cl := f.createStandardClaim()
-				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{}, oauth2.ErrServerError)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-			},
-			err:      oauth2.ErrServerError,
-			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
-		},
-		{
-			name: "ShouldRejectScopesTheKeyIsNotGranted",
-			setup: func(f *jwtBearerFixture) {
-				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
 				f.requester.RequestedScope = []string{"some_scope"}
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
 			},
-			err:      oauth2.ErrInvalidScope,
-			expected: "The requested scope is invalid, unknown, or malformed. The public key registered for issuer 'trusted_issuer' and subject 'some_ro' is not allowed to request scope 'some_scope'.",
+			err:  oauth2.ErrInvalidScope,
+			hint: "The issuer 'trusted_issuer' is not allowed to grant scope 'some_scope'.",
 		},
 		{
 			name: "ShouldAcceptAValidAssertion",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
 				f.requester.RequestedScope = []string{"valid_scope"}
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope", consts.ScopeOpenID}, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
+				f.trust(func(trusted *oauth2.RFC7523TrustedIssuer) {
+					trusted.Scopes = []string{"valid_scope", consts.ScopeOpenID}
+				})
 			},
 		},
 		{
@@ -531,13 +444,10 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 				f.requester.Client = &oauth2.DefaultClient{ID: testClientID, GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}, Scopes: []string{"valid_scope"}}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
 				f.requester.RequestedScope = []string{"valid_scope", testWiderScope}
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope", testWiderScope}, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
+				f.trust(func(trusted *oauth2.RFC7523TrustedIssuer) { trusted.Scopes = []string{"valid_scope", testWiderScope} })
 			},
 			err:      oauth2.ErrInvalidScope,
 			expected: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'wider_scope'.",
@@ -547,98 +457,82 @@ func TestAuthorizeJWTGrantRequestHandler(t *testing.T) {
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 				f.requester.Client = &oauth2.DefaultClient{ID: testClientID, GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}, Scopes: []string{"valid_scope"}}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
 				f.requester.RequestedScope = []string{"valid_scope"}
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope", testWiderScope}, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
+				f.trust(func(trusted *oauth2.RFC7523TrustedIssuer) { trusted.Scopes = []string{"valid_scope", testWiderScope} })
 			},
 		},
 		{
 			name: "ShouldAcceptAValidAssertionWithNoScopesRequested",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
 			},
 		},
 		{
 			name: "ShouldAcceptAnAssertionWithoutATokenIDWhenOptional",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIDOptional = true
 				cl.ID = ""
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
 			},
 		},
 		{
 			name: "ShouldAcceptAnAssertionWithoutAnIssuedAtWhenOptional",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				cl.IssuedAt = nil
 				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerIssuedDateOptional = true
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
 			},
 		},
 		{
 			name: "ShouldAcceptWhenClientAuthenticationMayBeSkipped",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				pubKey := f.createJWK(f.privateKey.Public(), keyID)
 				cl := f.createStandardClaim()
 				f.requester.Client = &oauth2.DefaultClient{}
 				f.handler.Config.(*oauth2.Config).GrantTypeJWTBearerCanSkipClientAuth = true
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-				f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-				f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
 			},
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newJWTBearerFixture(t)
+	for _, store := range jwtBearerStores {
+		t.Run(store.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					f := newJWTBearerFixture(t, store.new())
 
-			tc.setup(f)
+					tc.setup(f)
 
-			err := f.handler.HandleTokenEndpointRequest(f.ctx, f.requester)
+					err := f.handler.HandleTokenEndpointRequest(f.ctx, f.requester)
 
-			if tc.err == nil {
-				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+					if tc.err == nil {
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+						assert.Equal(t, "local_ro", f.requester.GetSession().GetSubject())
 
-				return
+						return
+					}
+
+					require.Error(t, err)
+					assert.ErrorIs(t, err, tc.err)
+					assert.Empty(t, f.requester.GetSession().GetSubject())
+
+					if tc.hint != "" {
+						assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+					}
+
+					if tc.expected != "" {
+						assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
+					}
+				})
 			}
-
-			require.Error(t, err)
-			assert.ErrorIs(t, err, tc.err)
-
-			if tc.hint != "" {
-				assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
-			}
-
-			if tc.pattern != "" {
-				assert.Regexp(t, tc.pattern, oauth2.ErrorToDebugRFC6749Error(err).Error())
-
-				return
-			}
-
-			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
 		})
 	}
 }
@@ -649,7 +543,7 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 		setup    func(f *jwtBearerFixture)
 		err      error
 		expected string
-		pattern  string
+		hint     string
 		check    func(t *testing.T, f *jwtBearerFixture)
 	}{
 		{
@@ -676,9 +570,7 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 				f.mockAccessTokenStrategy.EXPECT().GenerateAccessToken(f.ctx, f.requester).Return(token, sig, nil)
-				f.mockAccessTokenStore.EXPECT().CreateAccessTokenSession(f.ctx, sig, f.requester.Sanitize([]string{}))
 			},
 			check: func(t *testing.T, f *jwtBearerFixture) {
 				assert.Equal(t, token, f.responder.AccessToken)
@@ -700,9 +592,7 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(nil)
 				f.mockAccessTokenStrategy.EXPECT().GenerateAccessToken(f.ctx, f.requester).Return(token, sig, nil)
-				f.mockAccessTokenStore.EXPECT().CreateAccessTokenSession(f.ctx, sig, f.requester.Sanitize([]string{}))
 			},
 			check: func(t *testing.T, f *jwtBearerFixture) {
 				assert.Equal(t, token, f.responder.AccessToken)
@@ -720,7 +610,6 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 				cl.ID = ""
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
 				f.mockAccessTokenStrategy.EXPECT().GenerateAccessToken(f.ctx, f.requester).Return(token, sig, nil)
-				f.mockAccessTokenStore.EXPECT().CreateAccessTokenSession(f.ctx, sig, f.requester.Sanitize([]string{}))
 			},
 			check: func(t *testing.T, f *jwtBearerFixture) {
 				assert.Equal(t, token, f.responder.AccessToken)
@@ -732,21 +621,10 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 				cl := f.createStandardClaim()
 				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(oauth2.ErrJTIKnown)
+				require.NoError(f.t, f.store.MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()))
 			},
-			err:      oauth2.ErrInvalidGrant,
-			expected: errJWTUsedMessage,
-		},
-		{
-			name: "ShouldRejectWhenMarkingTheJWTUsedFails",
-			setup: func(f *jwtBearerFixture) {
-				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-				cl := f.createStandardClaim()
-				f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-				f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(oauth2.ErrServerError)
-			},
-			err:      oauth2.ErrServerError,
-			expected: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
+			err:  oauth2.ErrInvalidGrant,
+			hint: hintRedeemed,
 		},
 		{
 			name: "ShouldRejectAnAssertionThatCanNotBeParsed",
@@ -754,89 +632,104 @@ func TestAuthorizeJWTGrantPopulateTokenEndpointResponse(t *testing.T) {
 				f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 				f.requester.Form.Add(consts.FormParameterAssertion, "not-a-jwt")
 			},
-			err:     oauth2.ErrInvalidGrant,
-			pattern: "^The provided authorization grant .* Unable to parse JSON Web Token passed in 'assertion' request parameter\\.",
+			err:  oauth2.ErrInvalidGrant,
+			hint: "Unable to parse the JWT authorization grant.",
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newJWTBearerFixture(t)
+	for _, store := range jwtBearerStores {
+		t.Run(store.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					f := newJWTBearerFixture(t, store.new())
 
-			tc.setup(f)
+					tc.setup(f)
 
-			err := f.handler.PopulateTokenEndpointResponse(f.ctx, f.requester, f.responder)
+					err := f.handler.PopulateTokenEndpointResponse(f.ctx, f.requester, f.responder)
 
-			if tc.err != nil {
-				require.Error(t, err)
-				assert.ErrorIs(t, err, tc.err)
+					if tc.err != nil {
+						require.Error(t, err)
+						assert.ErrorIs(t, err, tc.err)
 
-				if tc.pattern != "" {
-					assert.Regexp(t, tc.pattern, oauth2.ErrorToDebugRFC6749Error(err).Error())
+						if tc.hint != "" {
+							assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+						}
 
-					return
-				}
+						if tc.expected != "" {
+							assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
+						}
 
-				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
+						return
+					}
 
-				return
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+					tc.check(t, f)
+				})
 			}
-
-			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
-
-			tc.check(t, f)
 		})
 	}
+
+	t.Run("ShouldRejectWhenMarkingTheJWTUsedFails", func(t *testing.T) {
+		f := newJWTBearerMockFixture(t)
+
+		f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+		cl := f.createStandardClaim()
+		f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
+		f.mockStore.EXPECT().MarkRFC7523JWTUsedForTime(f.ctx, cl.Issuer, cl.ID, cl.Expiry.Time()).Return(oauth2.ErrServerError)
+
+		assert.ErrorIs(t, f.handler.PopulateTokenEndpointResponse(f.ctx, f.requester, f.responder), oauth2.ErrServerError)
+	})
 }
 
 func TestAuthorizeJWTGrantAudience(t *testing.T) {
 	testCases := []struct {
 		name     string
 		setup    func(f *jwtBearerFixture)
-		storage  bool
+		issuer   bool
 		audience []string
 		resource []string
 		err      string
 	}{
 		{
-			name:    "ShouldNotGrantTheAssertionAudience",
-			storage: true,
+			name:   "ShouldNotGrantTheAssertionAudience",
+			issuer: true,
 		},
 		{
-			name:    "ShouldGrantARequestedAudienceTheKeyHas",
-			storage: true,
+			name:   "ShouldGrantARequestedAudienceTheIssuerHas",
+			issuer: true,
 			setup: func(f *jwtBearerFixture) {
 				f.requester.SetRequestedAudience(oauth2.Arguments{"https://leela.example.com"})
 			},
 			audience: []string{"https://leela.example.com"},
 		},
 		{
-			name:    "ShouldGrantARequestedResourceTheKeyHas",
-			storage: true,
+			name:   "ShouldGrantARequestedResourceTheIssuerHas",
+			issuer: true,
 			setup: func(f *jwtBearerFixture) {
 				f.requester.SetRequestedResource(oauth2.Arguments{"https://leela.example.com"})
 			},
 			resource: []string{"https://leela.example.com"},
 		},
 		{
-			name:    "ShouldRejectARequestedAudienceTheKeyDoesNotHave",
-			storage: true,
+			name:   "ShouldRejectARequestedAudienceTheIssuerDoesNotHave",
+			issuer: true,
 			setup: func(f *jwtBearerFixture) {
 				f.requester.SetRequestedAudience(oauth2.Arguments{"https://fry.example.com"})
 			},
 			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://fry.example.com' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			name:    "ShouldRejectARequestedResourceTheKeyDoesNotHave",
-			storage: true,
+			name:   "ShouldRejectARequestedResourceTheIssuerDoesNotHave",
+			issuer: true,
 			setup: func(f *jwtBearerFixture) {
 				f.requester.SetRequestedResource(oauth2.Arguments{"https://fry.example.com"})
 			},
 			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://fry.example.com' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			name:    "ShouldRejectARequestedAudienceOnlyTheClientHas",
-			storage: true,
+			name:   "ShouldRejectARequestedAudienceOnlyTheClientHas",
+			issuer: true,
 			setup: func(f *jwtBearerFixture) {
 				f.requester.Client = &oauth2.DefaultClient{ID: "foo", GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}, Audience: []string{"https://fry.example.com"}}
 				f.requester.SetRequestedAudience(oauth2.Arguments{"https://fry.example.com"})
@@ -844,8 +737,8 @@ func TestAuthorizeJWTGrantAudience(t *testing.T) {
 			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://fry.example.com' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			name:    "ShouldRejectARequestedResourceOnlyALooseResourceStrategyMatches",
-			storage: true,
+			name:   "ShouldRejectARequestedResourceOnlyALooseResourceStrategyMatches",
+			issuer: true,
 			setup: func(f *jwtBearerFixture) {
 				f.handler.Config.(*oauth2.Config).ResourceStrategy = oauth2.DefaultResourceStrategy
 				f.requester.SetRequestedResource(oauth2.Arguments{"https://leela.example.com/admin"})
@@ -853,8 +746,8 @@ func TestAuthorizeJWTGrantAudience(t *testing.T) {
 			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://leela.example.com/admin' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			name:    "ShouldRejectARequestedAudienceOnlyALooseAudienceStrategyMatches",
-			storage: true,
+			name:   "ShouldRejectARequestedAudienceOnlyALooseAudienceStrategyMatches",
+			issuer: true,
 			setup: func(f *jwtBearerFixture) {
 				f.handler.Config.(*oauth2.Config).AudienceStrategy = func(_, _ []string) error { return nil }
 				f.requester.SetRequestedAudience(oauth2.Arguments{"https://fry.example.com"})
@@ -862,8 +755,8 @@ func TestAuthorizeJWTGrantAudience(t *testing.T) {
 			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. Requested audience 'https://fry.example.com' has not been whitelisted by the OAuth 2.0 Client.",
 		},
 		{
-			name:    "ShouldGrantARegisteredResourceWithALooseResourceStrategy",
-			storage: true,
+			name:   "ShouldGrantARegisteredResourceWithALooseResourceStrategy",
+			issuer: true,
 			setup: func(f *jwtBearerFixture) {
 				f.handler.Config.(*oauth2.Config).ResourceStrategy = oauth2.DefaultResourceStrategy
 				f.requester.SetRequestedResource(oauth2.Arguments{"https://leela.example.com"})
@@ -871,8 +764,8 @@ func TestAuthorizeJWTGrantAudience(t *testing.T) {
 			resource: []string{"https://leela.example.com"},
 		},
 		{
-			name:    "ShouldRejectARegisteredAudienceTheConfiguredStrategyRejects",
-			storage: true,
+			name:   "ShouldRejectARegisteredAudienceTheConfiguredStrategyRejects",
+			issuer: true,
 			setup: func(f *jwtBearerFixture) {
 				f.handler.Config.(*oauth2.Config).AudienceStrategy = func(_, _ []string) error {
 					return oauth2.ErrInvalidTarget.WithDebug("The configured strategy rejected the audience.")
@@ -882,7 +775,7 @@ func TestAuthorizeJWTGrantAudience(t *testing.T) {
 			err: "The requested resource is invalid, missing, unknown, or malformed. Ensure the requested resource is an absolute URI without a fragment component that identifies a resource server known to the authorization server and that it is permitted for this client. The configured strategy rejected the audience.",
 		},
 		{
-			name: "ShouldRejectARequestedAudienceWithoutAudienceStorage",
+			name: "ShouldRejectARequestedAudienceWhenTheIssuerHasNone",
 			setup: func(f *jwtBearerFixture) {
 				f.requester.SetRequestedAudience(oauth2.Arguments{"https://leela.example.com"})
 			},
@@ -890,38 +783,37 @@ func TestAuthorizeJWTGrantAudience(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newJWTBearerFixture(t)
-			f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+	for _, store := range jwtBearerStores {
+		t.Run(store.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					f := newJWTBearerFixture(t, store.new())
+					f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
 
-			if tc.storage {
-				f.handler.Storage = &testAudienceStorage{MockRFC7523Storage: f.mockStore, audience: []string{"https://leela.example.com"}}
+					if tc.issuer {
+						f.trust(func(trusted *oauth2.RFC7523TrustedIssuer) { trusted.Audience = []string{"https://leela.example.com"} })
+					}
+
+					if tc.setup != nil {
+						tc.setup(f)
+					}
+
+					f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(f.createStandardClaim(), keyID))
+
+					err := f.handler.HandleTokenEndpointRequest(f.ctx, f.requester)
+
+					if tc.err != "" {
+						require.ErrorIs(t, err, oauth2.ErrInvalidTarget)
+						assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+
+						return
+					}
+
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+					assert.ElementsMatch(t, tc.audience, f.requester.GetGrantedAudience())
+					assert.ElementsMatch(t, tc.resource, f.requester.GetGrantedResource())
+				})
 			}
-
-			if tc.setup != nil {
-				tc.setup(f)
-			}
-
-			pubKey := f.createJWK(f.privateKey.Public(), keyID)
-			cl := f.createStandardClaim()
-			f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertion(cl, keyID))
-			f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-			f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{"valid_scope"}, nil)
-			f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil)
-
-			err := f.handler.HandleTokenEndpointRequest(f.ctx, f.requester)
-
-			if tc.err != "" {
-				require.ErrorIs(t, err, oauth2.ErrInvalidTarget)
-				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
-
-				return
-			}
-
-			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
-			assert.ElementsMatch(t, tc.audience, f.requester.GetGrantedAudience())
-			assert.ElementsMatch(t, tc.resource, f.requester.GetGrantedResource())
 		})
 	}
 }
@@ -939,44 +831,85 @@ func TestAuthorizeJWTGrantConfirmation(t *testing.T) {
 		{name: "ShouldRejectANullConfirmation", cnf: nil},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newJWTBearerFixture(t)
+	for _, store := range jwtBearerStores {
+		t.Run(store.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					f := newJWTBearerFixture(t, store.new())
 
-			keyID := "my_key"
-			cl := f.createStandardClaim()
-			pubKey := f.createJWK(f.privateKey.Public(), keyID)
+					f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+					f.requester.Form.Add(consts.FormParameterAssertion, f.createTestAssertionWithClaims(f.createStandardClaim(), map[string]any{consts.ClaimConfirmation: tc.cnf}, keyID))
 
-			sig, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: jose.JSONWebKey{Key: f.privateKey, KeyID: keyID, Algorithm: string(jose.RS256)}}, (&jose.SignerOptions{}).WithType(consts.JSONWebTokenTypeJWT))
-			require.NoError(t, err)
-
-			assertion, err := jwt.Signed(sig).Claims(cl).Claims(map[string]any{consts.ClaimConfirmation: tc.cnf}).Serialize()
-			require.NoError(t, err)
-
-			f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
-			f.requester.Form.Add(consts.FormParameterAssertion, assertion)
-
-			f.mockStore.EXPECT().GetRFC7523PublicKey(f.ctx, cl.Issuer, cl.Subject, keyID).Return(&pubKey, nil)
-			f.mockStore.EXPECT().GetRFC7523PublicKeyScopes(f.ctx, cl.Issuer, cl.Subject, keyID).Return([]string{}, nil).AnyTimes()
-			f.mockStore.EXPECT().IsRFC7523JWTUsed(f.ctx, cl.Issuer, cl.ID).Return(false, nil).AnyTimes()
-
-			require.ErrorIs(t, f.handler.HandleTokenEndpointRequest(f.ctx, f.requester), oauth2.ErrInvalidGrant)
-			assert.Empty(t, f.requester.GetSession().GetSubject())
+					require.ErrorIs(t, f.handler.HandleTokenEndpointRequest(f.ctx, f.requester), oauth2.ErrInvalidGrant)
+					assert.Empty(t, f.requester.GetSession().GetSubject())
+				})
+			}
 		})
 	}
 }
 
-func newJWTBearerFixture(t *testing.T) *jwtBearerFixture {
+type fixtureStore interface {
+	Storage
+	hoauth2.AccessTokenStorage
+}
+
+var jwtBearerStores = []struct {
+	name string
+	new  func() fixtureStore
+}{
+	{name: "MemoryStore", new: func() fixtureStore { return storage.NewMemoryStore() }},
+	{name: "HydratingMemoryStore", new: func() fixtureStore { return storage.NewHydratingMemoryStore() }},
+}
+
+func newJWTBearerFixture(t *testing.T, store fixtureStore) *jwtBearerFixture {
 	t.Helper()
+
+	f := newJWTBearerBaseFixture(t)
+
+	f.store = store
+
+	switch s := store.(type) {
+	case *storage.MemoryStore:
+		f.memory = s
+	case *storage.HydratingMemoryStore:
+		f.memory = s.MemoryStore
+	default:
+		require.FailNow(t, "unsupported store")
+	}
+
+	f.memory.RFC7523TrustedIssuers[testTrustedIssuer] = f.createTrustedIssuer()
+	f.memory.RFC7523Subjects[storage.RFC7523SubjectKey{Issuer: testTrustedIssuer, Subject: "some_ro"}] = "local_ro"
+
+	f.handler.Storage = store
+	f.handler.AccessTokenStorage = store
+
+	return f
+}
+
+func newJWTBearerMockFixture(t *testing.T) *jwtBearerFixture {
+	t.Helper()
+
+	f := newJWTBearerBaseFixture(t)
 
 	ctrl := gomock.NewController(t)
 
+	f.mockStore = mock.NewMockRFC7523Storage(ctrl)
+	f.mockAccessTokenStore = mock.NewMockAccessTokenStorage(ctrl)
+
+	f.handler.Storage = f.mockStore
+	f.handler.AccessTokenStorage = f.mockAccessTokenStore
+
+	return f
+}
+
+func newJWTBearerBaseFixture(t *testing.T) *jwtBearerFixture {
+	t.Helper()
+
 	f := &jwtBearerFixture{
+		t:                       t,
 		ctx:                     t.Context(),
 		privateKey:              jwtBearerKey,
-		mockStore:               mock.NewMockRFC7523Storage(ctrl),
-		mockAccessTokenStrategy: mock.NewMockAccessTokenStrategy(ctrl),
-		mockAccessTokenStore:    mock.NewMockAccessTokenStorage(ctrl),
+		mockAccessTokenStrategy: mock.NewMockAccessTokenStrategy(gomock.NewController(t)),
 		responder:               oauth2.NewAccessResponse(),
 	}
 
@@ -985,7 +918,6 @@ func newJWTBearerFixture(t *testing.T) *jwtBearerFixture {
 	f.requester.Client = &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}}
 
 	f.handler = &Handler{
-		Storage: f.mockStore,
 		Config: &oauth2.Config{
 			ScopeStrategy:                        oauth2.HierarchicScopeStrategy,
 			AudienceStrategy:                     oauth2.DefaultAudienceStrategy,
@@ -997,7 +929,6 @@ func newJWTBearerFixture(t *testing.T) *jwtBearerFixture {
 		},
 		HandleHelper: &hoauth2.HandleHelper{
 			AccessTokenStrategy: f.mockAccessTokenStrategy,
-			AccessTokenStorage:  f.mockAccessTokenStore,
 			Config: &oauth2.Config{
 				AccessTokenLifespan: time.Hour,
 			},
@@ -1008,8 +939,11 @@ func newJWTBearerFixture(t *testing.T) *jwtBearerFixture {
 }
 
 type jwtBearerFixture struct {
+	t                       *testing.T
 	ctx                     context.Context
 	privateKey              *rsa.PrivateKey
+	store                   fixtureStore
+	memory                  *storage.MemoryStore
 	mockStore               *mock.MockRFC7523Storage
 	mockAccessTokenStrategy *mock.MockAccessTokenStrategy
 	mockAccessTokenStore    *mock.MockAccessTokenStorage
@@ -1018,11 +952,36 @@ type jwtBearerFixture struct {
 	handler                 *Handler
 }
 
+func (f *jwtBearerFixture) createTrustedIssuer() oauth2.RFC7523TrustedIssuer {
+	return oauth2.RFC7523TrustedIssuer{
+		Issuer:      testTrustedIssuer,
+		JSONWebKeys: f.createJWS(f.createJWK(f.privateKey.Public(), keyID)),
+		SigningAlgs: []string{string(jose.RS256)},
+		Scopes:      []string{"valid_scope"},
+	}
+}
+
+func (f *jwtBearerFixture) trust(mutate func(trusted *oauth2.RFC7523TrustedIssuer)) {
+	trusted := f.memory.RFC7523TrustedIssuers[testTrustedIssuer]
+
+	mutate(&trusted)
+
+	f.memory.RFC7523TrustedIssuers[testTrustedIssuer] = trusted
+}
+
 func (f *jwtBearerFixture) createTestAssertion(cl jwt.Claims, keyID string) string {
 	return f.createTestAssertionWithType(cl, keyID, "JWT")
 }
 
 func (f *jwtBearerFixture) createTestAssertionWithType(cl jwt.Claims, keyID, typ string) string {
+	return f.sign(cl, nil, keyID, typ)
+}
+
+func (f *jwtBearerFixture) createTestAssertionWithClaims(cl jwt.Claims, extra map[string]any, keyID string) string {
+	return f.sign(cl, extra, keyID, "JWT")
+}
+
+func (f *jwtBearerFixture) sign(cl jwt.Claims, extra map[string]any, keyID, typ string) string {
 	jwk := jose.JSONWebKey{Key: f.privateKey, KeyID: keyID, Algorithm: string(jose.RS256)}
 
 	opts := &jose.SignerOptions{}
@@ -1035,7 +994,12 @@ func (f *jwtBearerFixture) createTestAssertionWithType(cl jwt.Claims, keyID, typ
 		panic(fmt.Sprintf("failed to create signer: %s", err))
 	}
 
-	raw, err := jwt.Signed(sig).Claims(cl).Serialize()
+	builder := jwt.Signed(sig).Claims(cl)
+	if extra != nil {
+		builder = builder.Claims(extra)
+	}
+
+	raw, err := builder.Serialize()
 	if err != nil {
 		panic(fmt.Sprintf("failed to sign assertion: %s", err))
 	}
@@ -1045,7 +1009,7 @@ func (f *jwtBearerFixture) createTestAssertionWithType(cl jwt.Claims, keyID, typ
 
 func (f *jwtBearerFixture) createStandardClaim() jwt.Claims {
 	return jwt.Claims{
-		Issuer:    "trusted_issuer",
+		Issuer:    testTrustedIssuer,
 		Subject:   "some_ro",
 		Audience:  jwt.Audience{"https://www.example.com/token", "leela", "fry"},
 		Expiry:    jwt.NewNumericDate(time.Now().AddDate(0, 0, 10)),
@@ -1085,13 +1049,3 @@ var jwtBearerKey = func() *rsa.PrivateKey {
 
 	return key
 }()
-
-type testAudienceStorage struct {
-	*mock.MockRFC7523Storage
-
-	audience []string
-}
-
-func (s *testAudienceStorage) GetRFC7523PublicKeyAudience(_ context.Context, _, _, _ string) ([]string, error) {
-	return s.audience, nil
-}

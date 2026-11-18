@@ -9,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 
 	"authelia.com/provider/jose/jwt"
 
@@ -73,33 +72,35 @@ func TestAuthorizeJWTGrantAssertionAudience(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newJWTBearerFixture(t)
+	for _, store := range jwtBearerStores {
+		t.Run(store.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					f := newJWTBearerFixture(t, store.new())
 
-			config := f.handler.Config.(*oauth2.Config)
-			config.Issuer = issuer
-			config.EndpointURLs = urls
-			config.AllowedJWTAssertionAudiences = []string{listed}
+					config := f.handler.Config.(*oauth2.Config)
+					config.Issuer = issuer
+					config.EndpointURLs = urls
+					config.AllowedJWTAssertionAudiences = []string{listed}
 
-			if tc.config != nil {
-				tc.config(config)
+					if tc.config != nil {
+						tc.config(config)
+					}
+
+					claims := f.createStandardClaim()
+					claims.Audience = tc.aud
+
+					err := f.handler.validateTokenClaims(f.ctx, claims)
+
+					if tc.err == nil {
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+						return
+					}
+
+					assert.ErrorIs(t, err, tc.err)
+				})
 			}
-
-			f.mockStore.EXPECT().IsRFC7523JWTUsed(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil).AnyTimes()
-
-			claims := f.createStandardClaim()
-			claims.Audience = tc.aud
-
-			err := f.handler.validateTokenClaims(f.ctx, claims, nil)
-
-			if tc.err == nil {
-				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
-
-				return
-			}
-
-			assert.ErrorIs(t, err, tc.err)
 		})
 	}
 }

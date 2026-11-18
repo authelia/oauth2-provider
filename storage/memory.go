@@ -31,25 +31,6 @@ type MemoryUserRelation struct {
 	Password string
 }
 
-// IssuerPublicKeys holds the public keys of an issuer by subject.
-type IssuerPublicKeys struct {
-	Issuer    string
-	KeysBySub map[string]SubjectPublicKeys
-}
-
-// SubjectPublicKeys holds the public keys of a subject by key identifier.
-type SubjectPublicKeys struct {
-	Subject string
-	Keys    map[string]PublicKeyScopes
-}
-
-// PublicKeyScopes is a public key with the scopes and audience it is permitted.
-type PublicKeyScopes struct {
-	Key      *jose.JSONWebKey
-	Scopes   []string
-	Audience []string
-}
-
 // DPoPProofMarker identifies a used DPoP proof for replay detection by its 'jti', method and normalized target URI,
 // following the RFC 9449 Section 11.1 recommendation to store the 'jti' in the context of the target URI. It is not
 // keyed on the proof key thumbprint or nonce, so the 'jti' namespace is shared by every client; see
@@ -138,6 +119,17 @@ type IDJAGResourceKey struct {
 	Resource string
 }
 
+// RFC7523SubjectKey identifies the subject of an RFC 7523 authorization grant within the namespace of its issuer.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.4.2
+type RFC7523SubjectKey struct {
+	// Issuer is the 'iss' claim of the grant.
+	Issuer string
+
+	// Subject is the 'sub' claim of the grant.
+	Subject string
+}
+
 // MemoryStore is a reference storage implementation which keeps every record in memory. It is intended for tests and
 // examples rather than production use. It does not implement Transactional, so a replay made while another request is
 // writing its tokens does not revoke them.
@@ -169,10 +161,11 @@ type MemoryStore struct {
 	Users                     map[string]MemoryUserRelation
 	ClientAssertionJTIs       map[JTIMarker]time.Time
 	RFC7523JTIs               map[JTIMarker]time.Time
+	RFC7523TrustedIssuers     map[string]oauth2.RFC7523TrustedIssuer
+	RFC7523Subjects           map[RFC7523SubjectKey]string
 	TokenExchangeJTIs         map[JTIMarker]time.Time
 	AccessTokenRequestIDs     map[string]map[string]struct{}
 	RefreshTokenRequestIDs    map[string]string
-	IssuerPublicKeys          map[string]IssuerPublicKeys
 	PARSessions               map[string]oauth2.AuthorizeRequester
 	DPoPProofJTIs             map[DPoPProofMarker]time.Time
 	DPoPNonces                map[string]time.Time
@@ -203,11 +196,11 @@ type MemoryStore struct {
 	jtisMutex                     sync.RWMutex
 	accessTokenRequestIDsMutex    sync.RWMutex
 	refreshTokenRequestIDsMutex   sync.RWMutex
-	issuerPublicKeysMutex         sync.RWMutex
 	parSessionsMutex              sync.RWMutex
 	dpopProofJTIsMutex            sync.RWMutex
 	dpopNoncesMutex               sync.RWMutex
 	idjagMutex                    sync.RWMutex
+	rfc7523Mutex                  sync.RWMutex
 	clientRegistrationCountsMutex sync.Mutex
 	ssfStreamsMutex               sync.RWMutex
 
@@ -258,8 +251,9 @@ func NewMemoryStore() *MemoryStore {
 		RefreshTokenRequestIDs:   make(map[string]string),
 		ClientAssertionJTIs:      make(map[JTIMarker]time.Time),
 		RFC7523JTIs:              make(map[JTIMarker]time.Time),
+		RFC7523TrustedIssuers:    make(map[string]oauth2.RFC7523TrustedIssuer),
+		RFC7523Subjects:          make(map[RFC7523SubjectKey]string),
 		TokenExchangeJTIs:        make(map[JTIMarker]time.Time),
-		IssuerPublicKeys:         make(map[string]IssuerPublicKeys),
 		PARSessions:              make(map[string]oauth2.AuthorizeRequester),
 		DPoPProofJTIs:            make(map[DPoPProofMarker]time.Time),
 		DPoPNonces:               make(map[string]time.Time),
@@ -1107,79 +1101,48 @@ func (s *MemoryStore) RevokeAccessToken(_ context.Context, requestID string) err
 	return nil
 }
 
-// GetRFC7523PublicKey returns the public key registered for the issuer, subject and key ID, or oauth2.ErrNotFound when
-// none is registered.
-func (s *MemoryStore) GetRFC7523PublicKey(ctx context.Context, issuer string, subject string, keyId string) (*jose.JSONWebKey, error) {
-	s.issuerPublicKeysMutex.RLock()
-	defer s.issuerPublicKeysMutex.RUnlock()
+// GetRFC7523TrustedIssuer returns a copy of the trust configuration registered for the issuer, or oauth2.ErrNotFound
+// when none is registered.
+func (s *MemoryStore) GetRFC7523TrustedIssuer(_ context.Context, issuer string) (*oauth2.RFC7523TrustedIssuer, error) {
+	s.rfc7523Mutex.RLock()
+	defer s.rfc7523Mutex.RUnlock()
 
-	if issuerKeys, ok := s.IssuerPublicKeys[issuer]; ok {
-		if subKeys, ok := issuerKeys.KeysBySub[subject]; ok {
-			if keyScopes, ok := subKeys.Keys[keyId]; ok {
-				return keyScopes.Key, nil
-			}
-		}
+	trusted, ok := s.RFC7523TrustedIssuers[issuer]
+	if !ok {
+		return nil, oauth2.ErrNotFound
 	}
 
-	return nil, oauth2.ErrNotFound
+	trusted.SigningAlgs = slices.Clone(trusted.SigningAlgs)
+	trusted.Subjects = slices.Clone(trusted.Subjects)
+	trusted.Scopes = slices.Clone(trusted.Scopes)
+	trusted.Audience = slices.Clone(trusted.Audience)
+	trusted.Clients = slices.Clone(trusted.Clients)
+
+	if trusted.JSONWebKeys != nil {
+		trusted.JSONWebKeys = &jose.JSONWebKeySet{Keys: slices.Clone(trusted.JSONWebKeys.Keys)}
+	}
+
+	return &trusted, nil
 }
 
-// GetRFC7523PublicKeys returns every public key registered for the issuer and subject, or oauth2.ErrNotFound when none
-// is registered.
-func (s *MemoryStore) GetRFC7523PublicKeys(ctx context.Context, issuer string, subject string) (*jose.JSONWebKeySet, error) {
-	s.issuerPublicKeysMutex.RLock()
-	defer s.issuerPublicKeysMutex.RUnlock()
-
-	if issuerKeys, ok := s.IssuerPublicKeys[issuer]; ok {
-		if subKeys, ok := issuerKeys.KeysBySub[subject]; ok {
-			if len(subKeys.Keys) == 0 {
-				return nil, oauth2.ErrNotFound
-			}
-
-			keys := make([]jose.JSONWebKey, 0, len(subKeys.Keys))
-			for _, keyScopes := range subKeys.Keys {
-				keys = append(keys, *keyScopes.Key)
-			}
-
-			return &jose.JSONWebKeySet{Keys: keys}, nil
-		}
+// ResolveRFC7523Subject returns the subject registered for the grant's issuer and 'sub' claim, or oauth2.ErrNotFound
+// when none is registered.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.4.2
+func (s *MemoryStore) ResolveRFC7523Subject(_ context.Context, _ oauth2.Client, trusted *oauth2.RFC7523TrustedIssuer, _ string, claims map[string]any) (string, error) {
+	subject, ok := claims[consts.ClaimSubject].(string)
+	if !ok || trusted == nil {
+		return "", oauth2.ErrNotFound
 	}
 
-	return nil, oauth2.ErrNotFound
-}
+	s.rfc7523Mutex.RLock()
+	defer s.rfc7523Mutex.RUnlock()
 
-// GetRFC7523PublicKeyScopes returns the scopes registered with the public key for the issuer, subject and key ID, or
-// oauth2.ErrNotFound when no such key is registered.
-func (s *MemoryStore) GetRFC7523PublicKeyScopes(ctx context.Context, issuer string, subject string, keyId string) ([]string, error) {
-	s.issuerPublicKeysMutex.RLock()
-	defer s.issuerPublicKeysMutex.RUnlock()
-
-	if issuerKeys, ok := s.IssuerPublicKeys[issuer]; ok {
-		if subKeys, ok := issuerKeys.KeysBySub[subject]; ok {
-			if keyScopes, ok := subKeys.Keys[keyId]; ok {
-				return keyScopes.Scopes, nil
-			}
-		}
+	if resolved, ok := s.RFC7523Subjects[RFC7523SubjectKey{Issuer: trusted.Issuer, Subject: subject}]; ok {
+		return resolved, nil
 	}
 
-	return nil, oauth2.ErrNotFound
-}
-
-// GetRFC7523PublicKeyAudience returns the audience registered for the public key of the issuer and subject, which is
-// the audience an assertion signed by that key may request.
-func (s *MemoryStore) GetRFC7523PublicKeyAudience(ctx context.Context, issuer string, subject string, keyId string) ([]string, error) {
-	s.issuerPublicKeysMutex.RLock()
-	defer s.issuerPublicKeysMutex.RUnlock()
-
-	if issuerKeys, ok := s.IssuerPublicKeys[issuer]; ok {
-		if subKeys, ok := issuerKeys.KeysBySub[subject]; ok {
-			if keyScopes, ok := subKeys.Keys[keyId]; ok {
-				return keyScopes.Audience, nil
-			}
-		}
-	}
-
-	return nil, oauth2.ErrNotFound
+	return "", oauth2.ErrNotFound
 }
 
 // IsRFC7523JWTUsed reports whether the issuer has already used the 'jti' in an unexpired RFC 7523 authorization grant.

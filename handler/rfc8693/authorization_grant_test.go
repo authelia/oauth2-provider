@@ -34,6 +34,8 @@ const (
 	grantIssuer = "https://as.a.example/auth"
 	grantTarget = "https://as.b.example/auth"
 	grantOther  = "https://as.c.example/auth"
+
+	grantPartnerType = "urn:example:token-type:partner-jwt"
 )
 
 func TestAuthorizationGrantClaims(t *testing.T) {
@@ -219,6 +221,61 @@ func TestAuthorizationGrantExpiresTooSoon(t *testing.T) {
 	_, err := f.exchange(t, grantExchange{audience: []string{grantTarget}, subjectExpires: time.Now().Truncate(time.Second).Add(999 * time.Millisecond)})
 
 	require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+}
+
+func TestAuthorizationGrantDefaultLifetime(t *testing.T) {
+	testCases := []struct {
+		name           string
+		expiry         time.Duration
+		client         time.Duration
+		subjectExpires time.Duration
+		expected       int64
+		capped         bool
+		expiresIn      bool
+	}{
+		{name: "ShouldDefaultToFiveMinutes", subjectExpires: 2 * time.Hour, expected: 300, expiresIn: true},
+		{name: "ShouldPreferTheConfiguredExpiry", expiry: 2 * time.Minute, subjectExpires: 2 * time.Hour, expected: 120},
+		{name: "ShouldPreferTheClientLifespan", client: 90 * time.Second, subjectExpires: 2 * time.Hour, expected: 90},
+		{name: "ShouldStillCapAtTheSubjectToken", subjectExpires: time.Minute, expected: 60, capped: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newGrantFixture(t, func(jwtType *JWTType) {
+				jwtType.Issue.Expiry = tc.expiry
+			})
+			f.cfg.AccessTokenLifespan = time.Hour
+
+			if tc.client > 0 {
+				f.requester = &lifespanClient{
+					DefaultRegisteredClient: &oauth2.DefaultRegisteredClient{DefaultClient: f.client, TokenExchangeAuthorizationGrant: true},
+					lifespan:                tc.client,
+				}
+			}
+
+			response, err := f.exchange(t, grantExchange{audience: []string{grantTarget}, subjectExpires: time.Now().UTC().Add(tc.subjectExpires)})
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			_, claims := parseGrant(t, response)
+
+			lifetime := toUnix(t, claims[consts.ClaimExpirationTime]) - toUnix(t, claims[consts.ClaimIssuedAt])
+
+			if tc.capped {
+				assert.Positive(t, lifetime)
+				assert.LessOrEqual(t, lifetime, tc.expected)
+			} else {
+				assert.Equal(t, tc.expected, lifetime)
+			}
+
+			if tc.expiresIn {
+				expiresIn, ok := response.GetExtra(consts.AccessResponseExpiresIn).(int64)
+				require.True(t, ok, "%T", response.GetExtra(consts.AccessResponseExpiresIn))
+
+				assert.GreaterOrEqual(t, expiresIn, int64(295))
+				assert.LessOrEqual(t, expiresIn, int64(300))
+			}
+		})
+	}
 }
 
 func TestAuthorizationGrantTranscribeClaims(t *testing.T) {
@@ -499,6 +556,32 @@ func TestAuthorizationGrantIsNotAcceptedBack(t *testing.T) {
 		assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "cannot be exchanged")
 	})
 
+	t.Run("ShouldRejectAGrantThroughAnotherJWTTypeAsTheSubjectToken", func(t *testing.T) {
+		f := newGrantFixture(t, nil)
+		f.cfg.RFC8693TokenTypes[grantPartnerType] = newGrantPartnerType()
+
+		response, err := f.exchange(t, grantExchange{audience: []string{grantTarget}})
+		require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+		_, err = f.exchange(t, grantExchange{audience: []string{grantOther}, subjectToken: response.GetAccessToken(), subjectTokenType: grantPartnerType})
+
+		require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+		assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "issued by this authorization server")
+	})
+
+	t.Run("ShouldRejectAGrantThroughAnotherJWTTypeAsTheActorToken", func(t *testing.T) {
+		f := newGrantFixture(t, nil)
+		f.cfg.RFC8693TokenTypes[grantPartnerType] = newGrantPartnerType()
+
+		response, err := f.exchange(t, grantExchange{audience: []string{grantTarget}})
+		require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+		_, err = f.exchange(t, grantExchange{audience: []string{grantOther}, actorToken: response.GetAccessToken(), actorTokenType: grantPartnerType})
+
+		require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+		assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "issued by this authorization server")
+	})
+
 	t.Run("ShouldNotIssueWhileAnIDTokenCouldBeAcceptedWithAnyIssuer", func(t *testing.T) {
 		f := newGrantFixture(t, nil)
 		f.cfg.Issuer = ""
@@ -665,14 +748,13 @@ func TestAuthorizationGrantRedeemedWithRFC7523(t *testing.T) {
 	kid, _ := token.Header[consts.JSONWebTokenHeaderKeyIdentifier].(string)
 
 	store := storage.NewMemoryStore()
-	store.IssuerPublicKeys[grantIssuer] = storage.IssuerPublicKeys{
-		Issuer: grantIssuer,
-		KeysBySub: map[string]storage.SubjectPublicKeys{
-			"peter": {Subject: "peter", Keys: map[string]storage.PublicKeyScopes{
-				kid: {Key: &jose.JSONWebKey{Key: key.Public(), KeyID: kid, Algorithm: "RS256", Use: "sig"}, Scopes: []string{"photos"}},
-			}},
-		},
+	store.RFC7523TrustedIssuers[grantIssuer] = oauth2.RFC7523TrustedIssuer{
+		Issuer:      grantIssuer,
+		JSONWebKeys: &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: key.Public(), KeyID: kid, Algorithm: "RS256", Use: "sig"}}},
+		SigningAlgs: []string{"RS256"},
+		Scopes:      []string{"photos"},
 	}
+	store.RFC7523Subjects[storage.RFC7523SubjectKey{Issuer: grantIssuer, Subject: "peter"}] = "peter"
 
 	handler := &rfc7523.Handler{
 		Storage: store,
@@ -716,7 +798,7 @@ type grantExchange struct {
 	subjectMayAct                             map[string]any
 	subjectOwner                              oauth2.Client
 	subjectToken, subjectTokenType            string
-	actorToken, subjectJKT                    string
+	actorToken, actorTokenType, subjectJKT    string
 	noSubject, omitRequestedType              bool
 	session                                   *DefaultSession
 }
@@ -730,6 +812,20 @@ type grantFixture struct {
 	core      hoauth2.CoreStrategy
 	strategy  *jwt.DefaultStrategy
 	handlers  []oauth2.TokenEndpointHandler
+}
+
+type lifespanClient struct {
+	*oauth2.DefaultRegisteredClient
+
+	lifespan time.Duration
+}
+
+func (c *lifespanClient) GetEffectiveLifespan(gt oauth2.GrantType, tt oauth2.TokenType, fallback time.Duration) time.Duration {
+	if gt == oauth2.GrantTypeTokenExchange && tt == oauth2.AccessToken {
+		return c.lifespan
+	}
+
+	return fallback
 }
 
 func newGrantFixture(t *testing.T, configure func(jwtType *JWTType)) *grantFixture {
@@ -861,7 +957,12 @@ func (f *grantFixture) exchange(t *testing.T, e grantExchange) (*oauth2.AccessRe
 	}
 
 	if e.actorToken != "" {
-		form.Set(consts.FormParameterActorTokenType, consts.TokenTypeRFC8693JWT)
+		actorTokenType := e.actorTokenType
+		if actorTokenType == "" {
+			actorTokenType = consts.TokenTypeRFC8693JWT
+		}
+
+		form.Set(consts.FormParameterActorTokenType, actorTokenType)
 		form.Set(consts.FormParameterActorToken, e.actorToken)
 	}
 
@@ -900,6 +1001,17 @@ func (f *grantFixture) exchange(t *testing.T, e grantExchange) (*oauth2.AccessRe
 	}
 
 	return response, nil
+}
+
+func newGrantPartnerType() *JWTType {
+	return &JWTType{
+		Name: grantPartnerType,
+		Validate: &JWTValidationConfig{
+			Issuer:           grantIssuer,
+			ExpectedAudience: []string{grantTarget},
+			ValidateFunc:     func(_ *jwt.Token) (any, error) { return key.PublicKey, nil },
+		},
+	}
 }
 
 func parseGrant(t *testing.T, response *oauth2.AccessResponse) (*jwt.Token, map[string]any) {

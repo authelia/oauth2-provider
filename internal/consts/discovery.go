@@ -132,3 +132,15 @@ const (
 	DiscoveryVPFormatsSupported                                        = "vp_formats_supported"
 	DiscoveryClientIDPrefixesSupported                                 = "client_id_prefixes_supported"
 )
+
+// Protected resource metadata parameter names not shared with the authorization server metadata.
+const (
+	ProtectedResourceMetadataResource                          = "resource"
+	ProtectedResourceMetadataAuthorizationServers              = "authorization_servers"
+	ProtectedResourceMetadataBearerMethodsSupported            = "bearer_methods_supported"
+	ProtectedResourceMetadataResourceSigningAlgValuesSupported = "resource_signing_alg_values_supported"
+	ProtectedResourceMetadataResourceName                      = "resource_name"
+	ProtectedResourceMetadataResourceDocumentation             = "resource_documentation"
+	ProtectedResourceMetadataResourcePolicyURI                 = "resource_policy_uri"
+	ProtectedResourceMetadataResourceTOSURI                    = "resource_tos_uri"
+)

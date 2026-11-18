@@ -27,8 +27,12 @@ import (
 // are returned as 401 here, as required at a protected resource. The 'acr_values' and 'max_age' members set on an
 // insufficient_user_authentication error with WithExtra are carried as challenge parameters.
 //
-// See: https://www.rfc-editor.org/rfc/rfc6750#section-3, https://www.rfc-editor.org/rfc/rfc9449#section-7.1, and
-// https://www.rfc-editor.org/rfc/rfc9449#section-7.2, and https://www.rfc-editor.org/rfc/rfc9470#section-3
+// When the Configurator implements ProtectedResourceMetadataURLProvider and r is not nil, the URL it returns for r is
+// carried on every challenge as the RFC 9728 Section 5.1 'resource_metadata' parameter.
+//
+// See: https://www.rfc-editor.org/rfc/rfc6750#section-3, https://www.rfc-editor.org/rfc/rfc9449#section-7.1,
+// https://www.rfc-editor.org/rfc/rfc9449#section-7.2, https://www.rfc-editor.org/rfc/rfc9470#section-3, and
+// https://datatracker.ietf.org/doc/html/rfc9728#section-5.1
 func (f *Fosite) WriteBearerAuthorizationChallenge(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) (rfc *RFC6749Error) {
 	rfc = ErrorToRFC6749Error(err)
 
@@ -48,7 +52,13 @@ func (f *Fosite) WriteBearerAuthorizationChallenge(ctx context.Context, rw http.
 		}
 	}
 
-	rw.Header().Set(consts.HeaderWWWAuthenticate, BearerAuthorizationChallenge(ctx, f.Config, "", rfc, schemes...))
+	var resourceMetadata string
+
+	if provider, ok := f.Config.(ProtectedResourceMetadataURLProvider); ok && r != nil {
+		resourceMetadata = provider.GetProtectedResourceMetadataURL(ctx, r)
+	}
+
+	rw.Header().Set(consts.HeaderWWWAuthenticate, BearerAuthorizationChallengeWithResourceMetadata(ctx, f.Config, "", resourceMetadata, rfc, schemes...))
 
 	// RFC 9449 Section 9: a resource server signaling that it requires a nonce must supply one, or the client has
 	// nothing to retry with and the handshake cannot complete.
@@ -73,6 +83,19 @@ type BearerAuthorizationChallengeConfigProvider interface {
 	GetDPoPAllowedJWSAlgorithms(ctx context.Context) (algs []string)
 }
 
+// ProtectedResourceMetadataURLProvider is optionally implemented by the Configurator to locate the protected resource
+// metadata carried in the 'resource_metadata' parameter of the 'WWW-Authenticate' challenge. The URL should be derived
+// from the configured resource identifiers, not from request headers such as Host. The introspection, RFC 7591 client
+// registration and RFC 7592 client configuration error writers take no request, so they only carry the parameter when
+// the context they are given carries the request under RequestContextKey.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9728#section-5.1
+type ProtectedResourceMetadataURLProvider interface {
+	// GetProtectedResourceMetadataURL returns the URL of the protected resource metadata for the protected resource
+	// r was made to, or an empty string to omit the parameter.
+	GetProtectedResourceMetadataURL(ctx context.Context, r *http.Request) (location string)
+}
+
 // BearerAuthorizationChallenge returns the RFC 6750 Section 3 / RFC 9449 Section 7.1 'WWW-Authenticate' value for a
 // protected resource rejecting a request with err. It neither sets headers nor corrects the status of err, so it suits
 // callers that do not write a net/http response; see WriteBearerAuthorizationChallenge for one that does.
@@ -91,11 +114,21 @@ type BearerAuthorizationChallengeConfigProvider interface {
 //   - The 'acr_values' and 'max_age' parameters are offered on an insufficient_user_authentication challenge (RFC 9470
 //     Section 3).
 //
-// A non-empty realm is carried on every challenge (RFC 6750 Section 3).
+// A non-empty realm is carried on every challenge (RFC 6750 Section 3). The value carries no 'resource_metadata'
+// parameter; see BearerAuthorizationChallengeWithResourceMetadata for one that does.
 //
 // See: https://www.rfc-editor.org/rfc/rfc6750#section-3, https://www.rfc-editor.org/rfc/rfc9449#section-7.1, and
 // https://www.rfc-editor.org/rfc/rfc9449#section-7.2, and https://www.rfc-editor.org/rfc/rfc9470#section-3
 func BearerAuthorizationChallenge(ctx context.Context, config BearerAuthorizationChallengeConfigProvider, realm string, err error, schemes ...string) (value string) {
+	return BearerAuthorizationChallengeWithResourceMetadata(ctx, config, realm, "", err, schemes...)
+}
+
+// BearerAuthorizationChallengeWithResourceMetadata returns the BearerAuthorizationChallenge value with a non-empty
+// resourceMetadata, the URL of the protected resource metadata, carried on every challenge as the 'resource_metadata'
+// parameter after the realm.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9728#section-5.1
+func BearerAuthorizationChallengeWithResourceMetadata(ctx context.Context, config BearerAuthorizationChallengeConfigProvider, realm, resourceMetadata string, err error, schemes ...string) (value string) {
 	rfc := ErrorToRFC6749Error(err)
 
 	presented := presentedSchemes(schemes)
@@ -106,6 +139,12 @@ func BearerAuthorizationChallenge(ctx context.Context, config BearerAuthorizatio
 		realmParam = "realm=" + challengeQuotedString(realm)
 	}
 
+	var resourceMetadataParam string
+
+	if resourceMetadata != "" {
+		resourceMetadataParam = consts.ChallengeParameterResourceMetadata + "=" + challengeQuotedString(resourceMetadata)
+	}
+
 	var params []string
 
 	if len(presented) != 0 || rfc.ErrorField == errUseDPoPNonceName {
@@ -113,7 +152,7 @@ func BearerAuthorizationChallenge(ctx context.Context, config BearerAuthorizatio
 	}
 
 	bearer := func(params ...string) string {
-		return challengeScheme(consts.AuthSchemeBearer, append([]string{realmParam}, params...)...)
+		return challengeScheme(consts.AuthSchemeBearer, append([]string{realmParam, resourceMetadataParam}, params...)...)
 	}
 
 	if !config.GetDPoPEnabled(ctx) {
@@ -127,7 +166,7 @@ func BearerAuthorizationChallenge(ctx context.Context, config BearerAuthorizatio
 	}
 
 	dpop := func(params ...string) string {
-		return challengeScheme(consts.AuthSchemeDPoP, append(append([]string{realmParam}, params...), algs)...)
+		return challengeScheme(consts.AuthSchemeDPoP, append(append([]string{realmParam, resourceMetadataParam}, params...), algs)...)
 	}
 
 	switch {

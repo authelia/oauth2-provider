@@ -9,6 +9,7 @@ import (
 	"hash"
 	"html/template"
 	"net"
+	"net/http"
 	"net/url"
 	"slices"
 	"strings"
@@ -760,6 +761,14 @@ type Config struct {
 	// ResponseEncryptionEncValues is the JWE 'enc' values supported per response. A missing or empty entry means every
 	// supported content encryption algorithm.
 	ResponseEncryptionEncValues map[ResponseEncryptionTarget][]string
+
+	// ProtectedResources is the resource identifiers of the protected resources advertised in the RFC 9728
+	// 'protected_resources' authorization server metadata parameter. Has no default and may be nil.
+	ProtectedResources []string
+
+	// ProtectedResourceMetadataURL returns the URL of the RFC 9728 protected resource metadata carried in the
+	// 'resource_metadata' parameter of the 'WWW-Authenticate' challenge for the request. Has no default and may be nil.
+	ProtectedResourceMetadataURL func(ctx context.Context, r *http.Request) string
 
 	// DPoPEnabled enables RFC 9449 DPoP handling.
 	DPoPEnabled bool
@@ -2088,6 +2097,26 @@ func (c *Config) GetSSFConfig(ctx context.Context) (config *SSFConfig) {
 	return &cfg
 }
 
+// GetProtectedResources returns the resource identifiers of the protected resources that can be used with this
+// authorization server.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9728#section-4
+func (c *Config) GetProtectedResources(ctx context.Context) (resources []string) {
+	return c.ProtectedResources
+}
+
+// GetProtectedResourceMetadataURL returns the URL of the protected resource metadata for the protected resource r was
+// made to, or an empty string when ProtectedResourceMetadataURL is nil.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc9728#section-5.1
+func (c *Config) GetProtectedResourceMetadataURL(ctx context.Context, r *http.Request) (location string) {
+	if c.ProtectedResourceMetadataURL == nil {
+		return ""
+	}
+
+	return c.ProtectedResourceMetadataURL(ctx, r)
+}
+
 // GetDPoPEnabled returns true if RFC 9449 DPoP handling is enabled, which is also the case whenever DPoP is enforced.
 func (c *Config) GetDPoPEnabled(ctx context.Context) (enabled bool) {
 	return c.DPoPEnabled || c.DPoPEnforce
@@ -2505,6 +2534,8 @@ var (
 	_ AllowedIntrospectionAudiencesProvider                    = (*Config)(nil)
 	_ AllowedIntrospectionScopesProvider                       = (*Config)(nil)
 	_ HTTPClientProvider                                       = (*Config)(nil)
+	_ ProtectedResourcesProvider                               = (*Config)(nil)
+	_ ProtectedResourceMetadataURLProvider                     = (*Config)(nil)
 	_ SpecialUseAddressGuardProvider                           = (*Config)(nil)
 	_ ClientJWKSFetcherStrategyProvider                        = (*Config)(nil)
 	_ ClientIDMetadataDocumentConfigProvider                   = (*Config)(nil)

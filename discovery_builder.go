@@ -181,6 +181,7 @@ func (f *Fosite) newOAuth2AuthorizationServerMetadata(ctx context.Context, capab
 	metadata.RFC9396RichAuthorizationRequestsMetadata = f.rfc9396Metadata(ctx)
 	metadata.RFC9449DPoPMetadata = f.rfc9449Metadata(ctx)
 	metadata.RFC9701JWTIntrospectionResponseMetadata = f.rfc9701Metadata(ctx)
+	metadata.RFC9728ProtectedResourceMetadata = f.rfc9728Metadata(ctx)
 	metadata.OpenIDConnectJARMMetadata = f.jarmMetadata(ctx)
 	metadata.DraftClientIDMetadataDocumentMetadata = f.cimdMetadata(ctx)
 	metadata.DraftIdentityChainingMetadata = f.identityChainingMetadata(ctx, capabilities.grantTypes)
@@ -298,10 +299,16 @@ func (f *Fosite) finalizeDiscoveryMetadata(ctx context.Context, metadata *OpenID
 
 	*signed = ""
 
+	*signed, err = signMetadataDocument(ctx, strategy, document, "discovery metadata", metadata.Issuer)
+
+	return err
+}
+
+func signMetadataDocument(ctx context.Context, strategy jwt.Strategy, document any, name, issuer string) (signed string, err error) {
 	var raw []byte
 
 	if raw, err = json.Marshal(document); err != nil {
-		return fmt.Errorf("unable to marshal the discovery metadata for signing: %w", err)
+		return "", fmt.Errorf("unable to marshal the %s for signing: %w", name, err)
 	}
 
 	claims := jwt.MapClaims{}
@@ -310,12 +317,12 @@ func (f *Fosite) finalizeDiscoveryMetadata(ctx context.Context, metadata *OpenID
 	decoder.UseNumber()
 
 	if err = decoder.Decode(&claims); err != nil {
-		return fmt.Errorf("unable to prepare the discovery metadata for signing: %w", err)
+		return "", fmt.Errorf("unable to prepare the %s for signing: %w", name, err)
 	}
 
 	delete(claims, consts.DiscoverySignedMetadata)
 
-	claims[consts.ClaimIssuer] = metadata.Issuer
+	claims[consts.ClaimIssuer] = issuer
 
 	algs := strategy.SigningAlgValues(ctx)
 
@@ -323,18 +330,18 @@ func (f *Fosite) finalizeDiscoveryMetadata(ctx context.Context, metadata *OpenID
 
 	switch {
 	case len(algs) == 0:
-		return errors.New("unable to sign the discovery metadata: the signing strategy has no signing algorithms")
+		return "", fmt.Errorf("unable to sign the %s: the signing strategy has no signing algorithms", name)
 	case slices.Contains(algs, string(jose.RS256)):
 		alg = string(jose.RS256)
 	default:
 		alg = slices.Sorted(slices.Values(algs))[0]
 	}
 
-	if *signed, _, err = strategy.Encode(ctx, claims, jwt.WithIssuerSigningAlg(alg)); err != nil {
-		return fmt.Errorf("unable to sign the discovery metadata: %w", err)
+	if signed, _, err = strategy.Encode(ctx, claims, jwt.WithIssuerSigningAlg(alg)); err != nil {
+		return "", fmt.Errorf("unable to sign the %s: %w", name, err)
 	}
 
-	return nil
+	return signed, nil
 }
 
 func rpInitiatedLogoutMetadata(urls EndpointURLs) *OpenIDConnectRPInitiatedLogoutMetadata {
@@ -581,6 +588,22 @@ func (f *Fosite) rfc9701Metadata(ctx context.Context) *RFC9701JWTIntrospectionRe
 		IntrospectionSigningAlgValuesSupported:    SupportedIntrospectionSignedResponseAlgValues(ctx, f.Config),
 		IntrospectionEncryptionAlgValuesSupported: f.Config.GetResponseEncryptionAlgValues(ctx, ResponseEncryptionTargetIntrospection),
 		IntrospectionEncryptionEncValuesSupported: f.Config.GetResponseEncryptionEncValues(ctx, ResponseEncryptionTargetIntrospection),
+	}
+}
+
+func (f *Fosite) rfc9728Metadata(ctx context.Context) *RFC9728ProtectedResourceMetadata {
+	provider, ok := f.Config.(ProtectedResourcesProvider)
+	if !ok {
+		return nil
+	}
+
+	resources := sortedUnique(provider.GetProtectedResources(ctx))
+	if len(resources) == 0 {
+		return nil
+	}
+
+	return &RFC9728ProtectedResourceMetadata{
+		ProtectedResources: resources,
 	}
 }
 

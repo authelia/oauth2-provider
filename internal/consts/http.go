@@ -65,6 +65,11 @@ const (
 	//
 	// See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationRequest
 	WellKnownOpenIDConfigurationSuffix = "openid-configuration"
+
+	// WellKnownOAuthProtectedResourceSuffix is the RFC 9728 well-known URI suffix of the protected resource metadata.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc9728#section-3
+	WellKnownOAuthProtectedResourceSuffix = "oauth-protected-resource"
 )
 
 const (
@@ -90,4 +95,10 @@ const (
 	// AuthSchemeDPoP is the HTTP authentication scheme name used in the 'WWW-Authenticate' response header, per
 	// RFC 9449 Section 7.1.
 	AuthSchemeDPoP = "DPoP"
+)
+
+const (
+	// ChallengeParameterResourceMetadata is the 'WWW-Authenticate' challenge parameter carrying the URL of the
+	// protected resource metadata, per RFC 9728 Section 5.1.
+	ChallengeParameterResourceMetadata = "resource_metadata"
 )

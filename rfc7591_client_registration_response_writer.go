@@ -75,8 +75,9 @@ func (f *Fosite) writeClientRegistrationResponse(ctx context.Context, rw http.Re
 // RFC 7592 client configuration endpoint. requester may be nil.
 //
 // When configuration is true an ErrInvalidRequest is written as 405 (RFC 7592 Section 3, unsupported method) and a
-// 401 carries the bare Bearer challenge, as a registration access token can never be DPoP bound. Otherwise the
-// challenge is the one WriteBearerAuthorizationChallenge composes.
+// 401 carries the Bearer challenge alone, as a registration access token can never be DPoP bound. Otherwise the
+// challenge is the one WriteBearerAuthorizationChallenge composes. Either carries the RFC 9728 Section 5.1
+// 'resource_metadata' parameter only when ctx carries the request under RequestContextKey.
 func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.ResponseWriter, requester Requester, err error, configuration bool) {
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
@@ -92,18 +93,21 @@ func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.Respo
 		rw.Header().Set(consts.HeaderAllow, clientConfigurationAllowedMethods)
 	}
 
+	// The request is present when the caller writes the error from a context carrying it under RequestContextKey,
+	// and absent otherwise.
+	r := RequestFromContext(ctx)
+
 	switch {
 	case configuration:
 		// RFC 7592 Section 3: a missing or invalid registration access token is reported with a 401 status and a
 		// 'WWW-Authenticate' header, as for any other bearer token protected resource (RFC 6750 Section 3).
 		if rfc.CodeField == http.StatusUnauthorized {
-			rw.Header().Set(consts.HeaderWWWAuthenticate, consts.AuthSchemeBearer)
+			rw.Header().Set(consts.HeaderWWWAuthenticate, f.clientConfigurationChallenge(ctx, r))
 		}
 	case IsBearerCredentialError(err):
-		// The request is not available here - WriteRFC7591ClientRegistrationError is public API taking only a
-		// context - so the challenge is composed for an unestablished scheme, which RFC 9449 Section 7.2 Figure 19
-		// covers.
-		rfc = f.WriteBearerAuthorizationChallenge(ctx, rw, nil, rfc)
+		// Without the request the challenge is composed for an unestablished scheme, which RFC 9449 Section 7.2
+		// Figure 19 covers.
+		rfc = f.WriteBearerAuthorizationChallenge(ctx, rw, r, rfc)
 	}
 
 	data, merr := json.Marshal(rfc)
@@ -118,3 +122,19 @@ func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.Respo
 }
 
 const clientConfigurationAllowedMethods = http.MethodGet + ", " + http.MethodPut + ", " + http.MethodDelete
+
+// clientConfigurationChallenge returns the Bearer challenge of the RFC 7592 client configuration endpoint, with the
+// RFC 9728 Section 5.1 'resource_metadata' parameter when the Configurator locates the metadata for r.
+func (f *Fosite) clientConfigurationChallenge(ctx context.Context, r *http.Request) (value string) {
+	provider, ok := f.Config.(ProtectedResourceMetadataURLProvider)
+	if !ok || r == nil {
+		return consts.AuthSchemeBearer
+	}
+
+	location := provider.GetProtectedResourceMetadataURL(ctx, r)
+	if location == "" {
+		return consts.AuthSchemeBearer
+	}
+
+	return consts.AuthSchemeBearer + " " + consts.ChallengeParameterResourceMetadata + "=" + challengeQuotedString(location)
+}

@@ -24,6 +24,8 @@ func TestWriteBearerAuthorizationChallenge(t *testing.T) {
 		dpop         bool
 		err          error
 		authHeader   string
+		location     func(ctx context.Context, r *http.Request) string
+		nilRequest   bool
 		expectedAuth string
 		expectedCode int
 	}{
@@ -58,14 +60,81 @@ func TestWriteBearerAuthorizationChallenge(t *testing.T) {
 			expectedAuth: `Bearer error="invalid_token", error_description="The access token provided is expired, revoked, malformed, or invalid for other reasons."`,
 			expectedCode: http.StatusUnauthorized,
 		},
+		{
+			name:         "ShouldCarryResourceMetadataWhenNoCredentialPresented",
+			dpop:         true,
+			err:          errorsx.WithStack(ErrInvalidToken),
+			location:     testProtectedResourceMetadataURL,
+			expectedAuth: `Bearer resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", DPoP resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", algs="ES256 RS256"`,
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name:         "ShouldCarryResourceMetadataOnBothChallengesWhenBearerUsed",
+			dpop:         true,
+			err:          errorsx.WithStack(ErrInvalidToken),
+			authHeader:   "Bearer abc",
+			location:     testProtectedResourceMetadataURL,
+			expectedAuth: `Bearer resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", error="invalid_token", error_description="The access token provided is expired, revoked, malformed, or invalid for other reasons.", DPoP resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", algs="ES256 RS256"`,
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name:         "ShouldCarryResourceMetadataBeforeErrorWhenDPoPUsed",
+			dpop:         true,
+			err:          errorsx.WithStack(ErrInvalidDPoPProof),
+			authHeader:   "DPoP abc",
+			location:     testProtectedResourceMetadataURL,
+			expectedAuth: `Bearer resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", DPoP resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", error="invalid_dpop_proof", error_description="The DPoP proof is missing or invalid.", algs="ES256 RS256"`,
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name:         "ShouldCarryResourceMetadataOnNonceChallenge",
+			dpop:         true,
+			err:          errorsx.WithStack(ErrUseDPoPNonce.WithDescription("x")),
+			authHeader:   "DPoP abc",
+			location:     testProtectedResourceMetadataURL,
+			expectedAuth: `DPoP resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", error="use_dpop_nonce", error_description="x", algs="ES256 RS256"`,
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name:         "ShouldCarryResourceMetadataWhenDPoPDisabled",
+			err:          errorsx.WithStack(ErrInvalidToken),
+			location:     testProtectedResourceMetadataURL,
+			expectedAuth: `Bearer resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource"`,
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name: "ShouldNotConsultProviderWhenRequestNil",
+			dpop: true,
+			err:  errorsx.WithStack(ErrInvalidToken.WithDescription("x")),
+			location: func(ctx context.Context, r *http.Request) string {
+				panic("the provider must not be consulted without a request")
+			},
+			nilRequest:   true,
+			expectedAuth: `Bearer error="invalid_token", error_description="x", DPoP error="invalid_token", error_description="x", algs="ES256 RS256"`,
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name:         "ShouldOmitResourceMetadataWhenProviderReturnsEmpty",
+			dpop:         true,
+			err:          errorsx.WithStack(ErrInvalidToken),
+			authHeader:   "Bearer abc",
+			location:     func(ctx context.Context, r *http.Request) string { return "" },
+			expectedAuth: `Bearer error="invalid_token", error_description="The access token provided is expired, revoked, malformed, or invalid for other reasons.", DPoP algs="ES256 RS256"`,
+			expectedCode: http.StatusUnauthorized,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := &Config{DPoPEnabled: tc.dpop, DPoPAllowedJWSAlgorithms: []string{"ES256", "RS256"}}
+			config := &Config{DPoPEnabled: tc.dpop, DPoPAllowedJWSAlgorithms: []string{"ES256", "RS256"}, ProtectedResourceMetadataURL: tc.location}
 			f := &Fosite{Config: config}
 
-			r := httptest.NewRequest(http.MethodPost, "https://as.example.com/introspect", nil)
+			var r *http.Request
+
+			if !tc.nilRequest {
+				r = httptest.NewRequest(http.MethodPost, "https://as.example.com/introspect", nil)
+			}
+
 			if tc.authHeader != "" {
 				r.Header.Set("Authorization", tc.authHeader)
 			}
@@ -195,6 +264,120 @@ func TestBearerAuthorizationChallenge(t *testing.T) {
 			config := &Config{DPoPEnabled: tc.dpop, DPoPAllowedJWSAlgorithms: []string{"ES256"}}
 
 			assert.Equal(t, tc.expected, BearerAuthorizationChallenge(context.Background(), config, tc.realm, errorsx.WithStack(tc.err), tc.schemes...))
+		})
+	}
+}
+
+func TestWriteBearerAuthorizationChallengeResourceMetadataRequest(t *testing.T) {
+	var actual *http.Request
+
+	const location = "https://rs.example.com/.well-known/oauth-protected-resource/api"
+
+	config := &Config{ProtectedResourceMetadataURL: func(ctx context.Context, r *http.Request) string {
+		actual = r
+
+		return location
+	}}
+
+	f := &Fosite{Config: config}
+
+	r := httptest.NewRequest(http.MethodGet, "https://other.example.com/api/resource", nil)
+	rw := httptest.NewRecorder()
+
+	_ = f.WriteBearerAuthorizationChallenge(context.Background(), rw, r, errorsx.WithStack(ErrInvalidToken))
+
+	assert.Same(t, r, actual)
+	assert.Equal(t, `Bearer resource_metadata="`+location+`"`, rw.Header().Get("WWW-Authenticate"))
+}
+
+func TestBearerAuthorizationChallengeWithResourceMetadata(t *testing.T) {
+	const location = "https://rs.example.com/.well-known/oauth-protected-resource"
+
+	scope := ErrInsufficientScope.WithDescription("x")
+	scope.ScopeField = "urn:a urn:b"
+
+	testCases := []struct {
+		name     string
+		dpop     bool
+		realm    string
+		location string
+		err      error
+		schemes  []string
+		expected string
+	}{
+		{
+			name:     "ShouldOrderRealmResourceMetadataThenScope",
+			dpop:     true,
+			realm:    "example",
+			location: location,
+			err:      scope,
+			schemes:  []string{"Bearer"},
+			expected: `Bearer realm="example", resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", error="insufficient_scope", error_description="x", scope="urn:a urn:b", DPoP realm="example", resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", algs="ES256"`,
+		},
+		{
+			name:     "ShouldOrderRealmResourceMetadataThenScopeOnDPoP",
+			dpop:     true,
+			realm:    "example",
+			location: location,
+			err:      scope,
+			schemes:  []string{"DPoP"},
+			expected: `Bearer realm="example", resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", DPoP realm="example", resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", error="insufficient_scope", error_description="x", scope="urn:a urn:b", algs="ES256"`,
+		},
+		{
+			name:     "ShouldCarryResourceMetadataWithoutCredential",
+			dpop:     true,
+			location: location,
+			err:      ErrInvalidToken,
+			expected: `Bearer resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", DPoP resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", algs="ES256"`,
+		},
+		{
+			name:     "ShouldCarryResourceMetadataOnNonceChallenge",
+			dpop:     true,
+			location: location,
+			err:      ErrUseDPoPNonce.WithDescription("x"),
+			expected: `DPoP resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", error="use_dpop_nonce", error_description="x", algs="ES256"`,
+		},
+		{
+			name:     "ShouldCarryResourceMetadataWhenDPoPDisabled",
+			realm:    "example",
+			location: location,
+			err:      ErrInvalidToken.WithDescription("x"),
+			schemes:  []string{"Bearer"},
+			expected: `Bearer realm="example", resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", error="invalid_token", error_description="x"`,
+		},
+		{
+			name:     "ShouldQuoteResourceMetadata",
+			location: "https://rs.example.com/a\"b\r\n",
+			err:      ErrInvalidToken,
+			expected: `Bearer resource_metadata="https://rs.example.com/a\"b"`,
+		},
+		{
+			name:     "ShouldQuoteResourceMetadataBackslash",
+			location: `https://rs.example.com/a\b`,
+			err:      ErrInvalidToken,
+			expected: `Bearer resource_metadata="https://rs.example.com/a\\b"`,
+		},
+		{
+			name:     "ShouldOmitEmptyResourceMetadata",
+			dpop:     true,
+			realm:    "example",
+			err:      ErrInvalidToken.WithDescription("x"),
+			schemes:  []string{"Bearer"},
+			expected: `Bearer realm="example", error="invalid_token", error_description="x", DPoP realm="example", algs="ES256"`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{DPoPEnabled: tc.dpop, DPoPAllowedJWSAlgorithms: []string{"ES256"}}
+
+			actual := BearerAuthorizationChallengeWithResourceMetadata(context.Background(), config, tc.realm, tc.location, errorsx.WithStack(tc.err), tc.schemes...)
+
+			assert.Equal(t, tc.expected, actual)
+
+			if tc.location == "" {
+				assert.Equal(t, BearerAuthorizationChallenge(context.Background(), config, tc.realm, errorsx.WithStack(tc.err), tc.schemes...), actual)
+			}
 		})
 	}
 }
@@ -330,4 +513,8 @@ func TestIsBearerCredentialError(t *testing.T) {
 	assert.True(t, IsBearerCredentialError(errorsx.WithStack(ErrInsufficientUserAuthentication.WithExtra("max_age", 5))))
 	assert.True(t, IsBearerCredentialError(errorsx.WithStack(ErrInsufficientScope)))
 	assert.False(t, IsBearerCredentialError(errorsx.WithStack(ErrRequestUnauthorized)))
+}
+
+func testProtectedResourceMetadataURL(ctx context.Context, r *http.Request) string {
+	return "https://rs.example.com/.well-known/oauth-protected-resource"
 }

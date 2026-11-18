@@ -114,3 +114,141 @@ func TestWriteRFC7592ClientConfigurationErrorKeepsTheBareBearerChallenge(t *test
 	assert.Equal(t, consts.AuthSchemeBearer, rw.Header().Get(consts.HeaderWWWAuthenticate))
 	assert.Empty(t, rw.Header().Get(consts.HeaderDPoPNonce))
 }
+
+func TestWriteRFC7591ClientRegistrationErrorResourceMetadata(t *testing.T) {
+	const (
+		location    = `Bearer resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", error="invalid_token", error_description="x", DPoP resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource", algs="ES256"`
+		unlocated   = `Bearer error="invalid_token", error_description="x", DPoP algs="ES256"`
+		unspecified = `Bearer error="invalid_token", error_description="x", DPoP error="invalid_token", error_description="x", algs="ES256"`
+	)
+
+	testCases := []struct {
+		name     string
+		provider func(ctx context.Context, r *http.Request) string
+		request  bool
+		expected string
+	}{
+		{
+			name:     "ShouldCarryResourceMetadataWithRequestInContext",
+			provider: testProtectedResourceMetadataURL,
+			request:  true,
+			expected: location,
+		},
+		{
+			name:     "ShouldOmitResourceMetadataWithoutRequestInContext",
+			provider: testProtectedResourceMetadataURL,
+			expected: unspecified,
+		},
+		{
+			name:     "ShouldOmitResourceMetadataWithoutProvider",
+			request:  true,
+			expected: unlocated,
+		},
+		{
+			name:     "ShouldOmitResourceMetadataWithoutProviderOrRequestInContext",
+			expected: unspecified,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{DPoPEnabled: true, DPoPAllowedJWSAlgorithms: []string{"ES256"}, ProtectedResourceMetadataURL: tc.provider}
+
+			ctx := context.Background()
+
+			if tc.request {
+				r := httptest.NewRequest(http.MethodPost, "https://auth.example.com/register", nil)
+				r.Header.Set(consts.HeaderAuthorization, "Bearer abc")
+
+				ctx = context.WithValue(ctx, RequestContextKey, r)
+			}
+
+			rw := httptest.NewRecorder()
+
+			(&Fosite{Config: config}).WriteRFC7591ClientRegistrationError(ctx, rw, nil, errorsx.WithStack(ErrInvalidToken.WithDescription("x")))
+
+			require.Equal(t, http.StatusUnauthorized, rw.Code)
+			assert.Equal(t, tc.expected, rw.Header().Get(consts.HeaderWWWAuthenticate))
+		})
+	}
+}
+
+func TestWriteRFC7592ClientConfigurationErrorResourceMetadata(t *testing.T) {
+	testCases := []struct {
+		name     string
+		provider func(ctx context.Context, r *http.Request) string
+		request  bool
+		err      error
+		code     int
+		expected string
+	}{
+		{
+			name:     "ShouldCarryResourceMetadataWithRequestInContext",
+			provider: testProtectedResourceMetadataURL,
+			request:  true,
+			err:      ErrRequestUnauthorized,
+			code:     http.StatusUnauthorized,
+			expected: `Bearer resource_metadata="https://rs.example.com/.well-known/oauth-protected-resource"`,
+		},
+		{
+			name: "ShouldQuoteResourceMetadata",
+			provider: func(ctx context.Context, r *http.Request) string {
+				return `https://rs.example.com/a"b\c`
+			},
+			request:  true,
+			err:      ErrRequestUnauthorized,
+			code:     http.StatusUnauthorized,
+			expected: `Bearer resource_metadata="https://rs.example.com/a\"b\\c"`,
+		},
+		{
+			name:     "ShouldKeepBareChallengeWithoutRequestInContext",
+			provider: testProtectedResourceMetadataURL,
+			err:      ErrRequestUnauthorized,
+			code:     http.StatusUnauthorized,
+			expected: "Bearer",
+		},
+		{
+			name:     "ShouldKeepBareChallengeWithoutProvider",
+			request:  true,
+			err:      ErrRequestUnauthorized,
+			code:     http.StatusUnauthorized,
+			expected: "Bearer",
+		},
+		{
+			name: "ShouldKeepBareChallengeWithoutLocation",
+			provider: func(ctx context.Context, r *http.Request) string {
+				return ""
+			},
+			request:  true,
+			err:      ErrRequestUnauthorized,
+			code:     http.StatusUnauthorized,
+			expected: "Bearer",
+		},
+		{
+			name:     "ShouldNotChallengeOtherStatuses",
+			provider: testProtectedResourceMetadataURL,
+			request:  true,
+			err:      ErrNotFound,
+			code:     http.StatusNotFound,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{DPoPEnabled: true, DPoPAllowedJWSAlgorithms: []string{"ES256"}, ProtectedResourceMetadataURL: tc.provider}
+
+			ctx := context.Background()
+
+			if tc.request {
+				ctx = context.WithValue(ctx, RequestContextKey, httptest.NewRequest(http.MethodGet, "https://auth.example.com/register/abc", nil))
+			}
+
+			rw := httptest.NewRecorder()
+
+			(&Fosite{Config: config}).WriteRFC7592ClientConfigurationError(ctx, rw, nil, errorsx.WithStack(tc.err))
+
+			require.Equal(t, tc.code, rw.Code)
+			assert.Equal(t, tc.expected, rw.Header().Get(consts.HeaderWWWAuthenticate))
+		})
+	}
+}

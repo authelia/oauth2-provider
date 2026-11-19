@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -161,6 +162,226 @@ func TestDefaultJWKSFetcherStrategyRefreshInterval(t *testing.T) {
 			assert.Equal(t, tc.expected, fetches.Load())
 		})
 	}
+}
+
+func TestDefaultJWKSFetcherStrategyCoalescing(t *testing.T) {
+	setA := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{KeyID: "a", Key: &gen.MustES256Key().PublicKey}}}
+	setB := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{KeyID: "b", Key: &gen.MustES256Key().PublicKey}}}
+
+	type server struct {
+		*httptest.Server
+
+		fetches  atomic.Int64
+		received chan struct{}
+		release  chan struct{}
+		set      atomic.Pointer[jose.JSONWebKeySet]
+		status   atomic.Int64
+	}
+
+	newServer := func(t *testing.T) *server {
+		srv := &server{received: make(chan struct{}, 16), release: make(chan struct{})}
+
+		srv.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			srv.fetches.Add(1)
+
+			srv.received <- struct{}{}
+
+			<-srv.release
+
+			if status := srv.status.Load(); status != 0 {
+				w.WriteHeader(int(status))
+
+				return
+			}
+
+			assert.NoError(t, json.NewEncoder(w).Encode(srv.set.Load()))
+		}))
+
+		t.Cleanup(srv.Close)
+
+		return srv
+	}
+
+	resolve := func(s jwt.JWKSFetcherStrategy, ctx context.Context, location string, force bool) <-chan any {
+		result := make(chan any, 1)
+
+		go func() {
+			set, err := s.Resolve(ctx, location, force)
+			if err != nil {
+				result <- err
+			} else {
+				result <- set
+			}
+		}()
+
+		return result
+	}
+
+	kid := func(result any) string {
+		if set, ok := result.(*jose.JSONWebKeySet); ok && len(set.Keys) == 1 {
+			return set.Keys[0].KeyID
+		}
+
+		return fmt.Sprint(result)
+	}
+
+	t.Run("ShouldFetchOnceForConcurrentMisses", func(t *testing.T) {
+		srv := newServer(t)
+		srv.set.Store(setA)
+
+		s := NewDefaultJWKSFetcherStrategy()
+
+		first := resolve(s, context.Background(), srv.URL, false)
+
+		<-srv.received
+
+		results := make([]<-chan any, 0, 5)
+		results = append(results, first)
+
+		for range 4 {
+			results = append(results, resolve(s, context.Background(), srv.URL, false))
+		}
+
+		time.Sleep(50 * time.Millisecond)
+		close(srv.release)
+
+		for _, result := range results {
+			assert.Equal(t, "a", kid(<-result))
+		}
+
+		assert.Equal(t, int64(1), srv.fetches.Load())
+	})
+
+	t.Run("ShouldWaitForTheRefreshInFlight", func(t *testing.T) {
+		srv := newServer(t)
+		srv.set.Store(setA)
+
+		s := NewDefaultJWKSFetcherStrategy()
+
+		prime := resolve(s, context.Background(), srv.URL, false)
+
+		<-srv.received
+
+		srv.release <- struct{}{}
+
+		assert.Equal(t, "a", kid(<-prime))
+
+		srv.set.Store(setB)
+
+		// The second forced refresh is inside the refresh interval, and waits for the first in place of the cache.
+		first := resolve(s, context.Background(), srv.URL, true)
+
+		<-srv.received
+
+		second := resolve(s, context.Background(), srv.URL, true)
+
+		time.Sleep(50 * time.Millisecond)
+		close(srv.release)
+
+		assert.Equal(t, "b", kid(<-first))
+		assert.Equal(t, "b", kid(<-second))
+		assert.Equal(t, int64(2), srv.fetches.Load())
+	})
+
+	t.Run("ShouldReturnTheFailureOfTheRefreshInFlight", func(t *testing.T) {
+		srv := newServer(t)
+		srv.set.Store(setA)
+
+		s := NewDefaultJWKSFetcherStrategy()
+
+		prime := resolve(s, context.Background(), srv.URL, false)
+
+		<-srv.received
+
+		srv.release <- struct{}{}
+
+		assert.Equal(t, "a", kid(<-prime))
+
+		srv.status.Store(http.StatusNotFound)
+
+		first := resolve(s, context.Background(), srv.URL, true)
+
+		<-srv.received
+
+		second := resolve(s, context.Background(), srv.URL, true)
+
+		time.Sleep(50 * time.Millisecond)
+		close(srv.release)
+
+		for _, result := range []any{<-first, <-second} {
+			err, _ := result.(error)
+
+			assert.ErrorIs(t, err, ErrServerError)
+		}
+
+		// The cached set is kept, and the refresh interval still applies.
+		set, err := s.Resolve(context.Background(), srv.URL, true)
+		require.NoError(t, ErrorToDebugRFC6749Error(err))
+		assert.Equal(t, "a", kid(set))
+		assert.Equal(t, int64(2), srv.fetches.Load())
+	})
+
+	t.Run("ShouldFetchAgainWhenTheFetchEndedAtTheDeadlineOfAnotherLookup", func(t *testing.T) {
+		srv := newServer(t)
+		srv.set.Store(setA)
+
+		s := NewDefaultJWKSFetcherStrategy()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		first := resolve(s, ctx, srv.URL, false)
+
+		<-srv.received
+
+		second := resolve(s, context.Background(), srv.URL, false)
+
+		err, _ := (<-first).(error)
+
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+
+		// The fetch of the first lookup ends at its deadline, and the second fetches again with its own.
+		close(srv.release)
+
+		assert.Equal(t, "a", kid(<-second))
+		assert.Equal(t, int64(2), srv.fetches.Load())
+	})
+
+	t.Run("ShouldReturnAPanicOfTheFetch", func(t *testing.T) {
+		s := NewDefaultJWKSFetcherStrategy(JWKSFetcherWithHTTPClientSource(func(context.Context) *retryablehttp.Client { return nil }))
+
+		for range 2 {
+			_, err := s.Resolve(context.Background(), "https://keys.example.com/jwks.json", false)
+
+			assert.ErrorIs(t, err, ErrServerError)
+		}
+	})
+
+	t.Run("ShouldNotEndTheFetchWithTheContextOfTheFirstLookup", func(t *testing.T) {
+		srv := newServer(t)
+		srv.set.Store(setA)
+
+		s := NewDefaultJWKSFetcherStrategy()
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		first := resolve(s, ctx, srv.URL, false)
+
+		<-srv.received
+
+		second := resolve(s, context.Background(), srv.URL, false)
+
+		cancel()
+
+		err, _ := (<-first).(error)
+
+		assert.ErrorIs(t, err, context.Canceled)
+
+		close(srv.release)
+
+		assert.Equal(t, "a", kid(<-second))
+		assert.Equal(t, int64(1), srv.fetches.Load())
+	})
 }
 
 func TestDefaultJWKSFetcherStrategyOptions(t *testing.T) {

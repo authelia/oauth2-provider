@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/netip"
@@ -36,7 +37,14 @@ type DefaultJWKSFetcherStrategy struct {
 
 	refreshInterval time.Duration
 	refreshes       map[string]time.Time
+	fetches         map[string]*jwksFetch
 	mu              sync.Mutex
+}
+
+type jwksFetch struct {
+	done chan struct{}
+	set  *jose.JSONWebKeySet
+	err  error
 }
 
 // NewDefaultJWKSFetcherStrategy returns a new instance of the DefaultJWKSFetcherStrategy.
@@ -118,61 +126,147 @@ func (s *DefaultJWKSFetcherStrategy) resolve(ctx context.Context, location strin
 		cacheKey = defaultJWKSFetcherStrategyGuardedCachePrefix + allowedNetworksKey(guarded.allowed) + ":" + location
 	}
 
+	if key, ok := s.cache.Get(cacheKey); ok && !ignoreCache {
+		return key, nil
+	}
+
+	for attempt := 0; ; attempt++ {
+		fetch, started, key := s.join(ctx, location, cacheKey, ignoreCache, guarded)
+		if fetch == nil {
+			return key, nil
+		}
+
+		select {
+		case <-fetch.done:
+			// A fetch another lookup started ends at the deadline of that lookup, which this one may not share.
+			if !started && attempt == 0 && ctx.Err() == nil && (errors.Is(fetch.err, context.DeadlineExceeded) || errors.Is(fetch.err, context.Canceled)) {
+				continue
+			}
+
+			return fetch.set, fetch.err
+		case <-ctx.Done():
+			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to fetch JSON Web Keys from location '%s'. Check for typos or other network issues.", location).WithWrap(ctx.Err()).WithDebugError(ctx.Err()))
+		}
+	}
+}
+
+func (s *DefaultJWKSFetcherStrategy) join(ctx context.Context, location, cacheKey string, ignoreCache bool, guarded *guardedJWKSFetcherStrategy) (fetch *jwksFetch, started bool, key *jose.JSONWebKeySet) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// A fetch in flight is newer than the cached set, so it is waited for in place of it.
+	if fetch, ok := s.fetches[cacheKey]; ok {
+		return fetch, false, nil
+	}
+
+	// The cache is read again under the lock, as a fetch stores its set before it is removed.
 	key, ok := s.cache.Get(cacheKey)
 
 	// A forced refresh follows a key identifier missing from the cached set, which the presenter of an unverified token
-	// chooses, so each location is refreshed at most once per refresh interval.
-	if ignoreCache && !s.claimRefresh(location) && ok {
-		ignoreCache = false
+	// chooses, so each cache key is refreshed at most once per refresh interval.
+	if ok && (!ignoreCache || !s.claimRefreshLocked(cacheKey)) {
+		return nil, false, key
 	}
 
-	if !ok || ignoreCache {
-		req, err := retryablehttp.NewRequest(http.MethodGet, location, nil)
-		if err != nil {
-			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to create HTTP 'GET' request to fetch JSON Web Keys from location '%s'.", location).WithWrap(err).WithDebugError(err))
-		}
+	if !ok && ignoreCache {
+		s.claimRefreshLocked(cacheKey)
+	}
 
-		hc := s.client
-		if s.clientSourceFunc != nil {
-			hc = s.clientSourceFunc(ctx)
-		}
+	fetch = &jwksFetch{done: make(chan struct{})}
 
-		if guarded != nil {
-			if hc, err = guardedHTTPClient(hc, guarded.allowed); err != nil {
-				return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to fetch JSON Web Keys from location '%s'. Check for typos or other network issues.", location).WithWrap(err).WithDebugError(err))
-			}
-		}
+	if s.fetches == nil {
+		s.fetches = map[string]*jwksFetch{}
+	}
 
-		fetch, cancel := context.WithTimeout(ctx, FetchTimeout)
+	s.fetches[cacheKey] = fetch
+
+	// Other lookups wait for the fetch, so the lookup which started it bounds it by its deadline and not by its
+	// cancellation.
+	fctx, cancel := jwksFetchContext(ctx)
+
+	go func() {
 		defer cancel()
 
-		response, err := HTTPClientWithoutRedirects(hc).Do(req.WithContext(fetch))
-		if err != nil {
-			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to fetch JSON Web Keys from location '%s'. Check for typos or other network issues.", location).WithWrap(err).WithDebugError(err))
-		}
-		defer response.Body.Close()
+		s.fetch(fctx, location, cacheKey, guarded, fetch)
+	}()
 
-		// The status code is reported in the debug field rather than the hint. The location is registrant supplied,
-		// so returning the origin's status verbatim would let a registrant use this server to probe a network it
-		// cannot reach and read the result.
-		if response.StatusCode < 200 || response.StatusCode >= 400 {
-			return nil, errorsx.WithStack(ErrServerError.
-				WithHintf("Expected a successful status code from location '%s'.", location).
-				WithDebugf("The request to location '%s' returned the status code %d.", location, response.StatusCode))
-		}
+	return fetch, true, nil
+}
 
-		var set jose.JSONWebKeySet
+func jwksFetchContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	fetch := context.WithoutCancel(ctx)
 
-		if err = json.NewDecoder(io.LimitReader(response.Body, MaxFetchedBodyBytes)).Decode(&set); err != nil {
-			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to decode JSON Web Keys from location '%s'. Please check for typos and if the URL returns valid JSON.", location).WithWrap(err).WithDebugError(err))
-		}
-
-		_ = s.cache.SetWithTTL(cacheKey, &set, 1, s.ttl)
-
-		return &set, nil
+	if deadline, ok := ctx.Deadline(); ok {
+		return context.WithDeadline(fetch, deadline)
 	}
 
-	return key, nil
+	return fetch, func() {}
+}
+
+func (s *DefaultJWKSFetcherStrategy) fetch(ctx context.Context, location, cacheKey string, guarded *guardedJWKSFetcherStrategy, fetch *jwksFetch) {
+	// The fetch runs on its own goroutine, so a panic is returned to the lookups waiting for it.
+	defer func() {
+		if r := recover(); r != nil {
+			fetch.set, fetch.err = nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to fetch JSON Web Keys from location '%s'.", location).WithDebugf("The fetch panicked: %v", r))
+		}
+
+		s.mu.Lock()
+		delete(s.fetches, cacheKey)
+		s.mu.Unlock()
+
+		close(fetch.done)
+	}()
+
+	fetch.set, fetch.err = s.get(ctx, location, guarded)
+
+	if fetch.err == nil {
+		_ = s.cache.SetWithTTL(cacheKey, fetch.set, 1, s.ttl)
+		s.cache.Wait()
+	}
+}
+
+func (s *DefaultJWKSFetcherStrategy) get(ctx context.Context, location string, guarded *guardedJWKSFetcherStrategy) (*jose.JSONWebKeySet, error) {
+	req, err := retryablehttp.NewRequest(http.MethodGet, location, nil)
+	if err != nil {
+		return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to create HTTP 'GET' request to fetch JSON Web Keys from location '%s'.", location).WithWrap(err).WithDebugError(err))
+	}
+
+	hc := s.client
+	if s.clientSourceFunc != nil {
+		hc = s.clientSourceFunc(ctx)
+	}
+
+	if guarded != nil {
+		if hc, err = guardedHTTPClient(hc, guarded.allowed); err != nil {
+			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to fetch JSON Web Keys from location '%s'. Check for typos or other network issues.", location).WithWrap(err).WithDebugError(err))
+		}
+	}
+
+	fetch, cancel := context.WithTimeout(ctx, FetchTimeout)
+	defer cancel()
+
+	response, err := HTTPClientWithoutRedirects(hc).Do(req.WithContext(fetch))
+	if err != nil {
+		return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to fetch JSON Web Keys from location '%s'. Check for typos or other network issues.", location).WithWrap(err).WithDebugError(err))
+	}
+	defer response.Body.Close()
+
+	// The status code is reported in the debug field rather than the hint. The location is registrant supplied,
+	// so returning the origin's status verbatim would let a registrant use this server to probe a network it
+	// cannot reach and read the result.
+	if response.StatusCode < 200 || response.StatusCode >= 400 {
+		return nil, errorsx.WithStack(ErrServerError.
+			WithHintf("Expected a successful status code from location '%s'.", location).
+			WithDebugf("The request to location '%s' returned the status code %d.", location, response.StatusCode))
+	}
+
+	var set jose.JSONWebKeySet
+
+	if err = json.NewDecoder(io.LimitReader(response.Body, MaxFetchedBodyBytes)).Decode(&set); err != nil {
+		return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to decode JSON Web Keys from location '%s'. Please check for typos and if the URL returns valid JSON.", location).WithWrap(err).WithDebugError(err))
+	}
+
+	return &set, nil
 }
 
 // SpecialUseAddressGuardJWKSFetcherStrategy returns the strategy to fetch a 'jwks_uri' supplied by a client or another
@@ -202,17 +296,14 @@ func (s *guardedJWKSFetcherStrategy) Resolve(ctx context.Context, location strin
 	return s.strategy.resolve(ctx, location, ignoreCache, s)
 }
 
-func (s *DefaultJWKSFetcherStrategy) claimRefresh(location string) bool {
+func (s *DefaultJWKSFetcherStrategy) claimRefreshLocked(key string) bool {
 	if s.refreshInterval <= 0 {
 		return true
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	now := time.Now()
 
-	if last, ok := s.refreshes[location]; ok && now.Sub(last) < s.refreshInterval {
+	if last, ok := s.refreshes[key]; ok && now.Sub(last) < s.refreshInterval {
 		return false
 	}
 
@@ -226,7 +317,7 @@ func (s *DefaultJWKSFetcherStrategy) claimRefresh(location string) bool {
 		}
 	}
 
-	s.refreshes[location] = now
+	s.refreshes[key] = now
 
 	return true
 }

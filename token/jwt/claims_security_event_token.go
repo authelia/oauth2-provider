@@ -403,9 +403,12 @@ func (c *SecurityEventTokenClaims) GetIssuedAtSafe() time.Time {
 }
 
 // ParseSecurityEventTokenClaims decodes the JSON claims object of a received SET, which is the decoded payload of the
-// JWS and not the compact token. Unlike UnmarshalJSON it keeps the precision of every integer of an event payload, and
-// keeps a 'sub_id' member the format does not define in SubjectIdentifier.Additional in place of refusing it (SSF 1.0
-// §3.3, §4.2.3). The result is validated with Valid and ValidateSecurityEventReceiver.
+// JWS and not the compact token. Unlike UnmarshalJSON it keeps the exact value of an integer of an event payload
+// written without a fraction or an exponent, whatever its size, and of one written with them which fits an int64 or a
+// uint64. Any other number is a float64, and one beyond its range is refused, as RFC 8259 §6 permits: only integers
+// within ±(2^53-1) are interoperable. It keeps a 'sub_id' member the format does not define in
+// SubjectIdentifier.Additional in place of refusing it (SSF 1.0 §3.3, §4.2.3). The result is validated with Valid and
+// ValidateSecurityEventReceiver.
 func ParseSecurityEventTokenClaims(payload []byte) (claims *SecurityEventTokenClaims, err error) {
 	claims = &SecurityEventTokenClaims{}
 

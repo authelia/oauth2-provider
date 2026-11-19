@@ -277,8 +277,8 @@ func decodeSecurityEventPayload(uri string, payload map[string]any) (event Secur
 	return event, nil
 }
 
-// decodeSecurityEventInto decodes the payload into the event. A number decoded into an interface value keeps its
-// precision (RFC 8259 §6).
+// decodeSecurityEventInto decodes the payload into the event. A number decoded into an interface value is converted as
+// ParseSecurityEventTokenClaims converts the numbers of an event payload (RFC 8259 §6).
 func decodeSecurityEventInto(data []byte, event SecurityEvent) (err error) {
 	decoder := jjson.NewDecoder(bytes.NewReader(data))
 	decoder.SetNumberType(jjson.UnmarshalJSONNumber)

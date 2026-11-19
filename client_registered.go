@@ -188,6 +188,13 @@ type DefaultRegisteredClient struct {
 	RequirePushedAuthorizationRequests  bool               `json:"require_pushed_authorization_requests"`
 	ResponseModes                       []ResponseModeType `json:"response_modes"`
 
+	// RFC 8417 Section 5.1 (Security Event Token confidentiality) client metadata. The names are a convention of this
+	// library, as no specification registers them.
+
+	SecurityEventTokenEncryptedResponseKeyID string `json:"security_event_token_encrypted_response_kid"`
+	SecurityEventTokenEncryptedResponseAlg   string `json:"security_event_token_encrypted_response_alg"`
+	SecurityEventTokenEncryptedResponseEnc   string `json:"security_event_token_encrypted_response_enc"`
+
 	// Client policy values which have no corresponding ClientRegistrationMetadata parameter because they are locally
 	// administered rather than supplied by the registering client.
 
@@ -462,6 +469,25 @@ func (c *DefaultRegisteredClient) GetIntrospectionEncryptedResponseAlg() string 
 // GetIntrospectionEncryptedResponseEnc returns the 'introspection_encrypted_response_enc' client metadata value.
 func (c *DefaultRegisteredClient) GetIntrospectionEncryptedResponseEnc() string {
 	return c.IntrospectionEncryptedResponseEnc
+}
+
+// GetSecurityEventTokenEncryptedResponseKeyID returns the 'security_event_token_encrypted_response_kid' client metadata
+// value.
+func (c *DefaultRegisteredClient) GetSecurityEventTokenEncryptedResponseKeyID() string {
+	return c.SecurityEventTokenEncryptedResponseKeyID
+}
+
+// GetSecurityEventTokenEncryptedResponseAlg returns the 'security_event_token_encrypted_response_alg' client metadata
+// value. The default, if omitted, is that no encryption is performed. The value 'none' is refused by
+// DefaultSecurityEventTokenStrategy.
+func (c *DefaultRegisteredClient) GetSecurityEventTokenEncryptedResponseAlg() string {
+	return c.SecurityEventTokenEncryptedResponseAlg
+}
+
+// GetSecurityEventTokenEncryptedResponseEnc returns the 'security_event_token_encrypted_response_enc' client metadata
+// value. The default, if omitted, is A128CBC-HS256.
+func (c *DefaultRegisteredClient) GetSecurityEventTokenEncryptedResponseEnc() string {
+	return c.SecurityEventTokenEncryptedResponseEnc
 }
 
 // GetEnforcePKCE returns the client policy value which determines if PKCE is enforced for this client.
@@ -749,6 +775,7 @@ var (
 	_ DPoPClient                                  = (*DefaultRegisteredClient)(nil)
 	_ JWTProfileClient                            = (*DefaultRegisteredClient)(nil)
 	_ IntrospectionJWTResponseClient              = (*DefaultRegisteredClient)(nil)
+	_ SecurityEventTokenClient                    = (*DefaultRegisteredClient)(nil)
 	_ ProofKeyCodeExchangeClient                  = (*DefaultRegisteredClient)(nil)
 	_ PushedAuthorizationRequestClient            = (*DefaultRegisteredClient)(nil)
 	_ PushedAuthorizationRequestRedirectURIClient = (*DefaultRegisteredClient)(nil)

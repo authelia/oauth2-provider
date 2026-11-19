@@ -31,6 +31,7 @@ func TestDecoratedClientsForwardTheMarker(t *testing.T) {
 		"UserInfo":              &decoratedUserInfoClient{UserInfoClient: markedUserInfoClient{}},
 		"JWTProfileAccessToken": &decoratedJWTProfileAccessTokenClient{JWTProfileAccessTokenClient: markedJWTProfileAccessTokenClient{}},
 		"Introspection":         &decoratedIntrospectionClient{IntrospectionClient: markedIntrospectionClient{}},
+		"SecurityEventToken":    &decoratedSecurityEventTokenClient{SecurityEventTokenClient: markedSecurityEventTokenClient{}},
 	}
 
 	for name, client := range testCases {
@@ -188,6 +189,10 @@ func (markedJWTProfileAccessTokenClient) IsClientIDMetadataDocumentClient() bool
 type markedIntrospectionClient struct{ IntrospectionClient }
 
 func (markedIntrospectionClient) IsClientIDMetadataDocumentClient() bool { return true }
+
+type markedSecurityEventTokenClient struct{ SecurityEventTokenClient }
+
+func (markedSecurityEventTokenClient) IsClientIDMetadataDocumentClient() bool { return true }
 
 type clientStubFetcher struct{ name string }
 

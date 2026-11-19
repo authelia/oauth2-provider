@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"slices"
 
@@ -71,7 +72,8 @@ func (r *SSFStreamStatusRequest) GetBody() (body *SSFStreamStatusRequestBody) {
 }
 
 // NewSSFStreamStatusRequest authorizes the request and decodes its body. Only GET and POST are served; a read needs
-// 'ssf.read' and an update 'ssf.manage'.
+// 'ssf.read' and an update 'ssf.manage'. A Content-Type header is not required, and one that is present must be
+// 'application/json'.
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2
 func (f *Fosite) NewSSFStreamStatusRequest(ctx context.Context, r *http.Request, session Session) (requester SSFStreamStatusRequester, err error) {
@@ -108,11 +110,19 @@ func (f *Fosite) NewSSFStreamStatusRequest(ctx context.Context, r *http.Request,
 // reason clears the stored one. An update resolves the stream policy, and a policy error gives 403. Enabling a stream
 // whose stored push endpoint the SSFEndpointValidator no longer permits gives 400.
 //
+// A policy that cannot decide whether the update may complete returns ErrSSFStreamUpdatePending, and the response is
+// then 202 with the stored status, which is not changed (SSF Section 8.1.2.2). The Receiver may send the request again
+// for the result. A policy error matching ErrTemporarilyUnavailable gives 503.
+//
 // An application refusing a re-enable, for example of an operator-disabled stream, inspects the requester before
 // calling this.
 //
 // The application must send a stream-updated event (NewSSFStreamUpdatedEvent) before a Transmitter-initiated stop of
 // a stream, as it does not follow from a status change made here.
+//
+// No stream-updated event is sent for a status the Receiver sets here, a re-enable included. The event reports a
+// change the Transmitter made without a request from the Receiver (SSF Section 8.1.2, Section 8.1.5), and the response
+// already gives the Receiver the new status.
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.5
@@ -169,16 +179,16 @@ func (f *Fosite) NewSSFStreamStatusResponse(ctx context.Context, requester SSFSt
 
 	var stream *SSFStream
 
-	if stream, err = storage.GetSSFStream(ctx, clientID, streamID); err != nil {
+	if stream, err = ownedSSFStream(ctx, storage, clientID, streamID); err != nil {
 		return nil, ssfStreamStorageError(err)
-	}
-
-	if stream == nil || stream.ClientID != clientID {
-		return nil, ssfStreamStorageError(ErrNotFound)
 	}
 
 	if requester.GetMethod() == http.MethodPost {
 		if _, err = f.resolveSSFClientPolicy(ctx, config, requester.GetClient()); err != nil {
+			if errors.Is(err, ErrSSFStreamUpdatePending) {
+				return &SSFStreamResponse{StatusCode: http.StatusAccepted, Body: &SSFStreamStatus{StreamID: stream.StreamID, Status: stream.Status, Reason: stream.StatusReason}}, nil
+			}
+
 			return nil, err
 		}
 
@@ -210,7 +220,11 @@ func (f *Fosite) WriteSSFStreamStatusResponse(ctx context.Context, rw http.Respo
 }
 
 // NewSSFStreamUpdatedEvent returns the stream-updated event for a status change, with 'reason' omitted when empty. Send
-// it before a Transmitter-initiated stop of a stream and upon re-enabling it.
+// it before a Transmitter-initiated stop of a stream and upon a Transmitter-initiated re-enable of it. It is not sent
+// for a status change the Receiver requested at the status endpoint, a re-enable included.
+//
+// It is the only event sent on a stream that is paused or disabled, which Provider.PushSecurityEventTokenToStream
+// allows for.
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.5
 func NewSSFStreamUpdatedEvent(status, reason string) (event *jwt.SSFStreamUpdated) {

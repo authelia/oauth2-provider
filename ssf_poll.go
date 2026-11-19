@@ -5,8 +5,11 @@
 package oauth2
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 
 	"authelia.com/provider/oauth2/internal/consts"
@@ -33,7 +36,9 @@ type SSFPollRequest struct {
 	// cap it.
 	MaxEvents *int
 
-	// ReturnImmediately is the 'returnImmediately' member.
+	// ReturnImmediately is the 'returnImmediately' member, which is false when absent. When it is false and no SET is
+	// available, the application SHALL delay its response until one is, or until its timeout elapses (RFC 8936 Section
+	// 2.5). The provider does not wait.
 	ReturnImmediately bool
 
 	// Ack holds the 'jti' of the acknowledged SETs. It is unverified receiver input and must be scoped to Stream.
@@ -52,25 +57,37 @@ type SSFPollSetError struct {
 	Description string `json:"description"`
 }
 
-type ssfPollRequestBody struct {
-	MaxEvents         *int                       `json:"maxEvents"`
-	ReturnImmediately bool                       `json:"returnImmediately"`
-	Ack               []string                   `json:"ack"`
-	SetErrs           map[string]SSFPollSetError `json:"setErrs"`
-}
+const (
+	ssfPollMemberMaxEvents         = "maxEvents"
+	ssfPollMemberReturnImmediately = "returnImmediately"
+	ssfPollMemberAck               = "ack"
+	ssfPollMemberSetErrs           = "setErrs"
+	ssfPollMemberErr               = "err"
+	ssfPollMemberDescription       = "description"
+)
 
 // NewSSFPollRequest authorizes a poll request, which needs 'ssf.manage', and parses its body. The stream ID is the one
 // the application took from its route. Only POST is served. An empty body is a default poll request; a body present
 // must be 'application/json'.
+//
+// An invalid poll request gives 400 (RFC 8936 Section 2.5.1). The body is a single JSON object with no repeated member
+// name, and member names are matched exactly. 'maxEvents' is a non-negative integer, 'returnImmediately' a boolean,
+// 'ack' an array of non-empty strings, and 'setErrs' an object whose member names are not empty and whose values are
+// objects with a non-empty string 'err' and, when present, a string 'description'. A member that is null is absent, and
+// an unknown member is ignored. The 'err' values are not compared with the Security Event Token Error Codes registry.
+//
+// The request is a long poll unless 'returnImmediately' is true: when no SET is available the application SHALL delay
+// its response until one is, or until its timeout elapses (RFC 8936 Section 2.5). This method returns at once and the
+// waiting is the application's.
 //
 // An unknown stream and another client's stream give the same 404, a policy error gives 403, and a push stream is a
 // 400. The stream status is not checked, as SSF Section 8.1.2.1 defines no error for polling, so the application returns
 // no SETs on a paused or disabled stream.
 //
 // See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.2
+// See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.5
+// See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.5.1
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2.1
-//
-//nolint:gocyclo
 func (f *Fosite) NewSSFPollRequest(ctx context.Context, r *http.Request, session Session, streamID string) (request *SSFPollRequest, err error) {
 	if r.Method != http.MethodPost {
 		return nil, &ssfMethodNotAllowedError{
@@ -92,12 +109,8 @@ func (f *Fosite) NewSSFPollRequest(ctx context.Context, r *http.Request, session
 
 	var stream *SSFStream
 
-	if stream, err = storage.GetSSFStream(ctx, clientID, streamID); err != nil {
+	if stream, err = ownedSSFStream(ctx, storage, clientID, streamID); err != nil {
 		return nil, ssfStreamStorageError(err)
-	}
-
-	if stream == nil || stream.ClientID != clientID {
-		return nil, ssfStreamStorageError(ErrNotFound)
 	}
 
 	if _, err = f.resolveSSFClientPolicy(ctx, f.getSSFConfig(ctx), ar.GetClient()); err != nil {
@@ -124,28 +137,199 @@ func (f *Fosite) NewSSFPollRequest(ctx context.Context, r *http.Request, session
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The Content-Type header must be 'application/json'."))
 	}
 
-	var body *ssfPollRequestBody
-
-	if body, err = parseSSFRequestBody[ssfPollRequestBody](data); err != nil {
+	if err = parseSSFPollRequestBody(data, request); err != nil {
 		return nil, err
 	}
 
-	if body.MaxEvents != nil && *body.MaxEvents < 0 {
-		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'maxEvents' member must not be negative."))
+	return request, nil
+}
+
+//nolint:gocyclo
+func parseSSFPollRequestBody(data []byte, request *SSFPollRequest) (err error) {
+	var members map[string]json.RawMessage
+
+	if members, err = parseSSFJSONObject(data); err != nil {
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("The request body must be a single JSON object with no repeated member names.").WithWrap(err).WithDebugError(err))
 	}
 
-	request.MaxEvents = body.MaxEvents
-	request.ReturnImmediately = body.ReturnImmediately
-	request.Ack = body.Ack
-	request.SetErrs = body.SetErrs
+	if raw, ok := ssfJSONMember(members, ssfPollMemberMaxEvents); ok {
+		var maxEvents int
 
-	return request, nil
+		if !isSSFJSONNumber(raw) || json.Unmarshal(raw, &maxEvents) != nil || maxEvents < 0 {
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'maxEvents' member must be a non-negative integer."))
+		}
+
+		request.MaxEvents = &maxEvents
+	}
+
+	if raw, ok := ssfJSONMember(members, ssfPollMemberReturnImmediately); ok {
+		switch string(raw) {
+		case "true":
+			request.ReturnImmediately = true
+		case "false":
+		default:
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'returnImmediately' member must be a boolean."))
+		}
+	}
+
+	if raw, ok := ssfJSONMember(members, ssfPollMemberAck); ok {
+		var values []json.RawMessage
+
+		if json.Unmarshal(raw, &values) != nil {
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'ack' member must be an array of non-empty strings."))
+		}
+
+		request.Ack = make([]string, 0, len(values))
+
+		for _, value := range values {
+			var jti string
+
+			if jti, ok = parseSSFJSONString(value); !ok || jti == "" {
+				return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'ack' member must be an array of non-empty strings."))
+			}
+
+			request.Ack = append(request.Ack, jti)
+		}
+	}
+
+	if raw, ok := ssfJSONMember(members, ssfPollMemberSetErrs); ok {
+		if request.SetErrs, err = parseSSFPollSetErrs(raw); err != nil {
+			return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'setErrs' member must be an object of objects, each named by a 'jti' and holding a non-empty string 'err' and an optional string 'description'.").WithWrap(err).WithDebugError(err))
+		}
+	}
+
+	return nil
+}
+
+func parseSSFPollSetErrs(data json.RawMessage) (setErrs map[string]SSFPollSetError, err error) {
+	var members map[string]json.RawMessage
+
+	if members, err = parseSSFJSONObject(data); err != nil {
+		return nil, err
+	}
+
+	setErrs = make(map[string]SSFPollSetError, len(members))
+
+	for jti, raw := range members {
+		if jti == "" {
+			return nil, errors.New("a member name is empty")
+		}
+
+		var fields map[string]json.RawMessage
+
+		if fields, err = parseSSFJSONObject(raw); err != nil {
+			return nil, err
+		}
+
+		var (
+			setErr SSFPollSetError
+			ok     bool
+		)
+
+		if setErr.Err, ok = parseSSFJSONString(fields[ssfPollMemberErr]); !ok || setErr.Err == "" {
+			return nil, errors.New("the 'err' member is not a non-empty string")
+		}
+
+		if description, present := ssfJSONMember(fields, ssfPollMemberDescription); present {
+			if setErr.Description, ok = parseSSFJSONString(description); !ok {
+				return nil, errors.New("the 'description' member is not a string")
+			}
+		}
+
+		setErrs[jti] = setErr
+	}
+
+	return setErrs, nil
+}
+
+// parseSSFJSONObject returns the members of a single JSON object by their exact names. A repeated name is an error.
+func parseSSFJSONObject(data []byte) (members map[string]json.RawMessage, err error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+
+	var token json.Token
+
+	if token, err = decoder.Token(); err != nil {
+		return nil, err
+	}
+
+	if token != json.Delim('{') {
+		return nil, errors.New("the value is not a JSON object")
+	}
+
+	members = map[string]json.RawMessage{}
+
+	for decoder.More() {
+		if token, err = decoder.Token(); err != nil {
+			return nil, err
+		}
+
+		name, ok := token.(string)
+		if !ok {
+			return nil, errors.New("the member name is not a string")
+		}
+
+		if _, ok = members[name]; ok {
+			return nil, errors.New("a member name is repeated")
+		}
+
+		var value json.RawMessage
+
+		if err = decoder.Decode(&value); err != nil {
+			return nil, err
+		}
+
+		members[name] = value
+	}
+
+	if _, err = decoder.Token(); err != nil {
+		return nil, err
+	}
+
+	if _, err = decoder.Token(); !errors.Is(err, io.EOF) {
+		return nil, errors.New("the value is followed by more data")
+	}
+
+	return members, nil
+}
+
+// ssfJSONMember returns the named member, which is absent when it is null.
+func ssfJSONMember(members map[string]json.RawMessage, name string) (value json.RawMessage, ok bool) {
+	if value, ok = members[name]; !ok || string(value) == jsonNull {
+		return nil, false
+	}
+
+	return value, true
+}
+
+func parseSSFJSONString(data json.RawMessage) (value string, ok bool) {
+	if len(data) == 0 || data[0] != '"' {
+		return "", false
+	}
+
+	if json.Unmarshal(data, &value) != nil {
+		return "", false
+	}
+
+	return value, true
+}
+
+func isSSFJSONNumber(data json.RawMessage) (ok bool) {
+	return len(data) != 0 && (data[0] == '-' || (data[0] >= '0' && data[0] <= '9'))
 }
 
 // WriteSSFPollResponse writes the poll response with 'Cache-Control: no-store'. The sets are keyed by 'jti'; a nil map
 // is written as an empty object, and 'moreAvailable' is omitted when false.
 //
+// It writes at once. For a request whose ReturnImmediately is false, the application calls it with no sets only after
+// it has waited for one until its timeout (RFC 8936 Section 2.5).
+//
+// The sets are not counted, so the application should give no more than the MaxEvents of the request, and none for a
+// MaxEvents of zero (RFC 8936 Section 2.2). Sets held while the stream was paused are given under the rule
+// Provider.PushSecurityEventTokenToStream describes for held events.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.2
 // See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.3
+// See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.5
 func (f *Fosite) WriteSSFPollResponse(ctx context.Context, rw http.ResponseWriter, sets map[string]string, moreAvailable bool) {
 	if sets == nil {
 		sets = map[string]string{}

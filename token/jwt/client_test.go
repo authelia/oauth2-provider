@@ -256,6 +256,79 @@ func TestNewStatelessJWTProfileIntrospectionClient(t *testing.T) {
 	}
 }
 
+func TestNewSecurityEventTokenClient(t *testing.T) {
+	testCases := []struct {
+		name       string
+		client     any
+		signingAlg string
+		expectedID string
+		sigAlg     string
+		encKID     string
+		encAlg     string
+		encEnc     string
+		nilOut     bool
+	}{
+		{
+			name:   "ShouldReturnNilForUnsupportedType",
+			client: struct{}{},
+			nilOut: true,
+		},
+		{
+			name:   "ShouldReturnNilForNil",
+			nilOut: true,
+		},
+		{
+			name:   "ShouldReturnNilForEmptyEncryptionAlg",
+			client: &stubSecurityEventTokenClient{stubBase: stubBase{id: "abc"}, encKID: "set-enc-kid", encEnc: string(jose.A256GCM)},
+			nilOut: true,
+		},
+		{
+			name: "ShouldDecorateWithDefaultSigningAlg",
+			client: &stubSecurityEventTokenClient{
+				stubBase: stubBase{id: "abc"},
+				encKID:   "set-enc-kid",
+				encAlg:   string(jose.RSA_OAEP_256),
+				encEnc:   string(jose.A256GCM),
+			},
+			expectedID: "abc",
+			sigAlg:     string(jose.RS256),
+			encKID:     "set-enc-kid",
+			encAlg:     string(jose.RSA_OAEP_256),
+			encEnc:     string(jose.A256GCM),
+		},
+		{
+			name:       "ShouldDecorateWithSigningAlg",
+			client:     &stubSecurityEventTokenClient{stubBase: stubBase{id: "abc"}, encAlg: string(jose.ECDH_ES)},
+			signingAlg: string(jose.ES256),
+			expectedID: "abc",
+			sigAlg:     string(jose.ES256),
+			encAlg:     string(jose.ECDH_ES),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := NewSecurityEventTokenClient(tc.client, tc.signingAlg)
+
+			if tc.nilOut {
+				assert.Nil(t, c)
+
+				return
+			}
+
+			require.NotNil(t, c)
+
+			assert.Equal(t, tc.expectedID, c.GetID())
+			assert.Empty(t, c.GetSigningKeyID())
+			assert.Equal(t, tc.sigAlg, c.GetSigningAlg())
+			assert.Equal(t, tc.encKID, c.GetEncryptionKeyID())
+			assert.Equal(t, tc.encAlg, c.GetEncryptionAlg())
+			assert.Equal(t, tc.encEnc, c.GetEncryptionEnc())
+			assert.False(t, c.IsClientSigned())
+		})
+	}
+}
+
 type testClient struct {
 	id                  string
 	secret              []byte
@@ -445,3 +518,20 @@ func (s *stubIntrospectionClient) GetIntrospectionEncryptedResponseKeyID() strin
 func (s *stubIntrospectionClient) GetIntrospectionEncryptedResponseAlg() string { return s.encAlg }
 
 func (s *stubIntrospectionClient) GetIntrospectionEncryptedResponseEnc() string { return s.encEnc }
+
+type stubSecurityEventTokenClient struct {
+	stubBase
+	encKID, encAlg, encEnc string
+}
+
+func (s *stubSecurityEventTokenClient) GetSecurityEventTokenEncryptedResponseKeyID() string {
+	return s.encKID
+}
+
+func (s *stubSecurityEventTokenClient) GetSecurityEventTokenEncryptedResponseAlg() string {
+	return s.encAlg
+}
+
+func (s *stubSecurityEventTokenClient) GetSecurityEventTokenEncryptedResponseEnc() string {
+	return s.encEnc
+}

@@ -8,6 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
+
+	"golang.org/x/text/language"
+
+	jjson "authelia.com/provider/jose/json"
 )
 
 const (
@@ -43,6 +50,33 @@ const (
 	SecurityEventInitiatingEntityPolicy = "policy"
 	// SecurityEventInitiatingEntitySystem means a system or platform assertion triggered the event (CAEP 1.0 §2).
 	SecurityEventInitiatingEntitySystem = "system"
+)
+
+// The credential_type values (CAEP 1.0 §3.3.1). The set is open to any other value the Transmitter and the Receiver
+// both support.
+const (
+	// CAEPCredentialTypePassword is the credential_type value for a password (CAEP 1.0 §3.3.1).
+	CAEPCredentialTypePassword = "password"
+	// CAEPCredentialTypePIN is the credential_type value for a PIN (CAEP 1.0 §3.3.1).
+	CAEPCredentialTypePIN = "pin"
+	// CAEPCredentialTypeX509 is the credential_type value for an X.509 certificate (CAEP 1.0 §3.3.1).
+	CAEPCredentialTypeX509 = "x509"
+	// CAEPCredentialTypeFIDO2Platform is the credential_type value for a FIDO2 platform authenticator (CAEP 1.0
+	// §3.3.1).
+	CAEPCredentialTypeFIDO2Platform = "fido2-platform"
+	// CAEPCredentialTypeFIDO2Roaming is the credential_type value for a FIDO2 roaming authenticator (CAEP 1.0 §3.3.1).
+	CAEPCredentialTypeFIDO2Roaming = "fido2-roaming"
+	// CAEPCredentialTypeFIDOU2F is the credential_type value for a FIDO U2F authenticator (CAEP 1.0 §3.3.1).
+	CAEPCredentialTypeFIDOU2F = "fido-u2f"
+	// CAEPCredentialTypeVerifiableCredential is the credential_type value for a verifiable credential (CAEP 1.0
+	// §3.3.1).
+	CAEPCredentialTypeVerifiableCredential = "verifiable-credential" //nolint:gosec // G101: credential type name, not a credential.
+	// CAEPCredentialTypePhoneVoice is the credential_type value for a phone voice call (CAEP 1.0 §3.3.1).
+	CAEPCredentialTypePhoneVoice = "phone-voice"
+	// CAEPCredentialTypePhoneSMS is the credential_type value for a phone text message (CAEP 1.0 §3.3.1).
+	CAEPCredentialTypePhoneSMS = "phone-sms"
+	// CAEPCredentialTypeApp is the credential_type value for an application (CAEP 1.0 §3.3.1).
+	CAEPCredentialTypeApp = "app"
 )
 
 // The change_type values (CAEP 1.0 §3.3.1).
@@ -93,17 +127,141 @@ const (
 	SSFStreamStatusDisabled = "disabled"
 )
 
+const (
+	securityEventTypePrefixCAEP = "https://schemas.openid.net/secevent/caep/event-type/"
+
+	claimSecurityEventTimestamp   = "event_timestamp"
+	jsonNull                      = "null"
+	claimSecurityEventReasonAdmin = "reason_admin"
+	claimSecurityEventReasonUser  = "reason_user"
+)
+
 // ErrInvalidSecurityEvent is returned for an event payload that is missing a required claim or has an invalid value.
 var ErrInvalidSecurityEvent = errors.New("invalid security event")
 
-// SecurityEvent is the payload of one event in the events claim of a SET (RFC 8417 §2.2).
+// SecurityEvent is the payload of one event in the events claim of a SET (RFC 8417 §2.2). An event type an application
+// defines describes its primary subject with the 'sub_id' claim of the SET and has no 'subject' member (SSF 1.0
+// §3.1.2). Any other subject member it defines refers to exactly one subject (SSF 1.0 §3.1.4).
 type SecurityEvent interface {
-	// SecurityEventType returns the event type URI of the event.
+	// SecurityEventType returns the event type URI of the event, which should be a stable value such as the permanent
+	// URL of the specification of the event (RFC 8417 §2.2).
 	SecurityEventType() (uri string)
 }
 
+// SecurityEventSubjectValidator is implemented by a SecurityEvent that restricts the subject identifier of its SET.
+// NewSecurityEventTokenClaims and SecurityEventTokenClaims.Valid call it with the 'sub_id' claim.
+type SecurityEventSubjectValidator interface {
+	// ValidateSubject returns an error when the event must not be about the subject.
+	ValidateSubject(subject *SubjectIdentifier) (err error)
+}
+
+var securityEventTypes = map[string]func() SecurityEvent{}
+
+func init() {
+	registerSecurityEventTypes(
+		func() SecurityEvent { return &CAEPSessionRevoked{} },
+		func() SecurityEvent { return &CAEPTokenClaimsChange{} },
+		func() SecurityEvent { return &CAEPCredentialChange{} },
+		func() SecurityEvent { return &CAEPAssuranceLevelChange{} },
+		func() SecurityEvent { return &CAEPDeviceComplianceChange{} },
+		func() SecurityEvent { return &CAEPSessionEstablished{} },
+		func() SecurityEvent { return &CAEPSessionPresented{} },
+		func() SecurityEvent { return &CAEPRiskLevelChange{} },
+		func() SecurityEvent { return &SSFVerification{} },
+		func() SecurityEvent { return &SSFStreamUpdated{} },
+	)
+}
+
+func registerSecurityEventTypes(factories ...func() SecurityEvent) {
+	for _, factory := range factories {
+		securityEventTypes[factory().SecurityEventType()] = factory
+	}
+}
+
+func validateSecurityEvent(event SecurityEvent, subject *SubjectIdentifier) (err error) {
+	if v, ok := event.(interface{ Validate() error }); ok {
+		if err = v.Validate(); err != nil {
+			return securityEventError(err)
+		}
+	}
+
+	if v, ok := event.(SecurityEventSubjectValidator); ok && subject != nil {
+		if err = v.ValidateSubject(subject); err != nil {
+			return securityEventError(err)
+		}
+	}
+
+	return nil
+}
+
+func validateSecurityEventPayload(uri string, payload map[string]any, subject *SubjectIdentifier) (err error) {
+	factory, ok := securityEventTypes[uri]
+	if !ok {
+		return nil
+	}
+
+	if strings.HasPrefix(uri, securityEventTypePrefixCAEP) {
+		// CAEP 1.0 §2: a reason object contains one or more key/value pairs.
+		for _, claim := range []string{claimSecurityEventReasonAdmin, claimSecurityEventReasonUser} {
+			if securityEventMemberJSON(payload, claim) == "{}" {
+				return fmt.Errorf("%w: the '%s' claim must contain one or more key/value pairs", ErrInvalidSecurityEvent, claim)
+			}
+		}
+	}
+
+	// CAEP 1.0 §2, RISC 1.0 §2.7: event_timestamp is a JSON number, which may have a fraction (RFC 8259 §6).
+	literal := securityEventMemberJSON(payload, claimSecurityEventTimestamp)
+
+	if literal == jsonNull {
+		return fmt.Errorf("%w: the '%s' event payload is not valid: the '%s' claim is not a number", ErrInvalidSecurityEvent, uri, claimSecurityEventTimestamp)
+	}
+
+	if literal != "" && (literal[0] == '-' || (literal[0] >= '0' && literal[0] <= '9')) {
+		payload = maps.Clone(payload)
+
+		delete(payload, claimSecurityEventTimestamp)
+	}
+
+	var data []byte
+
+	if data, err = json.Marshal(payload); err != nil {
+		return fmt.Errorf("%w: the '%s' event payload is not valid: %w", ErrInvalidSecurityEvent, uri, err)
+	}
+
+	event := factory()
+
+	if err = jjson.Unmarshal(data, event); err != nil {
+		return fmt.Errorf("%w: the '%s' event payload is not valid: %w", ErrInvalidSecurityEvent, uri, err)
+	}
+
+	return validateSecurityEvent(event, subject)
+}
+
+func securityEventMemberJSON(payload map[string]any, claim string) (literal string) {
+	value, ok := payload[claim]
+	if !ok {
+		return ""
+	}
+
+	data, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+
+	return string(data)
+}
+
+func securityEventError(err error) error {
+	if errors.Is(err, ErrInvalidSecurityEvent) {
+		return err
+	}
+
+	return fmt.Errorf("%w: %w", ErrInvalidSecurityEvent, err)
+}
+
 // SecurityEventCommon are the optional claims shared by CAEP 1.0 events (CAEP 1.0 §2). Reasons are objects keyed by
-// BCP47 language tag.
+// BCP47 language tag. EventTimestamp is the time the event occurred, which each event type defines, such as the time
+// the credential changed (CAEP 1.0 §3.3.1), and not the time the SET was issued.
 type SecurityEventCommon struct {
 	EventTimestamp   int64             `json:"event_timestamp,omitempty"`
 	InitiatingEntity string            `json:"initiating_entity,omitempty"`
@@ -111,14 +269,46 @@ type SecurityEventCommon struct {
 	ReasonUser       map[string]string `json:"reason_user,omitempty"`
 }
 
-// Validate checks initiating_entity (CAEP 1.0 §2).
+// Validate checks initiating_entity and that each reason_admin and reason_user key is a BCP47 language tag (CAEP 1.0
+// §2).
 func (c SecurityEventCommon) Validate() (err error) {
 	switch c.InitiatingEntity {
 	case "", SecurityEventInitiatingEntityAdmin, SecurityEventInitiatingEntityUser, SecurityEventInitiatingEntityPolicy, SecurityEventInitiatingEntitySystem:
-		return nil
+		break
 	default:
 		return securityEventInvalid("initiating_entity", c.InitiatingEntity)
 	}
+
+	if err = securityEventLanguageTags("reason_admin", c.ReasonAdmin); err != nil {
+		return err
+	}
+
+	return securityEventLanguageTags("reason_user", c.ReasonUser)
+}
+
+func securityEventLanguageTags(claim string, reasons map[string]string) (err error) {
+	for _, tag := range slices.Sorted(maps.Keys(reasons)) {
+		if !isLanguageTag(tag) {
+			return fmt.Errorf("%w: the '%s' claim key '%s' is not a BCP47 language tag", ErrInvalidSecurityEvent, claim, tag)
+		}
+	}
+
+	return nil
+}
+
+func isLanguageTag(tag string) bool {
+	if strings.Contains(tag, "_") {
+		return false
+	}
+
+	var unknown language.ValueError
+
+	// RFC 5646 §2.2.9: a well-formed tag whose subtags are not registered is still a language tag.
+	if _, err := language.Parse(tag); err != nil && !errors.As(err, &unknown) {
+		return false
+	}
+
+	return true
 }
 
 func securityEventInvalid(claim, value string) (err error) {
@@ -217,7 +407,8 @@ func (e CAEPCredentialChange) Validate() (err error) {
 	return securityEventOneOf("change_type", e.ChangeType, false, CAEPChangeTypeCreate, CAEPChangeTypeRevoke, CAEPChangeTypeUpdate, CAEPChangeTypeDelete)
 }
 
-// CAEPAssuranceLevelChange is the assurance-level-change event (CAEP 1.0 §3.4).
+// CAEPAssuranceLevelChange is the assurance-level-change event (CAEP 1.0 §3.4). An event with a PreviousLevel should
+// have a ChangeDirection (CAEP 1.0 §3.4.1).
 type CAEPAssuranceLevelChange struct {
 	SecurityEventCommon
 
@@ -303,7 +494,7 @@ func (CAEPSessionPresented) SecurityEventType() (uri string) {
 	return SecurityEventTypeCAEPSessionPresented
 }
 
-// CAEPRiskLevelChange is the risk-level-change event (CAEP 1.0 §3.8).
+// CAEPRiskLevelChange is the risk-level-change event (CAEP 1.0 §3.8). A RiskReason is recommended (CAEP 1.0 §3.8.1).
 type CAEPRiskLevelChange struct {
 	SecurityEventCommon
 
@@ -338,7 +529,9 @@ func (e CAEPRiskLevelChange) Validate() (err error) {
 // SSFVerification is the verification event (SSF 1.0 §8.1.4.1). The top-level sub_id is an opaque subject holding the
 // stream_id.
 type SSFVerification struct {
-	State string `json:"state,omitempty"`
+	// State is the 'state' of the verification request, which is echoed even when it is the empty string (SSF 1.0
+	// §8.1.4.2). It is nil when the request had none or the Transmitter initiated the event.
+	State *string `json:"state,omitempty"`
 }
 
 // SecurityEventType returns the event type URI of the verification security event.
@@ -362,7 +555,9 @@ func (e SSFStreamUpdated) Validate() (err error) {
 	return securityEventOneOf("status", e.Status, false, SSFStreamStatusEnabled, SSFStreamStatusPaused, SSFStreamStatusDisabled)
 }
 
-// RawSecurityEvent carries an event type without a typed payload, such as a RISC event. Only Claims is marshaled.
+// RawSecurityEvent carries an event type without a typed payload. Only Claims is marshaled. A raw event of an event
+// type this package defines is validated as that type, and one of the deprecated RISC sessions-revoked event type is
+// refused (RISC 1.0 §2.11).
 type RawSecurityEvent struct {
 	URI string
 	// Claims is the set of registered claim accessors implemented by the claim types of this package.

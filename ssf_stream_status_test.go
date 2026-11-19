@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -121,6 +122,15 @@ func TestSSFStreamStatus(t *testing.T) {
 		assert.Empty(t, h.stored(t, "a", id).StatusReason)
 	})
 
+	t.Run("UpdateWithoutContentType", func(t *testing.T) {
+		rw := h.doStatus(t, "a", http.MethodPost, ssfStatusURL, "", `{"stream_id":"`+id+`","status":"paused"}`)
+		require.Equal(t, http.StatusOK, rw.Code, rw.Body.String())
+		assert.Equal(t, "paused", h.stored(t, "a", id).Status)
+
+		rw = h.doStatus(t, "a", http.MethodPost, ssfStatusURL, "", `{"stream_id":"`+id+`","status":"enabled"}`)
+		require.Equal(t, http.StatusOK, rw.Code, rw.Body.String())
+	})
+
 	t.Run("UpdateKeepsConfiguration", func(t *testing.T) {
 		before := h.stored(t, "a", id)
 
@@ -167,6 +177,138 @@ func TestSSFStreamStatusPolicy(t *testing.T) {
 	})
 }
 
+func TestSSFStreamStatusPolicyDeferral(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		code     int
+		expected string
+	}{
+		{name: "ShouldAcceptPendingUpdate", err: ErrSSFStreamUpdatePending, code: http.StatusAccepted},
+		{name: "ShouldAcceptWrappedPendingUpdate", err: fmt.Errorf("review queue: %w", ErrSSFStreamUpdatePending), code: http.StatusAccepted},
+		{name: "ShouldReportTemporarilyUnavailable", err: ErrTemporarilyUnavailable, code: http.StatusServiceUnavailable, expected: "temporarily_unavailable"},
+		{name: "ShouldReportWrappedTemporarilyUnavailable", err: ErrTemporarilyUnavailable.WithWrap(errors.New("database down")).WithDebug("database down"), code: http.StatusServiceUnavailable, expected: "temporarily_unavailable"},
+		{name: "ShouldReportDerivedTemporarilyUnavailable", err: ErrTemporarilyUnavailable.WithHint("database down"), code: http.StatusServiceUnavailable, expected: "temporarily_unavailable"},
+		{name: "ShouldDenyOtherErrors", err: errors.New("database down"), code: http.StatusForbidden, expected: "access_denied"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newSSFHandlerHarness(t, nil)
+			id := h.createStream(t, "a", `{}`)
+
+			require.NoError(t, h.store.UpdateSSFStreamStatus(context.Background(), "a", id, SSFStreamStatusPaused, "held"))
+
+			h.config.Policy = ssfHandlerPolicy{err: tc.err}
+
+			rw := h.doStatus(t, "a", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"`+id+`","status":"enabled","reason":"resume"}`)
+			require.Equal(t, tc.code, rw.Code, rw.Body.String())
+			assert.Equal(t, "no-store", rw.Header().Get("Cache-Control"))
+			assert.NotContains(t, rw.Body.String(), "database down")
+			assert.NotContains(t, rw.Body.String(), "review queue")
+
+			if tc.expected == "" {
+				assert.JSONEq(t, `{"stream_id":"`+id+`","status":"paused","reason":"held"}`, rw.Body.String())
+			} else {
+				assert.Contains(t, rw.Body.String(), `"error":"`+tc.expected+`"`)
+			}
+
+			stored := h.stored(t, "a", id)
+			assert.Equal(t, SSFStreamStatusPaused, stored.Status)
+			assert.Equal(t, "held", stored.StatusReason)
+
+			rw = h.doStatus(t, "a", http.MethodGet, ssfStatusURL+"?stream_id="+id, "", "")
+			require.Equal(t, http.StatusOK, rw.Code, rw.Body.String())
+			assert.JSONEq(t, `{"stream_id":"`+id+`","status":"paused","reason":"held"}`, rw.Body.String())
+		})
+	}
+
+	t.Run("ShouldNotRevealAnotherClientsStreamWhilePending", func(t *testing.T) {
+		h := newSSFHandlerHarness(t, nil)
+		id := h.createStream(t, "a", `{}`)
+
+		h.config.Policy = ssfHandlerPolicy{err: ErrSSFStreamUpdatePending}
+
+		foreign := h.doStatus(t, "b", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"`+id+`","status":"paused"}`)
+		unknown := h.doStatus(t, "b", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"nope","status":"paused"}`)
+
+		assert.Equal(t, http.StatusNotFound, foreign.Code)
+		assert.Equal(t, unknown.Body.String(), foreign.Body.String())
+	})
+
+	t.Run("ShouldValidateBeforeDeferring", func(t *testing.T) {
+		h := newSSFHandlerHarness(t, nil)
+		id := h.createStream(t, "a", `{}`)
+
+		h.config.Policy = ssfHandlerPolicy{err: ErrSSFStreamUpdatePending}
+
+		rw := h.doStatus(t, "a", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"`+id+`","status":"gone"}`)
+		assert.Equal(t, http.StatusBadRequest, rw.Code)
+	})
+}
+
+func TestSSFStreamPolicyErrors(t *testing.T) {
+	const verification = "verification"
+
+	requests := []struct {
+		name string
+		do   func(t *testing.T, h *ssfHandlerHarness, id string) *httptest.ResponseRecorder
+	}{
+		{name: "Create", do: func(t *testing.T, h *ssfHandlerHarness, _ string) *httptest.ResponseRecorder {
+			require.NoError(t, h.store.DeleteSSFStream(context.Background(), "a", h.onlyStream(t, "a")))
+
+			return h.do(t, "a", http.MethodPost, ssfHandlerURL, "application/json", `{}`)
+		}},
+		{name: "Update", do: func(t *testing.T, h *ssfHandlerHarness, id string) *httptest.ResponseRecorder {
+			return h.do(t, "a", http.MethodPatch, ssfHandlerURL, "application/json", `{"stream_id":"`+id+`","description":"x"}`)
+		}},
+		{name: "Verification", do: func(t *testing.T, h *ssfHandlerHarness, id string) *httptest.ResponseRecorder {
+			rw, _ := h.doVerify(t, "a", http.MethodPost, "application/json", `{"stream_id":"`+id+`"}`)
+
+			return rw
+		}},
+		{name: "Poll", do: func(_ *testing.T, h *ssfHandlerHarness, id string) *httptest.ResponseRecorder {
+			return h.doPoll("a", http.MethodPost, "application/json", `{}`, id)
+		}},
+	}
+
+	testCases := []struct {
+		name string
+		err  error
+		code int
+	}{
+		{name: "ShouldReportTemporarilyUnavailable", err: ErrTemporarilyUnavailable.WithWrap(errors.New("database down")).WithDebug("database down"), code: http.StatusServiceUnavailable},
+		{name: "ShouldDenyPendingOutsideStatusUpdate", err: ErrSSFStreamUpdatePending, code: http.StatusForbidden},
+	}
+
+	for _, tc := range testCases {
+		for _, request := range requests {
+			t.Run(tc.name+request.name, func(t *testing.T) {
+				rec := &ssfVerifyRecorder{}
+				h := newSSFHandlerHarness(t, func(c *SSFConfig) { c.VerificationHandler = rec })
+				id := h.createStream(t, "a", `{"description":"d"}`)
+
+				h.config.Policy = ssfHandlerPolicy{err: tc.err}
+
+				rw := request.do(t, h, id)
+				assert.Equal(t, tc.code, rw.Code, rw.Body.String())
+				assert.NotContains(t, rw.Body.String(), "database down")
+				assert.Zero(t, rec.calls, verification)
+			})
+		}
+	}
+}
+
+func (h *ssfHandlerHarness) onlyStream(t *testing.T, client string) (id string) {
+	t.Helper()
+
+	streams, err := h.store.ListSSFStreams(context.Background(), client)
+	require.NoError(t, err)
+	require.Len(t, streams, 1)
+
+	return streams[0].StreamID
+}
+
 func TestSSFStreamStatusStoredEndpoint(t *testing.T) {
 	h := newSSFHandlerHarness(t, nil)
 	id := h.createStream(t, "a", `{"delivery":{"method":"`+SSFDeliveryMethodPush+`","endpoint_url":"https://rx.example.com/events"}}`)
@@ -207,6 +349,7 @@ func TestSSFStreamStatusRejects(t *testing.T) {
 		{"MissingStreamID", "a", http.MethodPost, ssfStatusURL, "application/json", `{"status":"paused"}`, http.StatusBadRequest, "invalid_request"},
 		{"WrongContentType", "a", http.MethodPost, ssfStatusURL, "text/plain", `{"stream_id":"` + id + `","status":"paused"}`, http.StatusBadRequest, "invalid_request"},
 		{"MalformedBody", "a", http.MethodPost, ssfStatusURL, "application/json", `{`, http.StatusBadRequest, "invalid_request"},
+		{"EmptyBody", "a", http.MethodPost, ssfStatusURL, "", ``, http.StatusBadRequest, "invalid_request"},
 		{"OversizeBody", "a", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"` + id + `","status":"paused","reason":"` + strings.Repeat("x", 600) + `"}`, http.StatusBadRequest, "invalid_request"},
 		{"ForeignStream", "b", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"` + id + `","status":"paused"}`, http.StatusNotFound, "not_found"},
 		{"UnknownStream", "b", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"nope","status":"paused"}`, http.StatusNotFound, "not_found"},

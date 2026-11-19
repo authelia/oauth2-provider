@@ -6,6 +6,7 @@ package jwt_test
 
 import (
 	"encoding/json"
+	"math/big"
 	"testing"
 	"time"
 
@@ -209,16 +210,235 @@ func TestSecurityEventTokenClaims(t *testing.T) {
 	assert.Equal(t, "secevent+jwt", JSONWebTokenTypeSecurityEventToken)
 }
 
+func TestNewSecurityEventTokenClaimsStringOrURI(t *testing.T) {
+	subject, err := NewSubjectIdentifierEmail("john@example.com")
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name     string
+		issuer   string
+		audience []string
+		uri      string
+		err      string
+	}{
+		{"ShouldAcceptURIs", "https://issuer.example.com", []string{"https://receiver.example.com", "urn:example:receiver"}, "https://example.com/event", ""},
+		{"ShouldAcceptStringIssuerAndAudience", "issuer", []string{"receiver"}, "urn:example:event", ""},
+		{"ShouldRejectEventTypeWithoutScheme", "issuer", []string{"receiver"}, "not a uri", "event type"},
+		{"ShouldRejectEventTypeString", "issuer", []string{"receiver"}, "session-revoked", "event type"},
+		{"ShouldRejectEventTypeWithSpace", "issuer", []string{"receiver"}, "https://example.com/an event", "event type"},
+		{"ShouldRejectAudienceNotURI", "issuer", []string{"x:y z"}, "urn:example:event", "'aud'"},
+		{"ShouldRejectSecondAudienceNotURI", "issuer", []string{"receiver", "x:y z"}, "urn:example:event", "'aud'"},
+		{"ShouldRejectIssuerNotURI", "a:b c", []string{"receiver"}, "urn:example:event", "'iss'"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			claims, err := NewSecurityEventTokenClaims(tc.issuer, tc.audience, subject, RawSecurityEvent{URI: tc.uri}, "")
+
+			if tc.err == "" {
+				require.NoError(t, err)
+				assert.NoError(t, claims.Valid())
+
+				return
+			}
+
+			assert.Nil(t, claims)
+			require.ErrorIs(t, err, ErrInvalidSecurityEvent)
+			assert.Contains(t, err.Error(), tc.err)
+		})
+	}
+}
+
+func TestSecurityEventTokenClaimsValidEventsAndAudience(t *testing.T) {
+	subject, err := NewSubjectIdentifierEmail("john@example.com")
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name   string
+		mutate func(claims *SecurityEventTokenClaims)
+		errors uint32
+	}{
+		{"ShouldPassValid", func(claims *SecurityEventTokenClaims) {}, 0},
+		{"ShouldPassEmptyObjectPayload", func(claims *SecurityEventTokenClaims) {
+			claims.Events = map[string]any{"urn:example:event": map[string]any{}}
+		}, 0},
+		{"ShouldFailEventTypeNotURI", func(claims *SecurityEventTokenClaims) {
+			claims.Events = map[string]any{"not a uri": map[string]any{}}
+		}, ValidationErrorClaimsInvalid},
+		{"ShouldFailEmptyEventType", func(claims *SecurityEventTokenClaims) {
+			claims.Events = map[string]any{"": map[string]any{}}
+		}, ValidationErrorClaimsInvalid},
+		{"ShouldFailNilPayload", func(claims *SecurityEventTokenClaims) {
+			claims.Events = map[string]any{"urn:example:event": nil}
+		}, ValidationErrorClaimsInvalid},
+		{"ShouldFailStringPayload", func(claims *SecurityEventTokenClaims) {
+			claims.Events = map[string]any{"urn:example:event": "payload"}
+		}, ValidationErrorClaimsInvalid},
+		{"ShouldFailArrayPayload", func(claims *SecurityEventTokenClaims) {
+			claims.Events = map[string]any{"urn:example:event": []any{}}
+		}, ValidationErrorClaimsInvalid},
+		{"ShouldFailNumberPayload", func(claims *SecurityEventTokenClaims) {
+			claims.Events = map[string]any{"urn:example:event": int64(1)}
+		}, ValidationErrorClaimsInvalid},
+		{"ShouldFailEmptyAudienceValue", func(claims *SecurityEventTokenClaims) { claims.Audience = []string{""} }, ValidationErrorAudience},
+		{"ShouldFailEmptySecondAudienceValue", func(claims *SecurityEventTokenClaims) { claims.Audience = []string{"aud", ""} }, ValidationErrorAudience},
+		{"ShouldFailAudienceNotURI", func(claims *SecurityEventTokenClaims) { claims.Audience = []string{"x:y z"} }, ValidationErrorAudience},
+		{"ShouldFailIssuerNotURI", func(claims *SecurityEventTokenClaims) { claims.Issuer = "a:b c" }, ValidationErrorIssuer},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			claims, err := NewSecurityEventTokenClaims("https://issuer.example.com", []string{"https://receiver.example.com"}, subject, CAEPSessionRevoked{}, "")
+			require.NoError(t, err)
+
+			tc.mutate(claims)
+
+			err = claims.Valid()
+
+			if tc.errors == 0 {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			var vErr *ValidationError
+
+			require.ErrorAs(t, err, &vErr)
+			assert.Equal(t, tc.errors, vErr.Errors)
+		})
+	}
+
+	t.Run("ShouldFailDecodedNonObjectPayload", func(t *testing.T) {
+		var claims SecurityEventTokenClaims
+
+		require.NoError(t, json.Unmarshal([]byte(`{"iss":"iss","aud":["aud"],"jti":"id","iat":1700000000,"sub_id":{"format":"opaque","id":"x"},"events":{"urn:example:event":"payload"}}`), &claims))
+		assert.Error(t, claims.Valid())
+	})
+}
+
+func TestNewSecurityEventTokenClaimsNilEvent(t *testing.T) {
+	subject, err := NewSubjectIdentifierEmail("john@example.com")
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name  string
+		event SecurityEvent
+	}{
+		{"ShouldRejectNilInterface", nil},
+		{"ShouldRejectNilTypedPointer", (*CAEPSessionRevoked)(nil)},
+		{"ShouldRejectNilRawPointer", (*RawSecurityEvent)(nil)},
+		{"ShouldRejectNilValidatedPointer", (*CAEPCredentialChange)(nil)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				claims *SecurityEventTokenClaims
+				err    error
+			)
+
+			require.NotPanics(t, func() {
+				claims, err = NewSecurityEventTokenClaims("https://issuer.example.com", []string{"aud"}, subject, tc.event, "")
+			})
+
+			assert.Nil(t, claims)
+			assert.ErrorIs(t, err, ErrInvalidSecurityEvent)
+		})
+	}
+}
+
+func TestNewSecurityEventTokenClaimsVerificationState(t *testing.T) {
+	subject, err := NewSubjectIdentifierOpaque("stream-1")
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name     string
+		event    SecurityEvent
+		expected map[string]any
+	}{
+		{"ShouldEchoState", &SSFVerification{State: new("abc")}, map[string]any{"state": "abc"}},
+		{"ShouldEchoEmptyState", &SSFVerification{State: new("")}, map[string]any{"state": ""}},
+		{"ShouldOmitNilState", &SSFVerification{}, map[string]any{}},
+		{"ShouldEchoEmptyRawState", &RawSecurityEvent{URI: SecurityEventTypeSSFVerification, Claims: map[string]any{"state": ""}}, map[string]any{"state": ""}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			claims, err := NewSecurityEventTokenClaims("https://issuer.example.com", []string{"aud"}, subject, tc.event, "")
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected, claims.Events[SecurityEventTypeSSFVerification])
+			assert.NoError(t, claims.Valid())
+		})
+	}
+}
+
+func TestNewSecurityEventTokenClaimsShouldCopyAudience(t *testing.T) {
+	subject, err := NewSubjectIdentifierEmail("john@example.com")
+	require.NoError(t, err)
+
+	audience := []string{"https://receiver.example.com", "https://other.example.com"}
+
+	claims, err := NewSecurityEventTokenClaims("https://issuer.example.com", audience, subject, CAEPSessionRevoked{}, "")
+	require.NoError(t, err)
+
+	audience[0] = "https://attacker.example.com"
+
+	assert.Equal(t, []string{"https://receiver.example.com", "https://other.example.com"}, claims.Audience)
+}
+
 func TestNewSecurityEventTokenClaimsShouldKeepIntegerPrecision(t *testing.T) {
 	subject, err := NewSubjectIdentifierEmail("john@example.com")
 	require.NoError(t, err)
 
-	claims, err := NewSecurityEventTokenClaims("https://issuer.example.com", []string{"aud"}, subject, RawSecurityEvent{URI: "https://example.com/event", Claims: map[string]any{"serial": int64(9007199254740993)}}, "")
-	require.NoError(t, err)
+	huge, ok := new(big.Int).SetString("123456789012345678901234567890", 10)
+	require.True(t, ok)
 
-	data, err := json.Marshal(claims.Events)
-	require.NoError(t, err)
+	testCases := []struct {
+		name     string
+		have     any
+		expected any
+		literal  string
+	}{
+		{"ShouldKeepInt64", int64(9007199254740993), int64(9007199254740993), "9007199254740993"},
+		{"ShouldKeepNegativeInt64", int64(-9007199254740993), int64(-9007199254740993), "-9007199254740993"},
+		{"ShouldKeepUint64", uint64(18446744073709551615), uint64(18446744073709551615), "18446744073709551615"},
+		{"ShouldKeepUint64Number", json.Number("18446744073709551615"), uint64(18446744073709551615), "18446744073709551615"},
+		{"ShouldKeepLargeNumber", json.Number("123456789012345678901234567890"), huge, "123456789012345678901234567890"},
+		{"ShouldKeepLargeNegativeNumber", json.Number("-123456789012345678901234567890"), new(big.Int).Neg(huge), "-123456789012345678901234567890"},
+		{"ShouldKeepBigInt", huge, huge, "123456789012345678901234567890"},
+		{"ShouldKeepFloat", 1.5, 1.5, "1.5"},
+		{"ShouldKeepIntegralExponent", json.Number("1e3"), int64(1000), "1000"},
+		{"ShouldKeepLargeExponent", json.Number("1e30"), 1e30, "1e+30"},
+	}
 
-	assert.JSONEq(t, `{"https://example.com/event":{"serial":9007199254740993}}`, string(data))
-	assert.Contains(t, string(data), "9007199254740993")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			event := RawSecurityEvent{URI: "https://example.com/event", Claims: map[string]any{
+				"serial": tc.have,
+				"nested": map[string]any{"list": []any{tc.have, "x"}},
+			}}
+
+			claims, err := NewSecurityEventTokenClaims("https://issuer.example.com", []string{"aud"}, subject, event, "")
+			require.NoError(t, err)
+
+			payload, ok := claims.Events["https://example.com/event"].(map[string]any)
+			require.True(t, ok)
+
+			assert.Equal(t, tc.expected, payload["serial"])
+			assert.Equal(t, map[string]any{"list": []any{tc.expected, "x"}}, payload["nested"])
+
+			data, err := json.Marshal(claims.ToMap()[ClaimEvents])
+			require.NoError(t, err)
+
+			assert.Equal(t, `{"https://example.com/event":{"nested":{"list":[`+tc.literal+`,"x"]},"serial":`+tc.literal+`}}`, string(data))
+		})
+	}
+
+	t.Run("ShouldRejectNumberOutOfRange", func(t *testing.T) {
+		event := RawSecurityEvent{URI: "https://example.com/event", Claims: map[string]any{"serial": json.Number("1e999")}}
+
+		_, err := NewSecurityEventTokenClaims("https://issuer.example.com", []string{"aud"}, subject, event, "")
+		assert.ErrorIs(t, err, ErrInvalidSecurityEvent)
+	})
 }

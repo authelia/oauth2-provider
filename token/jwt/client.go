@@ -83,6 +83,21 @@ func NewStatelessJWTProfileIntrospectionClient(client any) Client {
 	}
 }
 
+// NewSecurityEventTokenClient converts a type into a Client provided it implements the SecurityEventTokenClient and has
+// an encryption algorithm. The signingAlg selects the issuer key, and empty means RS256.
+func NewSecurityEventTokenClient(client any, signingAlg string) Client {
+	switch c := client.(type) {
+	case SecurityEventTokenClient:
+		if c.GetSecurityEventTokenEncryptedResponseAlg() == "" {
+			return nil
+		}
+
+		return &decoratedSecurityEventTokenClient{SecurityEventTokenClient: c, signingAlg: signingAlg}
+	default:
+		return nil
+	}
+}
+
 // Client represents a client which can be used to sign, verify, encrypt, and decrypt JWT's.
 type Client interface {
 	// GetSigningKeyID returns the 'kid' of the key registered for signing the JWT, if any.
@@ -531,6 +546,63 @@ func (r *decoratedIntrospectionClient) IsClientSigned() (is bool) {
 	return false
 }
 
+// SecurityEventTokenClient is a client that provides Security Event Token related metadata.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8417.html#section-5.1
+type SecurityEventTokenClient interface {
+	// GetSecurityEventTokenEncryptedResponseKeyID is equivalent to the 'security_event_token_encrypted_response_kid'
+	// client metadata value which is the specific key identifier used to satisfy JWE requirements for Security Event
+	// Tokens. If unspecified the other available parameters will be utilized to select an appropriate key.
+	GetSecurityEventTokenEncryptedResponseKeyID() (kid string)
+
+	// GetSecurityEventTokenEncryptedResponseAlg is equivalent to the 'security_event_token_encrypted_response_alg'
+	// client metadata value which determines the JWE [RFC7516] algorithm (alg value) as defined in JWA [RFC7518] for
+	// content key encryption of Security Event Tokens. The default, if omitted, is that no encryption is performed.
+	GetSecurityEventTokenEncryptedResponseAlg() (alg string)
+
+	// GetSecurityEventTokenEncryptedResponseEnc is equivalent to the 'security_event_token_encrypted_response_enc'
+	// client metadata value which determines the JWE [RFC7516] algorithm (enc value) as defined in JWA [RFC7518] for
+	// content encryption of Security Event Tokens. The default, if omitted, is A128CBC-HS256. Note: This parameter
+	// has no effect without setting security_event_token_encrypted_response_alg.
+	GetSecurityEventTokenEncryptedResponseEnc() (enc string)
+
+	BaseClient
+}
+
+type decoratedSecurityEventTokenClient struct {
+	SecurityEventTokenClient
+
+	signingAlg string
+}
+
+func (r *decoratedSecurityEventTokenClient) GetSigningKeyID() (kid string) {
+	return ""
+}
+
+func (r *decoratedSecurityEventTokenClient) GetSigningAlg() (alg string) {
+	if r.signingAlg == "" {
+		return string(jose.RS256)
+	}
+
+	return r.signingAlg
+}
+
+func (r *decoratedSecurityEventTokenClient) GetEncryptionKeyID() (kid string) {
+	return r.GetSecurityEventTokenEncryptedResponseKeyID()
+}
+
+func (r *decoratedSecurityEventTokenClient) GetEncryptionAlg() (alg string) {
+	return r.GetSecurityEventTokenEncryptedResponseAlg()
+}
+
+func (r *decoratedSecurityEventTokenClient) GetEncryptionEnc() (enc string) {
+	return r.GetSecurityEventTokenEncryptedResponseEnc()
+}
+
+func (r *decoratedSecurityEventTokenClient) IsClientSigned() (is bool) {
+	return false
+}
+
 func isClientSecretExpired(client BaseClient) bool {
 	var inner any = client
 
@@ -549,6 +621,8 @@ unwrap:
 			inner = c.JWTProfileAccessTokenClient
 		case *decoratedIntrospectionClient:
 			inner = c.IntrospectionClient
+		case *decoratedSecurityEventTokenClient:
+			inner = c.SecurityEventTokenClient
 		default:
 			break unwrap
 		}

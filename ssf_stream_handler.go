@@ -55,7 +55,8 @@ type SSFStreamResponder interface {
 
 // SSFStreamRequestBody is the decoded body of a stream configuration request. Create ignores the Transmitter-supplied
 // properties; update compares them to the stored stream. Unlike SSFDelivery, its delivery holds the
-// 'authorization_header'. A nil EventsRequested, Delivery or Description is absent.
+// 'authorization_header'. A nil EventsRequested, Delivery or Description is absent. EventsRequested holds only the
+// strings of the array, as a value the Transmitter does not understand is ignored.
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1
 type SSFStreamRequestBody struct {
@@ -71,6 +72,57 @@ type SSFStreamRequestBody struct {
 
 	MinVerificationInterval *int `json:"min_verification_interval"`
 	InactivityTimeout       *int `json:"inactivity_timeout"`
+}
+
+// UnmarshalJSON decodes the body, dropping the values of 'events_requested' that are not strings (SSF Section 8.1.1).
+func (b *SSFStreamRequestBody) UnmarshalJSON(data []byte) (err error) {
+	type body SSFStreamRequestBody
+
+	aux := struct {
+		*body
+
+		EventsRequested ssfEventTypes `json:"events_requested"`
+	}{body: (*body)(b)}
+
+	if err = json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	b.EventsRequested = aux.EventsRequested
+
+	return nil
+}
+
+type ssfEventTypes []string
+
+func (e *ssfEventTypes) UnmarshalJSON(data []byte) (err error) {
+	var values []json.RawMessage
+
+	if err = json.Unmarshal(data, &values); err != nil {
+		return err
+	}
+
+	if values == nil {
+		*e = nil
+
+		return nil
+	}
+
+	types := make(ssfEventTypes, 0, len(values))
+
+	for _, value := range values {
+		var eventType string
+
+		if len(value) == 0 || value[0] != '"' || json.Unmarshal(value, &eventType) != nil {
+			continue
+		}
+
+		types = append(types, eventType)
+	}
+
+	*e = types
+
+	return nil
 }
 
 // SSFStreamRequestDelivery is the delivery object of a request body.
@@ -128,6 +180,9 @@ func (r *SSFStreamResponse) GetBody() (body any) { return r.Body }
 // NewSSFStreamRequest authorizes the request and decodes its body. Only GET, POST, PUT, PATCH and DELETE are served; reads need
 // 'ssf.read' and writes 'ssf.manage'.
 //
+// A body is JSON whether or not the request has a Content-Type header, and a Content-Type that is present must be
+// 'application/json'. An empty body is a body with no properties, which creates a poll stream (SSF Section 8.1.1.1).
+//
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1
 func (f *Fosite) NewSSFStreamRequest(ctx context.Context, r *http.Request, session Session) (requester SSFStreamRequester, err error) {
 	switch r.Method {
@@ -158,14 +213,18 @@ func (f *Fosite) NewSSFStreamRequest(ctx context.Context, r *http.Request, sessi
 }
 
 func decodeSSFRequestBody[T any](f *Fosite, ctx context.Context, r *http.Request) (body *T, err error) {
-	if !hasJSONContentType(r) {
-		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The Content-Type header must be 'application/json'."))
+	if r.Header.Get(consts.HeaderContentType) != "" && !hasJSONContentType(r) {
+		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The Content-Type header must be 'application/json' when present."))
 	}
 
 	var data []byte
 
 	if data, err = readSSFRequestBody(f, ctx, r); err != nil {
 		return nil, err
+	}
+
+	if len(data) == 0 {
+		return new(T), nil
 	}
 
 	return parseSSFRequestBody[T](data)
@@ -264,16 +323,24 @@ func ssfStreamStorageError(err error) error {
 	return errorsx.WithStack(ErrorToRFC6749ErrorFallback(err, ErrServerError))
 }
 
+func ownedSSFStream(ctx context.Context, storage SSFStreamStorage, clientID, streamID string) (stream *SSFStream, err error) {
+	if stream, err = storage.GetSSFStream(ctx, clientID, streamID); err != nil {
+		return nil, err
+	}
+
+	if stream == nil || stream.ClientID != clientID {
+		return nil, ErrNotFound
+	}
+
+	return stream, nil
+}
+
 func (f *Fosite) readSSFStreams(ctx context.Context, config *SSFConfig, storage SSFStreamStorage, clientID, streamID string) (responder SSFStreamResponder, err error) {
 	if streamID != "" {
 		var stream *SSFStream
 
-		if stream, err = storage.GetSSFStream(ctx, clientID, streamID); err != nil {
+		if stream, err = ownedSSFStream(ctx, storage, clientID, streamID); err != nil {
 			return nil, ssfStreamStorageError(err)
-		}
-
-		if stream == nil || stream.ClientID != clientID {
-			return nil, ssfStreamStorageError(ErrNotFound)
 		}
 
 		return &SSFStreamResponse{StatusCode: http.StatusOK, Body: f.currentSSFStream(ctx, config, stream)}, nil
@@ -380,6 +447,9 @@ func ptrString(p *string) (s string) {
 // the 'endpoint_url' of a stream that stays poll is compared too. The stream ID must be in the body. The library
 // supplies no 'inactivity_timeout', so a present one never matches.
 //
+// 'events_supported' and 'events_delivered' are taken from the stream policy only by a PUT or by a PATCH that has
+// 'events_requested', and are otherwise not changed (SSF Section 8.1.1.3). 'aud' is never changed (SSF Section 8.1.1).
+//
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1.3
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1.4
 //
@@ -401,12 +471,8 @@ func (f *Fosite) updateSSFStream(ctx context.Context, config *SSFConfig, storage
 
 	var stored *SSFStream
 
-	if stored, err = storage.GetSSFStream(ctx, client.GetID(), streamID); err != nil {
+	if stored, err = ownedSSFStream(ctx, storage, client.GetID(), streamID); err != nil {
 		return nil, ssfStreamStorageError(err)
-	}
-
-	if stored == nil || stored.ClientID != client.GetID() {
-		return nil, ssfStreamStorageError(ErrNotFound)
 	}
 
 	stored = f.currentSSFStream(ctx, config, stored)
@@ -428,19 +494,15 @@ func (f *Fosite) updateSSFStream(ctx context.Context, config *SSFConfig, storage
 
 	updated := *stored
 
-	updated.Audience = slices.Clone(stored.Audience)
-	updated.EventsSupported = slices.Clone(policy.EventsSupported)
-	updated.EventsRequested = slices.Clone(stored.EventsRequested)
-
 	if replace || body.EventsRequested != nil {
 		updated.EventsRequested = slices.Clone(body.EventsRequested)
+		updated.EventsSupported = slices.Clone(policy.EventsSupported)
+		updated.EventsDelivered = ssfIntersect(policy.EventsSupported, updated.EventsRequested)
 	}
 
 	if replace || body.Description != nil {
 		updated.Description = ptrString(body.Description)
 	}
-
-	updated.EventsDelivered = ssfIntersect(policy.EventsSupported, updated.EventsRequested)
 
 	if body.Delivery != nil {
 		// The poll endpoint URL is Transmitter-supplied (SSF Section 8.1.1.3).
@@ -474,6 +536,68 @@ func (f *Fosite) updateSSFStream(ctx context.Context, config *SSFConfig, storage
 	}
 
 	return &SSFStreamResponse{StatusCode: http.StatusOK, Body: &updated}, nil
+}
+
+// ReconcileSSFStream applies the current stream policy of the client to its stored stream: 'events_supported' becomes
+// the EventsSupported of the policy and 'events_delivered' its intersection with the stored 'events_requested'. The
+// stream is stored only when either changes, and the stream as it now stands is returned.
+//
+// A stream configuration update leaves both properties alone unless it changes 'events_requested' or replaces the
+// stream (SSF Section 8.1.1.3), so the application calls this after changing the policy of a client, or its streams
+// keep the events of the policy they were created under. The Receiver is not notified and learns of the change by
+// reading the stream.
+//
+// 'aud' cannot be updated (SSF Section 8.1.1), so a changed policy audience needs a new stream. The delivery, the
+// status and the Receiver-supplied properties are not changed; a delivery method the policy no longer permits is
+// refused at the next update.
+//
+// An unknown stream and another client's stream give ErrNotFound, and a policy error gives ErrAccessDenied.
+//
+// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1
+// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1.3
+func (f *Fosite) ReconcileSSFStream(ctx context.Context, client Client, streamID string) (stream *SSFStream, err error) {
+	var (
+		config  *SSFConfig
+		storage SSFStreamStorage
+		ok      bool
+	)
+
+	if config = f.getSSFConfig(ctx); config == nil {
+		return nil, errorsx.WithStack(ErrServerError.WithDebug("The Shared Signals Framework transmitter is not configured."))
+	}
+
+	if storage, ok = f.Store.(SSFStreamStorage); !ok {
+		return nil, errorsx.WithStack(ErrServerError.WithDebug("The storage does not implement SSFStreamStorage."))
+	}
+
+	var stored *SSFStream
+
+	if stored, err = ownedSSFStream(ctx, storage, client.GetID(), streamID); err != nil {
+		return nil, ssfStreamStorageError(err)
+	}
+
+	var policy *SSFClientPolicy
+
+	if policy, err = f.resolveSSFClientPolicy(ctx, config, client); err != nil {
+		return nil, err
+	}
+
+	stream = f.currentSSFStream(ctx, config, stored)
+
+	supported := slices.Clone(policy.EventsSupported)
+	delivered := ssfIntersect(policy.EventsSupported, stream.EventsRequested)
+
+	if slices.Equal(stream.EventsSupported, supported) && slices.Equal(stream.EventsDelivered, delivered) {
+		return stream, nil
+	}
+
+	stream.EventsSupported, stream.EventsDelivered = supported, delivered
+
+	if err = storage.UpdateSSFStream(ctx, stream); err != nil {
+		return nil, ssfStreamStorageError(err)
+	}
+
+	return stream, nil
 }
 
 // checkSSFTransmitterProperties rejects a present Transmitter-supplied property that differs from the stored stream.
@@ -541,13 +665,17 @@ func ssfSameSet(a, b []string) bool {
 }
 
 // resolveSSFClientPolicy returns the policy of the client. A missing policy is a misconfiguration, and a policy error
-// denies the request.
+// denies the request unless it is ErrTemporarilyUnavailable.
 func (f *Fosite) resolveSSFClientPolicy(ctx context.Context, config *SSFConfig, client Client) (policy *SSFClientPolicy, err error) {
 	if config.Policy == nil {
 		return nil, errorsx.WithStack(ErrServerError.WithDebug("The Shared Signals Framework transmitter is not configured with a stream policy."))
 	}
 
 	if policy, err = config.Policy.SSFStreamPolicy(ctx, client); err != nil {
+		if errors.Is(err, ErrTemporarilyUnavailable) {
+			return nil, errorsx.WithStack(ErrTemporarilyUnavailable.WithHint("The stream policy of the client is temporarily unavailable.").WithWrap(err).WithDebugError(err))
+		}
+
 		return nil, errorsx.WithStack(ErrAccessDenied.WithHint("The client is not permitted to use the stream.").WithWrap(err).WithDebugError(err))
 	}
 
@@ -559,11 +687,13 @@ func (f *Fosite) resolveSSFClientPolicy(ctx context.Context, config *SSFConfig, 
 }
 
 // newSSFDelivery builds the delivery of a stream from the Receiver-supplied delivery. An absent delivery is poll. The
-// poll endpoint URL is Transmitter-supplied and the Receiver value is not used, nor is its authorization header. A push
-// endpoint URL must be https and pass the SSFEndpointValidator, which must be configured.
+// poll endpoint URL is Transmitter-supplied and the Receiver value is not used, nor is its authorization header. Both
+// endpoint URLs must be https (RFC 8935 Section 5.3, RFC 8936 Section 4.3), and a push endpoint URL must pass the
+// SSFEndpointValidator, which must be configured.
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1.1
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-6.1.2
+// See: https://www.rfc-editor.org/rfc/rfc8936.html#section-4.3
 func (f *Fosite) newSSFDelivery(ctx context.Context, config *SSFConfig, client Client, policy *SSFClientPolicy, streamID string, in *SSFStreamRequestDelivery) (delivery SSFDelivery, err error) {
 	method := SSFDeliveryMethodPoll
 
@@ -594,6 +724,10 @@ func (f *Fosite) newSSFDelivery(ctx context.Context, config *SSFConfig, client C
 			return SSFDelivery{}, errorsx.WithStack(ErrServerError.WithDebug("The poll endpoint URL function returned an empty URL."))
 		}
 
+		if !isSSFEndpointURL(endpoint) {
+			return SSFDelivery{}, errorsx.WithStack(ErrServerError.WithDebug("The poll endpoint URL function returned a URL that is not an absolute https URL."))
+		}
+
 		return SSFDelivery{Method: SSFDeliveryMethodPoll, EndpointURL: endpoint}, nil
 	}
 
@@ -614,9 +748,13 @@ func validateSSFPushEndpoint(ctx context.Context, config *SSFConfig, client Clie
 		return errorsx.WithStack(ErrServerError.WithDebug("The Shared Signals Framework transmitter is not configured with an endpoint validator, so push streams cannot be used."))
 	}
 
+	if !isSSFEndpointURL(raw) {
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("The delivery 'endpoint_url' must be an absolute https URL."))
+	}
+
 	var endpoint *url.URL
 
-	if endpoint, err = url.Parse(raw); err != nil || endpoint.Scheme != consts.SchemeHTTPS || endpoint.Hostname() == "" || endpoint.User != nil || strings.Contains(raw, "#") {
+	if endpoint, err = url.Parse(raw); err != nil {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The delivery 'endpoint_url' must be an absolute https URL."))
 	}
 
@@ -625,6 +763,12 @@ func validateSSFPushEndpoint(ctx context.Context, config *SSFConfig, client Clie
 	}
 
 	return nil
+}
+
+func isSSFEndpointURL(raw string) (valid bool) {
+	endpoint, err := url.Parse(raw)
+
+	return err == nil && endpoint.Scheme == consts.SchemeHTTPS && endpoint.Hostname() != "" && endpoint.User == nil && !strings.Contains(raw, "#")
 }
 
 func (f *Fosite) validateSSFStoredDelivery(ctx context.Context, config *SSFConfig, client Client, delivery SSFDelivery) (err error) {

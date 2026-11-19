@@ -6,6 +6,8 @@ package oauth2
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,15 +17,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-retryablehttp"
+	"golang.org/x/net/http/httpguts"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
 const (
 	ssfContentTypeSecurityEventToken = "application/secevent+jwt"
-	ssfMediaTypeJSON                 = "application/json"
 
 	ssfPushMaxRetryAfter = 5 * time.Minute
 )
@@ -32,15 +34,23 @@ const (
 type SSFPushOutcome int
 
 const (
-	// SSFPushDelivered means the receiver accepted the Security Event Token with a 202.
-	SSFPushDelivered SSFPushOutcome = iota
+	// SSFPushUnknown is the zero value, which no push attempt reports. A result holding it says nothing about the
+	// delivery, so the Security Event Token must not be treated as delivered.
+	SSFPushUnknown SSFPushOutcome = iota
 
-	// SSFPushRejected means the receiver will not accept the token as sent, and repeating the request unchanged
-	// is not expected to help.
+	// SSFPushDelivered means the receiver accepted the Security Event Token with a 202.
+	SSFPushDelivered
+
+	// SSFPushRejected means the token was not delivered and repeating the request unchanged is not expected to help,
+	// so it should not be retransmitted (RFC 8935 Section 2): a 400, a 501, a 505, a 511, any other status that is not
+	// retryable, a delivery that is refused without a request, a receiver certificate that fails verification, an
+	// error matching ErrSpecialUseAddress, which stays matchable in SSFPushResult.Err, or a disabled stream, which
+	// gives an error matching ErrSSFStreamDisabled.
 	SSFPushRejected
 
-	// SSFPushRetryable means the attempt may succeed later: a 429, a 5xx, a network error, a timeout, or an
-	// SSFEndpointValidator error matching ErrTemporarilyUnavailable.
+	// SSFPushRetryable means the failure is potentially recoverable and the attempt may succeed later: a 408, a 425, a
+	// 429, any other 5xx, a network error, a timeout, an SSFEndpointValidator error matching ErrTemporarilyUnavailable,
+	// or a paused stream, which gives an error matching ErrSSFStreamPaused.
 	SSFPushRetryable
 )
 
@@ -90,6 +100,7 @@ func (d SSFDelivery) Format(f fmt.State, verb rune) {
 
 // SSFPushResult is the outcome of a single push attempt. It never contains the authorization header.
 type SSFPushResult struct {
+	// Outcome is the classification of the attempt. The zero value is SSFPushUnknown.
 	Outcome SSFPushOutcome
 
 	// Status is the HTTP status code, zero when no response was received.
@@ -99,7 +110,7 @@ type SSFPushResult struct {
 	// text.
 	ErrorCode, Description string
 
-	// RetryAfter is the receiver's Retry-After, capped at five minutes.
+	// RetryAfter is the receiver's Retry-After on an SSFPushRetryable response, capped at five minutes.
 	RetryAfter time.Duration
 
 	Err error
@@ -108,17 +119,22 @@ type SSFPushResult struct {
 // PushSecurityEventToken makes one RFC 8935 push attempt on behalf of the stream's client and reports the outcome. It
 // never retries and never follows redirects; queuing and retrying belong to the caller. An endpoint the
 // SSFEndpointValidator does not permit for the client is refused without a request, as is any endpoint when no validator
-// is configured.
+// is configured. The token is sent as it is given and is otherwise opaque, but one that is not a compact serialized JWS
+// or JWE, such as an empty string, is refused without a request (RFC 8935 Section 2.1).
+//
+// A failure is SSFPushRetryable only when it is potentially recoverable, as any other SET should not be retransmitted
+// (RFC 8935 Section 2). See SSFPushRejected and SSFPushRetryable for the classification.
+//
+// The status of the stream is not known to this method, so the caller must not push on a stream that is paused or
+// disabled (SSF Section 8.1.2.1). PushSecurityEventTokenToStream makes that check.
 //
 // See: https://www.rfc-editor.org/rfc/rfc8935.html
+// See: https://www.rfc-editor.org/rfc/rfc8935.html#section-2
+// See: https://www.rfc-editor.org/rfc/rfc8935.html#section-2.1
+// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2.1
 func (f *Fosite) PushSecurityEventToken(ctx context.Context, client Client, delivery SSFDelivery, token string) (result SSFPushResult) {
-	// The URI of RFC 8935 is the only push method; the poll method is never pushed to.
-	if delivery.Method != "" && delivery.Method != SSFDeliveryMethodPush {
-		return ssfPushRefused("The delivery method is not the RFC 8935 push method.")
-	}
-
-	if client == nil {
-		return ssfPushRefused("The delivery has no client.")
+	if hint := ssfPushInputFault(client, delivery, token); hint != "" {
+		return ssfPushRefused(hint)
 	}
 
 	var (
@@ -139,7 +155,7 @@ func (f *Fosite) PushSecurityEventToken(ctx context.Context, client Client, deli
 		return SSFPushResult{Outcome: SSFPushRejected, Err: err}
 	}
 
-	var httpClient *retryablehttp.Client
+	var httpClient *http.Client
 
 	if httpClient, err = f.ssfPushHTTPClient(ctx, config); err != nil {
 		return SSFPushResult{Outcome: SSFPushRejected, Err: errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugError(err))}
@@ -148,7 +164,7 @@ func (f *Fosite) PushSecurityEventToken(ctx context.Context, client Client, deli
 	ctx, cancel := context.WithTimeout(ctx, FetchTimeout)
 	defer cancel()
 
-	var request *retryablehttp.Request
+	var request *http.Request
 
 	if request, err = newSSFPushRequest(ctx, delivery, token); err != nil {
 		return ssfPushRefused("Failed to create the push request.")
@@ -163,7 +179,7 @@ func (f *Fosite) PushSecurityEventToken(ctx context.Context, client Client, deli
 	}
 
 	if err != nil {
-		result.Outcome = SSFPushRetryable
+		result.Outcome = ssfPushTransportOutcome(err)
 		result.Err = errorsx.WithStack(ErrServerError.WithHint("Failed to perform the push request.").WithWrap(err).WithDebugError(err))
 
 		return result
@@ -179,12 +195,12 @@ func (f *Fosite) PushSecurityEventToken(ctx context.Context, client Client, deli
 		result.Outcome = SSFPushRejected
 		result.ErrorCode, result.Description = ssfPushParseError(body)
 		result.Err = errorsx.WithStack(ErrServerError.WithHintf("The receiver rejected the Security Event Token with status code '%d'.", response.StatusCode))
-	case response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= http.StatusInternalServerError:
+	case ssfPushStatusRetryable(response.StatusCode):
 		result.Outcome = SSFPushRetryable
 		result.RetryAfter = ssfPushRetryAfter(response.Header.Get("Retry-After"), time.Now())
 		result.Err = errorsx.WithStack(ErrServerError.WithHintf("The receiver responded with status code '%d'.", response.StatusCode))
 	default:
-		// RFC 8935 sanctions only 202 (§2.2) and 400 (§2.3).
+		// Any other status is a general HTTP error (RFC 8935 Section 2.3) that waiting does not resolve.
 		result.Outcome = SSFPushRejected
 		result.Err = errorsx.WithStack(ErrServerError.WithHintf("The receiver responded with status code '%d', expected '202'.", response.StatusCode))
 	}
@@ -192,13 +208,126 @@ func (f *Fosite) PushSecurityEventToken(ctx context.Context, client Client, deli
 	return result
 }
 
-func newSSFPushRequest(ctx context.Context, delivery SSFDelivery, token string) (request *retryablehttp.Request, err error) {
-	if request, err = retryablehttp.NewRequestWithContext(ctx, http.MethodPost, delivery.EndpointURL, strings.NewReader(token)); err != nil {
+// PushSecurityEventTokenToStream makes one RFC 8935 push attempt on a stream of the client, as PushSecurityEventToken
+// does with the stored delivery of the stream, after reading the stream again and checking its status. A token queued
+// while the stream was enabled is therefore not sent once the stream is paused or disabled (SSF Section 8.1.2.1).
+//
+// The eventType is the event type URI of the token, which is not read from the token as it may be encrypted. Nothing
+// is sent, and the result has no Status, when:
+//
+//   - The stream is paused: SSFPushRetryable with an Err matching ErrSSFStreamPaused. The application should hold the
+//     token and send it once the stream is enabled. Held events that affect the same subject must be sent in the order
+//     they were generated, or only the last of them when it cancels or outdates the earlier ones.
+//   - The stream is disabled: SSFPushRejected with an Err matching ErrSSFStreamDisabled. The token is not held.
+//   - The stream is unknown or belongs to another client: SSFPushRejected with an Err matching ErrNotFound.
+//   - The stream could not be read: SSFPushRetryable.
+//
+// A verification event is held or refused like any other event. A stream-updated event, which has the event type
+// jwt.SecurityEventTypeSSFStreamUpdated, is exempt from the status check, as it is the event that tells the Receiver
+// of a stream that is paused or disabled (SSF Section 8.1.5). A poll stream is refused whatever its status, as its
+// tokens are returned by the poll endpoint.
+//
+// The status is the one stored when the stream is read, and the library does not stop it changing before the request
+// is sent. The application must coordinate its queue with its status changes so that it sends nothing after one.
+//
+// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2.1
+// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.5
+func (f *Fosite) PushSecurityEventTokenToStream(ctx context.Context, client Client, streamID, eventType, token string) (result SSFPushResult) {
+	if client == nil {
+		return ssfPushRefused("The delivery has no client.")
+	}
+
+	storage, ok := f.Store.(SSFStreamStorage)
+	if !ok {
+		return ssfPushRefused("The storage does not implement SSFStreamStorage.")
+	}
+
+	stream, err := ownedSSFStream(ctx, storage, client.GetID(), streamID)
+
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return SSFPushResult{Outcome: SSFPushRejected, Err: errorsx.WithStack(ErrServerError.WithHint("The stream does not exist.").WithWrap(ErrNotFound))}
+	case err != nil:
+		return SSFPushResult{Outcome: SSFPushRetryable, Err: errorsx.WithStack(ErrServerError.WithHint("Failed to read the stream.").WithWrap(err).WithDebugError(err))}
+	}
+
+	// SSF Section 8.1.2.1: events are transmitted by the delivery method of the stream, which for a poll stream is the
+	// poll endpoint whatever its status.
+	if stream.Delivery.Method != "" && stream.Delivery.Method != SSFDeliveryMethodPush {
+		return ssfPushRefused("The delivery method is not the RFC 8935 push method.")
+	}
+
+	// SSF Section 8.1.5: the stream updated event reports a status under which nothing else is transmitted.
+	if eventType != jwt.SecurityEventTypeSSFStreamUpdated {
+		// SSF Section 8.1.2.1: events are transmitted on an enabled stream only.
+		switch stream.Status {
+		case SSFStreamStatusEnabled:
+			break
+		case SSFStreamStatusPaused:
+			return SSFPushResult{Outcome: SSFPushRetryable, Err: errorsx.WithStack(ErrServerError.WithHint("The stream is paused.").WithWrap(ErrSSFStreamPaused))}
+		case SSFStreamStatusDisabled:
+			return SSFPushResult{Outcome: SSFPushRejected, Err: errorsx.WithStack(ErrServerError.WithHint("The stream is disabled.").WithWrap(ErrSSFStreamDisabled))}
+		default:
+			return ssfPushRefused("The stream status is not known.")
+		}
+	}
+
+	return f.PushSecurityEventToken(ctx, client, stream.Delivery, token)
+}
+
+func ssfPushInputFault(client Client, delivery SSFDelivery, token string) (hint string) {
+	switch {
+	case delivery.Method != "" && delivery.Method != SSFDeliveryMethodPush:
+		// The URI of RFC 8935 is the only push method; the poll method is never pushed to.
+		return "The delivery method is not the RFC 8935 push method."
+	case client == nil:
+		return "The delivery has no client."
+	case !isSecurityEventTokenCompact(strings.Split(token, ".")):
+		// RFC 8935 Section 2.1: the request body is the SET itself, as a JWT.
+		return "The Security Event Token is not a compact serialized JWS or JWE."
+	case !httpguts.ValidHeaderFieldValue(delivery.AuthorizationHeader):
+		return "The delivery authorization header is not a valid header value."
+	default:
+		return ""
+	}
+}
+
+func ssfPushStatusRetryable(status int) (retryable bool) {
+	switch status {
+	case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests:
+		return true
+	case http.StatusNotImplemented, http.StatusHTTPVersionNotSupported, http.StatusNetworkAuthenticationRequired:
+		return false
+	default:
+		return status >= http.StatusInternalServerError
+	}
+}
+
+func ssfPushTransportOutcome(err error) (outcome SSFPushOutcome) {
+	var (
+		verification *tls.CertificateVerificationError
+		authority    x509.UnknownAuthorityError
+		hostname     x509.HostnameError
+		invalid      x509.CertificateInvalidError
+	)
+
+	switch {
+	case errors.Is(err, ErrSpecialUseAddress):
+		return SSFPushRejected
+	case errors.As(err, &verification), errors.As(err, &authority), errors.As(err, &hostname), errors.As(err, &invalid):
+		return SSFPushRejected
+	default:
+		return SSFPushRetryable
+	}
+}
+
+func newSSFPushRequest(ctx context.Context, delivery SSFDelivery, token string) (request *http.Request, err error) {
+	if request, err = http.NewRequestWithContext(ctx, http.MethodPost, delivery.EndpointURL, strings.NewReader(token)); err != nil {
 		return nil, err
 	}
 
 	request.Header.Set(consts.HeaderContentType, ssfContentTypeSecurityEventToken)
-	request.Header.Set("Accept", ssfMediaTypeJSON)
+	request.Header.Set(consts.HeaderAccept, consts.MediaTypeApplicationJSON)
 
 	if delivery.AuthorizationHeader != "" {
 		request.Header.Set(consts.HeaderAuthorization, delivery.AuthorizationHeader)
@@ -207,7 +336,7 @@ func newSSFPushRequest(ctx context.Context, delivery SSFDelivery, token string) 
 	return request, nil
 }
 
-func (f *Fosite) ssfPushHTTPClient(ctx context.Context, config *SSFConfig) (client *retryablehttp.Client, err error) {
+func (f *Fosite) ssfPushHTTPClient(ctx context.Context, config *SSFConfig) (client *http.Client, err error) {
 	base := config.HTTPClient
 
 	if base == nil {
@@ -218,13 +347,18 @@ func (f *Fosite) ssfPushHTTPClient(ctx context.Context, config *SSFConfig) (clie
 		return nil, err
 	}
 
-	client = backChannelLogoutHTTPClient(base)
+	// The caller owns retries and a log hook would see the secret request, so only the inner client is used. It shares
+	// its transport with the pushes to every other receiver, which a failed push must not close the idle connections of.
+	client = &http.Client{}
 
-	// The caller owns retries, and a log hook would see the secret request.
-	client.RetryMax = 0
-	client.RequestLogHook = nil
-	client.ResponseLogHook = nil
-	client.CheckRetry = func(context.Context, *http.Response, error) (bool, error) { return false, nil }
+	if base != nil && base.HTTPClient != nil {
+		copied := *base.HTTPClient
+		client = &copied
+	}
+
+	client.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
 
 	return client, nil
 }
@@ -236,17 +370,19 @@ func ssfPushRefused(hint string) (result SSFPushResult) {
 // ssfPushParseError reads the RFC 8935 §2.3 error body, returning empty values when it is not that JSON.
 func ssfPushParseError(body []byte) (code, description string) {
 	var parsed struct {
-		Err         string `json:"err"`
-		Description string `json:"description"`
+		Err         json.RawMessage `json:"err"`
+		Description json.RawMessage `json:"description"`
 	}
 
-	var err error
-
-	if err = json.Unmarshal(body, &parsed); err != nil {
+	if err := json.Unmarshal(body, &parsed); err != nil {
 		return "", ""
 	}
 
-	return parsed.Err, parsed.Description
+	// RFC 8935 Section 2.3: each member is read on its own, so one of the wrong type does not discard the other.
+	_ = json.Unmarshal(parsed.Err, &code)
+	_ = json.Unmarshal(parsed.Description, &description)
+
+	return code, description
 }
 
 // ssfPushRetryAfter parses a Retry-After delay in seconds or an HTTP date, bounded to five minutes.
@@ -257,23 +393,20 @@ func ssfPushRetryAfter(value string, now time.Time) (d time.Duration) {
 		return 0
 	}
 
-	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil {
-		switch {
-		case seconds <= 0:
-			return 0
-		case seconds > int64(ssfPushMaxRetryAfter/time.Second):
+	// RFC 9110 Section 10.2.3: delay-seconds is 1*DIGIT, so it has no sign.
+	if !strings.ContainsFunc(value, func(r rune) bool { return r < '0' || r > '9' }) {
+		seconds, err := strconv.ParseUint(value, 10, 64)
+
+		// A value out of range is still bounded rather than dropped.
+		if err != nil || seconds > uint64(ssfPushMaxRetryAfter/time.Second) {
 			return ssfPushMaxRetryAfter
-		default:
-			return time.Duration(seconds) * time.Second
 		}
+
+		return time.Duration(seconds) * time.Second
 	}
 
-	var (
-		at  time.Time
-		err error
-	)
-
-	if at, err = http.ParseTime(value); err != nil {
+	at, err := http.ParseTime(value)
+	if err != nil {
 		return 0
 	}
 

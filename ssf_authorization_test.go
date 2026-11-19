@@ -356,6 +356,8 @@ func TestAuthorizeSSFRequestHeaderOnly(t *testing.T) {
 		{name: "ShouldRejectQueryToken", method: http.MethodGet, target: target + "?access_token=tok-a", code: http.StatusUnauthorized},
 		{name: "ShouldRejectFormToken", method: http.MethodPost, target: target, contentType: form, body: "access_token=tok-a", code: http.StatusUnauthorized},
 		{name: "ShouldRejectQueryTokenWithBasicHeader", method: http.MethodGet, target: target + "?access_token=tok-a", header: "Basic abc", code: http.StatusUnauthorized},
+		{name: "ShouldRejectDPoPSchemeWithDPoPDisabled", method: http.MethodGet, target: target, header: "DPoP tok-a", code: http.StatusUnauthorized},
+		{name: "ShouldRejectDPoPSchemeAndQueryTokenWithDPoPDisabled", method: http.MethodGet, target: target + "?access_token=tok-a", header: "dpop tok-a", code: http.StatusUnauthorized},
 		{name: "ShouldAcceptBearerHeaderWithSeveralSpaces", method: http.MethodGet, target: target, header: "bearer   tok-a", code: http.StatusOK, listed: "a"},
 	}
 
@@ -384,6 +386,7 @@ func TestAuthorizeSSFRequestHeaderOnly(t *testing.T) {
 				assert.Equal(t, tc.code, rw.Code)
 				assert.Contains(t, rw.Body.String(), "invalid_token")
 				assert.NotEmpty(t, rw.Header().Get(consts.HeaderWWWAuthenticate))
+				assert.NotContains(t, rw.Header().Get(consts.HeaderWWWAuthenticate), "DPoP")
 				assert.Nil(t, r.Form, "the request must not be parsed for a token")
 
 				return
@@ -405,6 +408,7 @@ func TestAuthorizeSSFRequestHeaderOnly(t *testing.T) {
 	t.Run("ShouldRejectHeaderAndParameterToken", func(t *testing.T) {
 		for _, scheme := range []string{"Bearer", "DPoP"} {
 			h := newSSFHandlerHarness(t, nil)
+			h.provider.Config.(*Config).DPoPEnabled = scheme == "DPoP"
 
 			r := httptest.NewRequest(http.MethodGet, target+"?access_token=tok-b", nil)
 			r.Header.Set(consts.HeaderAuthorization, scheme+" tok-a")

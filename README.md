@@ -129,14 +129,15 @@ finalized, so support for one may change in any release.
 
 ### Shared Signals
 
-| Specification                                                                                               | Status | Draft      | Notes                                                                                                                                                                                                                         |
-| ----------------------------------------------------------------------------------------------------------- | :----: | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html)     |   🟡   |            | Security Event Token signing, transmitter metadata, stream management, push and poll; subject management not implemented                                                                                                      |
-| [OpenID Continuous Access Evaluation Profile 1.0](https://openid.net/specs/openid-caep-1_0.html)            |   ✅   |            | Every event and subject identifier type; when to emit an event is left to the application                                                                                                                                     |
-| [CAEP Interoperability Profile 1.0](https://openid.net/specs/openid-caep-interoperability-profile-1_0.html) |   ✅   | `draft-01` | Bearer authorization with `ssf.read` and `ssf.manage`, stream management and verification, push and poll delivery; the `authorization_schemes` and `reason_admin` values and an RS256 signing key are left to the application |
-| [RFC 8417: Security Event Token (SET)](https://datatracker.ietf.org/doc/html/rfc8417)                       |   ✅   |            | Claims and signing as profiled by SSF, so `sub`, `exp`, and multiple events are not supported and `toe` is not emitted; delivery is RFC 8935 push or RFC 8936 poll                                                            |
-| [RFC 8935: Push-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8935)         |   ✅   |            | Single push attempt with a typed outcome; queuing and retries are left to the application                                                                                                                                     |
-| [RFC 8936: Poll-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8936)         |   ✅   |            | Request parsing and response writing; the SET queue, acknowledgements and long polling are left to the application                                                                                                            |
+| Specification                                                                                               | Status | Draft      | Notes                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------- | :----: | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html)     |   🟡   |            | The Transmitter role: Security Event Token signing, transmitter metadata, stream configuration, status and verification, and push and poll delivery; the subject endpoints, `inactivity_timeout`, asynchronous stream creation and the Receiver role are not implemented, and the event queue is left to the application                                     |
+| [OpenID Continuous Access Evaluation Profile 1.0](https://openid.net/specs/openid-caep-1_0.html)            |   ✅   |            | Every event and subject identifier type, validated when sent as a raw event as well; when to emit an event is left to the application                                                                                                                                                                                                                        |
+| [OpenID RISC Profile 1.0](https://openid.net/specs/openid-risc-1_0.html)                                    |   ✅   |            | Every event type, validated when sent as a raw event as well; the identifier events require an `email` or `phone_number` subject and the deprecated `sessions-revoked` event is refused; when to emit an event and the opt-out state are left to the application                                                                                             |
+| [CAEP Interoperability Profile 1.0](https://openid.net/specs/openid-caep-interoperability-profile-1_0.html) |   🟡   | `draft-01` | The Transmitter role, with bearer authorization through `ssf.read` and `ssf.manage`; RS256 signing with an RSA key of at least 2048 bits and the required transmitter metadata are checked only when `SSFConfig.EnforceCAEPInteroperabilityProfile` is enabled, and TLS, the access token lifetime and the `reason_admin` values are left to the application |
+| [RFC 8417: Security Event Token (SET)](https://datatracker.ietf.org/doc/html/rfc8417)                       |   ✅   |            | Claims and signing as profiled by SSF, so `sub`, `exp`, and multiple events are not supported and `toe` is not emitted; the default strategy signs, and nests the token in a JWE per client through `security_event_token_encrypted_response_*`; delivery is RFC 8935 push or RFC 8936 poll                                                                  |
+| [RFC 8935: Push-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8935)         |   ✅   |            | Single push attempt with a typed outcome, which `PushSecurityEventTokenToStream` withholds on a stream that is paused or disabled; queuing and retries are left to the application                                                                                                                                                                           |
+| [RFC 8936: Poll-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8936)         |   ✅   |            | Request parsing and response writing; the SET queue, acknowledgements, the `maxEvents` limit and long polling are left to the application                                                                                                                                                                                                                    |
 
 ### Model Context Protocol
 
@@ -167,21 +168,20 @@ Drafts adopted by the IETF OAuth Working Group or the OpenID Foundation which ar
 
 ### Not Yet Supported: Published
 
-| Specification                                                                                                                                      | Status | Draft | Notes                                     |
-| -------------------------------------------------------------------------------------------------------------------------------------------------- | :----: | ----- | ----------------------------------------- |
-| [RFC 9901: Selective Disclosure for JWTs (SD-JWT)](https://datatracker.ietf.org/doc/html/rfc9901)                                                  |   ❌   |       |                                           |
-| [RFC 10027: Best Current Practice for Security of Cross-Device Flows](https://datatracker.ietf.org/doc/html/rfc10027)                              |   ❌   |       |                                           |
-| [OpenID RISC Profile 1.0](https://openid.net/specs/openid-risc-1_0.html)                                                                           |   ❌   |       | Events can be sent as raw Security Events |
-| [OpenID Connect Front-Channel Logout 1.0](https://openid.net/specs/openid-connect-frontchannel-1_0.html)                                           |   ❌   |       |                                           |
-| [OpenID Connect Session Management 1.0](https://openid.net/specs/openid-connect-session-1_0.html)                                                  |   ❌   |       |                                           |
-| [OpenID Connect Relying Party Metadata Choices 1.0](https://openid.net/specs/openid-connect-rp-metadata-choices-1_0-final.html)                    |   ❌   |       |                                           |
-| [OpenID Connect for Identity Assurance 1.0](https://openid.net/specs/openid-connect-4-identity-assurance-1_0-final.html)                           |   ❌   |       |                                           |
-| [OpenID Federation 1.0](https://openid.net/specs/openid-federation-1_0.html)                                                                       |   ❌   |       |                                           |
-| [OpenID Federation 1.1](https://openid.net/specs/openid-federation-1_1.html)                                                                       |   ❌   |       |                                           |
-| [OpenID Federation for OpenID Connect 1.1](https://openid.net/specs/openid-federation-connect-1_1.html)                                            |   ❌   |       |                                           |
-| [OpenID for Verifiable Credential Issuance 1.0](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html)                         |   ❌   |       |                                           |
-| [OpenID for Verifiable Presentations 1.0](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html)                                     |   ❌   |       |                                           |
-| [OpenID4VC High Assurance Interoperability Profile 1.0](https://openid.net/specs/openid4vc-high-assurance-interoperability-profile-1_0-final.html) |   ❌   |       |                                           |
+| Specification                                                                                                                                      | Status | Draft | Notes |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | :----: | ----- | ----- |
+| [RFC 9901: Selective Disclosure for JWTs (SD-JWT)](https://datatracker.ietf.org/doc/html/rfc9901)                                                  |   ❌   |       |       |
+| [RFC 10027: Best Current Practice for Security of Cross-Device Flows](https://datatracker.ietf.org/doc/html/rfc10027)                              |   ❌   |       |       |
+| [OpenID Connect Front-Channel Logout 1.0](https://openid.net/specs/openid-connect-frontchannel-1_0.html)                                           |   ❌   |       |       |
+| [OpenID Connect Session Management 1.0](https://openid.net/specs/openid-connect-session-1_0.html)                                                  |   ❌   |       |       |
+| [OpenID Connect Relying Party Metadata Choices 1.0](https://openid.net/specs/openid-connect-rp-metadata-choices-1_0-final.html)                    |   ❌   |       |       |
+| [OpenID Connect for Identity Assurance 1.0](https://openid.net/specs/openid-connect-4-identity-assurance-1_0-final.html)                           |   ❌   |       |       |
+| [OpenID Federation 1.0](https://openid.net/specs/openid-federation-1_0.html)                                                                       |   ❌   |       |       |
+| [OpenID Federation 1.1](https://openid.net/specs/openid-federation-1_1.html)                                                                       |   ❌   |       |       |
+| [OpenID Federation for OpenID Connect 1.1](https://openid.net/specs/openid-federation-connect-1_1.html)                                            |   ❌   |       |       |
+| [OpenID for Verifiable Credential Issuance 1.0](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html)                         |   ❌   |       |       |
+| [OpenID for Verifiable Presentations 1.0](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html)                                     |   ❌   |       |       |
+| [OpenID4VC High Assurance Interoperability Profile 1.0](https://openid.net/specs/openid4vc-high-assurance-interoperability-profile-1_0-final.html) |   ❌   |       |       |
 
 Planned work and notable differences from ORY Fosite are tracked in [TODO.md](TODO.md).
 
@@ -423,6 +423,51 @@ omit `redirect_uri`, access tokens in the URI query ignored, and a `RefreshToken
 `compose.ApplyOAuth21Profile` caps at `RefreshTokenLifespan`, so a rotated refresh token never outlives the first. It
 does not set `Issuer`, and does not check the clients, such as their redirect URI comparison strategy or their own
 lifespans, or a custom `RedirectSecureChecker`.
+
+### Shared Signals Transmitter
+
+The library signs Security Event Tokens, serves the stream configuration, status, verification and poll requests of an
+[OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html) Transmitter, and
+makes a single push attempt. It has no queue, no routes and no knowledge of when an event happens, so the following are
+the responsibility of the application. The documentation of `SSFConfig` lists them in full and names the method each one
+belongs to.
+
+- **Queue and deliver the tokens**: retry a push that `PushSecurityEventTokenToStream` reports as retryable, wait on a
+  poll request that does not ask to return immediately, and return no more tokens than its `maxEvents`
+  ([RFC 8936 Section 2.2](https://datatracker.ietf.org/doc/html/rfc8936#section-2.2)). Hold the tokens of a paused
+  stream, a verification event included, and drop those of a disabled stream. Held events that affect the same subject
+  are sent in the order they were generated, or only the last of them when it supersedes the others
+  ([SSF Section 8.1.2.1](https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.2.1)).
+  `PushSecurityEventTokenToStream` checks the status when it reads the stream and does not stop it changing before the
+  request is sent, so coordinate the queue with status changes.
+- **Tell the Receiver of a status change it did not request**: send the event from `NewSSFStreamUpdatedEvent` when the
+  application pauses, disables or re-enables a stream. None is sent for a change the Receiver made at the status
+  endpoint ([SSF Section 8.1.5](https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.5)).
+- **Apply policy changes to existing streams**: a stream keeps the events of the policy it was created under until
+  `ReconcileSSFStream` is called for it, and its audience until it is created again.
+- **Choose the identifiers of each token**: a `jti` that is unique on the stream and reused only to send the same token
+  again, and a `txn` that is unique to the underlying event
+  ([SSF Section 4.1.9](https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-4.1.9)).
+- **Protect the subject**: send a Receiver only the events it is permitted to have, identify the subject in the same way
+  for a Receiver every time and in a way that reveals nothing new to it, obtain consent before releasing data the user
+  has not consented to release
+  ([SSF Section 10](https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-10)), and set
+  `security_event_token_encrypted_response_alg` on the client that owns the stream when a token carries personally
+  identifiable information that TLS alone does not keep confidential
+  ([RFC 8417 Section 5.1](https://datatracker.ietf.org/doc/html/rfc8417#section-5.1)). An encrypted token is refused
+  while `EnforceCAEPInteroperabilityProfile` is enabled.
+- **Give each Receiver its own stream**: a stream audience with more than one value is for Receivers known to be the
+  same entity ([SSF Section 4.1.8](https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-4.1.8)).
+- **Secure the transport**: serve the endpoints, and connect to Receivers, over TLS 1.2 or later with certificate
+  validation ([RFC 8935 Section 5.3](https://datatracker.ietf.org/doc/html/rfc8935#section-5.3)). An
+  `SSFConfig.HTTPClient` with its own transport must keep both.
+
+`SSFConfig.EnforceCAEPInteroperabilityProfile` is disabled by default. When enabled the library refuses a Security Event
+Token that is not signed with RS256 by an RSA key of at least 2048 bits, and Transmitter Configuration Metadata without
+the members the [CAEP Interoperability Profile](https://openid.net/specs/openid-caep-interoperability-profile-1_0.html)
+requires. The rest of the profile is never checked: TLS, an access token lifetime of 60 minutes or less, a `jwks_uri`
+that serves the current signing keys, and a non-empty `reason_admin` in each session-revoked, credential-change and
+device-compliance-change event.
 
 ## Thanks
 

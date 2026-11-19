@@ -48,6 +48,20 @@ var (
 	// session.
 	ErrDuplicateUserCode = errors.New("user code is already in use")
 
+	// ErrUserCodeUnknown is an error indicating that no device authorization request holds the presented user code.
+	ErrUserCodeUnknown = errors.New("user code is unknown")
+
+	// ErrUserCodeExpired is an error indicating that the presented user code has expired.
+	ErrUserCodeExpired = errors.New("user code has expired")
+
+	// ErrUserCodeDecided is an error indicating that the device authorization request of the presented user code was
+	// already approved, denied or redeemed.
+	ErrUserCodeDecided = errors.New("user code has already been decided")
+
+	// ErrUserCodeClaimed is an error indicating that the presented user code is bound to another subject, the one who
+	// first presented it.
+	ErrUserCodeClaimed = errors.New("user code has been claimed by another subject")
+
 	// ErrPKCEChallengeReused is an error indicating that the client already used the PKCE code challenge in an
 	// authorization request whose record has not yet expired.
 	ErrPKCEChallengeReused = errors.New("PKCE code challenge has already been used by the client")
@@ -196,6 +210,12 @@ var (
 	ErrSSFVerificationThrottled = &RFC6749Error{
 		ErrorField:       errTooManyRequestsName,
 		DescriptionField: "The stream was verified too recently.",
+		CodeField:        http.StatusTooManyRequests,
+	}
+	// ErrTooManyRequests is returned when a rate limit refuses the request.
+	ErrTooManyRequests = &RFC6749Error{
+		ErrorField:       errTooManyRequestsName,
+		DescriptionField: "The request was refused because too many requests have been made.",
 		CodeField:        http.StatusTooManyRequests,
 	}
 	// ErrRequestUnauthorized is returned when the request could not be authorized.

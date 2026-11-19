@@ -63,7 +63,8 @@ type Config struct {
 	// IDTokenLifespan sets the default id token lifetime. Defaults to one hour.
 	IDTokenLifespan time.Duration
 
-	// Sets how long a device user/device code pair is valid for.
+	// RFC8628CodeLifespan sets how long a device code and user code pair is valid for. Defaults to ten minutes, as
+	// does a negative value. A client implementing CustomTokenLifespansClient overrides it.
 	RFC8628CodeLifespan time.Duration
 
 	// Issuer is the canonical issuer identifier of the authorization server. It is the issuer of every token and
@@ -270,6 +271,22 @@ type Config struct {
 	// RFC8628TokenPollingInterval sets the interval that clients should check for device code grants.
 	RFC8628TokenPollingInterval time.Duration
 
+	// RFC8628SlowDownLimit is the number of consecutive 'slow_down' responses after which a device code is
+	// invalidated. Defaults to 0 (disabled).
+	RFC8628SlowDownLimit int
+
+	// RFC8628EnableVerificationURIComplete includes the 'verification_uri_complete' member in the device authorization
+	// response. A client implementing RFC8628VerificationURICompleteClient overrides it.
+	RFC8628EnableVerificationURIComplete bool
+
+	// RFC8628DisableUserCodeSubjectBinding allows a subject to present an undecided user code another subject
+	// presented first.
+	RFC8628DisableUserCodeSubjectBinding bool
+
+	// RFC8628UserCodeRateLimiter limits the user code attempts made at the device grant user interaction endpoint.
+	// Defaults to nil (no limit).
+	RFC8628UserCodeRateLimiter RFC8628UserCodeRateLimiter
+
 	// CIBATokenDeliveryModes are the supported CIBA token delivery modes. Defaults to poll, ping and push. A value
 	// other than poll, ping or push is ignored, so a list holding none of them supports no mode.
 	CIBATokenDeliveryModes []string
@@ -307,9 +324,11 @@ type Config struct {
 	// CIBAIDTokenHintMaximumAge is how long past its expiry an 'id_token_hint' is accepted. Defaults to 24 hours.
 	CIBAIDTokenHintMaximumAge time.Duration
 
-	// CIBARequireBindingMessage requires the 'binding_message' parameter, unless the request carries an authorization
-	// detail which its AuthorizationDetailsTypeUniqueContextHandler reports identifies a unique authorization context.
-	CIBARequireBindingMessage bool
+	// CIBADisableBindingMessageRequirement allows a CIBA authentication request without the 'binding_message'
+	// parameter. The parameter is otherwise required, unless the request carries an authorization detail which its
+	// AuthorizationDetailsTypeUniqueContextHandler reports identifies a unique authorization context. A client
+	// implementing CIBABindingMessageClient overrides it.
+	CIBADisableBindingMessageRequirement bool
 
 	// CIBAMaximumBindingMessageLength is the maximum 'binding_message' length. Defaults to 64.
 	CIBAMaximumBindingMessageLength int
@@ -834,6 +853,20 @@ type Config struct {
 	// client can be required individually through SenderConstrainedAccessTokensClient.
 	EnforceSenderConstrainedAccessTokens bool
 
+	// RFC8628EnforceSenderConstrainedAccessTokens requires every token request of the RFC 8628 device authorization
+	// grant to bind its tokens to a DPoP proof or a mutual-TLS client certificate. A client can be held to it alone
+	// by implementing CrossDeviceSenderConstrainedAccessTokensClient.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.12
+	RFC8628EnforceSenderConstrainedAccessTokens bool
+
+	// CIBAEnforceSenderConstrainedAccessTokens requires the tokens of every OpenID Connect CIBA authentication
+	// request to be bound to a DPoP proof or a mutual-TLS client certificate. A client can be held to it alone by
+	// implementing CrossDeviceSenderConstrainedAccessTokensClient.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.12
+	CIBAEnforceSenderConstrainedAccessTokens bool
+
 	// EnforceIntrospectionPermission permits only a client implementing IntrospectionClient whose
 	// GetIntrospectionPermitted returns true to call the introspection endpoint, as FAPI 2.0 Message Signing Section
 	// 6.2 requires. Any other caller is refused with 'request_unauthorized'.
@@ -906,8 +939,10 @@ type Config struct {
 	// one of them. Empty means consts.ScopeClientRegistration.
 	RFC7591ClientRegistrationScopes []string
 
-	// RFC7591ClientRegistrationGrantTypes are the grant types a client may register for. Empty permits any grant.
-	// See GetRFC7591ClientRegistrationGrantTypes for why, and when a deployment should set it.
+	// RFC7591ClientRegistrationGrantTypes are the grant types a client may register for. Empty permits any grant
+	// except 'urn:ietf:params:oauth:grant-type:device_code' and 'urn:openid:params:grant-type:ciba', which a client
+	// may only register for when they are listed. See GetRFC7591ClientRegistrationGrantTypes for why, and when a
+	// deployment should set it.
 	RFC7591ClientRegistrationGrantTypes []string
 
 	// RFC7591ClientRegistrationPolicyClaim is the name of the claim carrying the registration policy. When empty it
@@ -1468,9 +1503,9 @@ func (c *Config) GetIDTokenLifespan(_ context.Context) time.Duration {
 	return c.IDTokenLifespan
 }
 
-// GetRFC8628CodeLifespan returns the device and user code lifespan.
+// GetRFC8628CodeLifespan returns the device and user code lifespan. Defaults to ten minutes.
 func (c *Config) GetRFC8628CodeLifespan(_ context.Context) time.Duration {
-	if c.RFC8628CodeLifespan == 0 {
+	if c.RFC8628CodeLifespan <= 0 {
 		return time.Minute * 10
 	}
 
@@ -1833,6 +1868,29 @@ func (c *Config) GetRFC8628TokenPollingInterval(_ context.Context) time.Duration
 	return c.RFC8628TokenPollingInterval
 }
 
+// GetRFC8628SlowDownLimit returns the number of consecutive 'slow_down' responses after which the device code is
+// invalidated. Defaults to 0 (disabled).
+func (c *Config) GetRFC8628SlowDownLimit(_ context.Context) (limit int) {
+	return max(c.RFC8628SlowDownLimit, 0)
+}
+
+// GetRFC8628VerificationURIComplete returns true if the device authorization response includes the
+// 'verification_uri_complete' member.
+func (c *Config) GetRFC8628VerificationURIComplete(_ context.Context) (enabled bool) {
+	return c.RFC8628EnableVerificationURIComplete
+}
+
+// GetRFC8628UserCodeSubjectBinding returns true if an undecided user code is bound to the subject who first presents
+// it. Defaults to true.
+func (c *Config) GetRFC8628UserCodeSubjectBinding(_ context.Context) (enforce bool) {
+	return !c.RFC8628DisableUserCodeSubjectBinding
+}
+
+// GetRFC8628UserCodeRateLimiter returns the limiter of user code attempts, or nil for no limit.
+func (c *Config) GetRFC8628UserCodeRateLimiter(_ context.Context) (limiter RFC8628UserCodeRateLimiter) {
+	return c.RFC8628UserCodeRateLimiter
+}
+
 // GetCIBATokenDeliveryModes returns the supported CIBA token delivery modes. Defaults to poll, ping and push. Only
 // the poll, ping and push modes are defined, so any other configured value is omitted.
 //
@@ -1950,9 +2008,9 @@ func (c *Config) GetCIBAIDTokenHintMaximumAge(_ context.Context) (age time.Durat
 	return c.CIBAIDTokenHintMaximumAge
 }
 
-// GetCIBARequireBindingMessage returns true if the 'binding_message' parameter is required.
+// GetCIBARequireBindingMessage returns true if the 'binding_message' parameter is required. Defaults to true.
 func (c *Config) GetCIBARequireBindingMessage(_ context.Context) (require bool) {
-	return c.CIBARequireBindingMessage
+	return !c.CIBADisableBindingMessageRequirement
 }
 
 // GetCIBAMaximumBindingMessageLength returns the maximum 'binding_message' length. Defaults to 64.
@@ -2314,6 +2372,18 @@ func (c *Config) GetMTLSEnforce(ctx context.Context) (enforce bool) {
 	return c.MTLSEnforce
 }
 
+// GetRFC8628EnforceSenderConstrainedAccessTokens returns true if every token request of the RFC 8628 device
+// authorization grant must bind its tokens to a DPoP proof or a mutual-TLS client certificate.
+func (c *Config) GetRFC8628EnforceSenderConstrainedAccessTokens(_ context.Context) (enforce bool) {
+	return c.RFC8628EnforceSenderConstrainedAccessTokens
+}
+
+// GetCIBAEnforceSenderConstrainedAccessTokens returns true if the tokens of every OpenID Connect CIBA authentication
+// request must be bound to a DPoP proof or a mutual-TLS client certificate.
+func (c *Config) GetCIBAEnforceSenderConstrainedAccessTokens(_ context.Context) (enforce bool) {
+	return c.CIBAEnforceSenderConstrainedAccessTokens
+}
+
 // GetEnforceSenderConstrainedAccessTokens returns true if every token request must bind its tokens to a DPoP proof or a
 // mutual-TLS client certificate.
 func (c *Config) GetEnforceSenderConstrainedAccessTokens(_ context.Context) (enforce bool) {
@@ -2394,10 +2464,12 @@ func (c *Config) GetRFC7591ClientRegistrationEndpointAudiences(ctx context.Conte
 	return c.RFC7591ClientRegistrationEndpointAudiences
 }
 
-// GetRFC7591ClientRegistrationGrantTypes returns the grant types a client may register for, or nil to permit any. It is
-// empty by default.
+// GetRFC7591ClientRegistrationGrantTypes returns the grant types a client may register for, or nil to permit any but
+// the cross-device grant types, 'urn:ietf:params:oauth:grant-type:device_code' and
+// 'urn:openid:params:grant-type:ciba', which must be listed. It is empty by default.
 //
 // See: https://www.rfc-editor.org/rfc/rfc7591#section-2
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.7
 func (c *Config) GetRFC7591ClientRegistrationGrantTypes(ctx context.Context) (grantTypes []string) {
 	return c.RFC7591ClientRegistrationGrantTypes
 }
@@ -2556,6 +2628,10 @@ var (
 	_ RFC8693ConfigProvider                                    = (*Config)(nil)
 	_ IDJAGConfigProvider                                      = (*Config)(nil)
 	_ RFC8628DeviceAuthorizeConfigProvider                     = (*Config)(nil)
+	_ RFC8628SlowDownLimitProvider                             = (*Config)(nil)
+	_ RFC8628VerificationURICompleteProvider                   = (*Config)(nil)
+	_ RFC8628UserCodeSubjectBindingProvider                    = (*Config)(nil)
+	_ RFC8628UserCodeRateLimiterProvider                       = (*Config)(nil)
 	_ RFC8628DeviceAuthorizeEndpointHandlersProvider           = (*Config)(nil)
 	_ RFC8628UserAuthorizeEndpointHandlersProvider             = (*Config)(nil)
 	_ IntrospectionJWTResponseStrategyProvider                 = (*Config)(nil)
@@ -2578,6 +2654,7 @@ var (
 	_ OIDCKeyBindingConfigProvider                             = (*Config)(nil)
 	_ MTLSConfigProvider                                       = (*Config)(nil)
 	_ EnforceSenderConstrainedAccessTokensProvider             = (*Config)(nil)
+	_ CrossDeviceSenderConstrainedAccessTokensProvider         = (*Config)(nil)
 	_ IntrospectionPermissionProvider                          = (*Config)(nil)
 	_ SignedResponseAlgValuesProvider                          = (*Config)(nil)
 	_ MTLSStrictRefreshTokenBindingProvider                    = (*Config)(nil)

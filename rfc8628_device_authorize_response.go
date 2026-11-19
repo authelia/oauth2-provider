@@ -110,12 +110,18 @@ func (d *DeviceAuthorizeResponse) FromJSON(r io.Reader) error {
 	return json.NewDecoder(r).Decode(&d)
 }
 
-// ToMap converts the response to a map.
+// ToMap converts the response to a map. An empty 'verification_uri_complete' member is omitted.
 func (d *DeviceAuthorizeResponse) ToMap() map[string]any {
 	d.Extra[consts.DeviceCodeResponseDeviceCode] = d.DeviceCode
 	d.Extra[consts.DeviceCodeResponseUserCode] = d.UserCode
 	d.Extra[consts.DeviceCodeResponseVerificationURI] = d.VerificationURI
-	d.Extra[consts.DeviceCodeResponseVerificationURIComplete] = d.VerificationURIComplete
+
+	if d.VerificationURIComplete != "" {
+		d.Extra[consts.DeviceCodeResponseVerificationURIComplete] = d.VerificationURIComplete
+	} else {
+		delete(d.Extra, consts.DeviceCodeResponseVerificationURIComplete)
+	}
+
 	d.Extra[consts.DeviceCodeResponseExpiresIn] = d.ExpiresIn
 	d.Extra[consts.DeviceCodeResponseInterval] = d.Interval
 

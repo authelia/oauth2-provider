@@ -11,12 +11,21 @@ import (
 )
 
 // Storage persists the sessions of the RFC 8628 device authorization grant.
+//
+// A user code is unique among the sessions the store holds, so the store is the deny list of user codes: a session
+// which has expired, been decided or been invalidated should be retained for at least one code lifespan, the
+// oauth2.DeviceCode expiry of its session, so that its user code is not issued again within that window.
+//
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.4
 type Storage interface {
 	// CreateDeviceCodeSession stores the device request for a given device code. It must atomically reject a user code
 	// signature already held by another session with oauth2.ErrDuplicateUserCode.
 	CreateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error)
 
-	// UpdateDeviceCodeSession update in store the device code session for a given device code.
+	// UpdateDeviceCodeSession update in store the device code session for a given device code. The token endpoint
+	// calls it with a request loaded before the poll was handled when the store does not implement PollStorage, so it
+	// should not replace a status of oauth2.DeviceAuthorizeStatusApproved or oauth2.DeviceAuthorizeStatusDenied recorded
+	// since.
 	UpdateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error)
 
 	// GetDeviceCodeSession hydrates the session based on the given device code and returns the device request.
@@ -54,7 +63,36 @@ type Storage interface {
 type DecisionStorage interface {
 	// DecideDeviceCodeSession stores the device code session for the given device code only while the stored session
 	// has the oauth2.DeviceAuthorizeStatusNew or oauth2.DeviceAuthorizeStatusClaimed status, checking and writing it in
-	// one atomic operation. It returns the oauth2.ErrDeviceAuthorizeDecided error when the stored session was already
-	// decided, and the oauth2.ErrNotFound error when no session is stored for the device code.
+	// one atomic operation. It must not overwrite the stored polling state, which PollStorage writes. It returns the
+	// oauth2.ErrDeviceAuthorizeDecided error when the stored session was already decided, and the oauth2.ErrNotFound
+	// error when no session is stored for the device code.
 	DecideDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error)
+}
+
+// PollStorage is an optional Storage extension which records a poll of the token endpoint without writing the rest of
+// the device code session. The DeviceCodeTokenHandler uses it when the Storage implements it, so a poll never
+// overwrites a decision recorded after the session was loaded.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.5
+type PollStorage interface {
+	// UpdateDeviceCodeSessionPolling writes the polling state of the request, the value of GetLastChecked and for an
+	// oauth2.DeviceAuthorizePollingRequester the values of GetPollingInterval and GetSlowDownCount, onto the stored
+	// device code session for the given device code. It must never overwrite the stored status, claim subject or
+	// session. It does nothing when no session is stored.
+	UpdateDeviceCodeSessionPolling(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error)
+}
+
+// ClaimStorage is a Storage extension which binds the user code of a device code session to the subject who first
+// presents it atomically, so of two subjects presenting one user code concurrently only the first is bound. The
+// UserAuthorizeHandler requires it unless user code subject binding is disabled.
+//
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.3
+type ClaimStorage interface {
+	// ClaimDeviceCodeSession records the subject and the oauth2.DeviceAuthorizeStatusClaimed status on the stored
+	// session for the given device code only while the stored session is undecided and no other subject is recorded,
+	// checking and writing it in one atomic operation. It must never overwrite any other part of the stored session.
+	// It returns the oauth2.ErrUserCodeClaimed error when another subject is recorded, the
+	// oauth2.ErrDeviceAuthorizeDecided error when the stored session was already decided, and the oauth2.ErrNotFound
+	// error when no session is stored for the device code.
+	ClaimDeviceCodeSession(ctx context.Context, signature string, subject string) (err error)
 }

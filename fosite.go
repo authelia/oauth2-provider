@@ -477,6 +477,26 @@ func IsSenderConstrainedAccessTokenEnforced(ctx context.Context, config EnforceS
 	return ok && c.GetEnforceSenderConstrainedAccessTokens()
 }
 
+// IsCrossDeviceSenderConstrainedAccessTokenEnforced determines if the tokens of a cross-device grant, being the RFC
+// 8628 device authorization grant or the OpenID Connect CIBA grant, must be bound to a DPoP proof or a mutual-TLS
+// client certificate, being when either the provider-wide option for the grant type or the client's own policy for it
+// is set. It is false for any other grant type; see IsSenderConstrainedAccessTokenEnforced for the requirement which
+// applies to every grant type.
+//
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.12
+func IsCrossDeviceSenderConstrainedAccessTokenEnforced(ctx context.Context, config CrossDeviceSenderConstrainedAccessTokensProvider, client Client, grantType GrantType) (enforce bool) {
+	c, _ := client.(CrossDeviceSenderConstrainedAccessTokensClient)
+
+	switch grantType {
+	case GrantTypeDeviceCode:
+		return (config != nil && config.GetRFC8628EnforceSenderConstrainedAccessTokens(ctx)) || (c != nil && c.GetRFC8628EnforceSenderConstrainedAccessTokens())
+	case GrantTypeCIBA:
+		return (config != nil && config.GetCIBAEnforceSenderConstrainedAccessTokens(ctx)) || (c != nil && c.GetCIBAEnforceSenderConstrainedAccessTokens())
+	default:
+		return false
+	}
+}
+
 func isSenderConstrained(ctx context.Context, config any, session Session) bool {
 	if s, ok := session.(DPoPBoundSession); ok && s.GetDPoPJWKThumbprint() != "" {
 		if c, ok := config.(interface {

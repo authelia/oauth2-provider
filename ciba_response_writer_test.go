@@ -33,6 +33,9 @@ func TestPushRequiresKeyMaterialWhenEnforced(t *testing.T) {
 		name    string
 		mode    string
 		enforce bool
+		ciba    bool
+		device  bool
+		client  oauth2.Client
 		bind    func(session *oauth2.DefaultSession)
 		err     bool
 	}{
@@ -43,6 +46,12 @@ func TestPushRequiresKeyMaterialWhenEnforced(t *testing.T) {
 		{name: "ShouldAcceptPushWhenNotEnforced", mode: consts.CIBAModePush},
 		{name: "ShouldAcceptPollWithoutKeyMaterial", mode: consts.CIBAModePoll, enforce: true},
 		{name: "ShouldAcceptPingWithoutKeyMaterial", mode: consts.CIBAModePing, enforce: true},
+		{name: "ShouldRejectPushWithoutKeyMaterialWhenEnforcedForCIBA", mode: consts.CIBAModePush, ciba: true, err: true},
+		{name: "ShouldAcceptPushWithADPoPThumbprintWhenEnforcedForCIBA", mode: consts.CIBAModePush, ciba: true, bind: func(s *oauth2.DefaultSession) { s.SetDPoPJWKThumbprint(jkt) }},
+		{name: "ShouldRejectPushWithoutKeyMaterialWhenTheClientEnforcesForCIBA", mode: consts.CIBAModePush, client: &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "client"}, CIBAEnforceSenderConstrainedAccessTokens: true}, err: true},
+		{name: "ShouldAcceptPushWhenEnforcedForTheDeviceGrantOnly", mode: consts.CIBAModePush, device: true},
+		{name: "ShouldAcceptPushWhenTheClientEnforcesForTheDeviceGrantOnly", mode: consts.CIBAModePush, client: &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "client"}, RFC8628EnforceSenderConstrainedAccessTokens: true}},
+		{name: "ShouldAcceptPollWithoutKeyMaterialWhenEnforcedForCIBA", mode: consts.CIBAModePoll, ciba: true},
 	}
 
 	for _, sc := range cibaDecisionTestStores {
@@ -54,6 +63,8 @@ func TestPushRequiresKeyMaterialWhenEnforced(t *testing.T) {
 
 					config := provider.Config.(*oauth2.Config)
 					config.EnforceSenderConstrainedAccessTokens = tc.enforce
+					config.CIBAEnforceSenderConstrainedAccessTokens = tc.ciba
+					config.RFC8628EnforceSenderConstrainedAccessTokens = tc.device
 					config.DPoPEnabled = true
 					config.MTLSEnabled = true
 
@@ -69,6 +80,10 @@ func TestPushRequiresKeyMaterialWhenEnforced(t *testing.T) {
 
 					request := newCIBADecisionTestRequest(session)
 					request.DeliveryMode = tc.mode
+
+					if tc.client != nil {
+						request.Client = tc.client
+					}
 
 					response, err := provider.NewBackChannelAuthenticationResponse(t.Context(), request)
 
@@ -102,7 +117,7 @@ func TestNewBackChannelAuthenticationResponseExposesTheHTTPRequest(t *testing.T)
 		return nil
 	}})
 
-	r := newCIBATestRequest(t, nil, "", cibaTestClientPoll, "", "scope=openid&login_hint=alice")
+	r := newCIBATestRequest(t, nil, "", cibaTestClientPoll, "", "scope=openid&login_hint=alice&binding_message=W4SCT")
 
 	request, err := provider.NewBackChannelAuthenticationRequest(t.Context(), r, &oauth2.DefaultSession{})
 	require.NoError(t, err)

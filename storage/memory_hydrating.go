@@ -20,8 +20,9 @@ import (
 // session a Get*Session call returns.
 //
 // Hydration clones the stored request and swaps in the caller-supplied session. Only a *oauth2.Request or a
-// *oauth2.AccessRequest can be cloned; a Get*Session call for any other oauth2.Requester implementation returns an
-// error. The clone is shallow: fields such as Form and Client are shared with the stored request, and only Session
+// *oauth2.AccessRequest can be cloned, or for the device code and CIBA sessions a *oauth2.DeviceAuthorizeRequest and a
+// *oauth2.BackChannelAuthenticationRequest; a Get*Session call for any other oauth2.Requester implementation returns
+// an error. The clone is shallow: fields such as Form and Client are shared with the stored request, and only Session
 // is decoupled.
 type HydratingMemoryStore struct {
 	*MemoryStore
@@ -192,6 +193,125 @@ func (s *HydratingMemoryStore) GetRefreshTokenSession(ctx context.Context, signa
 	}
 
 	return hydrated, err
+}
+
+// CreateDeviceCodeSession stores a copy of the request against its device code signature and its user code signature.
+// The marshaled session is published under the same lock as the write and only once it succeeds.
+func (s *HydratingMemoryStore) CreateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error) {
+	return s.writeDeviceCodeSession(signature, request, func(stored oauth2.DeviceAuthorizeRequester) error {
+		return s.MemoryStore.CreateDeviceCodeSession(ctx, signature, stored)
+	})
+}
+
+// UpdateDeviceCodeSession replaces the request stored against the device code signature with a copy of the request,
+// and the marshaled session stored with it. It is a whole row write: a request loaded before another write was made
+// replaces that write.
+func (s *HydratingMemoryStore) UpdateDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error) {
+	return s.writeDeviceCodeSession(signature, request, func(stored oauth2.DeviceAuthorizeRequester) error {
+		return s.MemoryStore.UpdateDeviceCodeSession(ctx, signature, stored)
+	})
+}
+
+// DecideDeviceCodeSession stores a copy of the request only while the stored request is undecided. The marshaled
+// session is published under the same lock as the decision and only once it succeeds.
+func (s *HydratingMemoryStore) DecideDeviceCodeSession(ctx context.Context, signature string, request oauth2.DeviceAuthorizeRequester) (err error) {
+	return s.writeDeviceCodeSession(signature, request, func(stored oauth2.DeviceAuthorizeRequester) error {
+		return s.MemoryStore.DecideDeviceCodeSession(ctx, signature, stored)
+	})
+}
+
+// GetDeviceCodeSession returns a copy of the request stored against the device code signature, carrying the
+// caller-supplied session hydrated from the marshaled session. The request is returned alongside
+// oauth2.ErrInvalidatedDeviceCode.
+func (s *HydratingMemoryStore) GetDeviceCodeSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.DeviceAuthorizeRequester, err error) {
+	s.sessionsMutex.RLock()
+	defer s.sessionsMutex.RUnlock()
+
+	request, err = s.MemoryStore.GetDeviceCodeSession(ctx, signature, session)
+
+	return s.hydrateDeviceCodeSession(request, session, err)
+}
+
+// GetDeviceCodeSessionByUserCode returns a copy of the request stored against the user code signature, hydrated as
+// GetDeviceCodeSession does.
+func (s *HydratingMemoryStore) GetDeviceCodeSessionByUserCode(ctx context.Context, signature string, session oauth2.Session) (request oauth2.DeviceAuthorizeRequester, err error) {
+	s.sessionsMutex.RLock()
+	defer s.sessionsMutex.RUnlock()
+
+	request, err = s.MemoryStore.GetDeviceCodeSessionByUserCode(ctx, signature, session)
+
+	return s.hydrateDeviceCodeSession(request, session, err)
+}
+
+func (s *HydratingMemoryStore) writeDeviceCodeSession(signature string, request oauth2.DeviceAuthorizeRequester, write func(stored oauth2.DeviceAuthorizeRequester) error) (err error) {
+	var data []byte
+
+	if request.GetSession() != nil {
+		if data, err = json.Marshal(request.GetSession()); err != nil {
+			return err
+		}
+	}
+
+	stored := request
+
+	if req, ok := request.(*oauth2.DeviceAuthorizeRequest); ok {
+		clone := *req
+
+		stored = &clone
+	}
+
+	s.sessionsMutex.Lock()
+	defer s.sessionsMutex.Unlock()
+
+	if err = write(stored); err != nil {
+		return err
+	}
+
+	// An update of a session which is not stored writes nothing.
+	if data != nil && s.hasDeviceCodeSession(signature) {
+		s.sessions["dc:"+signature] = data
+	}
+
+	return nil
+}
+
+func (s *HydratingMemoryStore) hasDeviceCodeSession(signature string) (ok bool) {
+	s.deviceCodesMutex.RLock()
+	defer s.deviceCodesMutex.RUnlock()
+
+	_, ok = s.DeviceCodes[signature]
+
+	return ok
+}
+
+func (s *HydratingMemoryStore) hydrateDeviceCodeSession(request oauth2.DeviceAuthorizeRequester, session oauth2.Session, getErr error) (oauth2.DeviceAuthorizeRequester, error) {
+	if request == nil || (getErr != nil && !errors.Is(getErr, oauth2.ErrInvalidatedDeviceCode)) {
+		return nil, getErr
+	}
+
+	req, ok := request.(*oauth2.DeviceAuthorizeRequest)
+	if !ok {
+		return nil, fmt.Errorf("HydratingMemoryStore cannot hydrate a %T; it can only clone *oauth2.DeviceAuthorizeRequest", request)
+	}
+
+	clone := *req
+
+	if session == nil {
+		return &clone, getErr
+	}
+
+	data, found := s.sessions["dc:"+req.GetDeviceCodeSignature()]
+	if !found {
+		return &clone, getErr
+	}
+
+	if err := json.Unmarshal(data, session); err != nil {
+		return nil, err
+	}
+
+	clone.Session = session
+
+	return &clone, getErr
 }
 
 // CreateCIBASession stores a copy of the request against the 'auth_req_id' signature. The marshaled session is

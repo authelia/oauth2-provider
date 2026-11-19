@@ -1427,10 +1427,92 @@ func (s *MemoryStore) DecideDeviceCodeSession(_ context.Context, signature strin
 		return oauth2.ErrDeviceAuthorizeDecided
 	}
 
-	s.DeviceCodes[signature] = request
-	s.UserCodes[request.GetUserCodeSignature()] = request
+	decided := copyDeviceCodeSession(request)
+
+	copyDeviceCodePolling(decided, stored)
+
+	s.DeviceCodes[signature] = decided
+	s.UserCodes[decided.GetUserCodeSignature()] = decided
 
 	return nil
+}
+
+// UpdateDeviceCodeSessionPolling implements rfc8628.PollStorage.
+func (s *MemoryStore) UpdateDeviceCodeSessionPolling(_ context.Context, signature string, request oauth2.DeviceAuthorizeRequester) error {
+	s.deviceCodesMutex.Lock()
+	defer s.deviceCodesMutex.Unlock()
+
+	stored, ok := s.DeviceCodes[signature].(oauth2.DeviceAuthorizeRequester)
+	if !ok {
+		return nil
+	}
+
+	polled := copyDeviceCodeSession(stored)
+
+	copyDeviceCodePolling(polled, request)
+
+	s.DeviceCodes[signature] = polled
+	s.UserCodes[polled.GetUserCodeSignature()] = polled
+
+	return nil
+}
+
+// ClaimDeviceCodeSession implements rfc8628.ClaimStorage. An invalidated session is decided.
+func (s *MemoryStore) ClaimDeviceCodeSession(_ context.Context, signature string, subject string) error {
+	s.deviceCodesMutex.Lock()
+	defer s.deviceCodesMutex.Unlock()
+
+	stored, ok := s.DeviceCodes[signature].(oauth2.DeviceAuthorizeRequester)
+	if !ok {
+		return oauth2.ErrNotFound
+	}
+
+	if status := stored.GetStatus(); s.InvalidatedDeviceCodes[signature] || (status != oauth2.DeviceAuthorizeStatusNew && status != oauth2.DeviceAuthorizeStatusClaimed) {
+		return oauth2.ErrDeviceAuthorizeDecided
+	}
+
+	claimant, ok := copyDeviceCodeSession(stored).(oauth2.DeviceAuthorizeClaimRequester)
+	if !ok {
+		return errors.New("MemoryStore can only claim an oauth2.DeviceAuthorizeClaimRequester")
+	}
+
+	switch claimed := claimant.GetClaimSubject(); {
+	case claimed == subject:
+		return nil
+	case claimed != "":
+		return oauth2.ErrUserCodeClaimed
+	}
+
+	claimant.SetStatus(oauth2.DeviceAuthorizeStatusClaimed)
+	claimant.SetClaimSubject(subject)
+
+	s.DeviceCodes[signature] = claimant
+	s.UserCodes[claimant.GetUserCodeSignature()] = claimant
+
+	return nil
+}
+
+// copyDeviceCodeSession returns a shallow copy of a *oauth2.DeviceAuthorizeRequest, so a write replaces the stored
+// request rather than mutating one a caller holds. Any other implementation is returned as is.
+func copyDeviceCodeSession(request oauth2.DeviceAuthorizeRequester) oauth2.DeviceAuthorizeRequester {
+	if req, ok := request.(*oauth2.DeviceAuthorizeRequest); ok {
+		clone := *req
+
+		return &clone
+	}
+
+	return request
+}
+
+func copyDeviceCodePolling(to, from oauth2.DeviceAuthorizeRequester) {
+	to.SetLastChecked(from.GetLastChecked())
+
+	if src, ok := from.(oauth2.DeviceAuthorizePollingRequester); ok {
+		if dst, ok := to.(oauth2.DeviceAuthorizePollingRequester); ok {
+			dst.SetPollingInterval(src.GetPollingInterval())
+			dst.SetSlowDownCount(src.GetSlowDownCount())
+		}
+	}
 }
 
 // GetDeviceCodeSession returns the request stored against the device code signature, or oauth2.ErrNotFound when no

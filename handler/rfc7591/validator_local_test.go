@@ -856,6 +856,27 @@ func TestLocalValidatorGrantTypePolicy(t *testing.T) {
 			metadata:  base([]string{"client_credentials"}, nil),
 		},
 		{
+			name:     "ShouldRejectDeviceCodeWhenUnset",
+			metadata: base([]string{"urn:ietf:params:oauth:grant-type:device_code"}, nil),
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'grant_types' value 'urn:ietf:params:oauth:grant-type:device_code' is not permitted for registration.",
+		},
+		{
+			name:     "ShouldRejectDeviceCodeAlongsideAPermittedGrantWhenUnset",
+			metadata: base([]string{"authorization_code", "urn:ietf:params:oauth:grant-type:device_code"}, []string{"code"}),
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'grant_types' value 'urn:ietf:params:oauth:grant-type:device_code' is not permitted for registration.",
+		},
+		{
+			name:      "ShouldRejectDeviceCodeWhenNotPermitted",
+			permitted: []string{"authorization_code"},
+			metadata:  base([]string{"urn:ietf:params:oauth:grant-type:device_code"}, nil),
+			expected:  "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'grant_types' value 'urn:ietf:params:oauth:grant-type:device_code' is not permitted for registration.",
+		},
+		{
+			name:      "ShouldAcceptDeviceCodeWhenPermitted",
+			permitted: []string{"urn:ietf:params:oauth:grant-type:device_code"},
+			metadata:  base([]string{"urn:ietf:params:oauth:grant-type:device_code"}, nil),
+		},
+		{
 			name:      "ShouldRejectWhatTheDeploymentDoesNotPermit",
 			permitted: []string{"authorization_code"},
 			metadata:  base([]string{"authorization_code", "refresh_token"}, []string{"code"}),

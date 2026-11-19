@@ -5,7 +5,6 @@
 package rfc8628_test
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -59,6 +58,6 @@ func Test_HandleDeviceEndpointRequest(t *testing.T) {
 	assert.Contains(t, resp.GetDeviceCode(), "authelia_dc_")
 	assert.Contains(t, resp.GetDeviceCode(), ".")
 	assert.Equal(t, "https://www.test.com", resp.GetVerificationURI())
-	assert.Equal(t, fmt.Sprintf("https://www.test.com?user_code=%s", resp.GetUserCode()), resp.GetVerificationURIComplete())
+	assert.Empty(t, resp.GetVerificationURIComplete())
 	assert.Equal(t, 10, resp.GetInterval())
 }

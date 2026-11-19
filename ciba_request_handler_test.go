@@ -54,6 +54,9 @@ const (
 	cibaTestClientPushNoEndpoint = "push-no-endpoint"
 	cibaTestClientIDTEncRSA15    = "id-token-rsa1_5"
 	cibaTestClientATRSA15        = "access-token-rsa1_5"
+
+	cibaTestClientBindingMessageWaived   = "binding-message-waived"
+	cibaTestClientBindingMessageRequired = "binding-message-required"
 )
 
 func TestNewBackChannelAuthenticationRequest(t *testing.T) {
@@ -351,8 +354,32 @@ func TestNewBackChannelAuthenticationRequest(t *testing.T) {
 			},
 		},
 		{
-			name:   "ShouldRejectAMissingBindingMessageWhenRequired",
-			config: func(config *Config) { config.CIBARequireBindingMessage = true },
+			name: "ShouldRejectAMissingBindingMessage",
+			form: func(form url.Values) { form.Del(consts.FormParameterBindingMessage) },
+			err:  ErrInvalidRequest,
+			hint: "'binding_message' parameter is required",
+		},
+		{
+			name:   "ShouldAcceptAMissingBindingMessageWhenTheRequirementIsDisabled",
+			config: func(config *Config) { config.CIBADisableBindingMessageRequirement = true },
+			form:   func(form url.Values) { form.Del(consts.FormParameterBindingMessage) },
+			check: func(t *testing.T, requester BackChannelAuthenticationRequester) {
+				assert.Empty(t, requester.GetBindingMessage())
+			},
+		},
+		{
+			name:   "ShouldAcceptAMissingBindingMessageWhenTheClientWaivesIt",
+			client: cibaTestClientBindingMessageWaived,
+			form:   func(form url.Values) { form.Del(consts.FormParameterBindingMessage) },
+			check: func(t *testing.T, requester BackChannelAuthenticationRequester) {
+				assert.Empty(t, requester.GetBindingMessage())
+			},
+		},
+		{
+			name:   "ShouldRejectAMissingBindingMessageWhenTheClientRequiresIt",
+			config: func(config *Config) { config.CIBADisableBindingMessageRequirement = true },
+			client: cibaTestClientBindingMessageRequired,
+			form:   func(form url.Values) { form.Del(consts.FormParameterBindingMessage) },
 			err:    ErrInvalidRequest,
 			hint:   "'binding_message' parameter is required",
 		},
@@ -525,8 +552,9 @@ func TestNewBackChannelAuthenticationRequest(t *testing.T) {
 			}
 
 			form := url.Values{
-				consts.FormParameterScope:     {"openid"},
-				consts.FormParameterLoginHint: {"alice"},
+				consts.FormParameterScope:          {"openid"},
+				consts.FormParameterLoginHint:      {"alice"},
+				consts.FormParameterBindingMessage: {"W4SCT"},
 			}
 
 			if tc.form != nil {
@@ -695,8 +723,9 @@ func TestBackChannelIDTokenHint(t *testing.T) {
 			}
 
 			r := newCIBATestRequest(t, key, "", cibaTestClientPoll, "", url.Values{
-				consts.FormParameterScope:       {"openid"},
-				consts.FormParameterIDTokenHint: {hint},
+				consts.FormParameterScope:          {"openid"},
+				consts.FormParameterIDTokenHint:    {hint},
+				consts.FormParameterBindingMessage: {"W4SCT"},
 			}.Encode())
 
 			requester, err := provider.NewBackChannelAuthenticationRequest(t.Context(), r, &DefaultSession{})
@@ -771,6 +800,11 @@ func newCIBATestProvider(serverKey, clientKey *rsa.PrivateKey) (config *Config, 
 	newClient(cibaTestClientPushNoEndpoint, consts.CIBAModePush).BackChannelClientNotificationEndpoint = ""
 	newClient(cibaTestClientIDTEncRSA15, consts.CIBAModePoll).IDTokenEncryptedResponseAlg = string(jose.RSA1_5)
 	newClient(cibaTestClientATRSA15, consts.CIBAModePoll).AccessTokenEncryptedResponseAlg = string(jose.RSA1_5)
+
+	waived, required := false, true
+
+	newClient(cibaTestClientBindingMessageWaived, consts.CIBAModePoll).CIBARequireBindingMessage = &waived
+	newClient(cibaTestClientBindingMessageRequired, consts.CIBAModePoll).CIBARequireBindingMessage = &required
 
 	pairwiseBasic := newClient(cibaTestClientPairwiseBasic, consts.CIBAModePoll)
 	pairwiseBasic.SubjectType = consts.SubjectTypePairwise

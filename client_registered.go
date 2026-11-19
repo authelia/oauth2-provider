@@ -211,6 +211,10 @@ type DefaultRegisteredClient struct {
 	RefreshTokenGracePeriod                       *time.Duration `json:"-"`
 	RefreshTokenMaximumLifespan                   time.Duration  `json:"-"`
 	EnforceSenderConstrainedAccessTokens          bool           `json:"-"`
+	RFC8628VerificationURIComplete                *bool          `json:"-"`
+	CIBARequireBindingMessage                     *bool          `json:"-"`
+	RFC8628EnforceSenderConstrainedAccessTokens   bool           `json:"-"`
+	CIBAEnforceSenderConstrainedAccessTokens      bool           `json:"-"`
 	FAPI2SecurityProfile                          bool           `json:"-"`
 
 	// Extra holds every unregistered client metadata parameter carried by ClientRegistrationMetadata.Extra so it can
@@ -546,6 +550,38 @@ func (c *DefaultRegisteredClient) GetEnforceSenderConstrainedAccessTokens() bool
 	return c.EnforceSenderConstrainedAccessTokens
 }
 
+// GetRFC8628VerificationURIComplete returns true if this client's device authorization responses include the
+// 'verification_uri_complete' member, or the fallback value when RFC8628VerificationURIComplete is nil.
+func (c *DefaultRegisteredClient) GetRFC8628VerificationURIComplete(fallback bool) (enabled bool) {
+	if c.RFC8628VerificationURIComplete == nil {
+		return fallback
+	}
+
+	return *c.RFC8628VerificationURIComplete
+}
+
+// GetCIBARequireBindingMessage returns true if this client's backchannel authentication requests must carry the
+// 'binding_message' parameter, or the fallback value when CIBARequireBindingMessage is nil.
+func (c *DefaultRegisteredClient) GetCIBARequireBindingMessage(fallback bool) (require bool) {
+	if c.CIBARequireBindingMessage == nil {
+		return fallback
+	}
+
+	return *c.CIBARequireBindingMessage
+}
+
+// GetRFC8628EnforceSenderConstrainedAccessTokens returns true if this client's token requests of the RFC 8628 device
+// authorization grant must bind their tokens to a DPoP proof or a mutual-TLS client certificate.
+func (c *DefaultRegisteredClient) GetRFC8628EnforceSenderConstrainedAccessTokens() bool {
+	return c.RFC8628EnforceSenderConstrainedAccessTokens
+}
+
+// GetCIBAEnforceSenderConstrainedAccessTokens returns true if the tokens of this client's OpenID Connect CIBA
+// authentication requests must be bound to a DPoP proof or a mutual-TLS client certificate.
+func (c *DefaultRegisteredClient) GetCIBAEnforceSenderConstrainedAccessTokens() bool {
+	return c.CIBAEnforceSenderConstrainedAccessTokens
+}
+
 // GetFAPI2SecurityProfile returns true if this client is held to the FAPI 2.0 Security Profile.
 func (c *DefaultRegisteredClient) GetFAPI2SecurityProfile() bool {
 	return c.FAPI2SecurityProfile
@@ -759,34 +795,37 @@ func (c *DefaultRegisteredClient) GetTokenExchangeRefreshTokenRotation() (rotate
 }
 
 var (
-	_ Client                                      = (*DefaultRegisteredClient)(nil)
-	_ DefaultACRValuesClient                      = (*DefaultRegisteredClient)(nil)
-	_ RotatedClientSecretsClient                  = (*DefaultRegisteredClient)(nil)
-	_ SoftwareStatementClient                     = (*DefaultRegisteredClient)(nil)
-	_ JSONWebKeysClient                           = (*DefaultRegisteredClient)(nil)
-	_ SectorIdentifierClient                      = (*DefaultRegisteredClient)(nil)
-	_ SubjectTypeClient                           = (*DefaultRegisteredClient)(nil)
-	_ JARClient                                   = (*DefaultRegisteredClient)(nil)
-	_ IDTokenClient                               = (*DefaultRegisteredClient)(nil)
-	_ UserInfoClient                              = (*DefaultRegisteredClient)(nil)
-	_ JARMClient                                  = (*DefaultRegisteredClient)(nil)
-	_ AuthenticationMethodClient                  = (*DefaultRegisteredClient)(nil)
-	_ ResponseModeClient                          = (*DefaultRegisteredClient)(nil)
-	_ DPoPClient                                  = (*DefaultRegisteredClient)(nil)
-	_ JWTProfileClient                            = (*DefaultRegisteredClient)(nil)
-	_ IntrospectionJWTResponseClient              = (*DefaultRegisteredClient)(nil)
-	_ SecurityEventTokenClient                    = (*DefaultRegisteredClient)(nil)
-	_ ProofKeyCodeExchangeClient                  = (*DefaultRegisteredClient)(nil)
-	_ PushedAuthorizationRequestClient            = (*DefaultRegisteredClient)(nil)
-	_ PushedAuthorizationRequestRedirectURIClient = (*DefaultRegisteredClient)(nil)
-	_ RequestObjectLifetimeClient                 = (*DefaultRegisteredClient)(nil)
-	_ RefreshTokenRotationClient                  = (*DefaultRegisteredClient)(nil)
-	_ RefreshTokenGracePeriodClient               = (*DefaultRegisteredClient)(nil)
-	_ RPInitiatedLogoutClient                     = (*DefaultRegisteredClient)(nil)
-	_ BackChannelLogoutClient                     = (*DefaultRegisteredClient)(nil)
-	_ CIBAClient                                  = (*DefaultRegisteredClient)(nil)
-	_ CIBALoginHintTokenTypesClient               = (*DefaultRegisteredClient)(nil)
-	_ TLSClientAuthClient                         = (*DefaultRegisteredClient)(nil)
-	_ MTLSClient                                  = (*DefaultRegisteredClient)(nil)
-	_ AuthorizationDetailsClient                  = (*DefaultRegisteredClient)(nil)
+	_ Client                                         = (*DefaultRegisteredClient)(nil)
+	_ DefaultACRValuesClient                         = (*DefaultRegisteredClient)(nil)
+	_ RotatedClientSecretsClient                     = (*DefaultRegisteredClient)(nil)
+	_ SoftwareStatementClient                        = (*DefaultRegisteredClient)(nil)
+	_ JSONWebKeysClient                              = (*DefaultRegisteredClient)(nil)
+	_ SectorIdentifierClient                         = (*DefaultRegisteredClient)(nil)
+	_ SubjectTypeClient                              = (*DefaultRegisteredClient)(nil)
+	_ JARClient                                      = (*DefaultRegisteredClient)(nil)
+	_ IDTokenClient                                  = (*DefaultRegisteredClient)(nil)
+	_ UserInfoClient                                 = (*DefaultRegisteredClient)(nil)
+	_ JARMClient                                     = (*DefaultRegisteredClient)(nil)
+	_ AuthenticationMethodClient                     = (*DefaultRegisteredClient)(nil)
+	_ ResponseModeClient                             = (*DefaultRegisteredClient)(nil)
+	_ DPoPClient                                     = (*DefaultRegisteredClient)(nil)
+	_ JWTProfileClient                               = (*DefaultRegisteredClient)(nil)
+	_ IntrospectionJWTResponseClient                 = (*DefaultRegisteredClient)(nil)
+	_ SecurityEventTokenClient                       = (*DefaultRegisteredClient)(nil)
+	_ ProofKeyCodeExchangeClient                     = (*DefaultRegisteredClient)(nil)
+	_ PushedAuthorizationRequestClient               = (*DefaultRegisteredClient)(nil)
+	_ PushedAuthorizationRequestRedirectURIClient    = (*DefaultRegisteredClient)(nil)
+	_ RequestObjectLifetimeClient                    = (*DefaultRegisteredClient)(nil)
+	_ RefreshTokenRotationClient                     = (*DefaultRegisteredClient)(nil)
+	_ RefreshTokenGracePeriodClient                  = (*DefaultRegisteredClient)(nil)
+	_ RFC8628VerificationURICompleteClient           = (*DefaultRegisteredClient)(nil)
+	_ RPInitiatedLogoutClient                        = (*DefaultRegisteredClient)(nil)
+	_ BackChannelLogoutClient                        = (*DefaultRegisteredClient)(nil)
+	_ CIBAClient                                     = (*DefaultRegisteredClient)(nil)
+	_ CIBALoginHintTokenTypesClient                  = (*DefaultRegisteredClient)(nil)
+	_ CIBABindingMessageClient                       = (*DefaultRegisteredClient)(nil)
+	_ CrossDeviceSenderConstrainedAccessTokensClient = (*DefaultRegisteredClient)(nil)
+	_ TLSClientAuthClient                            = (*DefaultRegisteredClient)(nil)
+	_ MTLSClient                                     = (*DefaultRegisteredClient)(nil)
+	_ AuthorizationDetailsClient                     = (*DefaultRegisteredClient)(nil)
 )

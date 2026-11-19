@@ -180,6 +180,20 @@ func TestFosite_NewRFC8628UserAuthorizeRequest_Session(t *testing.T) {
 			},
 		},
 		{
+			name:    "ShouldPassTheHTTPRequestToTheHandlers",
+			session: new(DefaultSession),
+			mock: func(handler *mock.MockRFC8628UserAuthorizeEndpointHandler, session Session) {
+				handler.EXPECT().HandleRFC8628UserAuthorizeEndpointRequest(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, request DeviceAuthorizeRequester) error {
+					r := RequestFromContext(ctx)
+
+					require.NotNil(t, r)
+					assert.Equal(t, request.GetRequestForm(), r.Form)
+
+					return nil
+				})
+			},
+		},
+		{
 			name:     "ShouldRejectNilSession",
 			mock:     func(handler *mock.MockRFC8628UserAuthorizeEndpointHandler, session Session) {},
 			expected: "must not be nil",

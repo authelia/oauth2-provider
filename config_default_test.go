@@ -95,6 +95,41 @@ func TestConfigGetAuthorizeCodeLifespan(t *testing.T) {
 	}
 }
 
+func TestConfigGetRFC8628CodeLifespan(t *testing.T) {
+	testCases := []struct {
+		name     string
+		lifespan time.Duration
+		expected time.Duration
+	}{
+		{"ShouldDefaultToTenMinutes", 0, time.Minute * 10},
+		{"ShouldDefaultToTenMinutesWhenNegative", -time.Minute, time.Minute * 10},
+		{"ShouldUseConfiguredLifespan", time.Minute * 3, time.Minute * 3},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{RFC8628CodeLifespan: tc.lifespan}
+
+			assert.Equal(t, tc.expected, config.GetRFC8628CodeLifespan(t.Context()))
+		})
+	}
+}
+
+func TestConfigRFC8628CrossDeviceDefaults(t *testing.T) {
+	config := &Config{}
+
+	assert.Equal(t, 0, config.GetRFC8628SlowDownLimit(t.Context()))
+	assert.False(t, config.GetRFC8628VerificationURIComplete(t.Context()))
+	assert.True(t, config.GetRFC8628UserCodeSubjectBinding(t.Context()))
+	assert.Nil(t, config.GetRFC8628UserCodeRateLimiter(t.Context()))
+
+	config = &Config{RFC8628SlowDownLimit: 3, RFC8628EnableVerificationURIComplete: true, RFC8628DisableUserCodeSubjectBinding: true}
+
+	assert.Equal(t, 3, config.GetRFC8628SlowDownLimit(t.Context()))
+	assert.True(t, config.GetRFC8628VerificationURIComplete(t.Context()))
+	assert.False(t, config.GetRFC8628UserCodeSubjectBinding(t.Context()))
+}
+
 func TestConfigBackChannelLogoutDefaults(t *testing.T) {
 	config := &Config{}
 

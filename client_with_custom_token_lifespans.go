@@ -38,6 +38,10 @@ type ClientLifespanConfig struct {
 	DeviceCodeGrantAccessTokenLifespan         *time.Duration `json:"device_code_grant_access_token_lifespan"`
 	DeviceCodeGrantIDTokenLifespan             *time.Duration `json:"device_code_grant_id_token_lifespan"`
 	DeviceCodeGrantRefreshTokenLifespan        *time.Duration `json:"device_code_grant_refresh_token_lifespan"`
+	DeviceCodeGrantDeviceCodeLifespan          *time.Duration `json:"device_code_grant_device_code_lifespan"`
+	CIBAGrantAccessTokenLifespan               *time.Duration `json:"ciba_grant_access_token_lifespan"`
+	CIBAGrantIDTokenLifespan                   *time.Duration `json:"ciba_grant_id_token_lifespan"`
+	CIBAGrantRefreshTokenLifespan              *time.Duration `json:"ciba_grant_refresh_token_lifespan"`
 	ClientCredentialsGrantAccessTokenLifespan  *time.Duration `json:"client_credentials_grant_access_token_lifespan"`
 	ImplicitGrantAccessTokenLifespan           *time.Duration `json:"implicit_grant_access_token_lifespan"`
 	ImplicitGrantIDTokenLifespan               *time.Duration `json:"implicit_grant_id_token_lifespan"`
@@ -99,6 +103,17 @@ func (c *DefaultClientWithCustomTokenLifespans) GetEffectiveLifespan(gt GrantTyp
 			cl = c.TokenLifespans.DeviceCodeGrantRefreshTokenLifespan
 		case IDToken:
 			cl = c.TokenLifespans.DeviceCodeGrantIDTokenLifespan
+		case DeviceCode:
+			cl = c.TokenLifespans.DeviceCodeGrantDeviceCodeLifespan
+		}
+	case GrantTypeCIBA:
+		switch tt {
+		case AccessToken:
+			cl = c.TokenLifespans.CIBAGrantAccessTokenLifespan
+		case RefreshToken:
+			cl = c.TokenLifespans.CIBAGrantRefreshTokenLifespan
+		case IDToken:
+			cl = c.TokenLifespans.CIBAGrantIDTokenLifespan
 		}
 	case GrantTypeClientCredentials:
 		if tt == AccessToken {

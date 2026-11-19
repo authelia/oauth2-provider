@@ -243,8 +243,9 @@ func TestComposeCIBAFactoriesServeThePollFlow(t *testing.T) {
 	session := openid.NewDefaultSession()
 
 	request, err := provider.NewBackChannelAuthenticationRequest(ctx, newRequest(url.Values{
-		consts.FormParameterScope:     {consts.ScopeOpenID},
-		consts.FormParameterLoginHint: {subject},
+		consts.FormParameterScope:          {consts.ScopeOpenID},
+		consts.FormParameterLoginHint:      {subject},
+		consts.FormParameterBindingMessage: {"W4SCT"},
 	}), session)
 	require.NoError(t, err)
 

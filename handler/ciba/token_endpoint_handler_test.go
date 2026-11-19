@@ -526,6 +526,53 @@ func TestCIBATokenReplayRevokes(t *testing.T) {
 	}
 }
 
+// RFC 10027 Section 6.1.10.
+func TestCIBATokenClientLifespans(t *testing.T) {
+	access, refresh := 2*time.Minute, 3*time.Minute
+
+	for _, sc := range tokenTestStores() {
+		t.Run(sc.name, func(t *testing.T) {
+			f := newTokenFixture(sc.new(), func(config *oauth2.Config) {
+				config.RefreshTokenScopes = []string{consts.ScopeOfflineAccess}
+			})
+
+			client := &lifespanTokenTestClient{
+				DefaultCIBAClient: newTokenTestClient("client", consts.CIBAModePoll),
+				lifespans: &oauth2.DefaultClientWithCustomTokenLifespans{TokenLifespans: &oauth2.ClientLifespanConfig{
+					CIBAGrantAccessTokenLifespan:  &access,
+					CIBAGrantRefreshTokenLifespan: &refresh,
+				}},
+			}
+
+			id, signature := f.create(t, client, consts.CIBAModePoll, time.Minute)
+			f.decide(t, t.Context(), client, consts.CIBAModePoll, signature, oauth2.CIBAStatusApproved)
+
+			response, err := f.poll(t.Context(), client, id, time.Now().UTC())
+			requireTokens(t, response, err)
+
+			assert.InDelta(t, access.Seconds(), response.GetExtra(consts.AccessResponseExpiresIn), 5)
+
+			token, ok := response.GetExtra(consts.AccessResponseRefreshToken).(string)
+			require.True(t, ok)
+
+			stored, err := f.store.GetRefreshTokenSession(t.Context(), f.strategy.RefreshTokenSignature(t.Context(), token), &oauth2.DefaultSession{})
+			require.NoError(t, err)
+
+			assert.WithinDuration(t, time.Now().UTC().Add(refresh), stored.GetSession().GetExpiresAt(oauth2.RefreshToken), 5*time.Second)
+		})
+	}
+}
+
+type lifespanTokenTestClient struct {
+	*oauth2.DefaultCIBAClient
+
+	lifespans *oauth2.DefaultClientWithCustomTokenLifespans
+}
+
+func (c *lifespanTokenTestClient) GetEffectiveLifespan(gt oauth2.GrantType, tt oauth2.TokenType, fallback time.Duration) time.Duration {
+	return c.lifespans.GetEffectiveLifespan(gt, tt, fallback)
+}
+
 // barrierTokenTestStore holds the first two GetCIBASession calls until both have arrived, so two redemptions read the
 // approved request before either invalidates it.
 type barrierTokenTestStore struct {

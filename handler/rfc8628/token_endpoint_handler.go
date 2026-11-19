@@ -15,6 +15,8 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
+const slowDownIncrement = 5 * time.Second
+
 // DeviceCodeTokenHandler is a response handler for the Device Code introduced in the Device Authorize Grant
 // as defined in https://www.rfc-editor.org/rfc/rfc8628
 type DeviceCodeTokenHandler struct {
@@ -48,10 +50,14 @@ func (c *DeviceCodeTokenHandler) ValidateCodeAndSession(ctx context.Context, _ o
 
 // GetCodeAndSession loads the device authorization request for the 'device_code' parameter and decides the outcome of
 // this poll. It returns 'expired_token' for an expired code, 'slow_down' when the device polls faster than the
-// configured interval, 'authorization_pending' while the user has not decided and 'access_denied' when the user has
-// denied the request. Once approved, the user's session is merged into the request.
+// interval in force, which starts as the configured interval and grows by 5 seconds with each 'slow_down',
+// 'invalid_grant' once the device code is invalidated for exceeding the configured limit of consecutive 'slow_down'
+// responses, 'authorization_pending' while the user has not decided and 'access_denied' when the user has denied the
+// request. Once approved, the user's session is merged into the request.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
+//
+//nolint:gocyclo
 func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request oauth2.AccessRequester) (code string, signature string, r oauth2.Requester, err error) {
 	code = request.GetRequestForm().Get(consts.FormParameterDeviceCode)
 
@@ -82,6 +88,12 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request 
 	last := deviceAuthReq.GetLastChecked()
 	interval := c.Config.GetRFC8628TokenPollingInterval(ctx)
 
+	polling, _ := deviceAuthReq.(oauth2.DeviceAuthorizePollingRequester)
+
+	if polling != nil && polling.GetPollingInterval() > 0 {
+		interval = polling.GetPollingInterval()
+	}
+
 	if requestedAt.IsZero() {
 		requestedAt = time.Now()
 	}
@@ -94,20 +106,27 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request 
 		last = deviceAuthReq.GetRequestedAt()
 	}
 
+	// The interval grows by 5 seconds for this and every later request.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.5
 	if last.Add(interval).After(requestedAt) {
-		_ = c.UpdateLastChecked(ctx, request, deviceAuthReq)
+		return code, signature, deviceAuthReq, c.slowDown(ctx, request, deviceAuthReq, interval)
+	}
 
-		return code, signature, deviceAuthReq, errorsx.WithStack(
-			oauth2.ErrSlowDown.WithHintf(
-				"The device made an attempt within [%d] seconds. This request will not be processed.",
-				(int)(interval.Seconds()),
-			),
-		)
+	if polling != nil {
+		polling.SetSlowDownCount(0)
+	}
+
+	// The record of the user code is hydrated into a copy of the session, so the session of the request only carries
+	// it once it is known to be the record for this device code.
+	session := request.GetSession()
+	if session != nil {
+		session = session.Clone()
 	}
 
 	var userAuthReq oauth2.DeviceAuthorizeRequester
 
-	if userAuthReq, err = c.Storage.GetDeviceCodeSessionByUserCode(ctx, deviceAuthReq.GetUserCodeSignature(), request.GetSession()); err != nil {
+	if userAuthReq, err = c.Storage.GetDeviceCodeSessionByUserCode(ctx, deviceAuthReq.GetUserCodeSignature(), session); err != nil {
 		_ = c.UpdateLastChecked(ctx, request, deviceAuthReq)
 
 		return code, signature, deviceAuthReq, err
@@ -120,7 +139,9 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request 
 	}
 
 	if status := userAuthReq.GetStatus(); status == oauth2.DeviceAuthorizeStatusNew || status == oauth2.DeviceAuthorizeStatusClaimed {
-		_ = c.UpdateLastChecked(ctx, request, deviceAuthReq)
+		if err = c.UpdateLastChecked(ctx, request, deviceAuthReq); err != nil {
+			return "", "", nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
 
 		return "", "", nil, errorsx.WithStack(oauth2.ErrAuthorizationPending.WithHintf("The user has not authorized the request."))
 	}
@@ -136,8 +157,46 @@ func (c *DeviceCodeTokenHandler) GetCodeAndSession(ctx context.Context, request 
 	return code, signature, deviceAuthReq, err
 }
 
+func (c *DeviceCodeTokenHandler) slowDown(ctx context.Context, request oauth2.AccessRequester, deviceAuthReq oauth2.DeviceAuthorizeRequester, interval time.Duration) (err error) {
+	polling, _ := deviceAuthReq.(oauth2.DeviceAuthorizePollingRequester)
+
+	count := 1
+
+	if polling != nil {
+		count = polling.GetSlowDownCount() + 1
+	}
+
+	if limit := c.slowDownLimit(ctx); limit > 0 && count > limit {
+		if err = c.Storage.InvalidateDeviceCodeSession(ctx, deviceAuthReq.GetDeviceCodeSignature()); err != nil && !errors.Is(err, oauth2.ErrInvalidatedDeviceCode) {
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
+
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The device exceeded the limit of [%d] 'slow_down' responses and the device code is no longer valid.", limit))
+	}
+
+	if polling != nil {
+		polling.SetPollingInterval(interval + slowDownIncrement)
+		polling.SetSlowDownCount(count)
+	}
+
+	if err = c.UpdateLastChecked(ctx, request, deviceAuthReq); err != nil {
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	return errorsx.WithStack(oauth2.ErrSlowDown.WithHintf("The device made an attempt within [%d] seconds. This request will not be processed.", (int)(interval.Seconds())))
+}
+
+func (c *DeviceCodeTokenHandler) slowDownLimit(ctx context.Context) (limit int) {
+	if config, ok := c.Config.(oauth2.RFC8628SlowDownLimitProvider); ok {
+		return config.GetRFC8628SlowDownLimit(ctx)
+	}
+
+	return 0
+}
+
 // UpdateLastChecked records the time of this request on the device authorization request as the last time the device
-// polled, and persists it.
+// polled, and persists it with the rest of its polling state. Only the polling state is written when the Storage
+// implements PollStorage.
 func (c *DeviceCodeTokenHandler) UpdateLastChecked(ctx context.Context, request oauth2.AccessRequester, authorizeRequest oauth2.Requester) (err error) {
 	r, ok := authorizeRequest.(oauth2.DeviceAuthorizeRequester)
 	if !ok {
@@ -150,6 +209,10 @@ func (c *DeviceCodeTokenHandler) UpdateLastChecked(ctx context.Context, request 
 	}
 
 	r.SetLastChecked(lastChecked)
+
+	if storage, ok := c.Storage.(PollStorage); ok {
+		return storage.UpdateDeviceCodeSessionPolling(ctx, r.GetDeviceCodeSignature(), r)
+	}
 
 	return c.Storage.UpdateDeviceCodeSession(ctx, r.GetDeviceCodeSignature(), r)
 }

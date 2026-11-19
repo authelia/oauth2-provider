@@ -56,9 +56,16 @@ func (d *UserAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx 
 }
 
 // HandleRFC8628UserAuthorizeEndpointRequest implements the Device Authorization Grant Flow's resource owner / user
-// interactions Device Authorization Response as defined in RFC8638 Section 3.5.
+// interactions Device Authorization Response as defined in RFC8638 Section 3.5. A user code which is not accepted is
+// answered with 'invalid_grant' wrapping oauth2.ErrUserCodeUnknown, oauth2.ErrUserCodeExpired,
+// oauth2.ErrUserCodeDecided or oauth2.ErrUserCodeClaimed. Unless disabled, an undecided user code is bound to the
+// subject of the session of the first request presenting it, and refused when any other subject presents it.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
+// See: https://www.rfc-editor.org/rfc/rfc8628#section-5.1
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.3
+//
+//nolint:gocyclo
 func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx context.Context, request oauth2.DeviceAuthorizeRequester) (err error) {
 	var (
 		code, signature string
@@ -74,13 +81,34 @@ func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx con
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Cannot process the request, the session is nil."))
 	}
 
+	// See: https://www.rfc-editor.org/rfc/rfc8628#section-5.1
+	if err = d.allowUserCodeAttempt(ctx, request); err != nil {
+		return err
+	}
+
+	// The stored session replaces the session of the request, so the presenting subject is read first.
+	binding, subject := d.isUserCodeSubjectBindingEnforced(ctx), request.GetSession().GetSubject()
+
+	if binding && subject == "" {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Cannot process the request, the session must carry the subject of the authenticated End-User presenting the user_code."))
+	}
+
+	claims, ok := d.Storage.(ClaimStorage)
+
+	if binding && !ok {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Cannot process the request, the storage must implement rfc8628.ClaimStorage to bind the user_code to the End-User presenting it."))
+	}
+
 	if signature, err = d.Strategy.RFC8628UserCodeSignature(ctx, code); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if storedReq, err = d.Storage.GetDeviceCodeSessionByUserCode(ctx, signature, request.GetSession()); errors.Is(err, oauth2.ErrNotFound) || errors.Is(err, oauth2.ErrInvalidatedDeviceCode) {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Cannot process the request, the user_code is either invalid or expired."))
-	} else if err != nil {
+	switch storedReq, err = d.Storage.GetDeviceCodeSessionByUserCode(ctx, signature, request.GetSession()); {
+	case errors.Is(err, oauth2.ErrNotFound):
+		return errUserCode(oauth2.ErrUserCodeUnknown)
+	case errors.Is(err, oauth2.ErrInvalidatedDeviceCode):
+		return errUserCode(oauth2.ErrUserCodeDecided)
+	case err != nil:
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
@@ -102,11 +130,78 @@ func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx con
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Cannot process the request, user code signature mismatch."))
 	}
 
-	if status := request.GetStatus(); session.GetExpiresAt(oauth2.UserCode).Before(time.Now().UTC()) || (status != oauth2.DeviceAuthorizeStatusNew && status != oauth2.DeviceAuthorizeStatusClaimed) {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Cannot process the request, the user_code is either invalid or expired."))
+	if status := request.GetStatus(); status != oauth2.DeviceAuthorizeStatusNew && status != oauth2.DeviceAuthorizeStatusClaimed {
+		return errUserCode(oauth2.ErrUserCodeDecided)
+	}
+
+	if session.GetExpiresAt(oauth2.UserCode).Before(time.Now().UTC()) {
+		return errUserCode(oauth2.ErrUserCodeExpired)
+	}
+
+	if !binding {
+		return nil
+	}
+
+	// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.3
+	return d.claim(ctx, claims, request, subject)
+}
+
+func (d *UserAuthorizeHandler) allowUserCodeAttempt(ctx context.Context, request oauth2.DeviceAuthorizeRequester) (err error) {
+	config, ok := d.Config.(oauth2.RFC8628UserCodeRateLimiterProvider)
+	if !ok {
+		return nil
+	}
+
+	limiter := config.GetRFC8628UserCodeRateLimiter(ctx)
+	if limiter == nil {
+		return nil
+	}
+
+	if err = limiter.AllowRFC8628UserCodeAttempt(ctx, request); err == nil {
+		return nil
+	}
+
+	var rfc *oauth2.RFC6749Error
+
+	if errors.As(err, &rfc) {
+		return err
+	}
+
+	return errorsx.WithStack(oauth2.ErrTooManyRequests.WithHint("Too many user_code attempts have been made.").WithWrap(err).WithDebugError(err))
+}
+
+func (d *UserAuthorizeHandler) isUserCodeSubjectBindingEnforced(ctx context.Context) (enforce bool) {
+	if config, ok := d.Config.(oauth2.RFC8628UserCodeSubjectBindingProvider); ok {
+		return config.GetRFC8628UserCodeSubjectBinding(ctx)
+	}
+
+	return true
+}
+
+func (d *UserAuthorizeHandler) claim(ctx context.Context, storage ClaimStorage, request oauth2.DeviceAuthorizeRequester, subject string) (err error) {
+	switch err = storage.ClaimDeviceCodeSession(ctx, request.GetDeviceCodeSignature(), subject); {
+	case err == nil:
+	case errors.Is(err, oauth2.ErrUserCodeClaimed):
+		return errUserCode(oauth2.ErrUserCodeClaimed)
+	case errors.Is(err, oauth2.ErrDeviceAuthorizeDecided):
+		return errUserCode(oauth2.ErrUserCodeDecided)
+	case errors.Is(err, oauth2.ErrNotFound):
+		return errUserCode(oauth2.ErrUserCodeUnknown)
+	default:
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	request.SetStatus(oauth2.DeviceAuthorizeStatusClaimed)
+
+	if claimant, ok := request.(oauth2.DeviceAuthorizeClaimRequester); ok {
+		claimant.SetClaimSubject(subject)
 	}
 
 	return nil
+}
+
+func errUserCode(cause error) (err error) {
+	return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("Cannot process the request, the user_code is either invalid or expired.").WithWrap(cause).WithDebugError(cause))
 }
 
 var (

@@ -75,6 +75,10 @@ func (s *DefaultClientRegistrationStrategy) PatchClient(ctx context.Context, cli
 	replacement.RefreshTokenGracePeriod = registered.RefreshTokenGracePeriod
 	replacement.RefreshTokenMaximumLifespan = registered.RefreshTokenMaximumLifespan
 	replacement.EnforceSenderConstrainedAccessTokens = registered.EnforceSenderConstrainedAccessTokens
+	replacement.RFC8628VerificationURIComplete = registered.RFC8628VerificationURIComplete
+	replacement.CIBARequireBindingMessage = registered.CIBARequireBindingMessage
+	replacement.RFC8628EnforceSenderConstrainedAccessTokens = registered.RFC8628EnforceSenderConstrainedAccessTokens
+	replacement.CIBAEnforceSenderConstrainedAccessTokens = registered.CIBAEnforceSenderConstrainedAccessTokens
 	replacement.FAPI2SecurityProfile = registered.FAPI2SecurityProfile
 	replacement.TokenExchangeOwnAccessTokenRestrictTargets = registered.TokenExchangeOwnAccessTokenRestrictTargets
 	replacement.TokenExchangeOwnAccessToken = registered.TokenExchangeOwnAccessToken

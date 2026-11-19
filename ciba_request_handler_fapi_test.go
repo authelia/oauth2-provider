@@ -151,7 +151,7 @@ func TestFAPICIBABindingMessageUniqueAuthorizationContext(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config, provider, _ := newCIBATestProvider(serverKey, key)
-			config.CIBARequireBindingMessage = tc.require
+			config.CIBADisableBindingMessageRequirement = !tc.require
 
 			if tc.handler != nil {
 				config.AuthorizationDetailsTypeHandlers = []AuthorizationDetailsTypeHandler{tc.handler}
@@ -207,7 +207,13 @@ func TestFAPICIBARequestContextRequired(t *testing.T) {
 			config, provider, _ := newCIBATestProvider(serverKey, key)
 			config.CIBARequireRequestContext = tc.require
 
-			_, err := sendCIBAFAPITestRequest(t, provider, cibaTestClientPoll, tc.form)
+			_, err := sendCIBAFAPITestRequest(t, provider, cibaTestClientPoll, func(form url.Values) {
+				form.Set(consts.FormParameterBindingMessage, cibaFAPITestBindingMessage)
+
+				if tc.form != nil {
+					tc.form(form)
+				}
+			})
 
 			if tc.err != nil {
 				assertCIBAFAPITestError(t, err, tc.err, "'request_context'")
@@ -364,8 +370,9 @@ func TestFAPICIBAPlainCIBARegression(t *testing.T) {
 	key := gen.MustRSAKey()
 	serverKey := gen.MustRSAKey()
 
-	t.Run("ShouldAcceptPushWithoutABindingMessage", func(t *testing.T) {
-		_, provider, _ := newCIBATestProvider(serverKey, key)
+	t.Run("ShouldAcceptPushWithoutABindingMessageWhenTheRequirementIsDisabled", func(t *testing.T) {
+		config, provider, _ := newCIBATestProvider(serverKey, key)
+		config.CIBADisableBindingMessageRequirement = true
 
 		requester, err := sendCIBAFAPITestRequest(t, provider, cibaTestClientPush, func(form url.Values) {
 			form.Set(consts.FormParameterClientNotificationToken, "token")
@@ -376,8 +383,9 @@ func TestFAPICIBAPlainCIBARegression(t *testing.T) {
 		assert.Empty(t, requester.GetBindingMessage())
 	})
 
-	t.Run("ShouldAcceptPollWithoutABindingMessageOrRequestContext", func(t *testing.T) {
-		_, provider, _ := newCIBATestProvider(serverKey, key)
+	t.Run("ShouldAcceptPollWithoutABindingMessageOrRequestContextWhenTheRequirementIsDisabled", func(t *testing.T) {
+		config, provider, _ := newCIBATestProvider(serverKey, key)
+		config.CIBADisableBindingMessageRequirement = true
 
 		requester, err := sendCIBAFAPITestRequest(t, provider, cibaTestClientPoll, nil)
 

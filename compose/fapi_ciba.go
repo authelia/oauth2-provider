@@ -55,7 +55,7 @@ func ApplyFAPICIBAProfile(config *oauth2.Config) {
 	}
 
 	config.CIBATokenDeliveryModes = modes
-	config.CIBARequireBindingMessage = true
+	config.CIBADisableBindingMessageRequirement = false
 	config.CIBARequireSingleAudienceAssertion = true
 
 	if config.CIBASignedRequestMaximumLifetime <= 0 || config.CIBASignedRequestMaximumLifetime > fapiCIBAMaximumSignedRequestLifetime {
@@ -89,12 +89,13 @@ func ApplyFAPICIBAProfile(config *oauth2.Config) {
 	}
 }
 
-// ValidateFAPICIBAProfile returns an error joining every way the configuration and the handlers registered with it
-// fail the authorization server requirements of the FAPI-CIBA profile on a FAPI 2.0 base, including those
+// ValidateFAPICIBAProfile returns an error joining every way the configuration and the handlers registered with it fail
+// the authorization server requirements of the FAPI-CIBA profile on a FAPI 2.0 base, including those
 // ValidateFAPI2SecurityProfile returns, or nil when they meet them. Call it once the provider is composed. It does not
-// check the clients, which must be confidential and register the poll or ping token delivery mode, or the keys which
-// sign the ID Tokens, UserInfo responses and JWT access tokens the server issues and their signing algorithms, which
-// the configuration does not expose.
+// check the clients, which must be confidential, register the poll or ping token delivery mode and not waive the
+// 'binding_message' requirement through oauth2.CIBABindingMessageClient, or the keys which sign the ID Tokens, UserInfo
+// responses and JWT access tokens the server issues and their signing algorithms, which the configuration does not
+// expose.
 //
 // See: https://openid.net/specs/fapi-ciba.html#section-4.1.1
 func ValidateFAPICIBAProfile(ctx context.Context, config oauth2.Configurator) (err error) {
@@ -118,7 +119,7 @@ func (v *fapi2Violations) cibaAuthorizationServer(ctx context.Context, config oa
 	}
 
 	if !config.GetCIBARequireBindingMessage(ctx) {
-		v.fail(fapiCIBASectionAuthorizationServer, "a unique authorization context or a 'binding_message' must be required, but CIBARequireBindingMessage is not set")
+		v.fail(fapiCIBASectionAuthorizationServer, "a unique authorization context or a 'binding_message' must be required, but CIBADisableBindingMessageRequirement is set")
 	}
 
 	modes := config.GetCIBATokenDeliveryModes(ctx)

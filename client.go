@@ -564,6 +564,21 @@ type CIBALoginHintTokenTypesClient interface {
 	GetBackChannelEndpointLoginHintTokenTypes() (types []string)
 }
 
+// CIBABindingMessageClient is a Client which decides whether its backchannel authentication requests must carry the
+// 'binding_message' parameter. When implemented it overrides CIBAConfigProvider. A client which does not require it
+// is outside the FAPI-CIBA profile.
+//
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.17
+// See: https://openid.net/specs/fapi-ciba.html#section-4.1.1
+type CIBABindingMessageClient interface {
+	Client
+
+	// GetCIBARequireBindingMessage should return true if this client's backchannel authentication requests must carry
+	// the 'binding_message' parameter, or the fallback value, which is the provider-wide option, when the client has
+	// no policy of its own.
+	GetCIBARequireBindingMessage(fallback bool) (require bool)
+}
+
 // GetCIBADeliveryMode returns the client's CIBA token delivery mode, or an empty string when the client is not a
 // CIBAClient.
 func GetCIBADeliveryMode(client Client) (mode string) {
@@ -660,6 +675,20 @@ type TokenRequestRedirectURIOptionalClient interface {
 	Client
 }
 
+// RFC8628VerificationURICompleteClient is a client which decides whether its device authorization responses include
+// the 'verification_uri_complete' member. When implemented it overrides RFC8628VerificationURICompleteProvider.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.2
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.14
+type RFC8628VerificationURICompleteClient interface {
+	// GetRFC8628VerificationURIComplete should return true if this client's device authorization responses include
+	// the 'verification_uri_complete' member, or the fallback value, which is the provider-wide option, when the
+	// client has no policy of its own.
+	GetRFC8628VerificationURIComplete(fallback bool) (enabled bool)
+
+	Client
+}
+
 // DPoPClient represents a client that can advertise the 'dpop_bound_access_tokens' metadata value per RFC 9449.
 type DPoPClient interface {
 	// GetEnableDPoPBoundAccessTokens returns the 'dpop_bound_access_tokens' client metadata value. When true, DPoP is
@@ -727,6 +756,23 @@ type SenderConstrainedAccessTokensClient interface {
 	// GetEnforceSenderConstrainedAccessTokens should return true if this client's token requests must bind their
 	// tokens to a DPoP proof or a mutual-TLS client certificate.
 	GetEnforceSenderConstrainedAccessTokens() (enforce bool)
+
+	Client
+}
+
+// CrossDeviceSenderConstrainedAccessTokensClient is a client whose cross-device grants must bind their tokens to a DPoP
+// proof or a mutual-TLS client certificate, whichever it presents; see
+// IsCrossDeviceSenderConstrainedAccessTokenEnforced.
+//
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.12
+type CrossDeviceSenderConstrainedAccessTokensClient interface {
+	// GetRFC8628EnforceSenderConstrainedAccessTokens should return true if this client's token requests of the RFC
+	// 8628 device authorization grant must bind their tokens to a DPoP proof or a mutual-TLS client certificate.
+	GetRFC8628EnforceSenderConstrainedAccessTokens() (enforce bool)
+
+	// GetCIBAEnforceSenderConstrainedAccessTokens should return true if the tokens of this client's OpenID Connect
+	// CIBA authentication requests must be bound to a DPoP proof or a mutual-TLS client certificate.
+	GetCIBAEnforceSenderConstrainedAccessTokens() (enforce bool)
 
 	Client
 }

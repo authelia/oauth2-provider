@@ -19,9 +19,11 @@ import (
 // validateCIBA checks the OpenID Connect CIBA client metadata. The rules apply only when the metadata registers a
 // 'backchannel_token_delivery_mode' or the CIBA grant type; any other registration is unaffected. The RSA1_5 JWE
 // algorithm is never permitted for the ID Token of such a client. The 'backchannel_user_code_parameter' is accepted
-// whatever the server supports, as it only applies when the server supports the user code.
+// whatever the server supports, as it only applies when the server supports the user code. The push mode is only
+// permitted when the grant types permitted for registration name the CIBA grant type, as the grant type itself is.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.4
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.7
 // See: https://openid.net/specs/fapi-ciba.html#section-5.11
 func validateCIBA(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	mode := metadata.BackChannelTokenDeliveryMode
@@ -42,6 +44,13 @@ func validateCIBA(ctx context.Context, config LocalValidatorConfig, metadata *oa
 	// The push mode never uses the token endpoint, so it does not register the grant type.
 	if mode != consts.CIBAModePush && !hasGrant {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' requires the '%s' to include '%s'.", consts.ClientMetadataBackChannelTokenDeliveryMode, mode, consts.ClientMetadataGrantTypes, consts.GrantTypeOpenIDCIBA))
+	}
+
+	// A push client registers no grant type to permit, so its token delivery mode is held to the same rule.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.7
+	if !hasGrant && !slices.Contains(config.GetRFC7591ClientRegistrationGrantTypes(ctx), consts.GrantTypeOpenIDCIBA) {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is not permitted for registration.", consts.ClientMetadataBackChannelTokenDeliveryMode, mode))
 	}
 
 	if err = validateCIBANotificationEndpoint(mode, metadata); err != nil {

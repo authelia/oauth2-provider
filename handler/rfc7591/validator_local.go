@@ -742,9 +742,11 @@ func validateAuthorizationGrantProfiles(metadata *oauth2.ClientRegistrationMetad
 
 // validateGrantTypesSupported checks the effective 'grant_types' against the grant types this authorization server
 // supports and permits for registration. An omitted value is checked as 'authorization_code', the RFC 7591 Section 2
-// default.
+// default. The cross-device grant types, 'urn:ietf:params:oauth:grant-type:device_code' and
+// 'urn:openid:params:grant-type:ciba', are only permitted when the permitted grant types name them.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7591#section-2
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.7
 func validateGrantTypesSupported(ctx context.Context, config LocalValidatorConfig, metadata *oauth2.ClientRegistrationMetadata) (err error) {
 	supported := oauth2.SupportedGrantTypes(ctx, config)
 	permitted := config.GetRFC7591ClientRegistrationGrantTypes(ctx)
@@ -759,7 +761,7 @@ func validateGrantTypesSupported(ctx context.Context, config LocalValidatorConfi
 			return errUnsupportedEffectiveValue(consts.ClientMetadataGrantTypes, grantType, defaulted)
 		}
 
-		if len(permitted) != 0 && !slices.Contains(permitted, grantType) {
+		if (len(permitted) != 0 || isCrossDeviceGrantType(grantType)) && !slices.Contains(permitted, grantType) {
 			if defaulted {
 				return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s', which applies by default when '%s' is omitted, is not permitted for registration.", consts.ClientMetadataGrantTypes, grantType, consts.ClientMetadataGrantTypes))
 			}
@@ -769,6 +771,10 @@ func validateGrantTypesSupported(ctx context.Context, config LocalValidatorConfi
 	}
 
 	return nil
+}
+
+func isCrossDeviceGrantType(grantType string) (ok bool) {
+	return grantType == consts.GrantTypeOAuthDeviceCode || grantType == consts.GrantTypeOpenIDCIBA
 }
 
 // validateResponseTypesSupported checks the effective 'response_types' against the response types this authorization

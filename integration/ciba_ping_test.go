@@ -94,6 +94,7 @@ func TestCIBAPingFlow(t *testing.T) {
 			status, body := flow.post(t, "/bc-authorize", cibaPingClientID, url.Values{
 				consts.FormParameterScope:                   {cibaScope},
 				consts.FormParameterLoginHint:               {testSubject},
+				consts.FormParameterBindingMessage:          {"W4SCT"},
 				consts.FormParameterClientNotificationToken: {cibaPingNotificationToken},
 			}, nil)
 			require.Equal(t, http.StatusOK, status, "backchannel authentication error: %+v", body)
@@ -181,6 +182,7 @@ func TestCIBAPingDeliveryFailureStillIssuesTokens(t *testing.T) {
 			status, body := flow.post(t, "/bc-authorize", cibaPingClientID, url.Values{
 				consts.FormParameterScope:                   {cibaScope},
 				consts.FormParameterLoginHint:               {testSubject},
+				consts.FormParameterBindingMessage:          {"W4SCT"},
 				consts.FormParameterClientNotificationToken: {cibaPingNotificationToken},
 			}, nil)
 			require.Equal(t, http.StatusOK, status, "backchannel authentication error: %+v", body)

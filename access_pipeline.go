@@ -79,9 +79,12 @@ func (f *Fosite) handleAccessRequest(ctx context.Context, r *http.Request, reque
 	// no proof, so the binding recorded on the session when the grant was requested stands in for it.
 	//
 	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#section-5
-	provider, _ := f.Config.(EnforceSenderConstrainedAccessTokensProvider)
-
-	if IsSenderConstrainedAccessTokenEnforced(ctx, provider, requester.GetClient()) {
+	//
+	// RFC 10027 Section 6.1.12: the same is required of a cross-device grant when the configuration or the client
+	// requires it.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.12
+	if f.isSenderConstraintEnforced(ctx, requester) {
 		var constrained bool
 
 		if IsInternalIssuance(ctx) {
@@ -137,6 +140,24 @@ func (f *Fosite) isSenderConstrainedByRequest(ctx context.Context, r *http.Reque
 	if s, ok := session.(MTLSBoundSession); ok && s.GetClientCertificateSHA256Thumbprint() != "" && f.Config.GetMTLSEnabled(ctx) {
 		if _, err := ValidateClientCertificateBinding(r, f.Config.GetMTLSClientCertificateHeader(ctx), s.GetClientCertificateSHA256Thumbprint()); err == nil {
 			return true
+		}
+	}
+
+	return false
+}
+
+func (f *Fosite) isSenderConstraintEnforced(ctx context.Context, requester AccessRequester) (enforce bool) {
+	provider, _ := f.Config.(EnforceSenderConstrainedAccessTokensProvider)
+
+	if IsSenderConstrainedAccessTokenEnforced(ctx, provider, requester.GetClient()) {
+		return true
+	}
+
+	crossDevice, _ := f.Config.(CrossDeviceSenderConstrainedAccessTokensProvider)
+
+	for _, grantType := range []GrantType{GrantTypeDeviceCode, GrantTypeCIBA} {
+		if requester.GetGrantTypes().ExactOne(string(grantType)) {
+			return IsCrossDeviceSenderConstrainedAccessTokenEnforced(ctx, crossDevice, requester.GetClient(), grantType)
 		}
 	}
 

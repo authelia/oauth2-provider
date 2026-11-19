@@ -7,6 +7,7 @@ package storage
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"maps"
@@ -22,6 +23,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/clone"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/ssfreceiver"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -48,6 +50,37 @@ type DPoPProofMarker struct {
 type JTIMarker struct {
 	Issuer string
 	JTI    string
+}
+
+// SSFReceiverStreamKey identifies a Shared Signals Framework stream record of a Receiver by the issuer of the
+// Transmitter and the stream ID.
+type SSFReceiverStreamKey struct {
+	Issuer   string
+	StreamID string
+}
+
+// SSFReceiverTokenMarker identifies a received Security Event Token for replay detection. RFC 8417 Section 2.2
+// requires a 'jti' to be unique within an event feed, so a 'jti' is known only in the context of the issuer and the
+// stream it was received on.
+type SSFReceiverTokenMarker struct {
+	Issuer   string
+	StreamID string
+	JTI      string
+}
+
+// SSFRelayMarker identifies an underlying event relayed as a Shared Signals Framework Receiver, by the 'txn' the
+// Security Event Tokens of the event share (SSF Section 4.1.9), the event type and the principal it is about.
+type SSFRelayMarker struct {
+	Transaction  string
+	EventType    string
+	PrincipalKey string
+}
+
+// SSFRelayMark is the mark of an SSFRelayMarker: the origin which identifies the Security Event Token the event was
+// relayed from, and when the mark expires.
+type SSFRelayMark struct {
+	Origin    string
+	ExpiresAt time.Time
 }
 
 // ClientValueMarker identifies a value a client sent in an authorization request, such as a PKCE code challenge or an
@@ -136,9 +169,11 @@ type RFC7523SubjectKey struct {
 //
 // The used 'jti' values are kept in a separate map per purpose: ClientAssertionJTIs for client assertions,
 // RFC7523JTIs for RFC 7523 authorization grants, TokenExchangeJTIs for RFC 8693 custom JWT subject and actor
-// tokens, and IDJAGJTIs for ID-JAG redemptions. Expired 'jti' values, DPoP proof markers and DPoP nonces are no
-// longer recognized once they expire, and are removed by the next insert into the same map once the prune interval
-// has elapsed. Expired Client ID Metadata Document records are removed by DeleteExpiredClientIDMetadataDocuments.
+// tokens, IDJAGJTIs for ID-JAG redemptions, and SSFReceiverTokens for the Security Event Tokens received as a Shared
+// Signals Framework Receiver. SSFRelayMarkers holds the events relayed as one. Expired 'jti' values, relay markers,
+// DPoP proof markers and DPoP nonces are no longer recognized once they expire, and are removed by the next insert
+// into the same map once the prune interval has elapsed. Expired Client ID Metadata Document records are removed by
+// DeleteExpiredClientIDMetadataDocuments.
 //
 // AccessTokenRequestIDs indexes every access token signature issued for a request ID, as one request may own several
 // live access tokens (e.g. the OpenID Connect hybrid flow).
@@ -178,6 +213,9 @@ type MemoryStore struct {
 	IDJAGResources            map[IDJAGResourceKey]struct{}
 	IDJAGJTIs                 map[JTIMarker]time.Time
 	SSFStreams                map[string]*oauth2.SSFStream
+	SSFReceiverStreams        map[SSFReceiverStreamKey]*ssfreceiver.StreamRecord
+	SSFReceiverTokens         map[SSFReceiverTokenMarker]time.Time
+	SSFRelayMarkers           map[SSFRelayMarker]SSFRelayMark
 	ClientRegistrationCounts  map[string]int64
 	ClientIDMetadataDocuments map[string]StoreClientIDMetadataDocument
 
@@ -203,6 +241,9 @@ type MemoryStore struct {
 	rfc7523Mutex                  sync.RWMutex
 	clientRegistrationCountsMutex sync.Mutex
 	ssfStreamsMutex               sync.RWMutex
+	ssfReceiverStreamsMutex       sync.RWMutex
+	ssfReceiverTokensMutex        sync.RWMutex
+	ssfRelayMarkersMutex          sync.Mutex
 
 	clientIDMetadataDocumentsMutex sync.RWMutex
 
@@ -214,6 +255,8 @@ type MemoryStore struct {
 	idjagJTIsPruneAt           time.Time
 	pkceChallengesPruneAt      time.Time
 	openIDConnectNoncesPruneAt time.Time
+	ssfReceiverTokensPruneAt   time.Time
+	ssfRelayMarkersPruneAt     time.Time
 
 	refreshTokenFamilies map[string]map[string]struct{}
 }
@@ -267,6 +310,9 @@ func NewMemoryStore() *MemoryStore {
 		IDJAGJTIs:                make(map[JTIMarker]time.Time),
 		ClientRegistrationCounts: make(map[string]int64),
 		SSFStreams:               make(map[string]*oauth2.SSFStream),
+		SSFReceiverStreams:       make(map[SSFReceiverStreamKey]*ssfreceiver.StreamRecord),
+		SSFReceiverTokens:        make(map[SSFReceiverTokenMarker]time.Time),
+		SSFRelayMarkers:          make(map[SSFRelayMarker]SSFRelayMark),
 
 		ClientIDMetadataDocuments: make(map[string]StoreClientIDMetadataDocument),
 	}
@@ -1912,3 +1958,342 @@ func (s *MemoryStore) DeleteSSFStream(ctx context.Context, clientID, streamID st
 }
 
 var _ oauth2.SSFStreamStorage = (*MemoryStore)(nil)
+
+func validateSSFReceiverStream(record *ssfreceiver.StreamRecord) (err error) {
+	switch {
+	case record == nil:
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The stream record is required."))
+	case record.Issuer == "":
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The issuer of the stream record is required."))
+	case record.State != ssfreceiver.StreamRecordPending && record.State != ssfreceiver.StreamRecordActive:
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The state of the stream record must be pending or active."))
+	case record.StreamID == "" && record.State != ssfreceiver.StreamRecordPending:
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The stream ID of an active stream record is required."))
+	default:
+		return nil
+	}
+}
+
+// ssfReceiverPushEndpoint returns the push endpoint URL of the record, or an empty string for a poll stream, where
+// the endpoint URL is the one of the Transmitter.
+func ssfReceiverPushEndpoint(record *ssfreceiver.StreamRecord) (endpointURL string) {
+	switch record.Delivery.Method {
+	case "", oauth2.SSFDeliveryMethodPush:
+		return record.Delivery.EndpointURL
+	default:
+		return ""
+	}
+}
+
+// ssfReceiverStreamConflicts returns true when a record other than the one stored under skip has the key or the
+// push endpoint URL of the record. The caller holds the lock.
+func (s *MemoryStore) ssfReceiverStreamConflicts(record *ssfreceiver.StreamRecord, skip *SSFReceiverStreamKey) bool {
+	key := SSFReceiverStreamKey{Issuer: record.Issuer, StreamID: record.StreamID}
+
+	if _, ok := s.SSFReceiverStreams[key]; ok && (skip == nil || *skip != key) {
+		return true
+	}
+
+	endpointURL := ssfReceiverPushEndpoint(record)
+	if endpointURL == "" {
+		return false
+	}
+
+	for k, stored := range s.SSFReceiverStreams {
+		if (skip == nil || *skip != k) && ssfReceiverPushEndpoint(stored) == endpointURL {
+			return true
+		}
+	}
+
+	return false
+}
+
+// CreateSSFReceiverStream implements ssfreceiver.StreamStorage.
+func (s *MemoryStore) CreateSSFReceiverStream(_ context.Context, record *ssfreceiver.StreamRecord) (err error) {
+	if err = validateSSFReceiverStream(record); err != nil {
+		return err
+	}
+
+	s.ssfReceiverStreamsMutex.Lock()
+	defer s.ssfReceiverStreamsMutex.Unlock()
+
+	if s.SSFReceiverStreams == nil {
+		s.SSFReceiverStreams = make(map[SSFReceiverStreamKey]*ssfreceiver.StreamRecord)
+	}
+
+	if s.ssfReceiverStreamConflicts(record, nil) {
+		return errorsx.WithStack(ssfreceiver.ErrStreamRecordConflict)
+	}
+
+	s.SSFReceiverStreams[SSFReceiverStreamKey{Issuer: record.Issuer, StreamID: record.StreamID}] = record.Clone()
+
+	return nil
+}
+
+// GetSSFReceiverStream implements ssfreceiver.StreamStorage.
+func (s *MemoryStore) GetSSFReceiverStream(_ context.Context, issuer, streamID string) (record *ssfreceiver.StreamRecord, err error) {
+	s.ssfReceiverStreamsMutex.RLock()
+	defer s.ssfReceiverStreamsMutex.RUnlock()
+
+	if stored, ok := s.SSFReceiverStreams[SSFReceiverStreamKey{Issuer: issuer, StreamID: streamID}]; ok {
+		return stored.Clone(), nil
+	}
+
+	return nil, errorsx.WithStack(oauth2.ErrNotFound)
+}
+
+// GetSSFReceiverStreamByPushEndpoint implements ssfreceiver.StreamStorage.
+func (s *MemoryStore) GetSSFReceiverStreamByPushEndpoint(_ context.Context, endpointURL string) (record *ssfreceiver.StreamRecord, err error) {
+	if endpointURL == "" {
+		return nil, errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	s.ssfReceiverStreamsMutex.RLock()
+	defer s.ssfReceiverStreamsMutex.RUnlock()
+
+	for _, stored := range s.SSFReceiverStreams {
+		if ssfReceiverPushEndpoint(stored) == endpointURL {
+			return stored.Clone(), nil
+		}
+	}
+
+	return nil, errorsx.WithStack(oauth2.ErrNotFound)
+}
+
+// ListSSFReceiverStreams implements ssfreceiver.StreamStorage.
+func (s *MemoryStore) ListSSFReceiverStreams(_ context.Context, issuer string) (records []*ssfreceiver.StreamRecord, err error) {
+	s.ssfReceiverStreamsMutex.RLock()
+	defer s.ssfReceiverStreamsMutex.RUnlock()
+
+	for key, stored := range s.SSFReceiverStreams {
+		if key.Issuer == issuer {
+			records = append(records, stored.Clone())
+		}
+	}
+
+	slices.SortFunc(records, func(a, b *ssfreceiver.StreamRecord) int { return strings.Compare(a.StreamID, b.StreamID) })
+
+	return records, nil
+}
+
+// UpdateSSFReceiverStream implements ssfreceiver.StreamStorage.
+func (s *MemoryStore) UpdateSSFReceiverStream(_ context.Context, issuer, streamID string, record *ssfreceiver.StreamRecord) (err error) {
+	if err = validateSSFReceiverStream(record); err != nil {
+		return err
+	}
+
+	if record.Issuer != issuer {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("The issuer of a stream record can not change."))
+	}
+
+	s.ssfReceiverStreamsMutex.Lock()
+	defer s.ssfReceiverStreamsMutex.Unlock()
+
+	key := SSFReceiverStreamKey{Issuer: issuer, StreamID: streamID}
+
+	stored, ok := s.SSFReceiverStreams[key]
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	if s.ssfReceiverStreamConflicts(record, &key) {
+		return errorsx.WithStack(ssfreceiver.ErrStreamRecordConflict)
+	}
+
+	updated := record.Clone()
+
+	updated.Status, updated.StatusReason = stored.Status, stored.StatusReason
+	updated.VerificationState, updated.VerificationRequestedAt = stored.VerificationState, stored.VerificationRequestedAt
+	updated.VerifiedAt = stored.VerifiedAt
+	updated.PendingAuthorizationHeader = stored.PendingAuthorizationHeader
+
+	delete(s.SSFReceiverStreams, key)
+
+	s.SSFReceiverStreams[SSFReceiverStreamKey{Issuer: updated.Issuer, StreamID: updated.StreamID}] = updated
+
+	return nil
+}
+
+// UpdateSSFReceiverStreamStatus implements ssfreceiver.StreamStorage.
+func (s *MemoryStore) UpdateSSFReceiverStreamStatus(_ context.Context, issuer, streamID, status, reason string) (err error) {
+	s.ssfReceiverStreamsMutex.Lock()
+	defer s.ssfReceiverStreamsMutex.Unlock()
+
+	stored, ok := s.SSFReceiverStreams[SSFReceiverStreamKey{Issuer: issuer, StreamID: streamID}]
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	stored.Status, stored.StatusReason = status, reason
+
+	return nil
+}
+
+// SetSSFReceiverStreamPendingAuthorizationHeader implements ssfreceiver.StreamStorage.
+func (s *MemoryStore) SetSSFReceiverStreamPendingAuthorizationHeader(_ context.Context, issuer, streamID, header string) (err error) {
+	s.ssfReceiverStreamsMutex.Lock()
+	defer s.ssfReceiverStreamsMutex.Unlock()
+
+	stored, ok := s.SSFReceiverStreams[SSFReceiverStreamKey{Issuer: issuer, StreamID: streamID}]
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	stored.PendingAuthorizationHeader = header
+
+	return nil
+}
+
+// SetSSFReceiverStreamVerificationState implements ssfreceiver.StreamStorage.
+func (s *MemoryStore) SetSSFReceiverStreamVerificationState(_ context.Context, issuer, streamID, state string, requestedAt time.Time) (err error) {
+	s.ssfReceiverStreamsMutex.Lock()
+	defer s.ssfReceiverStreamsMutex.Unlock()
+
+	stored, ok := s.SSFReceiverStreams[SSFReceiverStreamKey{Issuer: issuer, StreamID: streamID}]
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	if requestedAt.IsZero() {
+		state = ""
+	}
+
+	stored.VerificationState, stored.VerificationRequestedAt = state, requestedAt
+
+	return nil
+}
+
+// ConsumeSSFReceiverStreamVerificationState implements ssfreceiver.StreamStorage.
+func (s *MemoryStore) ConsumeSSFReceiverStreamVerificationState(_ context.Context, issuer, streamID, state string, verifiedAt time.Time) (err error) {
+	s.ssfReceiverStreamsMutex.Lock()
+	defer s.ssfReceiverStreamsMutex.Unlock()
+
+	stored, ok := s.SSFReceiverStreams[SSFReceiverStreamKey{Issuer: issuer, StreamID: streamID}]
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	if stored.VerificationRequestedAt.IsZero() || subtle.ConstantTimeCompare([]byte(stored.VerificationState), []byte(state)) != 1 {
+		return errorsx.WithStack(ssfreceiver.ErrVerificationStateMismatch)
+	}
+
+	stored.VerificationState, stored.VerificationRequestedAt, stored.VerifiedAt = "", time.Time{}, verifiedAt
+
+	return nil
+}
+
+// SetSSFReceiverStreamVerifiedAt implements ssfreceiver.StreamStorage.
+func (s *MemoryStore) SetSSFReceiverStreamVerifiedAt(_ context.Context, issuer, streamID string, verifiedAt time.Time) (err error) {
+	s.ssfReceiverStreamsMutex.Lock()
+	defer s.ssfReceiverStreamsMutex.Unlock()
+
+	stored, ok := s.SSFReceiverStreams[SSFReceiverStreamKey{Issuer: issuer, StreamID: streamID}]
+	if !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	stored.VerifiedAt = verifiedAt
+
+	return nil
+}
+
+// DeleteSSFReceiverStream implements ssfreceiver.StreamStorage.
+func (s *MemoryStore) DeleteSSFReceiverStream(_ context.Context, issuer, streamID string) (err error) {
+	s.ssfReceiverStreamsMutex.Lock()
+	defer s.ssfReceiverStreamsMutex.Unlock()
+
+	key := SSFReceiverStreamKey{Issuer: issuer, StreamID: streamID}
+
+	if _, ok := s.SSFReceiverStreams[key]; !ok {
+		return errorsx.WithStack(oauth2.ErrNotFound)
+	}
+
+	delete(s.SSFReceiverStreams, key)
+
+	return nil
+}
+
+// IsSSFReceiverTokenKnown implements ssfreceiver.TokenStorage. The 'jti' is scoped to the issuer and the stream,
+// see SSFReceiverTokenMarker.
+func (s *MemoryStore) IsSSFReceiverTokenKnown(_ context.Context, issuer, streamID, jti string) (known bool, err error) {
+	s.ssfReceiverTokensMutex.RLock()
+	defer s.ssfReceiverTokensMutex.RUnlock()
+
+	exp, ok := s.SSFReceiverTokens[SSFReceiverTokenMarker{Issuer: issuer, StreamID: streamID, JTI: jti}]
+
+	return ok && !exp.Before(s.now()), nil
+}
+
+// MarkSSFReceiverTokenReceived implements ssfreceiver.TokenStorage. The 'jti' is scoped to the issuer and the
+// stream, see SSFReceiverTokenMarker.
+func (s *MemoryStore) MarkSSFReceiverTokenReceived(_ context.Context, issuer, streamID, jti string, expiresAt time.Time) (err error) {
+	s.ssfReceiverTokensMutex.Lock()
+	defer s.ssfReceiverTokensMutex.Unlock()
+
+	if s.SSFReceiverTokens == nil {
+		s.SSFReceiverTokens = make(map[SSFReceiverTokenMarker]time.Time)
+	}
+
+	now := s.now()
+
+	pruneExpired(s.SSFReceiverTokens, &s.ssfReceiverTokensPruneAt, now)
+
+	marker := SSFReceiverTokenMarker{Issuer: issuer, StreamID: streamID, JTI: jti}
+
+	if exp, ok := s.SSFReceiverTokens[marker]; ok && !exp.Before(now) {
+		return errorsx.WithStack(oauth2.ErrJTIKnown)
+	}
+
+	s.SSFReceiverTokens[marker] = expiresAt
+
+	return nil
+}
+
+// MarkSSFRelayedEvent implements ssfreceiver.RelayStorage. A mark of the same origin is kept with the later expiry,
+// and a mark of another origin gives ssfreceiver.ErrRelayKnown.
+func (s *MemoryStore) MarkSSFRelayedEvent(_ context.Context, txn string, eventTypes []string, principalKey, origin string, expiry time.Time) (err error) {
+	s.ssfRelayMarkersMutex.Lock()
+	defer s.ssfRelayMarkersMutex.Unlock()
+
+	if s.SSFRelayMarkers == nil {
+		s.SSFRelayMarkers = make(map[SSFRelayMarker]SSFRelayMark)
+	}
+
+	now := s.now()
+
+	if !now.Before(s.ssfRelayMarkersPruneAt) {
+		s.ssfRelayMarkersPruneAt = now.Add(memoryStorePruneInterval)
+
+		for key, mark := range s.SSFRelayMarkers {
+			if mark.ExpiresAt.Before(now) {
+				delete(s.SSFRelayMarkers, key)
+			}
+		}
+	}
+
+	for _, eventType := range eventTypes {
+		marker := SSFRelayMarker{Transaction: txn, EventType: eventType, PrincipalKey: principalKey}
+
+		if mark, ok := s.SSFRelayMarkers[marker]; ok && !mark.ExpiresAt.Before(now) && mark.Origin != origin {
+			return errorsx.WithStack(ssfreceiver.ErrRelayKnown)
+		}
+	}
+
+	for _, eventType := range eventTypes {
+		marker := SSFRelayMarker{Transaction: txn, EventType: eventType, PrincipalKey: principalKey}
+
+		if mark, ok := s.SSFRelayMarkers[marker]; ok && !mark.ExpiresAt.Before(now) && !expiry.After(mark.ExpiresAt) {
+			continue
+		}
+
+		s.SSFRelayMarkers[marker] = SSFRelayMark{Origin: origin, ExpiresAt: expiry}
+	}
+
+	return nil
+}
+
+var (
+	_ ssfreceiver.StreamStorage = (*MemoryStore)(nil)
+	_ ssfreceiver.TokenStorage  = (*MemoryStore)(nil)
+	_ ssfreceiver.RelayStorage  = (*MemoryStore)(nil)
+)

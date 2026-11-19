@@ -28,6 +28,18 @@ type ClaimValidationOptions struct {
 	nbfRequired    bool
 	issNotRequired bool
 	audNotRequired bool
+
+	securityEventReceiver bool
+}
+
+// ValidateSecurityEventReceiver validates SecurityEventTokenClaims as the Receiver of the SET. A 'sub_id' format this
+// package does not define is accepted at any depth (SSF 1.0 Figure 13), an additional Complex Subject member name
+// counts as a member (SSF 1.0 §3.3), and the deprecated RISC sessions-revoked event type is accepted (RISC 1.0 §2.11).
+// Nothing else changes, and other claim types ignore the option.
+func ValidateSecurityEventReceiver() ClaimValidationOption {
+	return func(opts *ClaimValidationOptions) {
+		opts.securityEventReceiver = true
+	}
 }
 
 // ValidateTimeFunc sets the function used to obtain the current time, in place of TimeFunc.

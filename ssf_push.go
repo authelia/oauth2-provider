@@ -13,22 +13,18 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
 	"golang.org/x/net/http/httpguts"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/ssfjson"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-const (
-	ssfContentTypeSecurityEventToken = "application/secevent+jwt"
-
-	ssfPushMaxRetryAfter = 5 * time.Minute
-)
+const ssfContentTypeSecurityEventToken = "application/secevent+jwt"
 
 // SSFPushOutcome is the classification of a single push attempt.
 type SSFPushOutcome int
@@ -197,7 +193,7 @@ func (f *Fosite) PushSecurityEventToken(ctx context.Context, client Client, deli
 		result.Err = errorsx.WithStack(ErrServerError.WithHintf("The receiver rejected the Security Event Token with status code '%d'.", response.StatusCode))
 	case ssfPushStatusRetryable(response.StatusCode):
 		result.Outcome = SSFPushRetryable
-		result.RetryAfter = ssfPushRetryAfter(response.Header.Get("Retry-After"), time.Now())
+		result.RetryAfter = ssfjson.RetryAfter(response.Header.Get("Retry-After"), time.Now())
 		result.Err = errorsx.WithStack(ErrServerError.WithHintf("The receiver responded with status code '%d'.", response.StatusCode))
 	default:
 		// Any other status is a general HTTP error (RFC 8935 Section 2.3) that waiting does not resolve.
@@ -383,39 +379,4 @@ func ssfPushParseError(body []byte) (code, description string) {
 	_ = json.Unmarshal(parsed.Description, &description)
 
 	return code, description
-}
-
-// ssfPushRetryAfter parses a Retry-After delay in seconds or an HTTP date, bounded to five minutes.
-func ssfPushRetryAfter(value string, now time.Time) (d time.Duration) {
-	value = strings.TrimSpace(value)
-
-	if value == "" {
-		return 0
-	}
-
-	// RFC 9110 Section 10.2.3: delay-seconds is 1*DIGIT, so it has no sign.
-	if !strings.ContainsFunc(value, func(r rune) bool { return r < '0' || r > '9' }) {
-		seconds, err := strconv.ParseUint(value, 10, 64)
-
-		// A value out of range is still bounded rather than dropped.
-		if err != nil || seconds > uint64(ssfPushMaxRetryAfter/time.Second) {
-			return ssfPushMaxRetryAfter
-		}
-
-		return time.Duration(seconds) * time.Second
-	}
-
-	at, err := http.ParseTime(value)
-	if err != nil {
-		return 0
-	}
-
-	switch d = at.Sub(now); {
-	case d <= 0:
-		return 0
-	case d > ssfPushMaxRetryAfter:
-		return ssfPushMaxRetryAfter
-	default:
-		return d
-	}
 }

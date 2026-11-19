@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"reflect"
@@ -154,6 +155,16 @@ func securityEventNumber(literal string) (number any, err error) {
 		}
 	}
 
+	// An integer written with a fraction or an exponent keeps its value when it fits an int64 or a uint64.
+	if r, ok := securityEventRat(literal); ok && r.IsInt() {
+		switch n := r.Num(); {
+		case n.IsInt64():
+			return n.Int64(), nil
+		case n.IsUint64():
+			return n.Uint64(), nil
+		}
+	}
+
 	var f float64
 
 	if f, err = strconv.ParseFloat(literal, 64); err != nil {
@@ -165,6 +176,42 @@ func securityEventNumber(literal string) (number any, err error) {
 	}
 
 	return f, nil
+}
+
+// securityEventMaxExponent bounds the exponent of a JSON number which is converted exactly, as the size of the result
+// grows with it.
+const securityEventMaxExponent = 1000
+
+// securityEventRat returns the exact value of a JSON number, or false when its exponent is beyond
+// securityEventMaxExponent.
+func securityEventRat(literal string) (r *big.Rat, ok bool) {
+	mantissa, exponent := literal, 0
+
+	if i := strings.IndexAny(literal, "eE"); i >= 0 {
+		var err error
+
+		if exponent, err = strconv.Atoi(literal[i+1:]); err != nil || exponent > securityEventMaxExponent || exponent < -securityEventMaxExponent {
+			return nil, false
+		}
+
+		mantissa = literal[:i]
+	}
+
+	if r, ok = new(big.Rat).SetString(mantissa); !ok {
+		return nil, false
+	}
+
+	if exponent != 0 {
+		scale := new(big.Rat).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(max(exponent, -exponent))), nil))
+
+		if exponent > 0 {
+			r.Mul(r, scale)
+		} else {
+			r.Quo(r, scale)
+		}
+	}
+
+	return r, true
 }
 
 func securityEventIsNil(event SecurityEvent) bool {
@@ -230,7 +277,8 @@ func (c *SecurityEventTokenClaims) GetAudience() (aud ClaimStrings, err error) {
 // a token with a 'sub' or 'exp' claim (SSF 1.0 §4), without exactly one event (SSF 1.0 §4), with an event type that
 // is not a URI or an event payload that is not an object (RFC 8417 §2.2), without an 'iss', 'aud', 'jti' or 'iat'
 // claim, with an 'iss' or 'aud' value that is not a StringOrURI (RFC 7519 §2), or with an invalid 'sub_id' claim. The
-// payload of an event type this package defines is validated as that type.
+// payload of an event type this package defines is validated as that type. ValidateSecurityEventReceiver relaxes the
+// 'sub_id' format and the deprecated RISC sessions-revoked event type for a received SET.
 //
 //nolint:gocyclo
 func (c SecurityEventTokenClaims) Valid(opts ...ClaimValidationOption) (err error) {
@@ -279,13 +327,18 @@ func (c SecurityEventTokenClaims) Valid(opts ...ClaimValidationOption) (err erro
 			continue
 		}
 
+		// RISC 1.0 §2.11: sessions-revoked is deprecated for new implementations, and is still received.
+		if vopts.securityEventReceiver && uri == SecurityEventTypeRISCSessionsRevoked {
+			continue
+		}
+
 		if err = validateSecurityEventPayload(uri, object, c.SubjectIdentifier); err != nil {
 			vErr.Inner = err
 			vErr.Errors |= ValidationErrorClaimsInvalid
 		}
 	}
 
-	if err = c.SubjectIdentifier.Validate(); err != nil {
+	if err = c.SubjectIdentifier.validate(vopts.securityEventReceiver); err != nil {
 		vErr.Inner = err
 		vErr.Errors |= ValidationErrorClaimsInvalid
 	}
@@ -349,18 +402,51 @@ func (c *SecurityEventTokenClaims) GetIssuedAtSafe() time.Time {
 	return c.IssuedAt.UTC()
 }
 
+// ParseSecurityEventTokenClaims decodes the JSON claims object of a received SET, which is the decoded payload of the
+// JWS and not the compact token. Unlike UnmarshalJSON it keeps the precision of every integer of an event payload, and
+// keeps a 'sub_id' member the format does not define in SubjectIdentifier.Additional in place of refusing it (SSF 1.0
+// §3.3, §4.2.3). The result is validated with Valid and ValidateSecurityEventReceiver.
+func ParseSecurityEventTokenClaims(payload []byte) (claims *SecurityEventTokenClaims, err error) {
+	claims = &SecurityEventTokenClaims{}
+
+	if err = claims.decode(payload, true); err != nil {
+		return nil, err
+	}
+
+	return claims, nil
+}
+
 // UnmarshalJSON handles the JSON unmarshalling for the SecurityEventTokenClaims. Claims other than those of a SET are
 // discarded.
-//
-//nolint:gocyclo
 func (c *SecurityEventTokenClaims) UnmarshalJSON(data []byte) (err error) {
-	claims := MapClaims{}
+	return c.decode(data, false)
+}
+
+//nolint:gocyclo
+func (c *SecurityEventTokenClaims) decode(data []byte, receiver bool) (err error) {
+	claims := map[string]any{}
 
 	decoder := jjson.NewDecoder(bytes.NewReader(data))
-	decoder.SetNumberType(jjson.UnmarshalIntOrFloat)
+
+	if receiver {
+		decoder.SetNumberType(jjson.UnmarshalJSONNumber)
+	} else {
+		decoder.SetNumberType(jjson.UnmarshalIntOrFloat)
+	}
 
 	if err = decoder.Decode(&claims); err != nil {
 		return errorsx.WithStack(err)
+	}
+
+	if receiver {
+		// RFC 8259 §2: a JSON text is one value with optional whitespace around it.
+		if _, err = decoder.Token(); !errors.Is(err, io.EOF) {
+			return errorsx.WithStack(errors.New("the claims are followed by further data"))
+		}
+
+		if _, err = securityEventNumbers(claims); err != nil {
+			return err
+		}
 	}
 
 	*c = SecurityEventTokenClaims{}
@@ -394,7 +480,7 @@ func (c *SecurityEventTokenClaims) UnmarshalJSON(data []byte) (err error) {
 
 			c.SubjectIdentifier = &SubjectIdentifier{}
 
-			if err = json.Unmarshal(raw, c.SubjectIdentifier); err != nil {
+			if err = c.SubjectIdentifier.decode(raw, receiver); err != nil {
 				ok = false
 			}
 		case ClaimSubject:

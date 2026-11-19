@@ -5,11 +5,14 @@
 package jwt
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
+	"strconv"
 	"strings"
 
 	"golang.org/x/text/language"
@@ -195,16 +198,49 @@ func validateSecurityEvent(event SecurityEvent, subject *SubjectIdentifier) (err
 }
 
 func validateSecurityEventPayload(uri string, payload map[string]any, subject *SubjectIdentifier) (err error) {
+	var event SecurityEvent
+
+	if event, err = decodeSecurityEventPayload(uri, payload); err != nil || event == nil {
+		return err
+	}
+
+	return validateSecurityEvent(event, subject)
+}
+
+// DecodeSecurityEvent returns the event of a received payload as a pointer to the type this package defines for the
+// event type URI, which is validated. A member the type does not define is ignored (SSF 1.0 §4.2.3), and the fraction
+// of an event_timestamp is dropped. Any other event type, and the deprecated RISC sessions-revoked event type (RISC 1.0
+// §2.11), gives a RawSecurityEvent with a copy of the payload.
+func DecodeSecurityEvent(uri string, payload map[string]any) (event SecurityEvent, err error) {
+	if uri != SecurityEventTypeRISCSessionsRevoked {
+		if event, err = decodeSecurityEventPayload(uri, payload); err != nil {
+			return nil, err
+		}
+	}
+
+	if event == nil {
+		return RawSecurityEvent{URI: uri, Claims: maps.Clone(payload)}, nil
+	}
+
+	if err = validateSecurityEvent(event, nil); err != nil {
+		return nil, err
+	}
+
+	return event, nil
+}
+
+// decodeSecurityEventPayload returns nil for an event type this package does not define.
+func decodeSecurityEventPayload(uri string, payload map[string]any) (event SecurityEvent, err error) {
 	factory, ok := securityEventTypes[uri]
 	if !ok {
-		return nil
+		return nil, nil
 	}
 
 	if strings.HasPrefix(uri, securityEventTypePrefixCAEP) {
 		// CAEP 1.0 §2: a reason object contains one or more key/value pairs.
 		for _, claim := range []string{claimSecurityEventReasonAdmin, claimSecurityEventReasonUser} {
 			if securityEventMemberJSON(payload, claim) == "{}" {
-				return fmt.Errorf("%w: the '%s' claim must contain one or more key/value pairs", ErrInvalidSecurityEvent, claim)
+				return nil, fmt.Errorf("%w: the '%s' claim must contain one or more key/value pairs", ErrInvalidSecurityEvent, claim)
 			}
 		}
 	}
@@ -213,28 +249,121 @@ func validateSecurityEventPayload(uri string, payload map[string]any, subject *S
 	literal := securityEventMemberJSON(payload, claimSecurityEventTimestamp)
 
 	if literal == jsonNull {
-		return fmt.Errorf("%w: the '%s' event payload is not valid: the '%s' claim is not a number", ErrInvalidSecurityEvent, uri, claimSecurityEventTimestamp)
+		return nil, fmt.Errorf("%w: the '%s' event payload is not valid: the '%s' claim is not a number", ErrInvalidSecurityEvent, uri, claimSecurityEventTimestamp)
 	}
 
 	if literal != "" && (literal[0] == '-' || (literal[0] >= '0' && literal[0] <= '9')) {
 		payload = maps.Clone(payload)
 
-		delete(payload, claimSecurityEventTimestamp)
+		if seconds, ok := securityEventSeconds(literal); ok {
+			payload[claimSecurityEventTimestamp] = seconds
+		} else {
+			delete(payload, claimSecurityEventTimestamp)
+		}
 	}
 
 	var data []byte
 
 	if data, err = json.Marshal(payload); err != nil {
-		return fmt.Errorf("%w: the '%s' event payload is not valid: %w", ErrInvalidSecurityEvent, uri, err)
+		return nil, fmt.Errorf("%w: the '%s' event payload is not valid: %w", ErrInvalidSecurityEvent, uri, err)
 	}
 
-	event := factory()
+	event = factory()
 
-	if err = jjson.Unmarshal(data, event); err != nil {
-		return fmt.Errorf("%w: the '%s' event payload is not valid: %w", ErrInvalidSecurityEvent, uri, err)
+	if err = decodeSecurityEventInto(data, event); err != nil {
+		return nil, fmt.Errorf("%w: the '%s' event payload is not valid: %w", ErrInvalidSecurityEvent, uri, err)
 	}
 
-	return validateSecurityEvent(event, subject)
+	return event, nil
+}
+
+// decodeSecurityEventInto decodes the payload into the event. A number decoded into an interface value keeps its
+// precision (RFC 8259 §6).
+func decodeSecurityEventInto(data []byte, event SecurityEvent) (err error) {
+	decoder := jjson.NewDecoder(bytes.NewReader(data))
+	decoder.SetNumberType(jjson.UnmarshalJSONNumber)
+
+	if err = decoder.Decode(event); err != nil {
+		return err
+	}
+
+	if change, ok := event.(*CAEPTokenClaimsChange); ok && change.Claims != nil {
+		_, err = securityEventNumbers(change.Claims)
+	}
+
+	return err
+}
+
+// securityEventSeconds returns the whole seconds of a JSON number, when they fit an int64. The fraction is removed
+// from the decimal digits, as rounding to a float64 may carry it into the seconds, and the work is bounded by the
+// length of the literal whatever its exponent (RFC 8259 §6).
+func securityEventSeconds(literal string) (seconds int64, ok bool) {
+	if i, err := strconv.ParseInt(literal, 10, 64); err == nil {
+		return i, true
+	}
+
+	sign, rest := "", literal
+
+	if strings.HasPrefix(rest, "-") {
+		sign, rest = "-", rest[1:]
+	}
+
+	mantissa, exponent := rest, 0
+
+	if i := strings.IndexAny(rest, "eE"); i >= 0 {
+		var err error
+
+		mantissa = rest[:i]
+
+		if exponent, err = strconv.Atoi(rest[i+1:]); err != nil {
+			if !errors.Is(err, strconv.ErrRange) {
+				return 0, false
+			}
+
+			// An exponent beyond an int is beyond any number of digits.
+			exponent = math.MaxInt32
+
+			if strings.HasPrefix(rest[i+1:], "-") {
+				exponent = math.MinInt32
+			}
+		}
+	}
+
+	whole, fraction, _ := strings.Cut(mantissa, ".")
+	digits := whole + fraction
+
+	if whole == "" || strings.Trim(digits, "0123456789") != "" {
+		return 0, false
+	}
+
+	// Past the digits and the 19 of an int64 the whole part is zero, or all of the digits and too large.
+	if limit := len(digits) + 19; exponent < -limit {
+		return 0, true
+	} else if exponent > limit {
+		if strings.Trim(digits, "0") == "" {
+			return 0, true
+		}
+
+		return 0, false
+	}
+
+	var integer string
+
+	switch point := len(whole) + exponent; {
+	case point <= 0:
+		integer = "0"
+	case point >= len(digits):
+		integer = digits + strings.Repeat("0", point-len(digits))
+	default:
+		integer = digits[:point]
+	}
+
+	i, err := strconv.ParseInt(sign+integer, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+
+	return i, true
 }
 
 func securityEventMemberJSON(payload map[string]any, claim string) (literal string) {

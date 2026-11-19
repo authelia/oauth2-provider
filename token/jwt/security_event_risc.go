@@ -36,7 +36,8 @@ const (
 	// security event.
 	SecurityEventTypeRISCRecoveryInformationChanged = "https://schemas.openid.net/secevent/risc/event-type/recovery-information-changed"
 	// SecurityEventTypeRISCSessionsRevoked is the event type URI of the RISC sessions revoked security event. A SET of
-	// this event type is refused (RISC 1.0 §2.11).
+	// this event type is refused (RISC 1.0 §2.11), other than by a Receiver that validates with
+	// ValidateSecurityEventReceiver.
 	//
 	// Deprecated: use SecurityEventTypeCAEPSessionRevoked.
 	SecurityEventTypeRISCSessionsRevoked = "https://schemas.openid.net/secevent/risc/event-type/sessions-revoked"

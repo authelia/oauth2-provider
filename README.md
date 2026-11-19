@@ -130,15 +130,15 @@ finalized, so support for one may change in any release.
 
 ### Shared Signals
 
-| Specification                                                                                               | Status | Draft      | Notes                                                                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------------------------------------------------------------------------- | :----: | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html)     |   🟡   |            | The Transmitter role: Security Event Token signing, transmitter metadata, stream configuration, status and verification, and push and poll delivery; the subject endpoints, `inactivity_timeout`, asynchronous stream creation and the Receiver role are not implemented, and the event queue is left to the application                                     |
-| [OpenID Continuous Access Evaluation Profile 1.0](https://openid.net/specs/openid-caep-1_0.html)            |   ✅   |            | Every event and subject identifier type, validated when sent as a raw event as well; when to emit an event is left to the application                                                                                                                                                                                                                        |
-| [OpenID RISC Profile 1.0](https://openid.net/specs/openid-risc-1_0.html)                                    |   ✅   |            | Every event type, validated when sent as a raw event as well; the identifier events require an `email` or `phone_number` subject and the deprecated `sessions-revoked` event is refused; when to emit an event and the opt-out state are left to the application                                                                                             |
-| [CAEP Interoperability Profile 1.0](https://openid.net/specs/openid-caep-interoperability-profile-1_0.html) |   🟡   | `draft-01` | The Transmitter role, with bearer authorization through `ssf.read` and `ssf.manage`; RS256 signing with an RSA key of at least 2048 bits and the required transmitter metadata are checked only when `SSFConfig.EnforceCAEPInteroperabilityProfile` is enabled, and TLS, the access token lifetime and the `reason_admin` values are left to the application |
-| [RFC 8417: Security Event Token (SET)](https://datatracker.ietf.org/doc/html/rfc8417)                       |   ✅   |            | Claims and signing as profiled by SSF, so `sub`, `exp`, and multiple events are not supported and `toe` is not emitted; the default strategy signs, and nests the token in a JWE per client through `security_event_token_encrypted_response_*`; delivery is RFC 8935 push or RFC 8936 poll                                                                  |
-| [RFC 8935: Push-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8935)         |   ✅   |            | Single push attempt with a typed outcome, which `PushSecurityEventTokenToStream` withholds on a stream that is paused or disabled; queuing and retries are left to the application                                                                                                                                                                           |
-| [RFC 8936: Poll-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8936)         |   ✅   |            | Request parsing and response writing; the SET queue, acknowledgements, the `maxEvents` limit and long polling are left to the application                                                                                                                                                                                                                    |
+| Specification                                                                                               | Status | Draft      | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------- | :----: | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html)     |   🟡   |            | The Transmitter role: Security Event Token signing, transmitter metadata, stream configuration, status and verification, and push and poll delivery; the subject endpoints, `inactivity_timeout` and asynchronous stream creation are not implemented, and the event queue is left to the application; the Receiver role is in `ssfreceiver`: transmitter metadata discovery, stream management with the subject endpoints, Security Event Token validation and `jti` de-duplication, the verification and stream updated events, and a relay to the streams of the Transmitter role; a token without `sub_id` or with more than one event is refused, and the routes, the storage and acting on an event are left to the application |
+| [OpenID Continuous Access Evaluation Profile 1.0](https://openid.net/specs/openid-caep-1_0.html)            |   ✅   |            | Every event and subject identifier type, validated when sent as a raw event as well; when to emit an event is left to the application                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| [OpenID RISC Profile 1.0](https://openid.net/specs/openid-risc-1_0.html)                                    |   ✅   |            | Every event type, validated when sent as a raw event as well; the identifier events require an `email` or `phone_number` subject and the deprecated `sessions-revoked` event is refused by the Transmitter role and accepted by the Receiver role; when to emit an event and the opt-out state are left to the application                                                                                                                                                                                                                                                                                                                                                                                                            |
+| [CAEP Interoperability Profile 1.0](https://openid.net/specs/openid-caep-interoperability-profile-1_0.html) |   🟡   | `draft-01` | The Transmitter role, with bearer authorization through `ssf.read` and `ssf.manage`; RS256 signing with an RSA key of at least 2048 bits and the required transmitter metadata are checked only when `SSFConfig.EnforceCAEPInteroperabilityProfile` is enabled, and TLS, the access token lifetime and the `reason_admin` values are left to the application; the Receiver role checks the same signing and transmitter metadata requirements, and refuses the subject requests, only when `ssfreceiver.Config.EnforceCAEPInteroperabilityProfile` is enabled; TLS, certificate revocation and obtaining the access token are left to the application                                                                                 |
+| [RFC 8417: Security Event Token (SET)](https://datatracker.ietf.org/doc/html/rfc8417)                       |   ✅   |            | Claims and signing as profiled by SSF, so `sub`, `exp`, and multiple events are not supported and `toe` is not emitted; the default strategy signs, and nests the token in a JWE per client through `security_event_token_encrypted_response_*`; delivery is RFC 8935 push or RFC 8936 poll                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| [RFC 8935: Push-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8935)         |   ✅   |            | Transmitter: single push attempt with a typed outcome, which `PushSecurityEventTokenToStream` withholds on a stream that is paused or disabled; queuing and retries are left to the application; Receiver: `ssfreceiver.Receiver.HandlePush` authorizes the request, validates and acknowledges the token and answers with the error codes; the route is left to the application and the error descriptions are in English only                                                                                                                                                                                                                                                                                                       |
+| [RFC 8936: Poll-Based Security Event Token Delivery](https://datatracker.ietf.org/doc/html/rfc8936)         |   ✅   |            | Transmitter: request parsing and response writing; the SET queue, acknowledgements, the `maxEvents` limit and long polling are left to the application; Receiver: `ssfreceiver.Receiver.Poll` makes one request and `ssfreceiver.Poller` long polls with acknowledgements, `setErrs` and backoff; running a poller for each stream is left to the application                                                                                                                                                                                                                                                                                                                                                                         |
 
 ### Model Context Protocol
 
@@ -470,6 +470,94 @@ the members the [CAEP Interoperability Profile](https://openid.net/specs/openid-
 requires. The rest of the profile is never checked: TLS, an access token lifetime of 60 minutes or less, a `jwks_uri`
 that serves the current signing keys, and a non-empty `reason_admin` in each session-revoked, credential-change and
 device-compliance-change event.
+
+### Shared Signals Receiver
+
+The `ssfreceiver` package is the Receiver role of the
+[OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html) for an
+authorization server. It discovers and validates the Transmitter Configuration Metadata, manages streams at a
+Transmitter, validates the Security Event Tokens of a push request or a poll response, hands each event to an
+`EventHandler`, and prepares the tokens which relay an event to the streams the authorization server transmits on. It
+has no routes, no queue and no OAuth client, so the following are the responsibility of the application. The package
+documentation lists them in full, with what is not implemented.
+
+- **Secure the transport**: serve the push endpoint, and connect to a Transmitter, over TLS 1.2 or later with
+  certificate validation
+  ([CAEP Interoperability Profile Section 2.1](https://openid.net/specs/openid-caep-interoperability-profile-1_0.html#section-2.1)).
+  Go does not check certificate revocation, so an application which requires it adds the check to the transport of
+  `Config.HTTPClient` and to its server. A `Config.HTTPClient` with a timeout needs one longer than
+  `Config.LongPollTimeout`.
+- **Authorize the requests**: supply the `Authorizer` and the access tokens behind it. Reading a stream or its status
+  asks for `ssf.read`, and every other request, a poll included, for `ssf.manage`. The poll endpoint URL is the one the
+  Transmitter supplied in the stream configuration: it must be an `https` URL and the request passes the special-use
+  address guard, but its host is not tied to the issuer, and it receives the access token, so create streams only at
+  issuers from a trusted list. A custom `Config.JWKSFetcher` applies the special-use address guard and limits forced
+  refreshes itself, as a token with an unknown `kid` forces one.
+- **Route each push URL**: one URL per stream, with the record looked up from the request URL and passed to
+  `Receiver.HandlePush`. The URL is matched as an exact string, so normalize it the same way when creating the stream
+  and when routing. A record whose delivery has no method is a push stream. `HandlePush` returns the cause of a 503 and
+  the error of a request which is not authorized, for the application to log. A `PushAuthorizer` which could not decide
+  returns an error matching `ErrPushAuthorizerUnavailable`, which answers 503 so the Transmitter delivers again.
+- **Keep the push secret**: `Delivery.AuthorizationHeader` and `PendingAuthorizationHeader` are stored with the record
+  and must be protected at rest. Rotate the secret with `Receiver.ReplaceStream` or `Receiver.UpdateStream`: the new
+  secret is stored as the pending one before the request, and a push with either is authorized while one is pending, so
+  no push is refused during a rotation. A 200 makes the new secret the only one. An error matching
+  `ErrStreamChangeApplied` confirms the Transmitter applied the change, not that the old secret is no longer accepted:
+  when the record could not be stored the old secret stays and the new one stays pending, so repeat the same request
+  until it returns no error. An error matching `ErrStreamUpdatePending` (a 202) or `ErrTransmitterUnconfirmed` (no
+  response), or a `*TransmitterError` of a 5xx or an unexpected 2xx, keeps both, so repeat the same request until it is
+  answered with a 200. Any other error withdraws the new secret. A record has one pending secret, so finish a rotation
+  before starting another.
+- **Persist in the handler and act afterwards**: `HandleSecurityEvent` persists or enqueues the event and returns, and
+  the application acts on it, such as ending sessions, after the handler returned
+  ([RFC 8935 Section 2](https://datatracker.ietf.org/doc/html/rfc8935#section-2)). The handler must be idempotent on the
+  issuer and the `jti`, as a failure before the token is marked as received, or a concurrent delivery, calls it again
+  for the same token.
+- **Fill in the events of each record**: an event type outside `StreamRecord.EventsDelivered` is acknowledged and
+  dropped, so an empty list drops every event but the verification and stream updated events. The status of a record is
+  stored and not enforced: a token received on a paused or disabled stream is handled as any other, as the status is the
+  duty of the Transmitter
+  ([SSF Section 8.1.5](https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.5)).
+- **Resolve subjects**: a `SubjectResolver` returns `ErrSubjectUnknown` for a subject it does not know, which
+  acknowledges the token without the handler. Any other error, a `*SetError` included, is never reported to the
+  Transmitter, which delivers the token again
+  ([SSF Section 9.3](https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-9.3)). An empty
+  `Config.ProcessedSubjectMembers` means the seven Complex Subject members of SSF Section 3.3. `Receiver.AddSubject`
+  refuses a proprietary subject format.
+- **Look after the streams**: call `Receiver.Touch` for a push stream more often than its `inactivity_timeout`
+  ([SSF Section 8.1.1](https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-8.1.1)), request
+  verification on a schedule, and alert when a stream stays unverified, paused or disabled. A process which ends during
+  `Receiver.CreateStream` leaves a pending record under the issuer and an empty stream ID, which blocks every later
+  create for that issuer until it is deleted through the store. The Transmitter may have created the stream before the
+  process ended: find it with `Receiver.ListStreams` and remove it with `Receiver.DeleteStream` before the next create,
+  as a Transmitter which allows one stream refuses it with `ErrStreamConflict`. A push to a pending record is answered
+  with a 503, so a Transmitter which verifies a push stream inside the create request, and requires that push to
+  succeed, fails the create. `Receiver.DeleteStream` removes the record on a 404 as well as on a 204. Serialize
+  `Receiver.UpdateStream`, `Receiver.ReplaceStream` and `Receiver.ReadStream` for one stream: each stores the whole
+  record and the last one wins. Serialize `Receiver.RequestStreamVerification` for one stream as well, as a request
+  replaces the `state` of an earlier one.
+- **Run the pollers**: one `Poller` per poll stream. Its `Failure` hook is the only sight of an error it retries, such
+  as a 401, a 403, a 400 or a 413. Each request has a `maxEvents`, which is `Config.MaxPollSets` unless
+  `Poller.MaxEvents` is set.
+- **Queue the relayed tokens**: `Relay.Prepare` returns the tokens and never pushes. Queue them in the outbox used for
+  the events the application originates, and prepare the event again when they could not be queued, which gives the same
+  `jti` and `txn`.
+- **Obtain consent before relaying**: nothing is relayed without a `RelayPolicy`. The policy and the
+  `RelaySubjectMapper` decide which Receivers learn of an event, on the consent or other basis the application has
+  ([SSF Section 10.3](https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-10.3)). The default
+  policy drops the reasons of the Transmitter and relays the free-form members it keeps as received: `credential_type`,
+  the namespace and levels of an assurance level change, and the principal of a risk level change.
+- **Choose the `txn` mode**: per stream by default, which needs a `Relay.TransactionKey` of at least 32 bytes and keeps
+  two Receivers from correlating their subjects
+  ([SSF Section 10.1](https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-10.1)).
+  `Relay.TransactionModeFor` chooses per stream, such as by client. Rotating the key changes the `jti` and the `txn` of
+  every later relay to a stream in the per-stream mode; a stream in the propagate mode has a `jti` without a key and the
+  `txn` of the event. The relay marker is keyed by `txn`, event type and principal, so the copy of the same event from a
+  second upstream Transmitter with the same `txn` is not relayed again. The upstream Transmitters share one `txn` space;
+  clear `RelayEvent.Transaction` for a Transmitter whose `txn` values may collide with those of another, which derives
+  one from its `iss` and `jti`. A cycle through another relay which derives a new `txn` is not recognized: keep the
+  relays acyclic, or use the propagate mode for every relay of a cycle, and set `ExcludeClientIDs` to the client of the
+  upstream Transmitter.
 
 ## Thanks
 

@@ -198,6 +198,142 @@ func TestValidateSSFConfiguration(t *testing.T) {
 	}
 }
 
+func TestValidateSSFConfigurationForIssuer(t *testing.T) {
+	const issuer = "https://tr.example.com/issuer1"
+
+	valid := func(mutate func(c *SSFConfiguration)) *SSFConfiguration {
+		c := &SSFConfiguration{
+			SpecVersion:              SSFSpecVersion,
+			Issuer:                   issuer,
+			JWKSURI:                  "https://tr.example.com/jwks.json",
+			DeliveryMethodsSupported: []string{SSFDeliveryMethodPush, SSFDeliveryMethodPoll},
+			ConfigurationEndpoint:    "https://tr.example.com/ssf/stream",
+			StatusEndpoint:           "https://tr.example.com/ssf/status",
+			VerificationEndpoint:     "https://tr.example.com/ssf/verify",
+			AuthorizationSchemes:     []SSFAuthorizationScheme{{SpecURN: SSFAuthorizationSchemeOAuth2}},
+		}
+
+		if mutate != nil {
+			mutate(c)
+		}
+
+		return c
+	}
+
+	type testCase struct {
+		name          string
+		configuration *SSFConfiguration
+		issuer        string
+		noIssuer      bool
+		profile       bool
+		err           string
+	}
+
+	groups := []struct {
+		name      string
+		testCases []testCase
+	}{
+		{
+			// SSF Section 7.2.4: the 'issuer' MUST be identical to the issuer the location was derived from.
+			name: "ShouldRejectIssuerMismatch",
+			testCases: []testCase{
+				{name: "AnotherHost", configuration: valid(nil), issuer: "https://other.example.com/issuer1", err: "'issuer' is not the configured issuer"},
+				{name: "TrailingSlash", configuration: valid(nil), issuer: issuer + "/", err: "'issuer' is not the configured issuer"},
+				{name: "Case", configuration: valid(nil), issuer: "https://TR.example.com/issuer1", err: "'issuer' is not the configured issuer"},
+				{name: "EmptyExpected", configuration: valid(nil), noIssuer: true, err: "'issuer' is not the configured issuer"},
+				{name: "EmptyMetadata", configuration: valid(func(c *SSFConfiguration) { c.Issuer = "" }), noIssuer: true, err: "'issuer' is not valid"},
+				{name: "HTTPOnBoth", configuration: valid(func(c *SSFConfiguration) { c.Issuer = "http://tr.example.com" }), issuer: "http://tr.example.com", err: "'issuer' is not valid"},
+			},
+		},
+		{
+			// SSF Section 7.1: 'jwks_uri' and each endpoint use the https scheme.
+			name: "ShouldRejectHTTPEndpoint",
+			testCases: []testCase{
+				{name: "JWKSURI", configuration: valid(func(c *SSFConfiguration) { c.JWKSURI = "http://tr.example.com/jwks.json" }), err: "'jwks_uri' must be an absolute https URL"},
+				{name: "ConfigurationEndpoint", configuration: valid(func(c *SSFConfiguration) { c.ConfigurationEndpoint = "http://tr.example.com/ssf/stream" }), err: "'configuration_endpoint' must be an absolute https URL"},
+				{name: "StatusEndpoint", configuration: valid(func(c *SSFConfiguration) { c.StatusEndpoint = "http://tr.example.com/ssf/status" }), err: "'status_endpoint' must be an absolute https URL"},
+				{name: "AddSubjectEndpoint", configuration: valid(func(c *SSFConfiguration) { c.AddSubjectEndpoint = "http://tr.example.com/add" }), err: "'add_subject_endpoint' must be an absolute https URL"},
+				{name: "RemoveSubjectEndpoint", configuration: valid(func(c *SSFConfiguration) { c.RemoveSubjectEndpoint = "http://tr.example.com/remove" }), err: "'remove_subject_endpoint' must be an absolute https URL"},
+				{name: "VerificationEndpoint", configuration: valid(func(c *SSFConfiguration) { c.VerificationEndpoint = "http://tr.example.com/ssf/verify" }), err: "'verification_endpoint' must be an absolute https URL"},
+				{name: "NoJWKSURI", configuration: valid(func(c *SSFConfiguration) { c.JWKSURI = "" }), err: "'jwks_uri' is required"},
+			},
+		},
+		{
+			// Profile Section 2.3.1 to 2.3.7.
+			name: "ShouldRequireProfileMembers",
+			testCases: []testCase{
+				{name: "AcceptFullMetadata", configuration: valid(nil), profile: true},
+				{name: "AcceptIssuerAndJWKSURIOnlyWithoutProfile", configuration: &SSFConfiguration{Issuer: issuer, JWKSURI: issuer + "/jwks.json"}},
+				{name: "SpecVersion", configuration: valid(func(c *SSFConfiguration) { c.SpecVersion = "" }), profile: true, err: "'spec_version' does not meet the CAEP Interoperability Profile"},
+				{name: "DraftSpecVersion", configuration: valid(func(c *SSFConfiguration) { c.SpecVersion = "1_0-ID3" }), profile: true, err: "'spec_version' does not meet the CAEP Interoperability Profile"},
+				{name: "DeliveryMethodsSupported", configuration: valid(func(c *SSFConfiguration) { c.DeliveryMethodsSupported = nil }), profile: true, err: "'delivery_methods_supported' does not meet the CAEP Interoperability Profile"},
+				{name: "JWKSURI", configuration: valid(func(c *SSFConfiguration) { c.JWKSURI = "" }), profile: true, err: "'jwks_uri' is required"},
+				{name: "ConfigurationEndpoint", configuration: valid(func(c *SSFConfiguration) { c.ConfigurationEndpoint = "" }), profile: true, err: "'configuration_endpoint' does not meet the CAEP Interoperability Profile"},
+				{name: "StatusEndpoint", configuration: valid(func(c *SSFConfiguration) { c.StatusEndpoint = "" }), profile: true, err: "'status_endpoint' does not meet the CAEP Interoperability Profile"},
+				{name: "VerificationEndpoint", configuration: valid(func(c *SSFConfiguration) { c.VerificationEndpoint = "" }), profile: true, err: "'verification_endpoint' does not meet the CAEP Interoperability Profile"},
+				{name: "AuthorizationSchemes", configuration: valid(func(c *SSFConfiguration) { c.AuthorizationSchemes = nil }), profile: true, err: "'authorization_schemes' does not meet the CAEP Interoperability Profile"},
+				{name: "OAuth2AuthorizationScheme", configuration: valid(func(c *SSFConfiguration) {
+					c.AuthorizationSchemes = []SSFAuthorizationScheme{{SpecURN: "urn:ietf:rfc:8705"}}
+				}), profile: true, err: "'authorization_schemes' does not meet the CAEP Interoperability Profile"},
+				{name: "NotWithoutProfile", configuration: valid(func(c *SSFConfiguration) {
+					c.SpecVersion, c.DeliveryMethodsSupported, c.ConfigurationEndpoint, c.StatusEndpoint, c.VerificationEndpoint, c.AuthorizationSchemes = "", nil, "", "", "", nil
+				})},
+			},
+		},
+		{
+			name: "ShouldKeepProviderBehavior",
+			testCases: []testCase{
+				{name: "Accept", configuration: valid(nil), profile: true},
+				{name: "Nil", err: "The Transmitter Configuration Metadata is missing."},
+				{name: "InvalidIssuer", configuration: valid(func(c *SSFConfiguration) { c.Issuer = issuer + "?a=b" }), issuer: issuer + "?a=b", err: "The Transmitter Configuration Metadata 'issuer' is not valid: issuer must not contain a query or fragment."},
+				{name: "AnotherIssuer", configuration: valid(func(c *SSFConfiguration) { c.Issuer = "https://other.example.com" }), err: "The Transmitter Configuration Metadata 'issuer' is not the configured issuer."},
+				{name: "NoJWKSURI", configuration: valid(func(c *SSFConfiguration) { c.JWKSURI = "" }), err: "The Transmitter Configuration Metadata 'jwks_uri' is required."},
+				{name: "RelativeEndpoint", configuration: valid(func(c *SSFConfiguration) { c.StatusEndpoint = "/ssf/status" }), err: "The Transmitter Configuration Metadata 'status_endpoint' must be an absolute https URL."},
+				{name: "DefaultSubjects", configuration: valid(func(c *SSFConfiguration) { c.DefaultSubjects = "all" }), err: "The Transmitter Configuration Metadata 'default_subjects' must be 'ALL' or 'NONE'."},
+				{name: "SchemeWithoutSpecURN", configuration: valid(func(c *SSFConfiguration) {
+					c.AuthorizationSchemes = append(c.AuthorizationSchemes, SSFAuthorizationScheme{})
+				}), err: "The Transmitter Configuration Metadata 'authorization_schemes' has an entry with no 'spec_urn'."},
+				{name: "Profile", configuration: valid(func(c *SSFConfiguration) { c.VerificationEndpoint = "" }), profile: true, err: "The Transmitter Configuration Metadata 'verification_endpoint' does not meet the CAEP Interoperability Profile."},
+			},
+		},
+	}
+
+	for _, group := range groups {
+		t.Run(group.name, func(t *testing.T) {
+			for _, tc := range group.testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					expected := issuer
+
+					if tc.issuer != "" || tc.noIssuer {
+						expected = tc.issuer
+					}
+
+					err := ValidateSSFConfigurationForIssuer(tc.configuration, expected, tc.profile)
+
+					provider := &Fosite{Config: &Config{Issuer: expected, SSF: &SSFConfig{EnforceCAEPInteroperabilityProfile: tc.profile}}}
+
+					wrapped := provider.ValidateSSFConfiguration(context.Background(), tc.configuration)
+
+					if tc.err == "" {
+						assert.NoError(t, err)
+						assert.NoError(t, wrapped)
+
+						return
+					}
+
+					require.Error(t, err)
+					assert.Contains(t, err.Error(), tc.err)
+					assert.NotErrorIs(t, err, ErrServerError)
+
+					// The provider method gives the same fault as the debug of a 'server_error'.
+					require.ErrorIs(t, wrapped, ErrServerError)
+					assert.Equal(t, err.Error(), ErrorToRFC6749Error(wrapped).DebugField)
+				})
+			}
+		})
+	}
+}
+
 func TestSSFConfigurationURL(t *testing.T) {
 	testCases := []struct {
 		name     string

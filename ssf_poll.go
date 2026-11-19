@@ -5,14 +5,13 @@
 package oauth2
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/ssfjson"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -148,21 +147,21 @@ func (f *Fosite) NewSSFPollRequest(ctx context.Context, r *http.Request, session
 func parseSSFPollRequestBody(data []byte, request *SSFPollRequest) (err error) {
 	var members map[string]json.RawMessage
 
-	if members, err = parseSSFJSONObject(data); err != nil {
+	if members, err = ssfjson.ParseObject(data); err != nil {
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The request body must be a single JSON object with no repeated member names.").WithWrap(err).WithDebugError(err))
 	}
 
-	if raw, ok := ssfJSONMember(members, ssfPollMemberMaxEvents); ok {
+	if raw, ok := ssfjson.Member(members, ssfPollMemberMaxEvents); ok {
 		var maxEvents int
 
-		if !isSSFJSONNumber(raw) || json.Unmarshal(raw, &maxEvents) != nil || maxEvents < 0 {
+		if !ssfjson.IsNumber(raw) || json.Unmarshal(raw, &maxEvents) != nil || maxEvents < 0 {
 			return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'maxEvents' member must be a non-negative integer."))
 		}
 
 		request.MaxEvents = &maxEvents
 	}
 
-	if raw, ok := ssfJSONMember(members, ssfPollMemberReturnImmediately); ok {
+	if raw, ok := ssfjson.Member(members, ssfPollMemberReturnImmediately); ok {
 		switch string(raw) {
 		case "true":
 			request.ReturnImmediately = true
@@ -172,7 +171,7 @@ func parseSSFPollRequestBody(data []byte, request *SSFPollRequest) (err error) {
 		}
 	}
 
-	if raw, ok := ssfJSONMember(members, ssfPollMemberAck); ok {
+	if raw, ok := ssfjson.Member(members, ssfPollMemberAck); ok {
 		var values []json.RawMessage
 
 		if json.Unmarshal(raw, &values) != nil {
@@ -184,7 +183,7 @@ func parseSSFPollRequestBody(data []byte, request *SSFPollRequest) (err error) {
 		for _, value := range values {
 			var jti string
 
-			if jti, ok = parseSSFJSONString(value); !ok || jti == "" {
+			if jti, ok = ssfjson.ParseString(value); !ok || jti == "" {
 				return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'ack' member must be an array of non-empty strings."))
 			}
 
@@ -192,7 +191,7 @@ func parseSSFPollRequestBody(data []byte, request *SSFPollRequest) (err error) {
 		}
 	}
 
-	if raw, ok := ssfJSONMember(members, ssfPollMemberSetErrs); ok {
+	if raw, ok := ssfjson.Member(members, ssfPollMemberSetErrs); ok {
 		if request.SetErrs, err = parseSSFPollSetErrs(raw); err != nil {
 			return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'setErrs' member must be an object of objects, each named by a 'jti' and holding a non-empty string 'err' and an optional string 'description'.").WithWrap(err).WithDebugError(err))
 		}
@@ -204,7 +203,7 @@ func parseSSFPollRequestBody(data []byte, request *SSFPollRequest) (err error) {
 func parseSSFPollSetErrs(data json.RawMessage) (setErrs map[string]SSFPollSetError, err error) {
 	var members map[string]json.RawMessage
 
-	if members, err = parseSSFJSONObject(data); err != nil {
+	if members, err = ssfjson.ParseObject(data); err != nil {
 		return nil, err
 	}
 
@@ -217,7 +216,7 @@ func parseSSFPollSetErrs(data json.RawMessage) (setErrs map[string]SSFPollSetErr
 
 		var fields map[string]json.RawMessage
 
-		if fields, err = parseSSFJSONObject(raw); err != nil {
+		if fields, err = ssfjson.ParseObject(raw); err != nil {
 			return nil, err
 		}
 
@@ -226,12 +225,12 @@ func parseSSFPollSetErrs(data json.RawMessage) (setErrs map[string]SSFPollSetErr
 			ok     bool
 		)
 
-		if setErr.Err, ok = parseSSFJSONString(fields[ssfPollMemberErr]); !ok || setErr.Err == "" {
+		if setErr.Err, ok = ssfjson.ParseString(fields[ssfPollMemberErr]); !ok || setErr.Err == "" {
 			return nil, errors.New("the 'err' member is not a non-empty string")
 		}
 
-		if description, present := ssfJSONMember(fields, ssfPollMemberDescription); present {
-			if setErr.Description, ok = parseSSFJSONString(description); !ok {
+		if description, present := ssfjson.Member(fields, ssfPollMemberDescription); present {
+			if setErr.Description, ok = ssfjson.ParseString(description); !ok {
 				return nil, errors.New("the 'description' member is not a string")
 			}
 		}
@@ -240,81 +239,6 @@ func parseSSFPollSetErrs(data json.RawMessage) (setErrs map[string]SSFPollSetErr
 	}
 
 	return setErrs, nil
-}
-
-// parseSSFJSONObject returns the members of a single JSON object by their exact names. A repeated name is an error.
-func parseSSFJSONObject(data []byte) (members map[string]json.RawMessage, err error) {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-
-	var token json.Token
-
-	if token, err = decoder.Token(); err != nil {
-		return nil, err
-	}
-
-	if token != json.Delim('{') {
-		return nil, errors.New("the value is not a JSON object")
-	}
-
-	members = map[string]json.RawMessage{}
-
-	for decoder.More() {
-		if token, err = decoder.Token(); err != nil {
-			return nil, err
-		}
-
-		name, ok := token.(string)
-		if !ok {
-			return nil, errors.New("the member name is not a string")
-		}
-
-		if _, ok = members[name]; ok {
-			return nil, errors.New("a member name is repeated")
-		}
-
-		var value json.RawMessage
-
-		if err = decoder.Decode(&value); err != nil {
-			return nil, err
-		}
-
-		members[name] = value
-	}
-
-	if _, err = decoder.Token(); err != nil {
-		return nil, err
-	}
-
-	if _, err = decoder.Token(); !errors.Is(err, io.EOF) {
-		return nil, errors.New("the value is followed by more data")
-	}
-
-	return members, nil
-}
-
-// ssfJSONMember returns the named member, which is absent when it is null.
-func ssfJSONMember(members map[string]json.RawMessage, name string) (value json.RawMessage, ok bool) {
-	if value, ok = members[name]; !ok || string(value) == jsonNull {
-		return nil, false
-	}
-
-	return value, true
-}
-
-func parseSSFJSONString(data json.RawMessage) (value string, ok bool) {
-	if len(data) == 0 || data[0] != '"' {
-		return "", false
-	}
-
-	if json.Unmarshal(data, &value) != nil {
-		return "", false
-	}
-
-	return value, true
-}
-
-func isSSFJSONNumber(data json.RawMessage) (ok bool) {
-	return len(data) != 0 && (data[0] == '-' || (data[0] >= '0' && data[0] <= '9'))
 }
 
 // WriteSSFPollResponse writes the poll response with 'Cache-Control: no-store'. The sets are keyed by 'jti'; a nil map

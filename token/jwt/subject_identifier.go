@@ -93,6 +93,11 @@ type SubjectIdentifier struct {
 	IPAddresses []string            `json:"ip-addresses,omitempty"`
 
 	SubjectIdentifierComplexMembers
+
+	// Additional holds the members of a received subject identifier that Format does not define, and every member
+	// other than 'format' when Format is not one this package defines (SSF 1.0 §3.3, §4.2.3). Only the decoding of
+	// a received SET sets it, and it is never marshaled.
+	Additional map[string]any `json:"-"`
 }
 
 // MarshalJSON marshals the 'format' and the members of Format only.
@@ -132,6 +137,12 @@ func (s SubjectIdentifier) MarshalJSON() (data []byte, err error) {
 // UnmarshalJSON decodes a subject identifier. Member names are matched by exact case, and a duplicate member or a
 // member the format does not define is an error (RFC 9493 §3). A format that is unknown is left for Validate.
 func (s *SubjectIdentifier) UnmarshalJSON(data []byte) (err error) {
+	return s.decode(data, false)
+}
+
+// decode decodes a subject identifier. A receiver keeps a member the format does not define in Additional in place of
+// refusing it (SSF 1.0 §3.3, §4.2.3), at every depth.
+func (s *SubjectIdentifier) decode(data []byte, receiver bool) (err error) {
 	if string(bytes.TrimSpace(data)) == jsonNull {
 		return nil
 	}
@@ -144,15 +155,21 @@ func (s *SubjectIdentifier) UnmarshalJSON(data []byte) (err error) {
 
 	var format string
 
-	if raw, ok := members["format"]; ok {
+	if raw, ok := members[subjectIdentifierMemberFormat]; ok {
 		if err = jjson.Unmarshal(raw, &format); err != nil {
 			return fmt.Errorf("%w: the 'format' member is not a string", ErrInvalidSubjectIdentifier)
 		}
 	}
 
-	if defined, ok := subjectIdentifierMembers(format); ok {
+	defined, known := subjectIdentifierMembers(format)
+
+	if receiver {
+		return s.decodeReceived(format, members, defined)
+	}
+
+	if known {
 		for _, member := range slices.Sorted(maps.Keys(members)) {
-			if member != "format" && !slices.Contains(defined, member) {
+			if member != subjectIdentifierMemberFormat && !slices.Contains(defined, member) {
 				return fmt.Errorf("%w: format '%s' does not define the '%s' member", ErrInvalidSubjectIdentifier, format, member)
 			}
 		}
@@ -173,6 +190,100 @@ func (s *SubjectIdentifier) UnmarshalJSON(data []byte) (err error) {
 	*s = SubjectIdentifier(decoded)
 
 	return nil
+}
+
+func (s *SubjectIdentifier) decodeReceived(format string, members map[string]jjson.RawMessage, defined []string) (err error) {
+	decoded := SubjectIdentifier{Format: format}
+	simple := map[string]jjson.RawMessage{}
+
+	for _, member := range slices.Sorted(maps.Keys(members)) {
+		switch {
+		case member == subjectIdentifierMemberFormat:
+			continue
+		case !slices.Contains(defined, member):
+			var value any
+
+			if value, err = decodeJSONValue(members[member]); err == nil {
+				if decoded.Additional == nil {
+					decoded.Additional = map[string]any{}
+				}
+
+				decoded.Additional[member] = value
+			}
+		case format == SubjectIdentifierFormatComplex:
+			err = decoded.decodeReceivedComplexMember(member, members[member])
+		case format == SubjectIdentifierFormatAliases:
+			err = decoded.decodeReceivedAliases(members[member])
+		default:
+			simple[member] = members[member]
+		}
+
+		if err != nil {
+			return fmt.Errorf("%w: the '%s' member is invalid: %w", ErrInvalidSubjectIdentifier, member, err)
+		}
+	}
+
+	var data []byte
+
+	if data, err = jjson.Marshal(simple); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidSubjectIdentifier, err)
+	}
+
+	type subjectIdentifier SubjectIdentifier
+
+	if err = jjson.Unmarshal(data, (*subjectIdentifier)(&decoded)); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidSubjectIdentifier, err)
+	}
+
+	*s = decoded
+
+	return nil
+}
+
+func (s *SubjectIdentifier) decodeReceivedComplexMember(name string, raw jjson.RawMessage) (err error) {
+	if string(bytes.TrimSpace(raw)) == jsonNull {
+		return nil
+	}
+
+	for _, member := range s.complexMembers() {
+		if member.name == name {
+			*member.value = &SubjectIdentifier{}
+
+			return (*member.value).decode(raw, true)
+		}
+	}
+
+	return nil
+}
+
+func (s *SubjectIdentifier) decodeReceivedAliases(raw jjson.RawMessage) (err error) {
+	var identifiers []jjson.RawMessage
+
+	if err = jjson.Unmarshal(raw, &identifiers); err != nil {
+		return err
+	}
+
+	s.Identifiers = make([]SubjectIdentifier, len(identifiers))
+
+	for i := range identifiers {
+		if err = s.Identifiers[i].decode(identifiers[i], true); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// decodeJSONValue decodes a JSON value without losing the precision of an integer.
+func decodeJSONValue(data []byte) (value any, err error) {
+	decoder := jjson.NewDecoder(bytes.NewReader(data))
+	decoder.SetNumberType(jjson.UnmarshalJSONNumber)
+
+	if err = decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+
+	return securityEventNumbers(value)
 }
 
 func subjectIdentifierMembers(format string) (members []string, known bool) {
@@ -257,14 +368,21 @@ func subjectMember(format, member, value, rule string, valid func(value string) 
 }
 
 const (
+	subjectIdentifierMemberFormat = "format"
+
 	subjectRuleStringOrURI = "a string without a ':' or a URI"
 	subjectRuleURI         = "a URI"
 )
 
 // Validate checks the members required by the format and their values (RFC 9493 §3.2, SSF 1.0 §3.3 and §3.5).
+func (s *SubjectIdentifier) Validate() (err error) {
+	return s.validate(false)
+}
+
+// validate accepts, for a receiver, a format this package does not define (SSF 1.0 §3.3, Figure 13).
 //
 //nolint:gocyclo
-func (s *SubjectIdentifier) Validate() (err error) {
+func (s *SubjectIdentifier) validate(receiver bool) (err error) {
 	if s == nil {
 		return fmt.Errorf("%w: the subject is nil", ErrInvalidSubjectIdentifier)
 	}
@@ -295,9 +413,9 @@ func (s *SubjectIdentifier) Validate() (err error) {
 		// RFC 9493 §3.2.6: a DID URL or a bare DID.
 		return subjectMember(s.Format, "url", s.URL, "a DID URL", regexpSubjectDID.MatchString)
 	case SubjectIdentifierFormatAliases:
-		return s.validateAliases()
+		return s.validateAliases(receiver)
 	case SubjectIdentifierFormatComplex:
-		return s.validateComplex()
+		return s.validateComplex(receiver)
 	case SubjectIdentifierFormatJWTID:
 		// SSF 1.0 §3.5.1: the RFC 7519 'iss' and 'jti' of the JWT.
 		if err = subjectMember(s.Format, "iss", s.Issuer, subjectRuleStringOrURI, isStringOrURI); err != nil {
@@ -316,11 +434,15 @@ func (s *SubjectIdentifier) Validate() (err error) {
 	case "":
 		return fmt.Errorf("%w: the 'format' member is required", ErrInvalidSubjectIdentifier)
 	default:
+		if receiver {
+			return nil
+		}
+
 		return fmt.Errorf("%w: the 'format' member '%s' is not supported", ErrInvalidSubjectIdentifier, s.Format)
 	}
 }
 
-func (s *SubjectIdentifier) validateAliases() (err error) {
+func (s *SubjectIdentifier) validateAliases(receiver bool) (err error) {
 	if len(s.Identifiers) == 0 {
 		return fmt.Errorf("%w: format 'aliases' requires the 'identifiers' member", ErrInvalidSubjectIdentifier)
 	}
@@ -337,13 +459,20 @@ func (s *SubjectIdentifier) validateAliases() (err error) {
 			return fmt.Errorf("%w: 'identifiers' member %d must not be a complex subject", ErrInvalidSubjectIdentifier, i)
 		}
 
-		if err = s.Identifiers[i].Validate(); err != nil {
+		if err = s.Identifiers[i].validate(receiver); err != nil {
 			return fmt.Errorf("%w: 'identifiers' member %d is invalid: %w", ErrInvalidSubjectIdentifier, i, err)
 		}
 
 		var data []byte
 
-		if data, err = json.Marshal(s.Identifiers[i]); err != nil {
+		// A received identifier is told apart by its Additional members too, and they are never sent.
+		if receiver {
+			data, err = s.Identifiers[i].identity()
+		} else {
+			data, err = json.Marshal(s.Identifiers[i])
+		}
+
+		if err != nil {
 			return fmt.Errorf("%w: 'identifiers' member %d is invalid: %w", ErrInvalidSubjectIdentifier, i, err)
 		}
 
@@ -358,23 +487,49 @@ func (s *SubjectIdentifier) validateAliases() (err error) {
 	return nil
 }
 
-// validateComplex requires at least one member, each a valid subject identifier (SSF 1.0 §3.3).
-func (s *SubjectIdentifier) validateComplex() (err error) {
+// identity returns the JSON of the members of the format and the Additional members, with the members sorted by
+// name, so two identifiers with the same members have the same identity.
+func (s *SubjectIdentifier) identity() (data []byte, err error) {
+	if data, err = json.Marshal(s); err != nil || len(s.Additional) == 0 {
+		return data, err
+	}
+
+	var members map[string]any
+
+	if err = json.Unmarshal(data, &members); err != nil {
+		return nil, err
+	}
+
+	for name, value := range s.Additional {
+		members[name] = value
+	}
+
+	return json.Marshal(members)
+}
+
+// validateComplex requires at least one member, each a valid subject identifier (SSF 1.0 §3.3). For a receiver an
+// additional member name counts as a member.
+func (s *SubjectIdentifier) validateComplex(receiver bool) (err error) {
 	var present int
 
+	if receiver {
+		present = len(s.Additional)
+	}
+
 	for _, member := range s.complexMembers() {
-		if member.value == nil {
+		value := *member.value
+		if value == nil {
 			continue
 		}
 
 		present++
 
 		// SSF 1.0 §3.3: the value of each member is a simple subject.
-		if member.value.Format == SubjectIdentifierFormatComplex {
+		if value.Format == SubjectIdentifierFormatComplex {
 			return fmt.Errorf("%w: complex member '%s' must not be a complex subject", ErrInvalidSubjectIdentifier, member.name)
 		}
 
-		if err = member.value.Validate(); err != nil {
+		if err = value.validate(receiver); err != nil {
 			return fmt.Errorf("%w: complex member '%s' is invalid: %w", ErrInvalidSubjectIdentifier, member.name, err)
 		}
 	}
@@ -388,13 +543,13 @@ func (s *SubjectIdentifier) validateComplex() (err error) {
 
 type subjectComplexMember struct {
 	name  string
-	value *SubjectIdentifier
+	value **SubjectIdentifier
 }
 
 func (s *SubjectIdentifier) complexMembers() (members []subjectComplexMember) {
 	return []subjectComplexMember{
-		{"user", s.User}, {"device", s.Device}, {"session", s.Session}, {"application", s.Application},
-		{"tenant", s.Tenant}, {"org_unit", s.OrgUnit}, {"group", s.Group},
+		{"user", &s.User}, {"device", &s.Device}, {"session", &s.Session}, {"application", &s.Application},
+		{"tenant", &s.Tenant}, {"org_unit", &s.OrgUnit}, {"group", &s.Group},
 	}
 }
 

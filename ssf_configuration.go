@@ -107,43 +107,61 @@ func (f *Fosite) WriteSSFConfiguration(ctx context.Context, rw http.ResponseWrit
 }
 
 // ValidateSSFConfiguration returns an error matching ErrServerError for Transmitter Configuration Metadata that must
-// not be published:
+// not be published, which is metadata ValidateSSFConfigurationForIssuer refuses for the configured issuer, GetIssuer,
+// the 'iss' of every Security Event Token. SSFConfig.EnforceCAEPInteroperabilityProfile selects the profile rules.
 //
-//   - The 'issuer' must be an issuer SSFConfigurationURL accepts and identical to the configured issuer, GetIssuer,
-//     which is the 'iss' of every Security Event Token (SSF Section 7.1).
+// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-7.1
+// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-7.1.1
+// See: https://openid.net/specs/openid-caep-interoperability-profile-1_0.html#section-2.3
+func (f *Fosite) ValidateSSFConfiguration(ctx context.Context, configuration *SSFConfiguration) (err error) {
+	config := f.getSSFConfig(ctx)
+
+	if err = ValidateSSFConfigurationForIssuer(configuration, f.Config.GetIssuer(ctx), config != nil && config.EnforceCAEPInteroperabilityProfile); err != nil {
+		return errorsx.WithStack(ErrServerError.WithDebug(err.Error()))
+	}
+
+	return nil
+}
+
+// ValidateSSFConfigurationForIssuer returns an error for Transmitter Configuration Metadata that is not valid for the
+// issuer, which a Transmitter must not publish and a Receiver must not use:
+//
+//   - The 'issuer' must be an issuer SSFConfigurationURL accepts and identical to the given issuer (SSF Section 7.1,
+//     Section 7.2.4).
 //   - 'jwks_uri' is required, since every Security Event Token is signed (SSF Section 7.1).
 //   - 'jwks_uri' and each endpoint that is present must be an absolute https URL with no userinfo or fragment (SSF
 //     Section 7.1).
 //   - 'default_subjects', when present, must be 'ALL' or 'NONE' (SSF Section 7.1).
 //   - Each entry of 'authorization_schemes' must have a 'spec_urn' (SSF Section 7.1.1).
 //
-// With SSFConfig.EnforceCAEPInteroperabilityProfile it must also have a 'spec_version' of '1_0' or greater,
-// 'delivery_methods_supported', 'configuration_endpoint', 'status_endpoint', 'verification_endpoint', and
-// 'authorization_schemes' with the SSFAuthorizationSchemeOAuth2 entry (Profile Section 2.3.1 to 2.3.7).
+// With profile it must also have a 'spec_version' of '1_0' or greater, 'delivery_methods_supported',
+// 'configuration_endpoint', 'status_endpoint', 'verification_endpoint', and 'authorization_schemes' with the
+// SSFAuthorizationSchemeOAuth2 entry (Profile Section 2.3.1 to 2.3.7).
 //
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-7.1
 // See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-7.1.1
+// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-7.2.4
 // See: https://openid.net/specs/openid-caep-interoperability-profile-1_0.html#section-2.3
-func (f *Fosite) ValidateSSFConfiguration(ctx context.Context, configuration *SSFConfiguration) (err error) {
+func ValidateSSFConfigurationForIssuer(configuration *SSFConfiguration, issuer string, profile bool) (err error) {
 	if configuration == nil {
-		return errorsx.WithStack(ErrServerError.WithDebug("The Transmitter Configuration Metadata is missing."))
+		return errors.New("The Transmitter Configuration Metadata is missing.")
 	}
 
 	if _, err = SSFConfigurationURL(configuration.Issuer); err != nil {
-		return errorsx.WithStack(ErrServerError.WithDebugf("The Transmitter Configuration Metadata '%s' is not valid: %s.", ssfMetadataIssuer, err))
+		return errors.Errorf("The Transmitter Configuration Metadata '%s' is not valid: %s.", ssfMetadataIssuer, err)
 	}
 
-	if configuration.Issuer != f.Config.GetIssuer(ctx) {
-		return errorsx.WithStack(ErrServerError.WithDebugf("The Transmitter Configuration Metadata '%s' is not the configured issuer.", ssfMetadataIssuer))
+	if configuration.Issuer != issuer {
+		return errors.Errorf("The Transmitter Configuration Metadata '%s' is not the configured issuer.", ssfMetadataIssuer)
 	}
 
 	if configuration.JWKSURI == "" {
-		return errorsx.WithStack(ErrServerError.WithDebugf("The Transmitter Configuration Metadata '%s' is required.", ssfMetadataJWKSURI))
+		return errors.Errorf("The Transmitter Configuration Metadata '%s' is required.", ssfMetadataJWKSURI)
 	}
 
 	for _, member := range configuration.endpoints() {
 		if member.value != "" && !isSSFEndpointURL(member.value) {
-			return errorsx.WithStack(ErrServerError.WithDebugf("The Transmitter Configuration Metadata '%s' must be an absolute https URL.", member.name))
+			return errors.Errorf("The Transmitter Configuration Metadata '%s' must be an absolute https URL.", member.name)
 		}
 	}
 
@@ -151,21 +169,21 @@ func (f *Fosite) ValidateSSFConfiguration(ctx context.Context, configuration *SS
 	case "", SSFDefaultSubjectsAll, SSFDefaultSubjectsNone:
 		break
 	default:
-		return errorsx.WithStack(ErrServerError.WithDebugf("The Transmitter Configuration Metadata '%s' must be 'ALL' or 'NONE'.", ssfMetadataDefaultSubjects))
+		return errors.Errorf("The Transmitter Configuration Metadata '%s' must be 'ALL' or 'NONE'.", ssfMetadataDefaultSubjects)
 	}
 
 	for _, scheme := range configuration.AuthorizationSchemes {
 		if scheme.SpecURN == "" {
-			return errorsx.WithStack(ErrServerError.WithDebugf("The Transmitter Configuration Metadata '%s' has an entry with no 'spec_urn'.", ssfMetadataAuthorizationSchemes))
+			return errors.Errorf("The Transmitter Configuration Metadata '%s' has an entry with no 'spec_urn'.", ssfMetadataAuthorizationSchemes)
 		}
 	}
 
-	if config := f.getSSFConfig(ctx); config == nil || !config.EnforceCAEPInteroperabilityProfile {
+	if !profile {
 		return nil
 	}
 
 	if member := configuration.interoperabilityProfileFault(); member != "" {
-		return errorsx.WithStack(ErrServerError.WithDebugf("The Transmitter Configuration Metadata '%s' does not meet the CAEP Interoperability Profile.", member))
+		return errors.Errorf("The Transmitter Configuration Metadata '%s' does not meet the CAEP Interoperability Profile.", member)
 	}
 
 	return nil

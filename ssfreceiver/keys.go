@@ -49,7 +49,11 @@ func (r *Receiver) keyFunc(record *StreamRecord) jwt.KeyFuncJWS {
 
 // signingKey returns the public key of the Transmitter for the 'kid' and 'alg'. The JSON Web Key Set is the
 // 'jwks_uri' of the validated metadata, and is fetched again, once, when it has no such key. Under the CAEP
-// Interoperability Profile a key that is not an RSA key of at least 2048 bits is no such key.
+// Interoperability Profile a key that is not an RSA key of at least 2048 bits is no such key. When the fetcher is a
+// jwt.JWKSRefreshStrategy and could not fetch the set again, as it was fetched within its refresh interval, the error
+// is ErrSigningKeyNotRefreshed and not ErrSigningKey.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#RotateSigKeys
 func (r *Receiver) signingKey(ctx context.Context, issuer, kid, alg string) (key *jose.JSONWebKey, err error) {
 	// RFC 8417 Section 5.1: no secret is shared with a Transmitter, so only an asymmetric signature is accepted.
 	if alg == "" || alg == jwt.JSONWebTokenAlgNone || jwt.IsSignedJWTClientSecretAlgStr(alg) {
@@ -64,14 +68,29 @@ func (r *Receiver) signingKey(ctx context.Context, issuer, kid, alg string) (key
 
 	fetcher := oauth2.SpecialUseAddressGuardJWKSFetcherStrategy(ctx, r.Config.SpecialUseAddressGuard, r.jwksFetcher())
 
-	for _, ignoreCache := range []bool{false, true} {
-		var jwks *jose.JSONWebKeySet
+	for _, refresh := range []bool{false, true} {
+		var (
+			jwks    *jose.JSONWebKeySet
+			fetched = true
+		)
 
-		if jwks, err = fetcher.Resolve(ctx, configuration.JWKSURI, ignoreCache); err != nil {
+		if refresher, ok := fetcher.(jwt.JWKSRefreshStrategy); ok && refresh {
+			jwks, fetched, err = refresher.Refresh(ctx, configuration.JWKSURI)
+		} else {
+			jwks, err = fetcher.Resolve(ctx, configuration.JWKSURI, refresh)
+		}
+
+		if err != nil {
 			return nil, fmt.Errorf("ssfreceiver: the keys of the transmitter could not be fetched: %w", err)
 		}
 
 		if key, err = searchSigningKey(jwks, kid, alg); err != nil {
+			// OpenID Connect Core Section 10.1.1: a key the Transmitter has started to use is fetched on its first use.
+			// One which could not be fetched yet is not a fault of the SET, which is delivered again.
+			if refresh && !fetched && len(jwks.Key(kid)) == 0 {
+				return nil, fmt.Errorf("%w: the key set has no key '%s'", ErrSigningKeyNotRefreshed, kid)
+			}
+
 			continue
 		}
 

@@ -708,6 +708,27 @@ func TestReceiverValidate(t *testing.T) {
 		assert.Nil(t, event)
 	})
 
+	t.Run("ShouldReturnInfrastructureErrorForKeyNotFetchedYet", func(t *testing.T) {
+		x := newTestTransmitter(t)
+
+		set := x.set()
+		set.kid = "sig-0"
+
+		// OpenID Connect Core Section 10.1.1: the first SET with an unfamiliar 'kid' fetches the keys again.
+		_, serr, err := x.receiver.validate(t.Context(), x.record, set.sign(t, x.claims()))
+		require.NoError(t, err)
+		assert.Equal(t, errSetSigningKey, serr)
+
+		// The keys can not be fetched again yet, so the SET is delivered again rather than refused.
+		set.kid = "sig-9"
+
+		event, serr, err := x.receiver.validate(t.Context(), x.record, set.sign(t, x.claims()))
+		require.ErrorIs(t, err, ErrSigningKeyNotRefreshed)
+
+		assert.Nil(t, serr)
+		assert.Nil(t, event)
+	})
+
 	t.Run("ShouldReturnInfrastructureErrorWithoutStrategyOrRecord", func(t *testing.T) {
 		x := newTestTransmitter(t)
 

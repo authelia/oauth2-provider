@@ -218,16 +218,29 @@ func TestReceiverKeyFunc(t *testing.T) {
 
 		require.Equal(t, int32(1), server.keysHits.Load())
 
-		// Two unknown 'kid' values cause one fetch.
-		for _, kid := range []string{"unknown1", "unknown2", "unknown1"} {
+		// Two unknown 'kid' values cause one fetch. The first is not in the set fetched for it, and the others could not
+		// be fetched again, which is not a fault of the SET.
+		for i, kid := range []string{"unknown1", "unknown2", "unknown1"} {
 			key, err := keyFunc(t.Context(), testToken(kid, es256), nil)
 
 			wait()
 
 			assert.Nil(t, key)
-			assert.ErrorIs(t, err, ErrSigningKey)
 			assert.Equal(t, int32(2), server.keysHits.Load())
+
+			if i == 0 {
+				assert.ErrorIs(t, err, ErrSigningKey)
+				assert.NotErrorIs(t, err, ErrSigningKeyNotRefreshed)
+			} else {
+				assert.ErrorIs(t, err, ErrSigningKeyNotRefreshed)
+				assert.NotErrorIs(t, err, ErrSigningKey)
+			}
 		}
+
+		// A key in the set which is not acceptable is a fault of the SET however recently the set was fetched.
+		_, err = keyFunc(t.Context(), testToken("k1", string(jose.RS256)), nil)
+		assert.ErrorIs(t, err, ErrSigningKey)
+		assert.NotErrorIs(t, err, ErrSigningKeyNotRefreshed)
 
 		// The known key is still served from the cache.
 		_, err = keyFunc(t.Context(), testToken("k1", es256), nil)

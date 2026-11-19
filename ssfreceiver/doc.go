@@ -22,7 +22,11 @@
 // Every request to a Transmitter passes the special-use address guard, which permits no network unless
 // Config.SpecialUseAddressGuard does. A Config.JWKSFetcher that is not an *oauth2.DefaultJWKSFetcherStrategy applies
 // the guard itself, and limits the forced refreshes itself: a SET with an unknown 'kid' forces one, so whoever is
-// authorized to push could otherwise cause a fetch of the key set with each request.
+// authorized to push could otherwise cause a fetch of the key set with each request. A SET with an unknown 'kid' which
+// arrives while the forced refresh is limited is delivered again, rather than refused with 'invalid_key', when the
+// fetcher is a jwt.JWKSRefreshStrategy as the default one is, so a key the Transmitter starts to use within the limit
+// of its last refresh is fetched once the limit has passed (OpenID Connect Core Section 10.1.1). Any other fetcher has
+// such a SET refused.
 //
 // A Config.HTTPClient with a request timeout must have one longer than Config.LongPollTimeout, or each long poll of a
 // quiet stream ends as an error and the Poller backs off.

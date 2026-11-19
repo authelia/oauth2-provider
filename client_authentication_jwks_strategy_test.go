@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -283,6 +284,50 @@ func TestDefaultJWKSFetcherStrategyCoalescing(t *testing.T) {
 		assert.Equal(t, int64(2), srv.fetches.Load())
 	})
 
+	t.Run("ShouldReportTheRefreshInFlightAsFetched", func(t *testing.T) {
+		srv := newServer(t)
+		srv.set.Store(setA)
+
+		s := NewDefaultJWKSFetcherStrategy().(*DefaultJWKSFetcherStrategy)
+
+		prime := resolve(s, context.Background(), srv.URL, false)
+
+		<-srv.received
+
+		srv.release <- struct{}{}
+
+		assert.Equal(t, "a", kid(<-prime))
+
+		srv.set.Store(setB)
+
+		first := resolve(s, context.Background(), srv.URL, true)
+
+		<-srv.received
+
+		type refreshed struct {
+			set     *jose.JSONWebKeySet
+			fetched bool
+		}
+
+		second := make(chan refreshed, 1)
+
+		go func() {
+			set, fetched, _ := s.Refresh(context.Background(), srv.URL)
+
+			second <- refreshed{set, fetched}
+		}()
+
+		time.Sleep(50 * time.Millisecond)
+		close(srv.release)
+
+		assert.Equal(t, "b", kid(<-first))
+
+		result := <-second
+
+		assert.Equal(t, "b", kid(result.set))
+		assert.True(t, result.fetched)
+	})
+
 	t.Run("ShouldReturnTheFailureOfTheRefreshInFlight", func(t *testing.T) {
 		srv := newServer(t)
 		srv.set.Store(setA)
@@ -382,6 +427,48 @@ func TestDefaultJWKSFetcherStrategyCoalescing(t *testing.T) {
 		assert.Equal(t, "a", kid(<-second))
 		assert.Equal(t, int64(1), srv.fetches.Load())
 	})
+}
+
+func TestDefaultJWKSFetcherStrategyRefresh(t *testing.T) {
+	var fetches atomic.Int64
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetches.Add(1)
+
+		assert.NoError(t, json.NewEncoder(w).Encode(&jose.JSONWebKeySet{}))
+	}))
+	t.Cleanup(ts.Close)
+
+	strategy := NewDefaultJWKSFetcherStrategy().(*DefaultJWKSFetcherStrategy)
+
+	testCases := []struct {
+		name     string
+		strategy jwt.JWKSRefreshStrategy
+	}{
+		{"ShouldReportTheFetch", strategy},
+		{"ShouldReportTheFetchOfAGuardedLookup", &guardedJWKSFetcherStrategy{strategy: strategy, allowed: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			before := fetches.Load()
+
+			set, fetched, err := tc.strategy.Refresh(context.Background(), ts.URL)
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			assert.NotNil(t, set)
+			assert.True(t, fetched)
+
+			strategy.WaitForCache()
+
+			// The location was refreshed within the refresh interval, so the cached set is returned.
+			set, fetched, err = tc.strategy.Refresh(context.Background(), ts.URL)
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			assert.NotNil(t, set)
+			assert.False(t, fetched)
+
+			assert.Equal(t, before+1, fetches.Load())
+		})
+	}
 }
 
 func TestDefaultJWKSFetcherStrategyOptions(t *testing.T) {

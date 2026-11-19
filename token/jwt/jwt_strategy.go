@@ -138,6 +138,18 @@ type JWKSFetcherStrategy interface {
 	Resolve(ctx context.Context, location string, ignoreCache bool) (jwks *jose.JSONWebKeySet, err error)
 }
 
+// JWKSRefreshStrategy is a JWKSFetcherStrategy which reports whether a forced refresh fetched the location. A strategy
+// which limits how often a location is fetched returns the cached set without fetching it while the limit applies, and
+// this tells that set from one which was fetched and still lacks a key.
+type JWKSRefreshStrategy interface {
+	JWKSFetcherStrategy
+
+	// Refresh returns the JSON Web Key Set of the location as Resolve does with a forced refresh. The fetched is true
+	// when the set was fetched for the call or by a fetch in flight when it was made, and false when it is the cached
+	// set as the location may not be fetched again yet.
+	Refresh(ctx context.Context, location string) (jwks *jose.JSONWebKeySet, fetched bool, err error)
+}
+
 // DefaultStrategy is responsible for providing JWK encoding and cryptographic functionality.
 type DefaultStrategy struct {
 	Config StrategyConfig

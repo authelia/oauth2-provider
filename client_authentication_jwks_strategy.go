@@ -28,7 +28,8 @@ const (
 	defaultJWKSFetcherStrategyGuardedCachePrefix = "authelia.com/provider/oauth2.DefaultJWKSFetcherStrategy:guarded:"
 )
 
-// DefaultJWKSFetcherStrategy is a default implementation of the jwt.JWKSFetcherStrategy interface.
+// DefaultJWKSFetcherStrategy is a default implementation of the jwt.JWKSFetcherStrategy and jwt.JWKSRefreshStrategy
+// interfaces.
 type DefaultJWKSFetcherStrategy struct {
 	client           *retryablehttp.Client
 	cache            *ristretto.Cache[string, *jose.JSONWebKeySet]
@@ -116,10 +117,18 @@ func JWKSFetcherWithHTTPClientSource(clientSourceFunc func(ctx context.Context) 
 // the strategy to fetch the key from the remote, except that a cached location is refreshed at most once per refresh
 // interval. If forceRefresh is false, the strategy may use a caching strategy to fetch the key.
 func (s *DefaultJWKSFetcherStrategy) Resolve(ctx context.Context, location string, ignoreCache bool) (*jose.JSONWebKeySet, error) {
-	return s.resolve(ctx, location, ignoreCache, nil)
+	set, _, err := s.resolve(ctx, location, ignoreCache, nil)
+
+	return set, err
 }
 
-func (s *DefaultJWKSFetcherStrategy) resolve(ctx context.Context, location string, ignoreCache bool, guarded *guardedJWKSFetcherStrategy) (*jose.JSONWebKeySet, error) {
+// Refresh returns the JSON Web Key Set as Resolve does with a forced refresh, and whether it was fetched rather than
+// taken from the cache as it was refreshed within the refresh interval.
+func (s *DefaultJWKSFetcherStrategy) Refresh(ctx context.Context, location string) (jwks *jose.JSONWebKeySet, fetched bool, err error) {
+	return s.resolve(ctx, location, true, nil)
+}
+
+func (s *DefaultJWKSFetcherStrategy) resolve(ctx context.Context, location string, ignoreCache bool, guarded *guardedJWKSFetcherStrategy) (*jose.JSONWebKeySet, bool, error) {
 	cacheKey := defaultJWKSFetcherStrategyCachePrefix + location
 
 	if guarded != nil {
@@ -127,13 +136,13 @@ func (s *DefaultJWKSFetcherStrategy) resolve(ctx context.Context, location strin
 	}
 
 	if key, ok := s.cache.Get(cacheKey); ok && !ignoreCache {
-		return key, nil
+		return key, false, nil
 	}
 
 	for attempt := 0; ; attempt++ {
 		fetch, started, key := s.join(ctx, location, cacheKey, ignoreCache, guarded)
 		if fetch == nil {
-			return key, nil
+			return key, false, nil
 		}
 
 		select {
@@ -143,9 +152,9 @@ func (s *DefaultJWKSFetcherStrategy) resolve(ctx context.Context, location strin
 				continue
 			}
 
-			return fetch.set, fetch.err
+			return fetch.set, fetch.err == nil, fetch.err
 		case <-ctx.Done():
-			return nil, errorsx.WithStack(ErrServerError.WithHintf("Unable to fetch JSON Web Keys from location '%s'. Check for typos or other network issues.", location).WithWrap(ctx.Err()).WithDebugError(ctx.Err()))
+			return nil, false, errorsx.WithStack(ErrServerError.WithHintf("Unable to fetch JSON Web Keys from location '%s'. Check for typos or other network issues.", location).WithWrap(ctx.Err()).WithDebugError(ctx.Err()))
 		}
 	}
 }
@@ -293,7 +302,13 @@ type guardedJWKSFetcherStrategy struct {
 }
 
 func (s *guardedJWKSFetcherStrategy) Resolve(ctx context.Context, location string, ignoreCache bool) (*jose.JSONWebKeySet, error) {
-	return s.strategy.resolve(ctx, location, ignoreCache, s)
+	set, _, err := s.strategy.resolve(ctx, location, ignoreCache, s)
+
+	return set, err
+}
+
+func (s *guardedJWKSFetcherStrategy) Refresh(ctx context.Context, location string) (jwks *jose.JSONWebKeySet, fetched bool, err error) {
+	return s.strategy.resolve(ctx, location, true, s)
 }
 
 func (s *DefaultJWKSFetcherStrategy) claimRefreshLocked(key string) bool {
@@ -327,3 +342,8 @@ func (s *DefaultJWKSFetcherStrategy) claimRefreshLocked(key string) bool {
 func (s *DefaultJWKSFetcherStrategy) WaitForCache() {
 	s.cache.Wait()
 }
+
+var (
+	_ jwt.JWKSRefreshStrategy = (*DefaultJWKSFetcherStrategy)(nil)
+	_ jwt.JWKSRefreshStrategy = (*guardedJWKSFetcherStrategy)(nil)
+)

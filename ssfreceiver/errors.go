@@ -131,6 +131,15 @@ var (
 	// See: https://openid.net/specs/openid-sharedsignals-framework-1_0.html#section-4.1.4
 	ErrSigningKey = errors.New("ssfreceiver: the transmitter has no acceptable signing key")
 
+	// ErrSigningKeyNotRefreshed is returned when the JSON Web Key Set of the Transmitter has no key with the 'kid' of a
+	// SET and could not be fetched again, as the jwt.JWKSRefreshStrategy fetched it within its refresh interval. It is
+	// not a fault of the SET: a push is answered with a 503 and a polled SET is not acknowledged, so the Transmitter
+	// delivers it again, and the set is fetched again once the interval has passed.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#RotateSigKeys
+	// See: https://www.rfc-editor.org/rfc/rfc8935#section-2
+	ErrSigningKeyNotRefreshed = errors.New("ssfreceiver: the signing keys of the transmitter could not be fetched again yet")
+
 	// ErrSubjectUnknown is returned by a SubjectResolver for a subject which identifies no principal of the
 	// application. The SET is acknowledged, and the Transmitter is never told.
 	//

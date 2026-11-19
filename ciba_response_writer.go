@@ -43,8 +43,11 @@ func (f *Fosite) NewBackChannelAuthenticationResponse(ctx context.Context, reque
 	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#section-5
 	if request.GetDeliveryMode() == consts.CIBAModePush {
 		provider, _ := f.Config.(EnforceSenderConstrainedAccessTokensProvider)
+		crossDevice, _ := f.Config.(CrossDeviceSenderConstrainedAccessTokensProvider)
 
-		if IsSenderConstrainedAccessTokenEnforced(ctx, provider, request.GetClient()) && !isSenderConstrained(ctx, f.Config, request.GetSession()) {
+		enforced := IsSenderConstrainedAccessTokenEnforced(ctx, provider, request.GetClient()) || IsCrossDeviceSenderConstrainedAccessTokenEnforced(ctx, crossDevice, request.GetClient(), GrantTypeCIBA)
+
+		if enforced && !isSenderConstrained(ctx, f.Config, request.GetSession()) {
 			return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The push mode requires key material at the backchannel authentication endpoint, being a DPoP proof, a 'dpop_jkt' parameter, or a mutual-TLS client certificate, to bind the sender-constrained tokens to."))
 		}
 	}

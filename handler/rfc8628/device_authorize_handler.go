@@ -30,6 +30,9 @@ type DeviceAuthorizeHandler struct {
 
 // HandleRFC8628DeviceAuthorizeEndpointRequest implements the Device Authorization Grant Flow's relying party
 // Device Authorization Request and Device Authorization Response as defined in RFC8638 Section 3.1 and Section 3.2.
+// The codes expire after the client's oauth2.DeviceCode lifespan for the grant, or the configured lifespan when the
+// client has none greater than 0 seconds. The 'verification_uri_complete' member is included only when the
+// configuration or the client enables it.
 //
 // See: https://tools.ietf.org/html/rfc8628#section-3.1 and https://tools.ietf.org/html/rfc8628#section-3.2
 func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx context.Context, request oauth2.DeviceAuthorizeRequester, response oauth2.DeviceAuthorizeResponder) (err error) {
@@ -44,7 +47,12 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 	request.SetStatus(oauth2.DeviceAuthorizeStatusNew)
 	request.SetDeviceCodeSignature(deviceCodeSignature)
 
-	expireAt := time.Now().UTC().Add(d.Config.GetRFC8628CodeLifespan(ctx)).Truncate(jwt.TimePrecision)
+	lifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeDeviceCode, oauth2.DeviceCode, d.Config.GetRFC8628CodeLifespan(ctx))
+	if lifespan <= 0 {
+		lifespan = d.Config.GetRFC8628CodeLifespan(ctx)
+	}
+
+	expireAt := time.Now().UTC().Add(lifespan).Truncate(jwt.TimePrecision)
 	session.SetExpiresAt(oauth2.DeviceCode, expireAt)
 	session.SetExpiresAt(oauth2.UserCode, expireAt)
 
@@ -60,20 +68,37 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 		return errorsx.WithStack(oauth2.ErrServerError.WithHint("Failed to parse the RFC8628 User Verification URL.").WithWrap(err).WithDebugError(err))
 	}
 
-	query := uri.Query()
-
-	query.Set(consts.FormParameterUserCode, userCode)
-
-	uri.RawQuery = query.Encode()
-
 	response.SetDeviceCode(deviceCode)
 	response.SetUserCode(userCode)
 	response.SetVerificationURI(raw)
-	response.SetVerificationURIComplete(uri.String())
+
+	// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.14
+	if d.isVerificationURICompleteEnabled(ctx, request.GetClient()) {
+		query := uri.Query()
+
+		query.Set(consts.FormParameterUserCode, userCode)
+
+		uri.RawQuery = query.Encode()
+
+		response.SetVerificationURIComplete(uri.String())
+	}
+
 	response.SetExpiresIn(int64(time.Until(expireAt).Seconds()))
 	response.SetInterval(int(d.Config.GetRFC8628TokenPollingInterval(ctx).Seconds()))
 
 	return nil
+}
+
+func (d *DeviceAuthorizeHandler) isVerificationURICompleteEnabled(ctx context.Context, client oauth2.Client) (enabled bool) {
+	if config, ok := d.Config.(oauth2.RFC8628VerificationURICompleteProvider); ok {
+		enabled = config.GetRFC8628VerificationURIComplete(ctx)
+	}
+
+	if c, ok := client.(oauth2.RFC8628VerificationURICompleteClient); ok {
+		return c.GetRFC8628VerificationURIComplete(enabled)
+	}
+
+	return enabled
 }
 
 func (d *DeviceAuthorizeHandler) createWithUniqueUserCode(ctx context.Context, deviceCodeSignature string, request oauth2.DeviceAuthorizeRequester) (code string, err error) {

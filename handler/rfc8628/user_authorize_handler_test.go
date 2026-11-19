@@ -288,8 +288,11 @@ func TestUserAuthorizeHandlerConcurrentDecisionsKeepTheFirst(t *testing.T) {
 			require.NoError(t, store.CreateDeviceCodeSession(t.Context(), deviceSignature, stored))
 
 			newSubmission := func() *oauth2.DeviceAuthorizeRequest {
+				session := openid.NewDefaultSession()
+				session.SetSubject("user")
+
 				submission := oauth2.NewDeviceAuthorizeRequest()
-				submission.SetSession(openid.NewDefaultSession())
+				submission.SetSession(session)
 				submission.GetRequestForm().Set("user_code", code)
 
 				return submission
@@ -862,6 +865,10 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 			}
 			if tt.setup != nil {
 				tt.setup(t, tt.args.req, &tt.fields, &tt.args)
+			}
+
+			if session, ok := tt.args.req.GetSession().(*openid.DefaultSession); ok && session != nil {
+				session.SetSubject("user")
 			}
 
 			if tt.wantErr != nil {

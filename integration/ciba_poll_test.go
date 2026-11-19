@@ -317,8 +317,9 @@ func (f *cibaFlow) backchannel(t *testing.T, clientID string, opts *cibaRequestO
 	t.Helper()
 
 	form := url.Values{
-		consts.FormParameterScope:     {cibaScope},
-		consts.FormParameterLoginHint: {testSubject},
+		consts.FormParameterScope:          {cibaScope},
+		consts.FormParameterLoginHint:      {testSubject},
+		consts.FormParameterBindingMessage: {"W4SCT"},
 	}
 
 	if opts != nil {

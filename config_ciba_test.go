@@ -25,7 +25,7 @@ func TestCIBAConfigDefaults(t *testing.T) {
 	assert.False(t, config.GetCIBAUserCodeSupported(ctx))
 	assert.True(t, config.GetCIBARequireOpenIDScope(ctx))
 	assert.Equal(t, 24*time.Hour, config.GetCIBAIDTokenHintMaximumAge(ctx))
-	assert.False(t, config.GetCIBARequireBindingMessage(ctx))
+	assert.True(t, config.GetCIBARequireBindingMessage(ctx))
 	assert.Equal(t, 64, config.GetCIBAMaximumBindingMessageLength(ctx))
 
 	algs := config.GetCIBARequestSigningAlgValues(ctx)
@@ -62,19 +62,19 @@ func TestCIBAConfigConfigured(t *testing.T) {
 	ctx := t.Context()
 
 	config := &Config{
-		CIBATokenDeliveryModes:            []string{"poll"},
-		CIBAAuthRequestLifespan:           time.Minute,
-		CIBARequestedExpiryMinimum:        time.Minute,
-		CIBARequestedExpiryMaximum:        time.Hour,
-		CIBAPollingInterval:               7 * time.Second,
-		CIBALongPollingTimeout:            20 * time.Second,
-		CIBASlowDownLimit:                 3,
-		CIBAUserCodeSupported:             true,
-		CIBARequestSigningAlgValues:       []string{"PS256"},
-		CIBADisableOpenIDScopeRequirement: true,
-		CIBAIDTokenHintMaximumAge:         time.Hour,
-		CIBARequireBindingMessage:         true,
-		CIBAMaximumBindingMessageLength:   16,
+		CIBATokenDeliveryModes:               []string{"poll"},
+		CIBAAuthRequestLifespan:              time.Minute,
+		CIBARequestedExpiryMinimum:           time.Minute,
+		CIBARequestedExpiryMaximum:           time.Hour,
+		CIBAPollingInterval:                  7 * time.Second,
+		CIBALongPollingTimeout:               20 * time.Second,
+		CIBASlowDownLimit:                    3,
+		CIBAUserCodeSupported:                true,
+		CIBARequestSigningAlgValues:          []string{"PS256"},
+		CIBADisableOpenIDScopeRequirement:    true,
+		CIBAIDTokenHintMaximumAge:            time.Hour,
+		CIBADisableBindingMessageRequirement: true,
+		CIBAMaximumBindingMessageLength:      16,
 	}
 
 	assert.Equal(t, []string{"poll"}, config.GetCIBATokenDeliveryModes(ctx))
@@ -88,7 +88,7 @@ func TestCIBAConfigConfigured(t *testing.T) {
 	assert.Equal(t, []string{"PS256"}, config.GetCIBARequestSigningAlgValues(ctx))
 	assert.False(t, config.GetCIBARequireOpenIDScope(ctx))
 	assert.Equal(t, time.Hour, config.GetCIBAIDTokenHintMaximumAge(ctx))
-	assert.True(t, config.GetCIBARequireBindingMessage(ctx))
+	assert.False(t, config.GetCIBARequireBindingMessage(ctx))
 	assert.Equal(t, 16, config.GetCIBAMaximumBindingMessageLength(ctx))
 }
 

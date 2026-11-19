@@ -209,7 +209,7 @@ func TestWriteRFC862DeviceAuthorizeResponseBody(t *testing.T) {
 			},
 		},
 		{
-			name: "ShouldEmitAllStandardClaimsIncludingZeroValuedOptionals",
+			name: "ShouldOmitAnEmptyVerificationURIComplete",
 			setup: func() *DeviceAuthorizeResponse {
 				resp := &DeviceAuthorizeResponse{Header: http.Header{}, Extra: map[string]any{}}
 				resp.SetUserCode("USER")
@@ -220,12 +220,11 @@ func TestWriteRFC862DeviceAuthorizeResponseBody(t *testing.T) {
 				return resp
 			},
 			expected: map[string]any{
-				consts.DeviceCodeResponseDeviceCode:              "DEVICE",
-				consts.DeviceCodeResponseUserCode:                "USER",
-				consts.DeviceCodeResponseVerificationURI:         "https://auth.example.com/device",
-				consts.DeviceCodeResponseVerificationURIComplete: "",
-				consts.DeviceCodeResponseExpiresIn:               float64(300),
-				consts.DeviceCodeResponseInterval:                float64(0),
+				consts.DeviceCodeResponseDeviceCode:      "DEVICE",
+				consts.DeviceCodeResponseUserCode:        "USER",
+				consts.DeviceCodeResponseVerificationURI: "https://auth.example.com/device",
+				consts.DeviceCodeResponseExpiresIn:       float64(300),
+				consts.DeviceCodeResponseInterval:        float64(0),
 			},
 		},
 		{
@@ -245,13 +244,12 @@ func TestWriteRFC862DeviceAuthorizeResponseBody(t *testing.T) {
 				return resp
 			},
 			expected: map[string]any{
-				consts.DeviceCodeResponseDeviceCode:              "Y",
-				consts.DeviceCodeResponseUserCode:                "X",
-				consts.DeviceCodeResponseVerificationURI:         "https://auth.example.com/device",
-				consts.DeviceCodeResponseVerificationURIComplete: "",
-				consts.DeviceCodeResponseExpiresIn:               float64(100),
-				consts.DeviceCodeResponseInterval:                float64(0),
-				"foo":                                            "bar",
+				consts.DeviceCodeResponseDeviceCode:      "Y",
+				consts.DeviceCodeResponseUserCode:        "X",
+				consts.DeviceCodeResponseVerificationURI: "https://auth.example.com/device",
+				consts.DeviceCodeResponseExpiresIn:       float64(100),
+				consts.DeviceCodeResponseInterval:        float64(0),
+				"foo":                                    "bar",
 			},
 		},
 	}

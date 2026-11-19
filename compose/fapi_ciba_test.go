@@ -91,7 +91,7 @@ func TestApplyFAPICIBAProfile(t *testing.T) {
 			assert.Equal(t, tc.expModes, config.CIBATokenDeliveryModes)
 			assert.Equal(t, tc.expAlgs, config.CIBARequestSigningAlgValues)
 			assert.Equal(t, tc.expLife, config.CIBASignedRequestMaximumLifetime)
-			assert.True(t, config.CIBARequireBindingMessage)
+			assert.False(t, config.CIBADisableBindingMessageRequirement)
 			assert.True(t, config.CIBARequireSingleAudienceAssertion)
 			assert.False(t, config.CIBARequireRequestContext)
 		})
@@ -258,8 +258,8 @@ func TestValidateFAPICIBAProfile(t *testing.T) {
 		},
 		{
 			name:     "ShouldRequireTheBindingMessage",
-			modify:   func(config *oauth2.Config) { config.CIBARequireBindingMessage = false },
-			expected: []string{"FAPI-CIBA Profile Section 4.1.1: a unique authorization context or a 'binding_message' must be required, but CIBARequireBindingMessage is not set"},
+			modify:   func(config *oauth2.Config) { config.CIBADisableBindingMessageRequirement = true },
+			expected: []string{"FAPI-CIBA Profile Section 4.1.1: a unique authorization context or a 'binding_message' must be required, but CIBADisableBindingMessageRequirement is set"},
 		},
 		{
 			name: "ShouldRejectRS256SignedRequests",
@@ -424,13 +424,8 @@ func TestValidateFAPICIBAProfileWithoutTheProfile(t *testing.T) {
 	err := ValidateFAPICIBAProfile(context.Background(), config)
 	require.Error(t, err)
 
-	for _, expected := range []string{
-		"the push token delivery mode must not be supported",
-		"CIBARequireBindingMessage is not set",
-	} {
-		assert.Contains(t, err.Error(), expected)
-	}
-
+	assert.Contains(t, err.Error(), "the push token delivery mode must not be supported")
+	assert.NotContains(t, err.Error(), "CIBADisableBindingMessageRequirement is set")
 	assert.NotContains(t, err.Error(), "FAPI 2.0 Security Profile")
 }
 

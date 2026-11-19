@@ -853,6 +853,50 @@ func TestClientConfigurationHandlerUpdateChangesNothingWhenTheResponseFails(t *t
 
 const testPatchedRedirectURI = "https://example.com/other"
 
+// RFC 10027 Section 6.1.7.
+func TestClientConfigurationHandlerCrossDeviceGrantTypes(t *testing.T) {
+	testCases := []struct {
+		name      string
+		permitted []string
+		expected  error
+	}{
+		{"ShouldRejectAnUpdateToDeviceCodeWhenUnset", nil, oauth2.ErrInvalidClientMetadata},
+		{"ShouldRejectAnUpdateToDeviceCodeWhenNotPermitted", []string{consts.GrantTypeAuthorizationCode}, oauth2.ErrInvalidClientMetadata},
+		{"ShouldAcceptAnUpdateToDeviceCodeWhenPermitted", []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeOAuthDeviceCode}, nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			handler, registrar, config, _ := newConfigurationHandler(t)
+
+			created := registerClient(t, ctx, registrar)
+
+			config.RFC7591ClientRegistrationGrantTypes = tc.permitted
+
+			requester := oauth2.NewClientConfigurationRequest()
+			requester.Method = http.MethodPut
+			requester.ClientID = created["client_id"].(string)
+			requester.Signature = handler.Strategy.ClientRegistrationTokenSignature(ctx, created["registration_access_token"].(string))
+			requester.Metadata = &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:  []string{"https://example.com/cb"},
+				GrantTypes:    []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeOAuthDeviceCode},
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+			}
+
+			err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
+
+			if tc.expected == nil {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			assert.ErrorIs(t, err, tc.expected)
+		})
+	}
+}
+
 type failingResponseMetadataStrategy struct {
 	oauth2.ClientRegistrationStrategy
 }

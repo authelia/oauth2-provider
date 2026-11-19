@@ -752,6 +752,61 @@ type RFC8628DeviceAuthorizeConfigProvider interface {
 	GetRFC8628TokenPollingInterval(ctx context.Context) (interval time.Duration)
 }
 
+// RFC8628SlowDownLimitProvider is optionally implemented by the configuration to limit the 'slow_down' responses a
+// device code may receive. A configuration which does not implement this interface is treated as returning 0.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.5
+type RFC8628SlowDownLimitProvider interface {
+	// GetRFC8628SlowDownLimit returns the number of consecutive 'slow_down' responses after which the device code is
+	// invalidated. Defaults to 0 (disabled).
+	GetRFC8628SlowDownLimit(ctx context.Context) (limit int)
+}
+
+// RFC8628VerificationURICompleteProvider is optionally implemented by the configuration to include the
+// 'verification_uri_complete' member in the device authorization response. A configuration which does not implement
+// this interface is treated as returning false. A client implementing RFC8628VerificationURICompleteClient overrides
+// this value.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.2
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.14
+type RFC8628VerificationURICompleteProvider interface {
+	// GetRFC8628VerificationURIComplete returns true if the device authorization response includes the
+	// 'verification_uri_complete' member. Defaults to false.
+	GetRFC8628VerificationURIComplete(ctx context.Context) (enabled bool)
+}
+
+// RFC8628UserCodeSubjectBindingProvider is optionally implemented by the configuration to decide whether an undecided
+// user code is bound to the subject who first presents it. A configuration which does not implement this interface is
+// treated as returning true.
+//
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.3
+type RFC8628UserCodeSubjectBindingProvider interface {
+	// GetRFC8628UserCodeSubjectBinding returns true if an undecided user code is bound to the subject who first
+	// presents it, so that any other subject presenting it is refused. Defaults to true.
+	GetRFC8628UserCodeSubjectBinding(ctx context.Context) (enforce bool)
+}
+
+// RFC8628UserCodeRateLimiter limits the user code attempts made at the device grant user interaction endpoint.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8628#section-5.1
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.11
+type RFC8628UserCodeRateLimiter interface {
+	// AllowRFC8628UserCodeAttempt is called before the user code of the request is looked up, with the [http.Request]
+	// under RequestContextKey, and returns an error to refuse the attempt. An error which is not an *RFC6749Error is
+	// answered as ErrTooManyRequests. The outcome of an attempt which was allowed is the error returned by
+	// NewRFC8628UserAuthorizeRequest, which wraps ErrUserCodeUnknown, ErrUserCodeExpired, ErrUserCodeDecided or
+	// ErrUserCodeClaimed.
+	AllowRFC8628UserCodeAttempt(ctx context.Context, request DeviceAuthorizeRequester) (err error)
+}
+
+// RFC8628UserCodeRateLimiterProvider is optionally implemented by the configuration to limit user code attempts.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8628#section-5.1
+type RFC8628UserCodeRateLimiterProvider interface {
+	// GetRFC8628UserCodeRateLimiter returns the RFC8628UserCodeRateLimiter, or nil for no limit. Defaults to nil.
+	GetRFC8628UserCodeRateLimiter(ctx context.Context) (limiter RFC8628UserCodeRateLimiter)
+}
+
 // CIBAConfigProvider returns the provider for configuring OpenID Connect Client-Initiated Backchannel Authentication.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html
@@ -795,7 +850,10 @@ type CIBAConfigProvider interface {
 
 	// GetCIBARequireBindingMessage returns true if the 'binding_message' parameter is required, unless the request
 	// carries an authorization detail which its AuthorizationDetailsTypeUniqueContextHandler reports identifies a
-	// unique authorization context. Defaults to false.
+	// unique authorization context. Defaults to true. A client implementing CIBABindingMessageClient overrides this
+	// value.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.17
 	GetCIBARequireBindingMessage(ctx context.Context) (require bool)
 
 	// GetCIBAMaximumBindingMessageLength returns the maximum 'binding_message' length. Defaults to 64.
@@ -842,7 +900,10 @@ type RFC7591ClientRegistrationTokenSecretProvider interface {
 // RFC7591ClientRegistrationGrantTypesProvider returns the provider for the grant types a client may register for.
 type RFC7591ClientRegistrationGrantTypesProvider interface {
 	// GetRFC7591ClientRegistrationGrantTypes returns the grant types a client may register for. A registered grant
-	// type outside this set is rejected with 'invalid_client_metadata'.
+	// type outside this set is rejected with 'invalid_client_metadata'. An empty set permits any grant type except
+	// 'urn:ietf:params:oauth:grant-type:device_code' and 'urn:openid:params:grant-type:ciba', which must be named.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.7
 	GetRFC7591ClientRegistrationGrantTypes(ctx context.Context) (grantTypes []string)
 }
 
@@ -1407,6 +1468,21 @@ type EnforceSenderConstrainedAccessTokensProvider interface {
 	// GetEnforceSenderConstrainedAccessTokens returns true if every token request must bind its tokens to a DPoP
 	// proof or a mutual-TLS client certificate, whichever the client presents.
 	GetEnforceSenderConstrainedAccessTokens(ctx context.Context) (enforce bool)
+}
+
+// CrossDeviceSenderConstrainedAccessTokensProvider is optionally implemented by the configuration to require the
+// access tokens of the cross-device grants to be sender-constrained by either RFC 9449 DPoP or RFC 8705 Mutual-TLS. A
+// configuration which does not implement this interface is treated as returning false.
+//
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.12
+type CrossDeviceSenderConstrainedAccessTokensProvider interface {
+	// GetRFC8628EnforceSenderConstrainedAccessTokens returns true if every token request of the RFC 8628 device
+	// authorization grant must bind its tokens to a DPoP proof or a mutual-TLS client certificate. Defaults to false.
+	GetRFC8628EnforceSenderConstrainedAccessTokens(ctx context.Context) (enforce bool)
+
+	// GetCIBAEnforceSenderConstrainedAccessTokens returns true if the tokens of every OpenID Connect CIBA
+	// authentication request must be bound to a DPoP proof or a mutual-TLS client certificate. Defaults to false.
+	GetCIBAEnforceSenderConstrainedAccessTokens(ctx context.Context) (enforce bool)
 }
 
 // MTLSConfigProvider is the configuration provider for RFC 8705 Mutual-TLS.

@@ -24,8 +24,10 @@ import (
 	josejwt "authelia.com/provider/jose/jwt"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/handler/rfc9449"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
 )
 
@@ -50,6 +52,58 @@ func TestDPoPAuthorizeFactory(t *testing.T) {
 	require.IsType(t, &rfc9449.AuthorizeHandler{}, h)
 
 	var _ oauth2.AuthorizeEndpointBindingHandler = h.(*rfc9449.AuthorizeHandler)
+}
+
+// RFC 10027 Section 6.1.12.
+func TestComposeAllEnabledBindsTheDeviceCodeToTheDPoPJKT(t *testing.T) {
+	const jkt = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
+
+	testCases := []struct {
+		name     string
+		form     url.Values
+		expected string
+		err      error
+	}{
+		{name: "ShouldRecordTheDPoPJKT", form: url.Values{consts.FormParameterDPoPJKT: {jkt}}, expected: jkt},
+		{name: "ShouldRecordNothingWithoutADPoPJKT", form: url.Values{}},
+		{name: "ShouldRejectAnInvalidDPoPJKT", form: url.Values{consts.FormParameterDPoPJKT: {"invalid"}}, err: oauth2.ErrInvalidRequest},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := storage.NewMemoryStore()
+
+			provider := ComposeAllEnabled(&oauth2.Config{
+				DPoPEnabled:                           true,
+				GlobalSecret:                          []byte("some-cool-secret-that-is-32bytes"),
+				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+				RFC8628UserVerificationURL:            "https://example.com/device",
+			}, store, gen.MustRSAKey())
+
+			request := oauth2.NewDeviceAuthorizeRequest()
+			request.Client = &oauth2.DefaultClient{ID: "device", GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthDeviceCode}}
+			request.Form = tc.form
+
+			_, err := provider.NewRFC862DeviceAuthorizeResponse(t.Context(), request, openid.NewDefaultSession())
+
+			if tc.err != nil {
+				require.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			stored, err := store.GetDeviceCodeSession(t.Context(), request.GetDeviceCodeSignature(), openid.NewDefaultSession())
+			require.NoError(t, err)
+
+			session, ok := stored.GetSession().(oauth2.DPoPBoundSession)
+			require.True(t, ok)
+
+			assert.Equal(t, tc.expected, session.GetDPoPJWKThumbprint())
+			assert.Equal(t, tc.expected, session.GetRequestedDPoPJWKThumbprint())
+		})
+	}
 }
 
 func TestDPoPFactoryPanicsWithoutUsableStrategy(t *testing.T) {

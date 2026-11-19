@@ -30,6 +30,7 @@ func (cibaGrantHandler) GrantTypesSupported(_ context.Context) []string {
 
 func newCIBAConfig(config *oauth2.Config) *oauth2.Config {
 	config.TokenEndpointHandlers.Append(cibaGrantHandler{})
+	config.RFC7591ClientRegistrationGrantTypes = append(config.RFC7591ClientRegistrationGrantTypes, consts.GrantTypeAuthorizationCode, consts.GrantTypeOpenIDCIBA)
 
 	return withTestCapabilities(config)
 }
@@ -165,6 +166,7 @@ func TestValidateCIBARegistration(t *testing.T) {
 		ctx := context.Background()
 		_, registrar, config, _ := newConfigurationHandler(t)
 		config.TokenEndpointHandlers.Append(cibaGrantHandler{})
+		config.RFC7591ClientRegistrationGrantTypes = []string{consts.GrantTypeOpenIDCIBA}
 
 		requester := oauth2.NewClientRegistrationRequest()
 		requester.Metadata = valid(func(m *oauth2.ClientRegistrationMetadata) { m.BackChannelUserCodeParameter = true })
@@ -174,6 +176,57 @@ func TestValidateCIBARegistration(t *testing.T) {
 		require.NoError(t, registrar.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, responder))
 		assert.Equal(t, true, responder.ToMap()[consts.ClientMetadataBackChannelUserCodeParameter])
 	})
+}
+
+// RFC 10027 Section 6.1.7.
+func TestValidateCIBARegistrationPermitted(t *testing.T) {
+	const prefix = "The value of one of the client metadata fields is invalid and the server has rejected this request. "
+
+	poll := &oauth2.ClientRegistrationMetadata{
+		GrantTypes:                   []string{consts.GrantTypeOpenIDCIBA},
+		BackChannelTokenDeliveryMode: consts.CIBAModePoll,
+		TokenEndpointAuthMethod:      consts.ClientAuthMethodClientSecretBasic,
+	}
+
+	push := &oauth2.ClientRegistrationMetadata{
+		RedirectURIs:                          []string{"https://example.com/cb"},
+		BackChannelTokenDeliveryMode:          consts.CIBAModePush,
+		BackChannelClientNotificationEndpoint: "https://example.com/notify",
+		TokenEndpointAuthMethod:               consts.ClientAuthMethodClientSecretBasic,
+	}
+
+	testCases := []struct {
+		name      string
+		permitted []string
+		metadata  *oauth2.ClientRegistrationMetadata
+		expected  string
+	}{
+		{"ShouldRejectTheGrantWhenUnset", nil, poll, prefix + "The 'grant_types' value 'urn:openid:params:grant-type:ciba' is not permitted for registration."},
+		{"ShouldRejectTheGrantWhenNotPermitted", []string{consts.GrantTypeAuthorizationCode}, poll, prefix + "The 'grant_types' value 'urn:openid:params:grant-type:ciba' is not permitted for registration."},
+		{"ShouldAcceptTheGrantWhenPermitted", []string{consts.GrantTypeOpenIDCIBA}, poll, ""},
+		{"ShouldRejectPushWithoutTheGrantWhenUnset", nil, push, prefix + "The 'backchannel_token_delivery_mode' value 'push' is not permitted for registration."},
+		{"ShouldRejectPushWithoutTheGrantWhenNotPermitted", []string{consts.GrantTypeAuthorizationCode}, push, prefix + "The 'backchannel_token_delivery_mode' value 'push' is not permitted for registration."},
+		{"ShouldAcceptPushWithoutTheGrantWhenPermitted", []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeOpenIDCIBA}, push, ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{RFC7591ClientRegistrationGrantTypes: tc.permitted}
+			config.TokenEndpointHandlers.Append(cibaGrantHandler{})
+
+			err := NewLocalValidator(withTestCapabilities(config)).ValidateClientRegistrationMetadata(t.Context(), nil, tc.metadata)
+
+			if tc.expected == "" {
+				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			require.Error(t, err)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.expected)
+			assert.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
+		})
+	}
 }
 
 func TestSectorDocumentMustListCIBAURIs(t *testing.T) {

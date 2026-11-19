@@ -224,3 +224,135 @@ func TestInternalIssuanceSenderConstraintFromSession(t *testing.T) {
 		})
 	}
 }
+
+// RFC 10027 Section 6.1.12.
+func TestInternalIssuanceCrossDeviceSenderConstraintFromSession(t *testing.T) {
+	testCases := []struct {
+		name    string
+		gt      GrantType
+		config  *Config
+		client  Client
+		session *DefaultSession
+		err     error
+	}{
+		{
+			name:    "ShouldFailCIBAWithoutThumbprintWhenEnforced",
+			gt:      GrantTypeCIBA,
+			config:  &Config{CIBAEnforceSenderConstrainedAccessTokens: true, MTLSEnabled: true, DPoPEnabled: true},
+			session: &DefaultSession{},
+			err:     ErrInvalidRequest,
+		},
+		{
+			name:    "ShouldPassCIBAWithMTLSThumbprintWhenEnforced",
+			gt:      GrantTypeCIBA,
+			config:  &Config{CIBAEnforceSenderConstrainedAccessTokens: true, MTLSEnabled: true},
+			session: &DefaultSession{ClientCertificateThumbprint: "x5t"},
+		},
+		{
+			name:    "ShouldFailCIBAWithoutThumbprintWhenTheClientEnforces",
+			gt:      GrantTypeCIBA,
+			config:  &Config{MTLSEnabled: true, DPoPEnabled: true},
+			client:  &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "client"}, CIBAEnforceSenderConstrainedAccessTokens: true},
+			session: &DefaultSession{},
+			err:     ErrInvalidRequest,
+		},
+		{
+			name:    "ShouldPassCIBAWithoutThumbprintWhenOnlyTheDeviceGrantIsEnforced",
+			gt:      GrantTypeCIBA,
+			config:  &Config{RFC8628EnforceSenderConstrainedAccessTokens: true},
+			session: &DefaultSession{},
+		},
+		{
+			name:    "ShouldFailTheDeviceGrantWithoutThumbprintWhenEnforced",
+			gt:      GrantTypeDeviceCode,
+			config:  &Config{RFC8628EnforceSenderConstrainedAccessTokens: true, MTLSEnabled: true, DPoPEnabled: true},
+			session: &DefaultSession{},
+			err:     ErrInvalidRequest,
+		},
+		{
+			name:    "ShouldPassTheDeviceGrantWithDPoPThumbprintWhenEnforced",
+			gt:      GrantTypeDeviceCode,
+			config:  &Config{RFC8628EnforceSenderConstrainedAccessTokens: true, DPoPEnabled: true},
+			session: &DefaultSession{JWKThumbprint: "jkt"},
+		},
+		{
+			name:    "ShouldFailTheDeviceGrantWithoutThumbprintWhenTheClientEnforces",
+			gt:      GrantTypeDeviceCode,
+			config:  &Config{DPoPEnabled: true},
+			client:  &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "client"}, RFC8628EnforceSenderConstrainedAccessTokens: true},
+			session: &DefaultSession{},
+			err:     ErrInvalidRequest,
+		},
+		{
+			name:    "ShouldPassTheDeviceGrantWithoutThumbprintWhenOnlyCIBAIsEnforced",
+			gt:      GrantTypeDeviceCode,
+			config:  &Config{CIBAEnforceSenderConstrainedAccessTokens: true},
+			session: &DefaultSession{},
+		},
+		{
+			name:    "ShouldPassAnotherGrantWithoutThumbprintWhenBothAreEnforced",
+			gt:      pipelineTestGrantType,
+			config:  &Config{RFC8628EnforceSenderConstrainedAccessTokens: true, CIBAEnforceSenderConstrainedAccessTokens: true},
+			session: &DefaultSession{},
+		},
+		{
+			name:    "ShouldPassWithoutThumbprintByDefault",
+			gt:      GrantTypeDeviceCode,
+			config:  &Config{},
+			session: &DefaultSession{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := &grantTypePipelineTestHandler{
+				pipelineTestHandler: &pipelineTestHandler{grants: map[string]pipelineTestGrant{"stored": {scopes: Arguments{"openid"}}}},
+				gt:                  string(tc.gt),
+			}
+
+			tc.config.TokenEndpointHandlers = TokenEndpointHandlers{handler}
+			tc.config.DisableRefreshTokenExpirationParameters = true
+
+			provider := &Fosite{Config: tc.config}
+
+			requester := NewAccessRequest(tc.session)
+			requester.GrantTypes = Arguments{string(tc.gt)}
+			requester.Form = url.Values{consts.FormParameterAuthorizationCode: {"stored"}}
+			requester.Client = &DefaultClient{ID: "client"}
+
+			if tc.client != nil {
+				requester.Client = tc.client
+			}
+
+			response, err := provider.issueInternalAccessResponse(context.Background(), requester)
+
+			if tc.err != nil {
+				assert.ErrorIs(t, err, tc.err)
+				assert.Nil(t, response)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, "access-token", response.GetAccessToken())
+		})
+	}
+}
+
+type grantTypePipelineTestHandler struct {
+	*pipelineTestHandler
+
+	gt string
+}
+
+func (h *grantTypePipelineTestHandler) CanHandleTokenEndpointRequest(_ context.Context, request AccessRequester) bool {
+	return request.GetGrantTypes().ExactOne(h.gt)
+}
+
+func (h *grantTypePipelineTestHandler) PopulateTokenEndpointResponse(_ context.Context, _ AccessRequester, response AccessResponder) error {
+	response.SetAccessToken("access-token")
+	response.SetTokenType(BearerAccessToken)
+	response.SetExpiresIn(time.Hour)
+
+	return nil
+}

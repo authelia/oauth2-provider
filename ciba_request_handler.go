@@ -393,13 +393,24 @@ func (f *Fosite) validateCIBABindingMessage(ctx context.Context, request *BackCh
 	return nil
 }
 
-// validateCIBABindingMessageRequired requires the 'binding_message' parameter when configured, unless the request
-// carries an authorization detail whose AuthorizationDetailsTypeUniqueContextHandler reports it identifies a unique
-// authorization context.
+// validateCIBABindingMessageRequired requires the 'binding_message' parameter unless the configuration or the client
+// waives it, or the request carries an authorization detail whose AuthorizationDetailsTypeUniqueContextHandler reports
+// it identifies a unique authorization context.
 //
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.17
 // See: https://openid.net/specs/fapi-ciba.html#section-4.1.1
 func (f *Fosite) validateCIBABindingMessageRequired(ctx context.Context, request *BackChannelAuthenticationRequest) (err error) {
-	if request.BindingMessage != "" || !f.Config.GetCIBARequireBindingMessage(ctx) {
+	if request.BindingMessage != "" {
+		return nil
+	}
+
+	require := f.Config.GetCIBARequireBindingMessage(ctx)
+
+	if c, ok := request.Client.(CIBABindingMessageClient); ok {
+		require = c.GetCIBARequireBindingMessage(require)
+	}
+
+	if !require {
 		return nil
 	}
 

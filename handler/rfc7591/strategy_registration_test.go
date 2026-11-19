@@ -172,6 +172,10 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesEveryUnregisteredF
 		RefreshTokenGracePeriod:                       new(time.Duration),
 		RefreshTokenMaximumLifespan:                   time.Minute,
 		EnforceSenderConstrainedAccessTokens:          true,
+		RFC8628VerificationURIComplete:                new(bool),
+		CIBARequireBindingMessage:                     new(bool),
+		RFC8628EnforceSenderConstrainedAccessTokens:   true,
+		CIBAEnforceSenderConstrainedAccessTokens:      true,
 		FAPI2SecurityProfile:                          true,
 	}
 

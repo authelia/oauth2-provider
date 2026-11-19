@@ -55,6 +55,34 @@ func TestClientRegistrationHandlerPolicy(t *testing.T) {
 				assert.Zero(t, memory.ClientRegistrationCounts[policyHandlerKey])
 			})
 
+			// RFC 10027 Section 6.1.7.
+			t.Run("ShouldNotPermitACrossDeviceGrantTypeByPolicyAlone", func(t *testing.T) {
+				newRequest := func() *oauth2.ClientRegistrationRequest {
+					claim := policyHandlerExample(1)
+					claim[consts.ClientMetadataGrantTypes] = map[string]any{policyRuleSubsetOf: []any{consts.GrantTypeAuthorizationCode, consts.GrantTypeOAuthDeviceCode}}
+
+					requester := policyRegistrationRequest(claim, policyHandlerKey)
+					requester.Metadata.GrantTypes = []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeOAuthDeviceCode}
+
+					return requester
+				}
+
+				handler, _, memory := newPolicyRegistrationHandler(t, factory)
+
+				err := handler.HandleRFC7591ClientRegistrationEndpointRequest(context.Background(), newRequest(), oauth2.NewClientRegistrationResponse())
+
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), policyErrorPrefix+"The 'grant_types' value 'urn:ietf:params:oauth:grant-type:device_code' is not permitted for registration.")
+				assert.Empty(t, memory.Clients)
+				assert.Zero(t, memory.ClientRegistrationCounts[policyHandlerKey])
+
+				handler.Config.(*oauth2.Config).RFC7591ClientRegistrationGrantTypes = []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeOAuthDeviceCode}
+
+				responder := oauth2.NewClientRegistrationResponse()
+
+				require.NoError(t, handler.HandleRFC7591ClientRegistrationEndpointRequest(context.Background(), newRequest(), responder))
+				assert.Equal(t, http.StatusCreated, responder.GetStatusCode())
+			})
+
 			t.Run("ShouldEnforceMaxRegistrationsPerKey", func(t *testing.T) {
 				handler, _, memory := newPolicyRegistrationHandler(t, factory)
 

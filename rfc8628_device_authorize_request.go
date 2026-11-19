@@ -30,6 +30,40 @@ const (
 	DeviceAuthorizeStatusClaimed
 )
 
+// DeviceAuthorizePollingRequester is a DeviceAuthorizeRequester which carries the polling state the token endpoint
+// keeps beyond the time of the last poll.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8628#section-3.5
+type DeviceAuthorizePollingRequester interface {
+	// GetPollingInterval returns the minimum polling interval currently in force for the request, or 0 when the
+	// configured interval applies.
+	GetPollingInterval() (interval time.Duration)
+
+	// SetPollingInterval sets the minimum polling interval currently in force for the request.
+	SetPollingInterval(interval time.Duration)
+
+	// GetSlowDownCount returns the number of consecutive 'slow_down' responses issued for the request.
+	GetSlowDownCount() (count int)
+
+	// SetSlowDownCount sets the number of consecutive 'slow_down' responses issued for the request.
+	SetSlowDownCount(count int)
+
+	DeviceAuthorizeRequester
+}
+
+// DeviceAuthorizeClaimRequester is a DeviceAuthorizeRequester which carries the subject its user code is bound to.
+//
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.3
+type DeviceAuthorizeClaimRequester interface {
+	// GetClaimSubject returns the subject who first presented the user code, or an empty string when no subject has.
+	GetClaimSubject() (subject string)
+
+	// SetClaimSubject sets the subject who first presented the user code.
+	SetClaimSubject(subject string)
+
+	DeviceAuthorizeRequester
+}
+
 // DeviceAuthorizeRequest is an implementation of DeviceAuthorizeRequester.
 type DeviceAuthorizeRequest struct {
 	Request
@@ -37,6 +71,9 @@ type DeviceAuthorizeRequest struct {
 	UserCodeSignature   string
 	Status              DeviceAuthorizeStatus
 	LastChecked         time.Time
+	PollingInterval     time.Duration
+	SlowDownCount       int
+	ClaimSubject        string
 }
 
 // NewDeviceAuthorizeRequest returns an empty DeviceAuthorizeRequest with its embedded Request initialized.
@@ -87,8 +124,38 @@ func (d *DeviceAuthorizeRequest) GetLastChecked() time.Time {
 	return d.LastChecked
 }
 
+// GetPollingInterval returns the minimum polling interval currently in force for the request.
+func (d *DeviceAuthorizeRequest) GetPollingInterval() time.Duration {
+	return d.PollingInterval
+}
+
+// SetPollingInterval sets the minimum polling interval currently in force for the request.
+func (d *DeviceAuthorizeRequest) SetPollingInterval(interval time.Duration) {
+	d.PollingInterval = interval
+}
+
+// GetSlowDownCount returns the number of consecutive 'slow_down' responses issued for the request.
+func (d *DeviceAuthorizeRequest) GetSlowDownCount() int {
+	return d.SlowDownCount
+}
+
+// SetSlowDownCount sets the number of consecutive 'slow_down' responses issued for the request.
+func (d *DeviceAuthorizeRequest) SetSlowDownCount(count int) {
+	d.SlowDownCount = count
+}
+
+// GetClaimSubject returns the subject who first presented the user code.
+func (d *DeviceAuthorizeRequest) GetClaimSubject() string {
+	return d.ClaimSubject
+}
+
+// SetClaimSubject sets the subject who first presented the user code.
+func (d *DeviceAuthorizeRequest) SetClaimSubject(subject string) {
+	d.ClaimSubject = subject
+}
+
 // Merge copies the requester data into this request. When requester is a *DeviceAuthorizeRequest the status, code
-// signatures, and last-checked timestamp are also merged.
+// signatures, polling state and claim subject are also merged.
 func (d *DeviceAuthorizeRequest) Merge(requester Requester) {
 	d.Request.Merge(requester)
 
@@ -97,9 +164,14 @@ func (d *DeviceAuthorizeRequest) Merge(requester Requester) {
 		d.DeviceCodeSignature = authReq.DeviceCodeSignature
 		d.UserCodeSignature = authReq.UserCodeSignature
 		d.LastChecked = authReq.LastChecked
+		d.PollingInterval = authReq.PollingInterval
+		d.SlowDownCount = authReq.SlowDownCount
+		d.ClaimSubject = authReq.ClaimSubject
 	}
 }
 
 var (
-	_ DeviceAuthorizeRequester = (*DeviceAuthorizeRequest)(nil)
+	_ DeviceAuthorizeRequester        = (*DeviceAuthorizeRequest)(nil)
+	_ DeviceAuthorizePollingRequester = (*DeviceAuthorizeRequest)(nil)
+	_ DeviceAuthorizeClaimRequester   = (*DeviceAuthorizeRequest)(nil)
 )

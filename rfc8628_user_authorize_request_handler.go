@@ -17,7 +17,11 @@ import (
 // NewRFC8628UserAuthorizeRequest parses the user-facing device authorization request and dispatches it to each
 // configured RFC8628UserAuthorizeEndpointHandler. The returned DeviceAuthorizeRequester reflects the user's
 // authorization decision (approval, denial, or pending) as recorded by the handlers. The session must not be nil; it is
-// the session the stored device authorization request is hydrated into.
+// the session the stored device authorization request is hydrated into. Unless RFC8628UserCodeSubjectBindingProvider
+// disables it, the session must carry the subject of the authenticated End-User presenting the user code, which is
+// read before the stored session replaces it and is the subject an undecided user code is bound to. An error for a
+// user code which is not accepted wraps ErrUserCodeUnknown, ErrUserCodeExpired, ErrUserCodeDecided or
+// ErrUserCodeClaimed.
 func (f *Fosite) NewRFC8628UserAuthorizeRequest(ctx context.Context, r *http.Request, session Session) (requester DeviceAuthorizeRequester, err error) {
 	request := NewDeviceAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
@@ -33,6 +37,8 @@ func (f *Fosite) NewRFC8628UserAuthorizeRequest(ctx context.Context, r *http.Req
 	}
 
 	request.SetSession(session)
+
+	ctx = context.WithValue(ctx, RequestContextKey, r)
 
 	for _, h := range f.Config.GetRFC8628UserAuthorizeEndpointHandlers(ctx) {
 		if err = h.HandleRFC8628UserAuthorizeEndpointRequest(ctx, request); err != nil && !errors.Is(err, ErrUnknownRequest) {

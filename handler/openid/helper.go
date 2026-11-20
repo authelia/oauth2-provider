@@ -227,6 +227,14 @@ func setNonceUsed(ctx context.Context, storage OpenIDConnectRequestStorage, requ
 	return nil
 }
 
+func getSessionSubject(request oauth2.Requester) (subject string) {
+	if session := request.GetSession(); !reflection.IsNil(session) {
+		return session.GetSubject()
+	}
+
+	return ""
+}
+
 func getSessionExpiresAt(request oauth2.Requester, key oauth2.TokenType, fallback time.Duration) (expiresAt time.Time) {
 	if session := request.GetSession(); !reflection.IsNil(session) {
 		if expiresAt = session.GetExpiresAt(key); !expiresAt.IsZero() {

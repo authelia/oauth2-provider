@@ -48,7 +48,6 @@ func composeAllEnabledWithImplicit(config *oauth2.Config, s any, key any) oauth2
 		compose.OAuth2ClientCredentialsGrantFactory,
 		compose.OAuth2RefreshTokenGrantFactory,
 		compose.RFC8628DeviceAuthorizeFactory,
-		compose.RFC8628UserAuthorizeFactory,
 		compose.RFC8628DeviceAuthorizeTokenFactory,
 
 		compose.RFC7523AssertionGrantFactory,
@@ -66,6 +65,7 @@ func composeAllEnabledWithImplicit(config *oauth2.Config, s any, key any) oauth2
 		compose.OpenIDConnectHybridFactory,
 		compose.OpenIDConnectRefreshFactory,
 		compose.OpenIDConnectDeviceAuthorizeFactory,
+		compose.RFC8628UserAuthorizeFactory,
 
 		compose.OAuth2TokenIntrospectionFactory,
 		compose.OAuth2TokenRevocationFactory,

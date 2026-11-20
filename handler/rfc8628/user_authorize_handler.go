@@ -16,7 +16,10 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// UserAuthorizeHandler handles the RFC 8628 user verification request.
+// UserAuthorizeHandler handles the RFC 8628 user verification request. It records the decision of the End-User, so it
+// must be registered after every other oauth2.RFC8628UserAuthorizeEndpointHandler which can reject the decision.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.3
 type UserAuthorizeHandler struct {
 	Storage  Storage
 	Strategy CodeStrategy

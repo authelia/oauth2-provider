@@ -115,7 +115,6 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		OAuth2ClientCredentialsGrantFactory,
 		OAuth2RefreshTokenGrantFactory,
 		RFC8628DeviceAuthorizeFactory,
-		RFC8628UserAuthorizeFactory,
 		RFC8628DeviceAuthorizeTokenFactory,
 
 		RFC7523AssertionGrantFactory,
@@ -131,6 +130,7 @@ func ComposeAllEnabled(config *oauth2.Config, storage any, key any) oauth2.Provi
 		OpenIDConnectExplicitFactory,
 		OpenIDConnectRefreshFactory,
 		OpenIDConnectDeviceAuthorizeFactory,
+		RFC8628UserAuthorizeFactory,
 
 		OAuth2TokenIntrospectionFactory,
 		OAuth2TokenRevocationFactory,

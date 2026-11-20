@@ -84,7 +84,9 @@ func OpenIDConnectHybridFactory(config oauth2.Configurator, storage any, strateg
 }
 
 // OpenIDConnectDeviceAuthorizeFactory creates the OpenID Connect 1.0 handler for the RFC 8628 device authorization
-// grant, which issues an ID Token when a device code granted the 'openid' scope is redeemed.
+// grant, which issues an ID Token when a device code granted the 'openid' scope is redeemed. It MUST be registered
+// after RFC8628DeviceAuthorizeTokenFactory and OpenIDConnectKeyBindingUserAuthorizeFactory, and before
+// RFC8628UserAuthorizeFactory; Compose panics on the wrong order.
 func OpenIDConnectDeviceAuthorizeFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &openid.OpenIDConnectDeviceAuthorizeHandler{
 		OpenIDConnectRequestStorage:   storage.(openid.OpenIDConnectRequestStorage),

@@ -288,6 +288,7 @@ func runNonceDevice(t *testing.T, store *storage.MemoryStore, clientID, nonce st
 	request.Session = session
 	request.Form = url.Values{consts.FormParameterNonce: {nonce}}
 	request.SetDeviceCodeSignature("device-" + clientID)
+	request.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
 
 	return handler.PopulateRFC8628UserAuthorizeEndpointResponse(t.Context(), request, oauth2.NewRFC8628UserAuthorizeResponse())
 }

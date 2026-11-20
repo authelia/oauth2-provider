@@ -50,6 +50,10 @@ var ErrHandlerOrder = errors.New("oauth2: handlers are registered in an order wh
 //     endpoint binding handlers, as it enforces the grant's 'cnf' claim there.
 //   - Every oidckb.UserAuthorizeHandler must precede the rfc8628.UserAuthorizeHandler in the RFC 8628 user authorize
 //     endpoint handlers, as it records the granted key binding onto the session rfc8628.UserAuthorizeHandler persists.
+//   - Every openid.OpenIDConnectDeviceAuthorizeHandler must precede the rfc8628.UserAuthorizeHandler in the RFC 8628
+//     user authorize endpoint handlers, so an approval it rejects, such as one for a reused 'nonce', is not recorded
+//     (see RFC 8628 Section 3.3), and must follow every oidckb.UserAuthorizeHandler, as it persists the session the
+//     granted key binding is recorded onto.
 //   - When any RFC 8693 handler is registered in the token endpoint handlers, an rfc8693.TokenExchangeGrantHandler
 //     must precede every RFC 8693 token type handler and an rfc8693.ActorTokenValidationHandler must follow every
 //     one, the order RFC8693TokenExchangeFactories declares. The grant handler validates the request and writes the
@@ -275,30 +279,50 @@ func validateIDJAGRedeemHandlerBinding(config *oauth2.Config) (err error) {
 	return nil
 }
 
-// validateRFC8628UserAuthorizeHandlerOrder returns an error when oidckb.UserAuthorizeHandler is registered after
-// rfc8628.UserAuthorizeHandler, which persists the device code session the 'bound_key' grant must be recorded onto.
+// validateRFC8628UserAuthorizeHandlerOrder returns an error when an oidckb.UserAuthorizeHandler or an
+// openid.OpenIDConnectDeviceAuthorizeHandler is registered after rfc8628.UserAuthorizeHandler, which persists the
+// device code session with the decision, or an oidckb.UserAuthorizeHandler is registered after an
+// openid.OpenIDConnectDeviceAuthorizeHandler, which persists the OpenID Connect session.
 func validateRFC8628UserAuthorizeHandlerOrder(config *oauth2.Config) (err error) {
-	var device, unordered bool
+	var device, connect, bindingUnordered, connectUnordered, connectBindingUnordered bool
 
-	// Walked in order for the reason validateTokenEndpointBindingHandlerOrder is: no oidckb.UserAuthorizeHandler may
-	// follow an rfc8628.UserAuthorizeHandler, which one index per type cannot express for a list carrying more
-	// than one of either.
+	// Walked in order for the reason validateTokenEndpointBindingHandlerOrder is: neither handler may follow an
+	// rfc8628.UserAuthorizeHandler, which one index per type cannot express for a list carrying more than one of
+	// either.
 	for _, handler := range config.RFC8628UserAuthorizeEndpointHandlers {
 		switch handler.(type) {
 		case *rfc8628.UserAuthorizeHandler:
 			device = true
 		case *oidckb.UserAuthorizeHandler:
 			if device {
-				unordered = true
+				bindingUnordered = true
+			}
+
+			if connect {
+				connectBindingUnordered = true
+			}
+		case *openid.OpenIDConnectDeviceAuthorizeHandler:
+			connect = true
+
+			if device {
+				connectUnordered = true
 			}
 		}
 	}
 
-	if !unordered {
-		return nil
+	if bindingUnordered {
+		err = errors.Join(err, fmt.Errorf("%w: the oidckb.UserAuthorizeHandler (OpenIDConnectKeyBindingUserAuthorizeFactory) must be registered before the rfc8628.UserAuthorizeHandler (RFC8628UserAuthorizeFactory), as it records the granted key binding onto the device code session the rfc8628.UserAuthorizeHandler persists", ErrHandlerOrder))
 	}
 
-	return fmt.Errorf("%w: the oidckb.UserAuthorizeHandler (OpenIDConnectKeyBindingUserAuthorizeFactory) must be registered before the rfc8628.UserAuthorizeHandler (RFC8628UserAuthorizeFactory), as it records the granted key binding onto the device code session the rfc8628.UserAuthorizeHandler persists", ErrHandlerOrder)
+	if connectUnordered {
+		err = errors.Join(err, fmt.Errorf("%w: the openid.OpenIDConnectDeviceAuthorizeHandler (OpenIDConnectDeviceAuthorizeFactory) must be registered before the rfc8628.UserAuthorizeHandler (RFC8628UserAuthorizeFactory), as an approval it rejects must not be recorded by the rfc8628.UserAuthorizeHandler", ErrHandlerOrder))
+	}
+
+	if connectBindingUnordered {
+		err = errors.Join(err, fmt.Errorf("%w: the oidckb.UserAuthorizeHandler (OpenIDConnectKeyBindingUserAuthorizeFactory) must be registered before the openid.OpenIDConnectDeviceAuthorizeHandler (OpenIDConnectDeviceAuthorizeFactory), as it records the granted key binding onto the session the openid.OpenIDConnectDeviceAuthorizeHandler persists", ErrHandlerOrder))
+	}
+
+	return err
 }
 
 // validateCIBAHandlerOrder returns an error when an openid.OpenIDConnectCIBAHandler follows the ciba.EndpointHandler

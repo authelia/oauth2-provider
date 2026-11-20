@@ -49,8 +49,9 @@ func OpenIDConnectKeyBindingFactory(config oauth2.Configurator, storage any, str
 // handler, which records that the 'bound_key' scope was granted for a device flow.
 //
 // It is required for device flow key binding, as the Device Authorization Flow grants its scopes at this endpoint. It
-// MUST be registered before RFC8628UserAuthorizeFactory, whose handler persists the device code session; Compose
-// panics on the wrong order.
+// MUST be registered before RFC8628UserAuthorizeFactory, whose handler persists the device code session, and before
+// OpenIDConnectDeviceAuthorizeFactory, whose handler persists the OpenID Connect session; Compose panics on the wrong
+// order.
 func OpenIDConnectKeyBindingUserAuthorizeFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &oidckb.UserAuthorizeHandler{
 		Config: config,

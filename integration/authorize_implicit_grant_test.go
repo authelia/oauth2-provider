@@ -85,9 +85,9 @@ func TestAuthorizeImplicitFlow(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := compose.Compose(new(oauth2.Config), store, hmacStrategy, compose.OAuth2AuthorizeImplicitFactory, compose.OAuth2TokenIntrospectionFactory)
+			f := compose.Compose(&oauth2.Config{RedirectSecureChecker: oauth2.IsRedirectURISecure}, store, hmacStrategy, compose.OAuth2AuthorizeImplicitFactory, compose.OAuth2TokenIntrospectionFactory)
 
-			server := mockServer(t, f, &oauth2.DefaultSession{})
+			server := mockServer(t, f, &oauth2.DefaultSession{Subject: "foo-sub"})
 			defer server.Close()
 
 			oauthClient := newOAuth2Client(server)
@@ -107,12 +107,18 @@ func TestAuthorizeImplicitFlow(t *testing.T) {
 					return errors.New("Dont follow redirects")
 				},
 			}
-			resp, err := client.Get(authURL)
+			_, err := client.Get(authURL)
 			require.Error(t, err)
+			require.NotNil(t, callbackURL)
 
-			if resp.StatusCode == http.StatusOK {
-				fragment, err := url.ParseQuery(callbackURL.Fragment)
-				require.NoError(t, err)
+			fragment, err := url.ParseQuery(callbackURL.Fragment)
+			require.NoError(t, err)
+
+			if tc.authStatusCode != http.StatusOK {
+				assert.NotEmpty(t, fragment.Get(consts.FormParameterError))
+			} else {
+				require.Empty(t, fragment.Get(consts.FormParameterError))
+
 				expires, err := strconv.Atoi(fragment.Get(consts.AccessResponseExpiresIn))
 				require.NoError(t, err)
 

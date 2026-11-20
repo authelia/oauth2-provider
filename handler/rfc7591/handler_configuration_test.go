@@ -633,17 +633,37 @@ func TestClientConfigurationHandlerCeilingIgnoresClientAudienceStrategy(t *testi
 	assert.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
 }
 
+// RFC 7592 Section 2.1, Section 2.2, and Section 2.3.
 func TestClientConfigurationHandlerRejectsUnknownClient(t *testing.T) {
-	ctx := context.Background()
-	handler, _, _, _ := newConfigurationHandler(t)
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			ctx := t.Context()
+			handler, registrar, _, store := newConfigurationHandler(t)
 
-	requester := oauth2.NewClientConfigurationRequest()
-	requester.Method = http.MethodGet
-	requester.ClientID = "missing"
+			created := registerClient(t, ctx, registrar)
+			id := created["client_id"].(string)
+			signature := handler.Strategy.ClientRegistrationTokenSignature(ctx, created["registration_access_token"].(string))
 
-	err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
-	require.Error(t, err)
-	assert.Equal(t, http.StatusNotFound, oauth2.ErrorToRFC6749Error(err).CodeField)
+			require.NoError(t, store.DeleteClient(ctx, id))
+
+			requester := oauth2.NewClientConfigurationRequest()
+			requester.Method = method
+			requester.ClientID = id
+			requester.Signature = signature
+
+			if method == http.MethodPut {
+				requester.Metadata = &oauth2.ClientRegistrationMetadata{RedirectURIs: []string{testPatchedRedirectURI}}
+			}
+
+			err := handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, oauth2.NewClientRegistrationResponse())
+			require.Error(t, err)
+			assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+			assert.Equal(t, http.StatusUnauthorized, oauth2.ErrorToRFC6749Error(err).CodeField)
+
+			_, err = store.GetClientRegistrationTokenSession(ctx, signature, &oauth2.DefaultSession{})
+			assert.ErrorIs(t, err, oauth2.ErrNotFound)
+		})
+	}
 }
 
 func TestClientConfigurationHandlerReportsClientLookupFailureAsServerError(t *testing.T) {

@@ -265,6 +265,14 @@ func isRefreshTokenGrant(request oauth2.Requester) bool {
 	return false
 }
 
+func isTokenExchangeGrant(request oauth2.Requester) bool {
+	if requester, ok := request.(oauth2.AccessRequester); ok {
+		return requester.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
+	}
+
+	return false
+}
+
 // SigningAlgValues returns the JWS algorithms the underlying jwt.Strategy can sign with, or nil when it is not set.
 //
 // See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
@@ -300,6 +308,12 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 
 	jwtClient := jwt.NewIDTokenClient(request.GetClient())
 
+	// OpenID Connect Dynamic Client Registration 1.0 Section 2: the 'auth_time' Claim is REQUIRED in every ID Token
+	// issued to a client which registered 'require_auth_time'.
+	if isAuthTimeRequired(request.GetClient()) && (claims.AuthTime == nil || claims.AuthTime.IsZero()) {
+		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because authentication time claim is required when the client registered require_auth_time."))
+	}
+
 	var acr string
 
 	// OpenID Connect Core 1.0 Section 12.2: an ID Token issued for a refresh carries the auth_time of the original
@@ -312,8 +326,11 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 			hasMaxAge bool
 		)
 
-		if maxAge, hasMaxAge, err = requestedMaxAge(request.GetRequestForm()); err != nil {
-			return "", errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'max_age' must be a non-negative integer.").WithWrap(err).WithDebugError(err))
+		// The 'default_max_age' applies to an Authentication Request, which a token exchange is not.
+		if !isTokenExchangeGrant(request) || request.GetRequestForm().Has(consts.FormParameterMaximumAge) {
+			if maxAge, hasMaxAge, err = oauth2.GetRequestedMaxAge(request); err != nil {
+				return "", errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'max_age' must be a non-negative integer.").WithWrap(err).WithDebugError(err))
+			}
 		}
 
 		// Adds a bit of wiggle room for timing issues.
@@ -330,7 +347,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because authentication time claim is required when max_age is set."))
 			case rat.IsZero():
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because requested at value is required when max_age is set."))
-			case claims.AuthTime.Add(time.Second * time.Duration(maxAge)).Before(rat):
+			case !oauth2.IsAuthenticationWithinMaxAge(claims.AuthTime.Time, rat, maxAge):
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because authentication time does not satisfy max_age time."))
 			}
 		}

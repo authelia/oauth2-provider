@@ -132,6 +132,8 @@ func TestFosite_NewRFC8628UserAuthorizeResponseEnforcesAuthenticationRequirement
 	testCases := []struct {
 		name     string
 		status   DeviceAuthorizeStatus
+		form     url.Values
+		client   Client
 		session  Session
 		expected error
 	}{
@@ -139,6 +141,8 @@ func TestFosite_NewRFC8628UserAuthorizeResponseEnforcesAuthenticationRequirement
 		{name: "ShouldFailAnApprovalWithAnUnmetACR", status: DeviceAuthorizeStatusApproved, session: newACRValuesSession("bronze", now), expected: ErrUnmetAuthenticationRequirements},
 		{name: "ShouldFailAnApprovalWithAnAuthenticationTooOld", status: DeviceAuthorizeStatusApproved, session: newACRValuesSession("gold", now.Add(-time.Hour)), expected: ErrUnmetAuthenticationRequirements},
 		{name: "ShouldPassADenialWithUnmetRequirements", status: DeviceAuthorizeStatusDenied, session: newACRValuesSession("bronze", now.Add(-time.Hour))},
+		{name: "ShouldPassAnApprovalThatMeetsTheDefaultMaxAge", status: DeviceAuthorizeStatusApproved, form: url.Values{}, client: &DefaultRegisteredClient{DefaultMaxAge: new(int64(300))}, session: newACRValuesSession("", now)},
+		{name: "ShouldFailAnApprovalWithAnAuthenticationTooOldForTheDefaultMaxAge", status: DeviceAuthorizeStatusApproved, form: url.Values{}, client: &DefaultRegisteredClient{DefaultMaxAge: new(int64(300))}, session: newACRValuesSession("", now.Add(-time.Hour)), expected: ErrUnmetAuthenticationRequirements},
 	}
 
 	for _, tc := range testCases {
@@ -151,6 +155,15 @@ func TestFosite_NewRFC8628UserAuthorizeResponseEnforcesAuthenticationRequirement
 			request.RequestedAt = now
 			request.Session = &DefaultSession{}
 			request.Form = url.Values{consts.FormParameterAuthenticationContextClassReferenceValues: {"gold"}, consts.FormParameterMaximumAge: {"300"}}
+
+			if tc.form != nil {
+				request.Form = tc.form
+			}
+
+			if tc.client != nil {
+				request.Client = tc.client
+			}
+
 			request.SetStatus(tc.status)
 
 			_, err := provider.NewRFC8628UserAuthorizeResponse(context.Background(), request, tc.session)

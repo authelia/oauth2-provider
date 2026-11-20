@@ -6,6 +6,7 @@ package openid
 
 import (
 	"context"
+	"math"
 	"net/url"
 	"testing"
 	"time"
@@ -54,6 +55,7 @@ func TestValidatePrompt(t *testing.T) {
 		maxAge      []string
 		redirectURL string
 		isPublic    bool
+		client      oauth2.Client
 		err         string
 		idTokenHint string
 		session     *DefaultSession
@@ -401,6 +403,101 @@ func TestValidatePrompt(t *testing.T) {
 				RequestedAt: time.Now(),
 			},
 		},
+		{
+			name:   "ShouldFailDefaultMaxAgeWhenAuthTimeIsTooOld",
+			client: &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, DefaultMaxAge: new(int64(300))},
+			err:    "The Authorization Server requires End-User authentication. Failed to validate OpenID Connect request because authentication time does not satisfy max_age time.",
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+				},
+				RequestedAt: time.Now(),
+			},
+		},
+		{
+			name:   "ShouldPassDefaultMaxAgeWhenAuthTimeIsRecentEnough",
+			client: &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, DefaultMaxAge: new(int64(300))},
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+				},
+				RequestedAt: time.Now(),
+			},
+		},
+		{
+			name:   "ShouldPassTheLargestDefaultMaxAgeWhenAuthTimeIsRecent",
+			client: &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, DefaultMaxAge: new(int64(math.MaxInt64))},
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+				},
+				RequestedAt: time.Now(),
+			},
+		},
+		{
+			name:   "ShouldFailDefaultMaxAgeWhenAuthTimeIsMissing",
+			client: &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, DefaultMaxAge: new(int64(300))},
+			err:    "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to validate OpenID Connect request because authentication time claim is required when max_age is set.",
+			session: &DefaultSession{
+				Subject:     "foo",
+				Claims:      &jwt.IDTokenClaims{Subject: "foo"},
+				RequestedAt: time.Now(),
+			},
+		},
+		{
+			name:   "ShouldFailDefaultMaxAgeZeroWhenAuthTimeBeforeRequest",
+			client: &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, DefaultMaxAge: new(int64(0))},
+			err:    "The Authorization Server requires End-User authentication. Failed to validate OpenID Connect request because authentication time does not satisfy max_age time.",
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+				},
+				RequestedAt: time.Now(),
+			},
+		},
+		{
+			name:   "ShouldPreferMaxAgeParameterOverDefaultMaxAge",
+			maxAge: []string{"7200"},
+			client: &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, DefaultMaxAge: new(int64(300))},
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+				},
+				RequestedAt: time.Now(),
+			},
+		},
+		{
+			name:   "ShouldFailRequireAuthTimeWhenAuthTimeIsMissing",
+			client: &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, RequireAuthTime: true},
+			err:    "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to validate OpenID Connect request because authentication time claim is required when the client registered require_auth_time.",
+			session: &DefaultSession{
+				Subject:     "foo",
+				Claims:      &jwt.IDTokenClaims{Subject: "foo"},
+				RequestedAt: time.Now(),
+			},
+		},
+		{
+			name:   "ShouldPassRequireAuthTimeWhenAuthTimeIsOld",
+			client: &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, RequireAuthTime: true},
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now().Add(-48 * time.Hour)),
+				},
+				RequestedAt: time.Now(),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -411,10 +508,16 @@ func TestValidatePrompt(t *testing.T) {
 				form["max_age"] = tc.maxAge
 			}
 
+			var client oauth2.Client = &oauth2.DefaultClient{Public: tc.isPublic}
+
+			if tc.client != nil {
+				client = tc.client
+			}
+
 			session, err := v.ValidatePrompt(t.Context(), &oauth2.AuthorizeRequest{
 				Request: oauth2.Request{
 					Form:    form,
-					Client:  &oauth2.DefaultClient{Public: tc.isPublic},
+					Client:  client,
 					Session: tc.session,
 				},
 				RedirectURI: parse(tc.redirectURL),

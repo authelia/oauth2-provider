@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"math"
 	"net/url"
 	"strings"
 	"testing"
@@ -712,6 +713,132 @@ func TestJWTStrategy_GenerateIDTokenRefreshNonce(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.expected, decoded.Claims.ToMapClaims()[consts.ClaimNonce])
+		})
+	}
+}
+
+func TestJWTStrategy_GenerateIDTokenClientAuthenticationTime(t *testing.T) {
+	config := &oauth2.Config{
+		MinParameterEntropy: oauth2.MinParameterEntropy,
+	}
+
+	strategy := &DefaultStrategy{
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+		},
+		Config: config,
+	}
+
+	const (
+		errMaxAgeAuthTimeMissing = "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because authentication time claim is required when max_age is set."
+		errMaxAgeUnmet           = "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because authentication time does not satisfy max_age time."
+		errRequireAuthTime       = "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because authentication time claim is required when the client registered require_auth_time."
+	)
+
+	now := time.Now().UTC().Truncate(time.Second)
+
+	old := jwt.NewNumericDate(now.Add(-48 * time.Hour))
+
+	access := func(grant string) func() oauth2.Requester {
+		return func() oauth2.Requester {
+			requester := oauth2.NewAccessRequest(nil)
+			requester.GrantTypes = oauth2.Arguments{grant}
+
+			return requester
+		}
+	}
+
+	authorize := func() oauth2.Requester { return oauth2.NewAuthorizeRequest() }
+	device := func() oauth2.Requester { return oauth2.NewDeviceAuthorizeRequest() }
+	ciba := func() oauth2.Requester { return oauth2.NewRequest() }
+
+	testCases := []struct {
+		name     string
+		request  func() oauth2.Requester
+		form     url.Values
+		maxAge   *int64
+		require  bool
+		authTime *jwt.NumericDate
+		expected any
+		err      string
+	}{
+		{name: "ShouldOmitAuthTimeWithoutTheMetadata", request: authorize, expected: nil},
+		{name: "ShouldFailDefaultMaxAgeWithAnUnknownAuthTime", request: authorize, maxAge: new(int64(300)), err: errMaxAgeAuthTimeMissing},
+		{name: "ShouldFailDefaultMaxAgeWithAnOldAuthTime", request: authorize, maxAge: new(int64(300)), authTime: old, err: errMaxAgeUnmet},
+		{name: "ShouldFailDefaultMaxAgeOfZeroWithAnAuthTimeBeforeTheRequest", request: authorize, maxAge: new(int64(0)), authTime: jwt.NewNumericDate(now.Add(-time.Minute)), err: errMaxAgeUnmet},
+		{name: "ShouldPassDefaultMaxAgeOfZeroWithAnAuthTimeAtTheRequest", request: authorize, maxAge: new(int64(0)), authTime: jwt.NewNumericDate(now), expected: float64(now.Unix())},
+		{name: "ShouldPassDefaultMaxAgeWithARecentAuthTime", request: authorize, maxAge: new(int64(300)), authTime: jwt.NewNumericDate(now.Add(-time.Minute)), expected: float64(now.Add(-time.Minute).Unix())},
+		{name: "ShouldPassTheLargestDefaultMaxAgeWithAnAuthTimeAtTheRequest", request: authorize, maxAge: new(int64(math.MaxInt64)), authTime: jwt.NewNumericDate(now), expected: float64(now.Unix())},
+		{name: "ShouldPassADefaultMaxAgeJustBeyondADurationWithAnAuthTimeAtTheRequest", request: authorize, maxAge: new(int64(9223372037)), authTime: jwt.NewNumericDate(now), expected: float64(now.Unix())},
+		{name: "ShouldPreferTheMaxAgeParameterOverTheDefaultMaxAge", request: authorize, form: url.Values{consts.FormParameterMaximumAge: {"259200"}}, maxAge: new(int64(300)), authTime: old, expected: float64(old.Unix())},
+		{name: "ShouldFailDefaultMaxAgeForTheDeviceFlow", request: device, maxAge: new(int64(300)), authTime: old, err: errMaxAgeUnmet},
+		{name: "ShouldFailDefaultMaxAgeForCIBA", request: ciba, maxAge: new(int64(300)), authTime: old, err: errMaxAgeUnmet},
+		{name: "ShouldFailDefaultMaxAgeForTheAuthorizationCodeGrant", request: access(consts.GrantTypeAuthorizationCode), maxAge: new(int64(300)), authTime: old, err: errMaxAgeUnmet},
+		{name: "ShouldSkipDefaultMaxAgeOnRefresh", request: access(consts.GrantTypeRefreshToken), maxAge: new(int64(300)), authTime: old, expected: float64(old.Unix())},
+		{name: "ShouldSkipDefaultMaxAgeOnTokenExchange", request: access(consts.GrantTypeOAuthTokenExchange), maxAge: new(int64(300)), authTime: old, expected: float64(old.Unix())},
+		{name: "ShouldSkipDefaultMaxAgeOnTokenExchangeWithAnUnknownAuthTime", request: access(consts.GrantTypeOAuthTokenExchange), maxAge: new(int64(300)), expected: nil},
+		{name: "ShouldEnforceTheMaxAgeParameterOnTokenExchange", request: access(consts.GrantTypeOAuthTokenExchange), form: url.Values{consts.FormParameterMaximumAge: {"300"}}, authTime: old, err: errMaxAgeUnmet},
+		{name: "ShouldFailRequireAuthTimeWithAnUnknownAuthTime", request: authorize, require: true, err: errRequireAuthTime},
+		{name: "ShouldFailRequireAuthTimeWithAZeroAuthTime", request: authorize, require: true, authTime: &jwt.NumericDate{}, err: errRequireAuthTime},
+		{name: "ShouldFailRequireAuthTimeWithAnUnknownAuthTimeOnRefresh", request: access(consts.GrantTypeRefreshToken), require: true, err: errRequireAuthTime},
+		{name: "ShouldFailRequireAuthTimeWithAnUnknownAuthTimeOnTokenExchange", request: access(consts.GrantTypeOAuthTokenExchange), require: true, err: errRequireAuthTime},
+		{name: "ShouldIncludeAuthTimeForRequireAuthTime", request: authorize, require: true, authTime: old, expected: float64(old.Unix())},
+		{name: "ShouldIncludeAuthTimeForRequireAuthTimeOnRefresh", request: access(consts.GrantTypeRefreshToken), require: true, authTime: old, expected: float64(old.Unix())},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			requester := tc.request()
+
+			requester.SetSession(&DefaultSession{
+				Claims: &jwt.IDTokenClaims{
+					Subject:  testSubjectPeter,
+					AuthTime: tc.authTime,
+				},
+				Headers:     &jwt.Headers{},
+				RequestedAt: now,
+			})
+
+			client := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "foo"}, DefaultMaxAge: tc.maxAge, RequireAuthTime: tc.require}
+
+			switch r := requester.(type) {
+			case *oauth2.AccessRequest:
+				r.Client = client
+			case *oauth2.AuthorizeRequest:
+				r.Client = client
+			case *oauth2.DeviceAuthorizeRequest:
+				r.Client = client
+			case *oauth2.Request:
+				r.Client = client
+			}
+
+			for key, values := range tc.form {
+				requester.GetRequestForm()[key] = values
+			}
+
+			token, err := strategy.GenerateIDToken(t.Context(), time.Hour, requester)
+
+			if tc.err != "" {
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			claims := map[string]any{}
+
+			_, err = jwt.UnsafeParseSignedAny(token, &claims)
+			require.NoError(t, err)
+
+			if tc.expected == nil {
+				assert.NotContains(t, claims, consts.ClaimAuthenticationTime)
+
+				return
+			}
+
+			assert.Equal(t, tc.expected, claims[consts.ClaimAuthenticationTime])
 		})
 	}
 }

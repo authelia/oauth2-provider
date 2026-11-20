@@ -6,6 +6,7 @@ package oauth2_test
 
 import (
 	"context"
+	"math"
 	"net/url"
 	"testing"
 	"time"
@@ -207,6 +208,95 @@ func TestNewAuthorizeResponse(t *testing.T) {
 	}
 }
 
+func TestGetRequestedMaxAge(t *testing.T) {
+	testCases := []struct {
+		name     string
+		form     url.Values
+		client   Client
+		expected int64
+		ok       bool
+		err      string
+	}{
+		{name: "ShouldReturnNoneWithoutAParameterOrClient"},
+		{name: "ShouldReturnNoneForAClientWithoutTheMetadata", client: &DefaultClient{}},
+		{name: "ShouldReturnNoneForAClientWithoutADefault", client: &DefaultRegisteredClient{}},
+		{name: "ShouldReturnTheParameter", form: url.Values{"max_age": {"60"}}, expected: 60, ok: true},
+		{name: "ShouldReturnAParameterOfZero", form: url.Values{"max_age": {"0"}}, ok: true},
+		{name: "ShouldReturnTheDefault", client: &DefaultRegisteredClient{DefaultMaxAge: new(int64(300))}, expected: 300, ok: true},
+		{name: "ShouldReturnADefaultOfZero", client: &DefaultRegisteredClient{DefaultMaxAge: new(int64(0))}, ok: true},
+		{name: "ShouldPreferTheParameterOverTheDefault", form: url.Values{"max_age": {"60"}}, client: &DefaultRegisteredClient{DefaultMaxAge: new(int64(300))}, expected: 60, ok: true},
+		{name: "ShouldIgnoreANegativeDefault", client: &DefaultRegisteredClient{DefaultMaxAge: new(int64(-1))}},
+		{name: "ShouldFailANegativeParameter", form: url.Values{"max_age": {"-1"}}, client: &DefaultRegisteredClient{DefaultMaxAge: new(int64(300))}, err: "the value '-1' could not be parsed as a non-negative integer"},
+		{name: "ShouldFailAnEmptyParameter", form: url.Values{"max_age": {""}}, client: &DefaultRegisteredClient{DefaultMaxAge: new(int64(300))}, err: "the value '' could not be parsed as a non-negative integer"},
+		{name: "ShouldFailARepeatedParameter", form: url.Values{"max_age": {"60", "120"}}, err: "the parameter was provided 2 times but must be provided exactly once"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := NewAuthorizeRequest()
+			request.Client = tc.client
+
+			for key, values := range tc.form {
+				request.Form[key] = values
+			}
+
+			actual, ok, err := GetRequestedMaxAge(request)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, tc.expected, actual)
+			assert.Equal(t, tc.ok, ok)
+		})
+	}
+}
+
+func TestIsAuthenticationWithinMaxAge(t *testing.T) {
+	at := time.Unix(1_800_000_000, 0)
+
+	earliest := time.Unix(math.MinInt64, 0)
+
+	testCases := []struct {
+		name     string
+		authTime time.Time
+		at       time.Time
+		maxAge   int64
+		expected bool
+	}{
+		{name: "ShouldPassAnAuthenticationAtTheTimeForZero", authTime: at, maxAge: 0, expected: true},
+		{name: "ShouldFailAnAuthenticationBeforeTheTimeForZero", authTime: at.Add(-time.Second), maxAge: 0},
+		{name: "ShouldPassAnAuthenticationAtTheLimit", authTime: at.Add(-300 * time.Second), maxAge: 300, expected: true},
+		{name: "ShouldFailAnAuthenticationBeyondTheLimit", authTime: at.Add(-301 * time.Second), maxAge: 300},
+		{name: "ShouldPassTheLargestDurationInSeconds", authTime: at.Add(-time.Minute), maxAge: int64(math.MaxInt64 / time.Second), expected: true},
+		{name: "ShouldPassAMaxAgeJustBeyondADuration", authTime: at, maxAge: int64(math.MaxInt64/time.Second) + 1, expected: true},
+		{name: "ShouldPassTheLargestMaxAge", authTime: at.Add(-time.Minute), maxAge: math.MaxInt64, expected: true},
+		{name: "ShouldFailAnAuthenticationOlderThanAMaxAgeBeyondADuration", authTime: time.Date(1700, time.January, 1, 0, 0, 0, 0, time.UTC), maxAge: int64(math.MaxInt64/time.Second) + 1},
+		{name: "ShouldFailAnAuthenticationAFractionOfASecondBeyondTheLimit", authTime: at.Add(-300*time.Second - time.Nanosecond), maxAge: 300},
+		{name: "ShouldPassAnAuthenticationAFractionOfASecondWithinTheLimit", authTime: at.Add(-299*time.Second - time.Millisecond), maxAge: 300, expected: true},
+		{name: "ShouldPassAnAuthenticationAfterTheTime", authTime: at.Add(time.Second), maxAge: 0, expected: true},
+		{name: "ShouldFailTheEarliestAuthenticationForZero", authTime: time.Unix(math.MinInt64, 0), maxAge: 0},
+		{name: "ShouldFailTheEarliestAuthenticationForTheLargestMaxAge", authTime: time.Unix(math.MinInt64, 0), maxAge: math.MaxInt64},
+		{name: "ShouldFailAnAuthenticationBeforeTheEarliestUnixSecond", authTime: earliest.Add(-time.Second), maxAge: math.MaxInt64},
+		{name: "ShouldPassAnAgeWithinTheLimitBeforeTheEarliestUnixSecond", authTime: earliest.Add(-2 * time.Second), at: earliest.Add(-time.Second), maxAge: 1, expected: true},
+		{name: "ShouldFailAnAgeBeyondTheLimitAcrossTheEarliestUnixSecond", authTime: earliest.Add(-time.Second), at: earliest.Add(time.Second), maxAge: 1},
+		{name: "ShouldPassAnAuthenticationAThousandYearsAfterTheTime", authTime: at.AddDate(1000, 0, 0), maxAge: 0, expected: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			now := at
+			if !tc.at.IsZero() {
+				now = tc.at
+			}
+
+			assert.Equal(t, tc.expected, IsAuthenticationWithinMaxAge(tc.authTime, now, tc.maxAge))
+		})
+	}
+}
+
 func TestNewAuthorizeResponseEnforcesAuthenticationRequirements(t *testing.T) {
 	now := time.Now().UTC()
 
@@ -215,6 +305,7 @@ func TestNewAuthorizeResponseEnforcesAuthenticationRequirements(t *testing.T) {
 		enforce  bool
 		form     url.Values
 		defaults []string
+		maxAge   *int64
 		claims   *ClaimsRequest
 		session  Session
 		expected error
@@ -240,6 +331,13 @@ func TestNewAuthorizeResponseEnforcesAuthenticationRequirements(t *testing.T) {
 		{name: "ShouldIgnoreTheDefaultsWhenTheUserInfoACRClaimIsRequestedWithAValue", enforce: true, defaults: []string{"gold"}, claims: &ClaimsRequest{UserInfo: map[string]*ClaimRequest{"acr": {Value: "bronze"}}}, session: newACRValuesSession("bronze", time.Time{})},
 		{name: "ShouldApplyTheDefaultsWhenTheACRClaimIsRequestedWithoutValues", enforce: true, defaults: []string{"gold"}, claims: &ClaimsRequest{IDToken: map[string]*ClaimRequest{"acr": nil}, UserInfo: map[string]*ClaimRequest{"acr": {Essential: true}}}, session: newACRValuesSession("bronze", time.Time{}), expected: ErrUnmetAuthenticationRequirements},
 		{name: "ShouldApplyTheDefaultsWhenOtherClaimsAreRequested", enforce: true, defaults: []string{"gold"}, claims: &ClaimsRequest{IDToken: map[string]*ClaimRequest{"email": nil}}, session: newACRValuesSession("bronze", time.Time{}), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldPassWhenTheAuthenticationIsRecentEnoughForTheDefaultMaxAge", enforce: true, maxAge: new(int64(300)), session: newACRValuesSession("", now.Add(-time.Minute))},
+		{name: "ShouldFailWhenTheAuthenticationIsTooOldForTheDefaultMaxAge", enforce: true, maxAge: new(int64(300)), session: newACRValuesSession("", now.Add(-time.Hour)), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldFailWhenTheSessionHasNoAuthenticationTimeForTheDefaultMaxAge", enforce: true, maxAge: new(int64(300)), session: newACRValuesSession("", time.Time{}), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldFailWhenTheAuthenticationPrecedesTheRequestForADefaultMaxAgeOfZero", enforce: true, maxAge: new(int64(0)), session: newACRValuesSession("", now.Add(-time.Minute)), expected: ErrUnmetAuthenticationRequirements},
+		{name: "ShouldPassWhenTheAuthenticationIsRecentForTheLargestDefaultMaxAge", enforce: true, maxAge: new(int64(math.MaxInt64)), session: newACRValuesSession("", now.Add(-time.Minute))},
+		{name: "ShouldPassWhenTheDefaultMaxAgeIsNotEnforced", maxAge: new(int64(300)), session: newACRValuesSession("", now.Add(-time.Hour))},
+		{name: "ShouldPreferTheMaxAgeParameterOverTheDefaultMaxAge", enforce: true, form: url.Values{"max_age": {"7200"}}, maxAge: new(int64(300)), session: newACRValuesSession("", now.Add(-time.Hour))},
 	}
 
 	for _, tc := range testCases {
@@ -251,7 +349,7 @@ func TestNewAuthorizeResponseEnforcesAuthenticationRequirements(t *testing.T) {
 			request := NewAuthorizeRequest()
 			request.RequestedAt = now
 			request.ResponseTypes = Arguments{consts.ResponseTypeAuthorizationCodeFlow}
-			request.Client = &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "foo"}, DefaultACRValues: tc.defaults}
+			request.Client = &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "foo"}, DefaultACRValues: tc.defaults, DefaultMaxAge: tc.maxAge}
 			request.SetClaims(tc.claims)
 
 			for key, values := range tc.form {

@@ -415,6 +415,21 @@ func (c *DefaultRegisteredClient) GetDefaultACRValues() []string {
 	return c.DefaultACRValues
 }
 
+// GetDefaultMaxAge returns the 'default_max_age' client metadata value in seconds, with ok false when the client
+// registered none.
+func (c *DefaultRegisteredClient) GetDefaultMaxAge() (maxAge int64, ok bool) {
+	if c.DefaultMaxAge == nil {
+		return 0, false
+	}
+
+	return *c.DefaultMaxAge, true
+}
+
+// GetRequireAuthTime returns the 'require_auth_time' client metadata value.
+func (c *DefaultRegisteredClient) GetRequireAuthTime() (require bool) {
+	return c.RequireAuthTime
+}
+
 // GetResponseModes returns the response modes the client is allowed to use.
 func (c *DefaultRegisteredClient) GetResponseModes() []ResponseModeType {
 	return c.ResponseModes
@@ -797,6 +812,8 @@ func (c *DefaultRegisteredClient) GetTokenExchangeRefreshTokenRotation() (rotate
 var (
 	_ Client                                         = (*DefaultRegisteredClient)(nil)
 	_ DefaultACRValuesClient                         = (*DefaultRegisteredClient)(nil)
+	_ DefaultMaxAgeClient                            = (*DefaultRegisteredClient)(nil)
+	_ RequireAuthTimeClient                          = (*DefaultRegisteredClient)(nil)
 	_ RotatedClientSecretsClient                     = (*DefaultRegisteredClient)(nil)
 	_ SoftwareStatementClient                        = (*DefaultRegisteredClient)(nil)
 	_ JSONWebKeysClient                              = (*DefaultRegisteredClient)(nil)

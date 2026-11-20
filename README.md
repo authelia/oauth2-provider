@@ -343,10 +343,12 @@ Several RFC 9700 measures are opt-in, or can be weakened, through `Config`. Cons
   to the key or certificate it was issued for, rather than re-binding it on refresh. The client cannot then change its
   key without a new grant. Public clients are always strictly bound.
 - `EnforceAuthenticationRequirements` refuses an authorization, or the approval of a device authorization, unless the
-  user's authentication meets the requested `max_age` and Authentication Context Class References: the `acr_values`
-  parameter or, when a request names none, the client's registered `default_acr_values`. Without it they are only
-  requested, and the client must check the `acr` claim it receives. An attacker can alter or remove the requested
-  classes in an unsigned request
+  user's authentication meets the requested Maximum Authentication Age and Authentication Context Class References: the
+  `max_age` and `acr_values` parameters or, when a request names none, the client's registered `default_max_age` and
+  `default_acr_values`. Without it the classes are only requested, and the client must check the `acr` claim it
+  receives. The OpenID Connect handlers hold an ID Token to the Maximum Authentication Age either way, and to the
+  client's registered `require_auth_time`; `GetRequestedMaxAge` returns the age which applies to a request. An attacker
+  can alter or remove the requested classes in an unsigned request
   ([EAP ACR Values 1.0 Section 4](https://openid.net/specs/openid-connect-eap-acr-values-1_0.html#section-4)), including
   by adding an `acr` claim request with its own values, which replaces the defaults. A client which depends on a class
   should send signed or pushed requests. The application decides which class an authentication meets, such as `phr` for

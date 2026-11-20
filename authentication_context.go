@@ -38,7 +38,7 @@ const (
 
 // AuthenticationContextSession is a Session which records the authentication context claims the authorization request
 // required, so every access token derived from the authorization response conveys them: 'acr' when it carried
-// 'acr_values', and 'auth_time' when it carried 'max_age'.
+// 'acr_values', and 'auth_time' when it carried 'max_age' or the client registered a 'default_max_age'.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9470#section-5 and https://www.rfc-editor.org/rfc/rfc9068#section-2.2.1
 type AuthenticationContextSession interface {
@@ -65,7 +65,7 @@ type AuthenticationContextClaimsClient interface {
 
 // RecordAuthenticationContextRequirements records on session the authentication context claims request requires access
 // tokens to convey, replacing any recorded before: 'acr' when GetRequestedACRValues returns any values, and 'auth_time'
-// when it has the 'max_age' parameter.
+// when GetRequestedMaxAge returns a value or the 'max_age' parameter is malformed.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9470#section-5
 func RecordAuthenticationContextRequirements(request Requester, session Session) {
@@ -76,13 +76,11 @@ func RecordAuthenticationContextRequirements(request Requester, session Session)
 
 	var claims []string
 
-	form := request.GetRequestForm()
-
 	if len(GetRequestedACRValues(request)) != 0 {
 		claims = append(claims, consts.ClaimAuthenticationContextClassReference)
 	}
 
-	if form.Has(consts.FormParameterMaximumAge) {
+	if _, ok, err := GetRequestedMaxAge(request); ok || err != nil {
 		claims = append(claims, consts.ClaimAuthenticationTime)
 	}
 

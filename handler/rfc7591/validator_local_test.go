@@ -634,6 +634,12 @@ func TestLocalValidatorURIs(t *testing.T) {
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'jwks_uri' value 'https://example.com/jwks.json#k' must not contain a fragment component.",
 		},
 		{
+			name: "ShouldAcceptRequestURIsWithFragment",
+			mutate: func(m *oauth2.ClientRegistrationMetadata) {
+				m.RequestURIs = []string{"https://example.com/ro.jwt#GlDnXvbWJBI4hM7mKJRZ9bqUp3UDDm0n8xwOSyMeXyU"}
+			},
+		},
+		{
 			name:   "ShouldAcceptSecureRequestURIs",
 			mutate: func(m *oauth2.ClientRegistrationMetadata) { m.RequestURIs = []string{"https://example.com/ro.jwt"} },
 		},

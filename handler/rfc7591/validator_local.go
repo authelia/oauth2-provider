@@ -355,7 +355,10 @@ func validateURI(name, value string, secure bool) (err error) {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must be an absolute URI.", name, value))
 	}
 
-	if parsed.Fragment != "" {
+	// A 'request_uris' value may carry the base64url-encoded SHA-256 hash of the Request Object as its fragment.
+	//
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+	if parsed.Fragment != "" && name != consts.ClientMetadataRequestURIs {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must not contain a fragment component.", name, value))
 	}
 

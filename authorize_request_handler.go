@@ -291,13 +291,6 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredRequestSyntaxParameter, hintRequestObjectPrefix(openid), parameter, consts.FormParameterClientID).WithDebugf("The OAuth 2.0 client with id '%s' provided the '%s' with value but did not include the 'client_id' parameter.", request.GetClient().GetID(), parameter))
 	}
 
-	if openid && !isPARRequest && request.Form.Get(consts.FormParameterResponseType) == "" {
-		// OpenID Connect requires the 'response_type' parameter be included using the OAuth 2.0 request syntax.
-		//
-		// See: https://openid.net/specs/openid-connect-core-1_0.html#RequestObject
-		return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredRequestSyntaxParameter, hintRequestObjectPrefix(openid), parameter, consts.FormParameterResponseType).WithDebugf("The OAuth 2.0 client with id '%s' provided the '%s' with value but did not include the 'response_type' parameter.", request.GetClient().GetID(), parameter))
-	}
-
 	var (
 		alg    string
 		algAny bool
@@ -388,6 +381,29 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
+	// An OpenID Connect request has 'openid' in the request syntax 'scope', assembles its parameters from the Request
+	// Object and the request syntax, and remains one only when the assembled 'scope' contains 'openid'. Every other
+	// Request Object is used alone, so it must contain every parameter and be signed.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#RequestObject and
+	// https://openid.net/specs/openid-connect-core-1_0.html#RequestParameterAssembly and
+	// https://www.rfc-editor.org/rfc/rfc9101#section-4 and https://www.rfc-editor.org/rfc/rfc9101#section-6.3
+	merge := openid && !isPARRequest && !required && requestObjectScopeIsOpenIDConnect(token.Claims.ToMapClaims())
+
+	if merge && request.Form.Get(consts.FormParameterResponseType) == "" {
+		// OpenID Connect requires the 'response_type' parameter be included using the OAuth 2.0 request syntax.
+		//
+		// See: https://openid.net/specs/openid-connect-core-1_0.html#RequestObject
+		return errorsx.WithStack(ErrInvalidRequest.WithHintf(hintRequestObjectRequiredRequestSyntaxParameter, hintRequestObjectPrefix(openid), parameter, consts.FormParameterResponseType).WithDebugf("The OAuth 2.0 client with id '%s' provided the '%s' with value but did not include the 'response_type' parameter.", request.GetClient().GetID(), parameter))
+	}
+
+	if !merge && token.SignatureAlgorithm == consts.JSONWebTokenAlgNone {
+		return errorsx.WithStack(
+			ErrInvalidRequestObject.
+				WithHintf("%s client provided a request object that is not signed.", hintRequestObjectPrefix(openid)).
+				WithDebugf("%s client with id '%s' provided a request object with the 'alg' value 'none' but a request object which is not an OpenID Connect request object must be signed.", hintRequestObjectPrefix(openid), client.GetID()))
+	}
+
 	var (
 		allowEmptyType bool
 		types          []string
@@ -431,14 +447,15 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 
 	claims := token.Claims
 
-	if !openid || isPARRequest || required {
+	if !merge {
 		request.Form = requestObjectSyntaxForm(request.Form)
 	}
 
 	var (
-		k, value string
-		v        any
-		raw      map[string]json.RawMessage
+		k, value                 string
+		v                        any
+		raw                      map[string]json.RawMessage
+		hasClientID, hasRespType bool
 	)
 
 	if err = token.UnsafeClaimsWithoutVerification(&raw); err != nil {
@@ -473,6 +490,8 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			if rsyntax != value {
 				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueMismatch, request.GetClient().GetID(), consts.FormParameterClientID, value, rsyntax))
 			}
+
+			hasClientID = true
 		case consts.FormParameterResponseType:
 			// The request syntax 'response_type', if present, must match the Request Object value.
 			//
@@ -488,6 +507,8 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			} else if rsyntax != value {
 				return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectValueMismatch, request.GetClient().GetID(), consts.FormParameterResponseType, value, rsyntax))
 			}
+
+			hasRespType = true
 		case consts.FormParameterResource, consts.FormParameterAudience:
 			// RFC 8707 Section 2.1: multiple values are an array of strings in a request object, which correspond to
 			// repeating the parameter in the request syntax.
@@ -506,6 +527,16 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 			}
 
 			request.Form.Set(k, value)
+		}
+	}
+
+	// See: https://www.rfc-editor.org/rfc/rfc9101#section-4 and https://www.rfc-editor.org/rfc/rfc9126#section-3
+	if !merge {
+		switch {
+		case !hasClientID:
+			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectClaimMissing, request.GetClient().GetID(), consts.FormParameterClientID))
+		case !hasRespType:
+			return errorsx.WithStack(ErrInvalidRequestObject.WithHintf(hintRequestObjectInvalidAuthorizationClaim, hintRequestObjectPrefix(openid)).WithDebugf(debugRequestObjectClaimMissing, request.GetClient().GetID(), consts.FormParameterResponseType))
 		}
 	}
 
@@ -538,21 +569,20 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}
 
-	// The Request Object scope is authoritative and the request syntax scope is never merged into it. The sole
-	// exception is 'openid', which is carried over when the request syntax marked the request as OpenID Connect.
-	//
-	// See: https://www.rfc-editor.org/rfc/rfc9101#section-6.3 and
-	// https://openid.net/specs/openid-connect-core-1_0.html#RequestObject
-	claimScope := RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterScope), " "))
-
-	if openid && !slices.Contains(claimScope, consts.ScopeOpenID) {
-		claimScope = append(claimScope, consts.ScopeOpenID)
-	}
-
 	request.State = request.Form.Get(consts.FormParameterState)
-	request.Form.Set(consts.FormParameterScope, strings.Join(claimScope, " "))
 
 	return nil
+}
+
+func requestObjectScopeIsOpenIDConnect(claims jwt.MapClaims) bool {
+	v, ok := claims[consts.FormParameterScope]
+	if !ok {
+		return true
+	}
+
+	scope, _ := v.(string)
+
+	return Arguments(RemoveEmpty(strings.Split(scope, " "))).Has(consts.ScopeOpenID)
 }
 
 func requestObjectSyntaxForm(form url.Values) (syntax url.Values) {

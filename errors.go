@@ -533,6 +533,7 @@ const (
 	hintRequestObjectRequiredSigned                 = "%s requests must be protected as a signed Request Object, but the OAuth 2.0 Client is registered with a 'request_object_signing_alg' value of 'none'."
 	hintRequestObjectValidate                       = "%s request failed with an error attempting to validate the request object."
 	hintRequestObjectInvalidAuthorizationClaim      = "%s request included a request object which excluded claims that are required or included claims that did not match the OAuth 2.0 request syntax or are generally not permitted."
+	debugRequestObjectClaimMissing                  = "The OAuth 2.0 client with id '%s' included a request object without the '%s' claim which a request object that is not an OpenID Connect request object must contain."
 	debugRequestObjectValueMismatch                 = "The OAuth 2.0 client with id '%s' included a request object with a '%s' claim with a value of '%s' which is required to match the value '%s' in the parameter with the same name from the OAuth 2.0 request syntax."
 	debugRequestObjectValueTypeNotString            = "The OAuth 2.0 client with id '%s' included a request object with a '%s' claim with a value of '%v' which is required to match the value '%s' in the parameter with the same name from the OAuth 2.0 request syntax but instead of a string it had the %T type."
 	debugRequestObjectSignedAbsentClaim             = "The OAuth 2.0 client with id '%s' provided a request object that was signed but it did not include the '%s' claim which is required."

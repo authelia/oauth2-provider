@@ -19,7 +19,12 @@ func RFC8628DeviceAuthorizeFactory(config oauth2.Configurator, storage any, stra
 	}
 }
 
-// RFC8628UserAuthorizeFactory creates an OAuth2 device grant user interaction handler.
+// RFC8628UserAuthorizeFactory creates an OAuth2 device grant user interaction handler, which records the decision of
+// the End-User. It MUST be registered after OpenIDConnectKeyBindingUserAuthorizeFactory and
+// OpenIDConnectDeviceAuthorizeFactory, and should be registered after any other factory whose handler can reject the
+// decision, so a decision is only recorded once every other handler accepted it; Compose panics on the wrong order.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.3
 func RFC8628UserAuthorizeFactory(config oauth2.Configurator, storage any, strategy any) any {
 	return &rfc8628.UserAuthorizeHandler{
 		Strategy: strategy.(rfc8628.CodeStrategy),

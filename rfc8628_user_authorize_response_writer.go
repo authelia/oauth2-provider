@@ -7,10 +7,12 @@ package oauth2
 import "context"
 
 // NewRFC8628UserAuthorizeResponse dispatches the user-facing device authorization request to each configured handler
-// to populate the response with the user's authorization decision and any extension parameters. When
-// EnforceAuthenticationRequirements is enabled an approval that does not meet the 'acr_values' and 'max_age' of the
-// device authorization request fails with unmet_authentication_requirements before any handler runs, so the decision
-// is not recorded and the user code can be approved again after the End-User authenticates as required.
+// to populate the response with the user's authorization decision and any extension parameters. The handlers run in
+// the order they are registered and the first error ends the request, so a handler which can reject the decision must
+// be registered before the handler which records it. When EnforceAuthenticationRequirements is enabled an approval
+// that does not meet the 'acr_values' and 'max_age' of the device authorization request fails with
+// unmet_authentication_requirements before any handler runs, so the decision is not recorded and the user code can be
+// approved again after the End-User authenticates as required.
 func (f *Fosite) NewRFC8628UserAuthorizeResponse(ctx context.Context, requester DeviceAuthorizeRequester, session Session) (responder DeviceUserAuthorizeResponder, err error) {
 	carrySessionBinding(requester.GetSession(), session)
 

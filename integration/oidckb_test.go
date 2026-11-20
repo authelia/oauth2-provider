@@ -537,12 +537,12 @@ func newOIDCKeyBindingProvider(t *testing.T, oidcKeyBindingEnabled bool) (provid
 		compose.RFC8628DeviceAuthorizeFactory,
 
 		compose.OpenIDConnectKeyBindingUserAuthorizeFactory,
-		compose.RFC8628UserAuthorizeFactory,
 		compose.RFC8628DeviceAuthorizeTokenFactory,
 
 		compose.OpenIDConnectExplicitFactory,
 		compose.OpenIDConnectRefreshFactory,
 		compose.OpenIDConnectDeviceAuthorizeFactory,
+		compose.RFC8628UserAuthorizeFactory,
 
 		compose.DPoPAuthorizeFactory,
 		compose.DPoPDeviceAuthorizeFactory,

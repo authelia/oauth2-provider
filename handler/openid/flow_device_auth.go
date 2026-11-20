@@ -14,7 +14,12 @@ import (
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
-// OpenIDConnectDeviceAuthorizeHandler issues ID Tokens for the RFC 8628 device authorization grant.
+// OpenIDConnectDeviceAuthorizeHandler issues ID Tokens for the RFC 8628 device authorization grant. As a
+// oauth2.RFC8628UserAuthorizeEndpointHandler it must be registered before rfc8628.UserAuthorizeHandler, so an approval
+// it rejects is not recorded. As a oauth2.TokenEndpointHandler it must be registered after
+// rfc8628.DeviceAuthorizeTokenEndpointHandler, so the granted scopes are set on the token request.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.3
 type OpenIDConnectDeviceAuthorizeHandler struct {
 	OpenIDConnectRequestStorage   OpenIDConnectRequestStorage
 	OpenIDConnectRequestValidator *OpenIDConnectRequestValidator
@@ -34,9 +39,14 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) HandleRFC8628UserAuthorizeEndpoint
 }
 
 // PopulateRFC8628UserAuthorizeEndpointResponse persists the OpenID Connect 1.0 session under the device code signature
-// when the 'openid' scope was granted and the client is registered for the device code grant type, and otherwise does
-// nothing. A 'nonce' the client already used while the device code issued for it could still be redeemed is rejected.
+// when the request is approved, the 'openid' scope was granted and the client is registered for the device code grant
+// type, and otherwise does nothing. A 'nonce' the client already used while the device code issued for it could still
+// be redeemed is rejected.
 func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, req oauth2.DeviceAuthorizeRequester, _ oauth2.DeviceUserAuthorizeResponder) (err error) {
+	if req.GetStatus() != oauth2.DeviceAuthorizeStatusApproved {
+		return nil
+	}
+
 	if !req.GetGrantedScopes().Has(consts.ScopeOpenID) {
 		return nil
 	}
@@ -68,7 +78,11 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) HandleTokenEndpointRequest(_ conte
 
 // PopulateTokenEndpointResponse issues an ID Token for a device code grant. It loads the OpenID Connect 1.0 session
 // stored under the device code signature, deletes it, and adds the 'id_token' with an 'at_hash' claim to the response.
-// It returns oauth2.ErrUnknownRequest when no such session exists.
+// When no such session exists it returns oauth2.ErrServerError if the 'openid' scope was granted, and otherwise
+// oauth2.ErrUnknownRequest. It returns oauth2.ErrServerError when the session is not for the subject of the recorded
+// decision.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#TokenResponse
 func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -85,7 +99,14 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
+	// Read first, as the storage may hydrate the OpenID Connect 1.0 session into the session of the request.
+	subject := getSessionSubject(request)
+
 	if ar, err = c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, signature, request); errors.Is(err, ErrNoSessionFound) {
+		if request.GetGrantedScopes().Has(consts.ScopeOpenID) {
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebug("The 'openid' scope was granted but no OpenID Connect session exists for the device code, so no ID Token can be issued."))
+		}
+
 		return errorsx.WithStack(oauth2.ErrUnknownRequest.WithWrap(err).WithDebugError(err))
 	} else if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
@@ -101,6 +122,10 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 
 	if session, ok = ar.GetSession().(Session); !ok {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because the session must be of type 'openid.Session'."))
+	}
+
+	if session.GetSubject() != subject {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because the OpenID Connect session is not for the subject the device code was approved by."))
 	}
 
 	claims := session.IDTokenClaims()

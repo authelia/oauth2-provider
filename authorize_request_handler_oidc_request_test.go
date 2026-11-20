@@ -149,6 +149,8 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 	assertionRequestObjectInvalidJWEContentType := mustGenerateRequestObjectJWE(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo openid", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderContentType: "at+jwt"}}, jwkPrivateSigRSA, jwkEncAES256, jose.A256GCM)
 	assertionRequestObjectInvalidJWEType := mustGenerateRequestObjectJWE(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo openid", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: "at+jwt"}}, jwkPrivateSigRSA, jwkEncAES256, jose.A256GCM)
 	assertionRequestObjectValidJWE := mustGenerateRequestObjectJWE(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo openid", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, nil, jwkPrivateSigRSA, jwkEncAES256, jose.A256GCM)
+	assertionRequestObjectJWEWithoutType := mustEncryptRequestObject(t, mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo openid", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA), map[jose.HeaderKey]any{consts.JSONWebTokenHeaderContentType: consts.JSONWebTokenTypeJWT}, jwkEncAES256, jose.A256GCM)
+	assertionRequestObjectJWEExplicitType := mustGenerateRequestObjectJWE(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo openid", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, &jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeJWTSecuredAuthorizationRequest}}, jwkPrivateSigRSA, jwkEncAES256, jose.A256GCM)
 	assertionRequestObjectValidAsymmetricJWE := mustGenerateRequestObjectJWE(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo openid", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, nil, jwkPrivateSigECDSA, jwkPublicEncECDSA, jose.A128GCM)
 	assertionRequestObjectEmptyHS256 := mustGenerateRequestObjectJWS(t, jwt.MapClaims{}, nil, jwkSigHS)
 	assertionRequestObjectInvalidRequestInRequest := mustGenerateRequestObjectJWS(t, jwt.MapClaims{consts.ClaimIssuer: "foo", consts.FormParameterRequest: "abc", consts.ClaimClientIdentifier: "foo", consts.ClaimAudience: []string{"https://auth.example.com"}, consts.FormParameterScope: "foo openid", "foo": "bar", "baz": "baz", consts.FormParameterResponseType: consts.ResponseTypeImplicitFlowToken, consts.FormParameterResponseMode: consts.ResponseModeFormPost}, nil, jwkPrivateSigRSA)
@@ -329,6 +331,18 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectValidJWE}, "foo": {"bar"}, "baz": {"baz"}},
 		},
 		{
+			name:     "ShouldPassRequestJWEWithoutType",
+			have:     url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectJWEWithoutType}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectJWEWithoutType}, "foo": {"bar"}, "baz": {"baz"}},
+		},
+		{
+			name:     "ShouldPassRequestJWEExplicitType",
+			have:     url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectJWEExplicitType}},
+			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
+			expected: url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterResponseMode: {consts.ResponseModeFormPost}, consts.FormParameterRequest: {assertionRequestObjectJWEExplicitType}, "foo": {"bar"}, "baz": {"baz"}},
+		},
+		{
 			name:     "ShouldPassRequestJWESymmetric",
 			have:     url.Values{consts.FormParameterScope: {"foo openid"}, consts.FormParameterClientID: {"foo"}, consts.FormParameterResponseType: {consts.ResponseTypeImplicitFlowToken}, consts.FormParameterRequest: {assertionRequestObjectValidAsymmetricJWE}},
 			client:   &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "ES256", RequestObjectSigningKeyID: "es256-sig", RequestObjectEncryptionKeyID: "es256-enc", DefaultClient: &DefaultClient{ID: "foo", ClientSecret: clientSecretHS256}},
@@ -475,7 +489,7 @@ func TestAuthorizeRequestParametersFromOpenIDConnectRequestObject(t *testing.T) 
 			client:    &DefaultJARClient{JSONWebKeys: jwksPublic, RequestObjectSigningAlg: "RS256", RequestObjectSigningKeyID: "rs256-sig", DefaultClient: &DefaultClient{ID: "test", ClientSecret: clientSecretHS256}},
 			expected:  url.Values{consts.FormParameterScope: {consts.ScopeOpenID}},
 			err:       ErrInvalidRequestObject,
-			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'test' expects request objects to be encrypted with the 'typ' header value 'JWT' but the request object was encrypted with the 'typ' header value 'at+jwt'.",
+			errString: "The request parameter contains an invalid Request Object. OpenID Connect 1.0 request object could not be decoded or validated. OpenID Connect 1.0 client with id 'test' expects request objects to be encrypted without a 'typ' header or with the 'typ' header value 'JWT' or that of the signed request object but the request object was encrypted with the 'typ' header value 'at+jwt'.",
 		},
 		{
 			name:      "ShouldFailJWEBadKeyID",
@@ -922,6 +936,19 @@ func mustGenerateRequestObjectJWS(t *testing.T, claims jwt.MapClaims, headers jw
 //nolint:unparam
 func mustGenerateRequestObjectJWE(t *testing.T, claims jwt.MapClaims, headers, headersJWE jwt.Mapper, key *jose.JSONWebKey, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) string {
 	token, _, err := jwt.EncodeNestedCompactEncrypted(t.Context(), claims, headers, headersJWE, key, keyEnc, enc)
+	require.NoError(t, err)
+
+	return token
+}
+
+func mustEncryptRequestObject(t *testing.T, signed string, headers map[jose.HeaderKey]any, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) string {
+	encrypter, err := jose.NewEncrypter(enc, jose.Recipient{Algorithm: jose.KeyAlgorithm(keyEnc.Algorithm), Key: keyEnc}, &jose.EncrypterOptions{ExtraHeaders: headers})
+	require.NoError(t, err)
+
+	jwe, err := encrypter.Encrypt([]byte(signed))
+	require.NoError(t, err)
+
+	token, err := jwe.CompactSerialize()
 	require.NoError(t, err)
 
 	return token

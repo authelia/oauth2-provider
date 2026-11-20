@@ -326,7 +326,8 @@ func (t *Token) CompactSignedString(k any) (tokenString string, err error) {
 }
 
 // Valid validates the token headers given various input options. This does not validate any claims. The JWE 'cty'
-// header of a Nested JWT must be 'JWT' as required by RFC 7519 section 5.2.
+// header of a Nested JWT must be 'JWT' as required by RFC 7519 section 5.2. The JWE 'typ' header is optional as
+// described in RFC 7519 section 5.1, and when present must be 'JWT' or one of the types given to ValidateTypes.
 //
 //nolint:gocyclo
 func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
@@ -346,7 +347,7 @@ func (t *Token) Valid(opts ...HeaderValidationOption) (err error) {
 	}
 
 	if t.HeaderJWE != nil && (t.KeyAlgorithm != "" || t.ContentEncryption != "") {
-		if !validateTokenType([]string{consts.JSONWebTokenTypeJWT}, t.HeaderJWE, vopts.allowEmptyType) {
+		if raw, ok := t.HeaderJWE[JSONWebTokenHeaderType]; ok && !validateTokenTypeValue(raw, append([]string{JSONWebTokenTypeJWT}, vopts.types...)...) {
 			vErr.Inner = errors.New("token was encrypted with invalid typ")
 			vErr.Errors |= ValidationErrorHeaderEncryptionTypeInvalid
 		}
@@ -435,14 +436,16 @@ type HeaderValidationOptions struct {
 	contentEnc     string
 }
 
-// ValidateAllowEmptyType sets whether a token without a 'typ' header is accepted as a 'JWT'.
+// ValidateAllowEmptyType sets whether a signed token without a 'typ' header is accepted as a 'JWT'. It does not affect
+// the JWE 'typ' header of a Nested JWT.
 func ValidateAllowEmptyType(value bool) HeaderValidationOption {
 	return func(opts *HeaderValidationOptions) {
 		opts.allowEmptyType = value
 	}
 }
 
-// ValidateTypes sets the accepted 'typ' header values of the signed token, replacing the default of 'JWT'.
+// ValidateTypes sets the accepted 'typ' header values of the signed token, replacing the default of 'JWT'. The JWE
+// 'typ' header of a Nested JWT, when present, is accepted with any of these values or 'JWT'.
 func ValidateTypes(types ...string) HeaderValidationOption {
 	return func(validator *HeaderValidationOptions) {
 		validator.types = types
@@ -581,21 +584,27 @@ func validateTokenTypeValue(raw any, values ...string) bool {
 		return false
 	}
 
-	for _, t := range values {
-		// 5.1 Media type names are not case-sensitive.
-		if strings.EqualFold(t, typ) {
-			return true
-		}
+	typ = mediaTypeFromTypeHeader(typ)
 
-		// 3.1.1 Use Explicit Typing (RFC8725)
+	for _, t := range values {
+		// Media type names are not case-sensitive, and a value without a '/' is the media type with the 'application/'
+		// prefix.
 		//
-		// See: https://www.rfc-editor.org/rfc/rfc8725.html#section-3.11
-		if strings.EqualFold(fmt.Sprintf("application/%s", t), typ) {
+		// See: https://www.rfc-editor.org/rfc/rfc7515#section-4.1.9 and https://www.rfc-editor.org/rfc/rfc8725#section-3.11
+		if strings.EqualFold(mediaTypeFromTypeHeader(t), typ) {
 			return true
 		}
 	}
 
 	return false
+}
+
+func mediaTypeFromTypeHeader(typ string) string {
+	if strings.Contains(typ, "/") {
+		return typ
+	}
+
+	return "application/" + typ
 }
 
 func isUnsafeNoneMagicConstant(k any) bool {

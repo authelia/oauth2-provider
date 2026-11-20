@@ -347,9 +347,15 @@ func TestDeviceCodeTokenHandlerPollKeepsAConcurrentDecision(t *testing.T) {
 					decideCrossDeviceGrant(t, inner, grant, tc.status)
 				}}
 
+				first := &DeviceCodeTokenHandler{Storage: inner, Strategy: &o2hmacshaStrategy, Config: config}
+
+				_, _, _, err := first.GetCodeAndSession(t.Context(), newDevicePoll(grant, base))
+
+				require.ErrorIs(t, err, oauth2.ErrAuthorizationPending)
+
 				token := &DeviceCodeTokenHandler{Storage: store, Strategy: &o2hmacshaStrategy, Config: config}
 
-				_, _, _, err := token.GetCodeAndSession(t.Context(), newDevicePoll(grant, base.Add(tc.poll)))
+				_, _, _, err = token.GetCodeAndSession(t.Context(), newDevicePoll(grant, base.Add(tc.poll)))
 
 				require.ErrorIs(t, err, oauth2.ErrSlowDown)
 
@@ -380,6 +386,7 @@ func TestDeviceCodeTokenHandlerSlowDown(t *testing.T) {
 		{
 			name: "ShouldGrowTheIntervalByFiveSecondsForEachSlowDown",
 			polls: []poll{
+				{expected: oauth2.ErrAuthorizationPending},
 				{after: time.Second, expected: oauth2.ErrSlowDown, interval: 15 * time.Second, count: 1},
 				{after: 12 * time.Second, expected: oauth2.ErrSlowDown, interval: 20 * time.Second, count: 2},
 				{after: 19 * time.Second, expected: oauth2.ErrSlowDown, interval: 25 * time.Second, count: 3},
@@ -388,6 +395,7 @@ func TestDeviceCodeTokenHandlerSlowDown(t *testing.T) {
 		{
 			name: "ShouldKeepTheGrownIntervalForLaterRequests",
 			polls: []poll{
+				{expected: oauth2.ErrAuthorizationPending},
 				{after: time.Second, expected: oauth2.ErrSlowDown, interval: 15 * time.Second, count: 1},
 				{after: 15 * time.Second, expected: oauth2.ErrAuthorizationPending, interval: 15 * time.Second},
 				{after: 12 * time.Second, expected: oauth2.ErrSlowDown, interval: 20 * time.Second, count: 1},
@@ -405,6 +413,7 @@ func TestDeviceCodeTokenHandlerSlowDown(t *testing.T) {
 			name:  "ShouldInvalidateTheDeviceCodeOnceTheLimitIsExceeded",
 			limit: 2,
 			polls: []poll{
+				{expected: oauth2.ErrAuthorizationPending},
 				{after: time.Second, expected: oauth2.ErrSlowDown, interval: 15 * time.Second, count: 1},
 				{after: time.Second, expected: oauth2.ErrSlowDown, interval: 20 * time.Second, count: 2},
 				{after: time.Second, expected: oauth2.ErrInvalidGrant, interval: 20 * time.Second, count: 2},
@@ -415,6 +424,7 @@ func TestDeviceCodeTokenHandlerSlowDown(t *testing.T) {
 			name:  "ShouldCountOnlyConsecutiveSlowDownsTowardsTheLimit",
 			limit: 1,
 			polls: []poll{
+				{expected: oauth2.ErrAuthorizationPending},
 				{after: time.Second, expected: oauth2.ErrSlowDown, interval: 15 * time.Second, count: 1},
 				{after: 15 * time.Second, expected: oauth2.ErrAuthorizationPending, interval: 15 * time.Second},
 				{after: time.Second, expected: oauth2.ErrSlowDown, interval: 20 * time.Second, count: 1},

@@ -7,6 +7,7 @@ package cimd
 import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/handler/rfc7523"
 	"authelia.com/provider/oauth2/handler/rfc8693"
 )
@@ -17,6 +18,27 @@ func newTestValidatorConfig() *oauth2.Config {
 	explicit := &hoauth2.AuthorizeExplicitGrantHandler{}
 
 	config.AuthorizeEndpointHandlers.Append(explicit)
+	config.TokenEndpointHandlers.Append(explicit)
+	config.TokenEndpointHandlers.Append(&hoauth2.ClientCredentialsGrantHandler{})
+	config.TokenEndpointHandlers.Append(&hoauth2.RefreshTokenGrantHandler{})
+	config.TokenEndpointHandlers.Append(&rfc8693.TokenExchangeGrantHandler{})
+	config.TokenEndpointHandlers.Append(&rfc7523.Handler{})
+
+	return config
+}
+
+func newTestCeilingConfig(config *oauth2.Config) *oauth2.Config {
+	if config == nil {
+		config = &oauth2.Config{}
+	}
+
+	explicit := &hoauth2.AuthorizeExplicitGrantHandler{}
+
+	config.AuthorizeEndpointHandlers.Append(explicit)
+	config.AuthorizeEndpointHandlers.Append(&hoauth2.AuthorizeImplicitGrantTypeHandler{})
+	config.AuthorizeEndpointHandlers.Append(&hoauth2.NoneResponseTypeHandler{})
+	config.AuthorizeEndpointHandlers.Append(&openid.OpenIDConnectImplicitHandler{})
+	config.AuthorizeEndpointHandlers.Append(&openid.OpenIDConnectHybridHandler{})
 	config.TokenEndpointHandlers.Append(explicit)
 	config.TokenEndpointHandlers.Append(&hoauth2.ClientCredentialsGrantHandler{})
 	config.TokenEndpointHandlers.Append(&hoauth2.RefreshTokenGrantHandler{})

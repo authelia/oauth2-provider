@@ -137,7 +137,7 @@ func (r *Receiver) validate(ctx context.Context, record *StreamRecord, token str
 	decoded.AssignJWE(jwe)
 
 	// SSF Section 4.1.1, RFC 8417 Section 2.3: the SET is explicitly typed.
-	if err = decoded.Valid(jwt.ValidateTypes(jwt.JSONWebTokenTypeSecurityEventToken)); err != nil && !isNestedTypeFault(decoded, err) {
+	if err = decoded.Valid(jwt.ValidateTypes(jwt.JSONWebTokenTypeSecurityEventToken)); err != nil {
 		return reject(errSetHeader)
 	}
 
@@ -402,28 +402,6 @@ func decodeFault(cause error) (serr *SetError, err error) {
 	default:
 		return errSetMalformed, nil
 	}
-}
-
-// isNestedTypeFault returns true when the only header fault is the 'typ' of the JWE, and that 'typ' is absent or is
-// the type of the SET. The 'cty' of 'JWT' is still required.
-//
-// See: https://www.rfc-editor.org/rfc/rfc7516#section-4.1.11
-// See: https://www.rfc-editor.org/rfc/rfc8725#section-3.11
-func isNestedTypeFault(token *jwt.Token, err error) bool {
-	var fault *jwt.ValidationError
-
-	if !errors.As(err, &fault) || !fault.IsExactly(jwt.ValidationErrorHeaderEncryptionTypeInvalid) {
-		return false
-	}
-
-	value, ok := token.HeaderJWE[jwt.JSONWebTokenHeaderType]
-	if !ok {
-		return true
-	}
-
-	typ, _ := value.(string)
-
-	return strings.EqualFold(typ, jwt.JSONWebTokenTypeSecurityEventToken) || strings.EqualFold(typ, "application/"+jwt.JSONWebTokenTypeSecurityEventToken)
 }
 
 // asymmetricKeyAlgorithms returns the JWE key management algorithms that use a key pair of the Receiver.

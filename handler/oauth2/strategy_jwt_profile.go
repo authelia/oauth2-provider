@@ -375,7 +375,7 @@ func fmtValidateJWTError(token *jwt.Token, client jwt.Client, inner error) (err 
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderTypeInvalid):
 			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be signed with the 'typ' header value '%s' but it was signed with the 'typ' header value '%s'.", clientText, consts.JSONWebTokenTypeJWT, token.Header[consts.JSONWebTokenHeaderType])
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionTypeInvalid):
-			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted with the 'typ' header value '%s' but it was encrypted with the 'typ' header value '%s'.", clientText, consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderType])
+			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted without a 'typ' header or with the 'typ' header value '%s' or that of the signed token but it was encrypted with the 'typ' header value '%s'.", clientText, consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderType])
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderContentTypeInvalid):
 			return oauth2.ErrInvalidTokenFormat.WithDebugf("Token %sis expected to be encrypted with the 'cty' header value '%s' but it was encrypted with the 'cty' header value '%s'.", clientText, consts.JSONWebTokenTypeJWT, token.HeaderJWE[consts.JSONWebTokenHeaderContentType])
 		case errJWTValidation.Has(jwt.ValidationErrorHeaderEncryptionKeyIDInvalid):

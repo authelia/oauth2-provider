@@ -293,7 +293,7 @@ func TestCIBAPushFlow(t *testing.T) {
 				config.BackChannelNotifier = oauth2.NewHTTPBackChannelNotifier(notification.Client())
 			})
 
-			id := flow.authenticate(t, cibaPushClientID, cibaPushOptions(nil))
+			id := flow.authenticate(t, cibaPushClientID, cibaPushOptions(&cibaRequestOptions{form: url.Values{consts.FormParameterRedirectURI: {"https://client.example.com/cb"}}}))
 
 			mu.Lock()
 			require.Empty(t, payloads)

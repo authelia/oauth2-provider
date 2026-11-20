@@ -508,6 +508,15 @@ func TestNewBackChannelAuthenticationRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldDropTheRedirectURIParameter",
+			form: func(form url.Values) {
+				form.Set(consts.FormParameterRedirectURI, "https://client.example.com/cb")
+			},
+			check: func(t *testing.T, requester BackChannelAuthenticationRequester) {
+				assert.False(t, requester.GetRequestForm().Has(consts.FormParameterRedirectURI))
+			},
+		},
+		{
 			name: "ShouldAcceptAFullRequest",
 			form: func(form url.Values) {
 				form.Set(consts.FormParameterScope, "openid profile")

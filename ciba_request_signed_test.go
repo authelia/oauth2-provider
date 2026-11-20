@@ -139,6 +139,15 @@ func TestBackChannelSignedRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldDropTheRedirectURIClaim",
+			claims: func(claims jwt.MapClaims) {
+				claims[consts.FormParameterRedirectURI] = "https://client.example.com/cb"
+			},
+			check: func(t *testing.T, requester BackChannelAuthenticationRequester) {
+				assert.False(t, requester.GetRequestForm().Has(consts.FormParameterRedirectURI))
+			},
+		},
+		{
 			name: "ShouldAcceptAJTIUsedByAClientAssertion",
 			used: true,
 		},

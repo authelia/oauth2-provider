@@ -60,12 +60,13 @@ var (
 	}
 
 	// cibaIgnoredParameters are the authorization endpoint parameters which are not CIBA authentication request
-	// parameters but which ID Token issuance reads from the request form.
+	// parameters but which ID Token issuance or the authorization code grant read from the request form.
 	//
 	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.2
 	cibaIgnoredParameters = []string{
 		consts.FormParameterPrompt,
 		consts.FormParameterMaximumAge,
+		consts.FormParameterRedirectURI,
 	}
 )
 

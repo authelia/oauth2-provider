@@ -95,6 +95,16 @@ func TestCIBAPollFlow(t *testing.T) {
 				assert.Equal(t, "invalid_grant", body["error"])
 			})
 
+			t.Run("ShouldIgnoreARedirectURISentToTheBackChannelAuthenticationEndpoint", func(t *testing.T) {
+				id := flow.authenticate(t, cibaClientID, &cibaRequestOptions{form: url.Values{consts.FormParameterRedirectURI: {"https://client.example.com/cb"}}})
+
+				flow.approve(t)
+
+				status, body := flow.poll(t, cibaClientID, id, nil)
+				require.Equal(t, http.StatusOK, status, "token error: %+v", body)
+				assert.NotEmpty(t, body["access_token"])
+			})
+
 			t.Run("ShouldBindTheTokensToTheTLSClientAuthCertificate", func(t *testing.T) {
 				certificate := gen.MustCertificate(gen.CertificateOptions{Subject: pkix.Name{CommonName: cibaMTLSClientID}})
 

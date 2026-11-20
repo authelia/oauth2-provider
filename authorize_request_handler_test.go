@@ -1268,6 +1268,117 @@ func TestAuthorizeRequestFromPARRevalidatesAuthorizationDetails(t *testing.T) {
 	}
 }
 
+func TestNewAuthorizeRequestRejectsInsecureRedirectURI(t *testing.T) {
+	const requestURI = "urn:ietf:params:oauth:request_uri:insecure"
+
+	testCases := []struct {
+		name      string
+		redirect  string
+		public    bool
+		par       bool
+		expired   bool
+		noRefetch bool
+		deleteErr error
+		err       error
+		keep      bool
+	}{
+		{name: "ShouldRejectHTTP", redirect: "http://app.example.com/cb", err: ErrInvalidRequest},
+		{name: "ShouldRejectHTTPLoopbackForAWebClient", redirect: "http://127.0.0.1:8080/cb", err: ErrInvalidRequest},
+		{name: "ShouldPassHTTPLoopbackForANativeClient", redirect: "http://127.0.0.1:8080/cb", public: true},
+		{name: "ShouldPassHTTPS", redirect: "https://app.example.com/cb"},
+		{name: "ShouldRejectHTTPFromPAR", redirect: "http://app.example.com/cb", par: true, err: ErrInvalidRequest},
+		{name: "ShouldRejectHTTPFromExpiredPAR", redirect: "http://app.example.com/cb", par: true, expired: true, err: ErrInvalidRequest},
+		{name: "ShouldRejectHTTPFromPARBeforeDeletion", redirect: "http://app.example.com/cb", par: true, deleteErr: errors.New("delete failed"), err: ErrInvalidRequest},
+		{name: "ShouldRejectHTTPFromPARWithoutRefetch", redirect: "http://app.example.com/cb", par: true, noRefetch: true, err: ErrInvalidRequest},
+		{name: "ShouldKeepHTTPSFromExpiredPAR", redirect: "https://app.example.com/cb", par: true, expired: true, err: ErrInvalidRequestURI, keep: true},
+		{name: "ShouldKeepHTTPSFromPARWhenDeletionFails", redirect: "https://app.example.com/cb", par: true, deleteErr: errors.New("delete failed"), err: ErrServerError, keep: true},
+		{name: "ShouldPassHTTPSFromPAR", redirect: "https://app.example.com/cb", par: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &DefaultClient{
+				ID:            "insecure",
+				Public:        tc.public,
+				RedirectURIs:  []string{tc.redirect},
+				Scopes:        []string{"foo"},
+				ResponseTypes: []string{consts.ResponseTypeAuthorizationCodeFlow},
+			}
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockStorage := mock.NewMockStorage(ctrl)
+
+			if !tc.noRefetch {
+				mockStorage.EXPECT().GetClient(gomock.Any(), client.ID).Return(client, nil)
+			}
+
+			mockPAR := mock.NewMockPARStorage(ctrl)
+
+			query := url.Values{
+				consts.FormParameterClientID:     {client.ID},
+				consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow},
+				consts.FormParameterRedirectURI:  {tc.redirect},
+				consts.FormParameterScope:        {"foo"},
+				consts.FormParameterState:        {"strong-enough-state"},
+			}
+
+			if tc.par {
+				redirect, err := url.Parse(tc.redirect)
+				require.NoError(t, err)
+
+				expires := time.Now().Add(time.Hour)
+				if tc.expired {
+					expires = time.Now().Add(-time.Hour)
+				}
+
+				par := NewAuthorizeRequest()
+				par.Client = client
+				par.Session = &DefaultSession{ExpiresAt: map[TokenType]time.Time{PushedAuthorizeRequestContext: expires}}
+				par.State = "strong-enough-state"
+				par.RedirectURI = redirect
+				par.ResponseTypes = []string{consts.ResponseTypeAuthorizationCodeFlow}
+				par.RequestedScope = []string{"foo"}
+
+				mockPAR.EXPECT().GetPARSession(gomock.Any(), requestURI).Return(par, nil)
+
+				if !errors.Is(tc.err, ErrInvalidRequest) {
+					mockPAR.EXPECT().DeletePARSession(gomock.Any(), requestURI).Return(tc.deleteErr)
+				}
+
+				query = url.Values{
+					consts.FormParameterClientID:   {client.ID},
+					consts.FormParameterRequestURI: {requestURI},
+				}
+			}
+
+			config := &Config{ScopeStrategy: ExactScopeStrategy, AudienceStrategy: DefaultAudienceStrategy, DisablePushedAuthorizationRequestClientRefetch: tc.noRefetch}
+			provider := &Fosite{Store: &parStorage{MockStorage: mockStorage, MockPARStorage: mockPAR}, Config: config}
+
+			r := &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{RawQuery: query.Encode()}}
+
+			ar, err := provider.NewAuthorizeRequest(context.Background(), r)
+
+			if tc.err != nil {
+				require.ErrorIs(t, err, tc.err)
+
+				if tc.keep {
+					assert.Equal(t, tc.redirect, ar.GetRedirectURI().String())
+				} else {
+					assert.Nil(t, ar.GetRedirectURI())
+					assert.False(t, ar.IsRedirectURIValid())
+				}
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, tc.redirect, ar.GetRedirectURI().String())
+		})
+	}
+}
+
 func TestNewAuthorizeRequestClaims(t *testing.T) {
 	client := &DefaultClient{
 		ID:            "1234",

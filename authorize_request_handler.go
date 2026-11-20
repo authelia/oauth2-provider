@@ -740,7 +740,7 @@ func hintRequestObjectPrefix(openid bool) string {
 	return hintRequestObjectPrefixJAR
 }
 
-func (f *Fosite) validateAuthorizeRedirectURI(_ context.Context, _ *http.Request, request *AuthorizeRequest) (err error) {
+func (f *Fosite) validateAuthorizeRedirectURI(ctx context.Context, _ *http.Request, request *AuthorizeRequest) (err error) {
 	raw := request.GetRequestForm().Get(consts.FormParameterRedirectURI)
 
 	// This ensures that the 'redirect_uri' parameter is present for OpenID Connect 1.0 authorization requests as per:
@@ -760,6 +760,13 @@ func (f *Fosite) validateAuthorizeRedirectURI(_ context.Context, _ *http.Request
 		return err
 	} else if !IsValidRedirectURI(redirectURI) {
 		return errorsx.WithStack(ErrInvalidRequest.WithHintf("The redirect URI '%s' contains an illegal character (for example #) or is otherwise invalid.", redirectURI))
+	}
+
+	// Authorization responses, error responses included, MUST NOT be sent to an insecure redirect URI.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.6
+	if err = ValidateRedirectURISecurity(ctx, f.Config, request.Client, redirectURI); err != nil {
+		return err
 	}
 
 	request.RedirectURI = redirectURI
@@ -969,6 +976,20 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 	request.ResponseTypes = par.GetResponseTypes()
 	request.State = par.GetState()
 	request.ResponseMode = par.GetResponseMode()
+
+	effective := client
+	if effective == nil {
+		effective = par.GetClient()
+	}
+
+	// Authorization responses, error responses included, MUST NOT be sent to an insecure redirect URI.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.6
+	if err = ValidateRedirectURISecurity(ctx, f.Config, effective, request.RedirectURI); err != nil {
+		request.RedirectURI = nil
+
+		return false, err
+	}
 
 	if request.GetClaims() == nil {
 		var claims *ClaimsRequest

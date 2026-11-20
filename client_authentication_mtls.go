@@ -5,13 +5,17 @@
 package oauth2
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"crypto/x509"
+	"encoding/asn1"
+	"encoding/hex"
 	"net"
 	"net/url"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"authelia.com/provider/jose"
 
@@ -23,46 +27,470 @@ import (
 // EqualDistinguishedNames reports whether two RFC 4514 string representations of a distinguished name denote the same
 // name.
 //
-// Full RFC 4517 distinguishedNameMatch is not implemented. Insignificant whitespace around each relative distinguished
-// name is ignored, attribute types are compared without regard to case, and the sequence is compared in both
-// directions because Go's [pkix.Name.String] and OpenSSL emit relative distinguished names in opposite orders.
-// Attribute values are compared with case significance, which is stricter than RFC 4517 requires.
+// Each value is parsed into its sequence of relative distinguished names. Attribute types are the RFC 4514 Section 3
+// short names (CN, L, ST, O, OU, C, STREET, DC, UID), SERIALNUMBER, POSTALCODE, emailAddress, or a dotted OID, compared
+// without regard to case, and a short name equals its dotted OID. The attributes of a multi-valued relative
+// distinguished name are compared without regard to order. Insignificant space around a separator is ignored. A
+// value that is not well formed per RFC 4514 Section 3, or that uses any other attribute type name, equals nothing.
 //
-// See: https://www.rfc-editor.org/rfc/rfc8705#section-2.1
+// Full RFC 4517 distinguishedNameMatch is not implemented: attribute values are compared exactly, which is stricter
+// than RFC 4517 requires.
+//
+// See: https://www.rfc-editor.org/rfc/rfc8705#section-2.1.2
 func EqualDistinguishedNames(a, b string) (equal bool) {
-	x, y := normalizeDistinguishedName(a), normalizeDistinguishedName(b)
-
-	if len(x) != len(y) {
+	x, ok := parseDistinguishedName(a)
+	if !ok {
 		return false
 	}
 
-	if slices.Equal(x, y) {
-		return true
+	y, ok := parseDistinguishedName(b)
+	if !ok {
+		return false
 	}
 
-	slices.Reverse(y)
-
-	return slices.Equal(x, y)
+	return equalRelativeDistinguishedNames(x, y)
 }
 
-func normalizeDistinguishedName(dn string) (rdns []string) {
-	raw := splitDistinguishedName(dn)
+type distinguishedNameAttribute struct {
+	kind   string
+	value  string
+	binary bool
+}
 
-	rdns = make([]string, 0, len(raw))
+type distinguishedNameAttributeASN1 struct {
+	Type  asn1.ObjectIdentifier
+	Value asn1.RawValue
+}
 
-	for _, rdn := range raw {
-		if rdn = trimUnescapedSpace(rdn); rdn == "" {
-			continue
+type distinguishedNameRelativeSET []distinguishedNameAttributeASN1
+
+var distinguishedNameAttributeTypes = map[string]string{
+	"CN":           "2.5.4.3",
+	"SERIALNUMBER": "2.5.4.5",
+	"C":            "2.5.4.6",
+	"L":            "2.5.4.7",
+	"ST":           "2.5.4.8",
+	"STREET":       "2.5.4.9",
+	"O":            "2.5.4.10",
+	"OU":           "2.5.4.11",
+	"POSTALCODE":   "2.5.4.17",
+	"UID":          "0.9.2342.19200300.100.1.1",
+	"DC":           "0.9.2342.19200300.100.1.25",
+	"EMAILADDRESS": "1.2.840.113549.1.9.1",
+}
+
+func equalRelativeDistinguishedNames(x, y [][]distinguishedNameAttribute) (equal bool) {
+	return slices.EqualFunc(x, y, slices.Equal[[]distinguishedNameAttribute])
+}
+
+func equalCertificateSubjectDistinguishedName(dn string, cert *x509.Certificate) (equal bool) {
+	x, ok := parseDistinguishedName(dn)
+	if !ok {
+		return false
+	}
+
+	y, ok := parseCertificateSubject(cert)
+	if !ok {
+		return false
+	}
+
+	slices.Reverse(x)
+
+	return equalRelativeDistinguishedNames(x, y)
+}
+
+func parseCertificateSubject(cert *x509.Certificate) (rdns [][]distinguishedNameAttribute, ok bool) {
+	var sequence []distinguishedNameRelativeSET
+
+	if rest, err := asn1.Unmarshal(cert.RawSubject, &sequence); err != nil || len(rest) != 0 {
+		return nil, false
+	}
+
+	rdns = make([][]distinguishedNameAttribute, 0, len(sequence))
+
+	for _, set := range sequence {
+		if len(set) == 0 {
+			return nil, false
 		}
 
-		if attribute, value, ok := strings.Cut(rdn, "="); ok {
-			rdn = strings.ToUpper(trimUnescapedSpace(attribute)) + "=" + trimUnescapedSpace(value)
+		rdn := make([]distinguishedNameAttribute, 0, len(set))
+
+		for _, attribute := range set {
+			value, valid := newDistinguishedNameAttribute(attribute.Type.String(), attribute.Value.FullBytes)
+			if !valid {
+				return nil, false
+			}
+
+			rdn = append(rdn, value)
 		}
+
+		slices.SortFunc(rdn, compareDistinguishedNameAttributes)
 
 		rdns = append(rdns, rdn)
 	}
 
-	return rdns
+	return rdns, true
+}
+
+func parseDistinguishedName(dn string) (rdns [][]distinguishedNameAttribute, ok bool) {
+	if trimUnescapedSpace(dn) == "" {
+		return nil, true
+	}
+
+	for _, raw := range splitDistinguishedName(dn, ',') {
+		if trimUnescapedSpace(raw) == "" {
+			return nil, false
+		}
+
+		var rdn []distinguishedNameAttribute
+
+		for _, part := range splitDistinguishedName(raw, '+') {
+			kind, value, found := strings.Cut(part, "=")
+			if !found {
+				return nil, false
+			}
+
+			var attribute distinguishedNameAttribute
+
+			if attribute, ok = parseDistinguishedNameAttribute(trimUnescapedSpace(kind), trimUnescapedSpace(value)); !ok {
+				return nil, false
+			}
+
+			rdn = append(rdn, attribute)
+		}
+
+		slices.SortFunc(rdn, compareDistinguishedNameAttributes)
+
+		rdns = append(rdns, rdn)
+	}
+
+	return rdns, true
+}
+
+func parseDistinguishedNameAttribute(kind, value string) (attribute distinguishedNameAttribute, ok bool) {
+	if oid, known := distinguishedNameAttributeTypes[strings.ToUpper(kind)]; known {
+		kind = oid
+	} else if !isDottedObjectIdentifier(kind) {
+		return attribute, false
+	}
+
+	if strings.HasPrefix(value, "#") {
+		ber, err := hex.DecodeString(value[1:])
+		if err != nil || len(ber) == 0 {
+			return attribute, false
+		}
+
+		der, rest, valid := normalizeBER(ber, 0)
+		if !valid || len(rest) != 0 {
+			return attribute, false
+		}
+
+		return newDistinguishedNameAttribute(kind, der)
+	}
+
+	if value, ok = unescapeDistinguishedNameValue(value); !ok {
+		return attribute, false
+	}
+
+	return distinguishedNameAttribute{kind: kind, value: value}, true
+}
+
+func newDistinguishedNameAttribute(kind string, der []byte) (attribute distinguishedNameAttribute, ok bool) {
+	var raw asn1.RawValue
+
+	if rest, err := asn1.Unmarshal(der, &raw); err != nil || len(rest) != 0 {
+		return attribute, false
+	}
+
+	if raw.Class != asn1.ClassUniversal || raw.IsCompound || !slices.Contains(distinguishedNameStringTags, raw.Tag) {
+		return distinguishedNameAttribute{kind: kind, value: string(der), binary: true}, true
+	}
+
+	var value string
+
+	if rest, err := asn1.Unmarshal(der, &value); err != nil || len(rest) != 0 {
+		return attribute, false
+	}
+
+	return distinguishedNameAttribute{kind: kind, value: value}, true
+}
+
+var distinguishedNameStringTags = []int{
+	asn1.TagUTF8String,
+	asn1.TagNumericString,
+	asn1.TagPrintableString,
+	asn1.TagT61String,
+	asn1.TagIA5String,
+	asn1.TagGeneralString,
+	asn1.TagBMPString,
+}
+
+//nolint:gocyclo
+func normalizeBER(ber []byte, depth int) (der, rest []byte, ok bool) {
+	if depth > 16 || len(ber) < 2 {
+		return nil, nil, false
+	}
+
+	i := 1
+
+	if ber[0]&0x1f == 0x1f {
+		for {
+			if i >= len(ber) || i > 5 {
+				return nil, nil, false
+			}
+
+			i++
+
+			if ber[i-1]&0x80 == 0 {
+				break
+			}
+		}
+	}
+
+	if i >= len(ber) {
+		return nil, nil, false
+	}
+
+	identifier, constructed, length := ber[:i], ber[0]&0x20 != 0, int(ber[i])
+	i++
+
+	var (
+		children [][]byte
+		content  []byte
+	)
+
+	switch length {
+	case 0x80:
+		if !constructed {
+			return nil, nil, false
+		}
+
+		rest = ber[i:]
+
+		for {
+			if len(rest) >= 2 && rest[0] == 0 && rest[1] == 0 {
+				rest = rest[2:]
+
+				break
+			}
+
+			var child []byte
+
+			if child, rest, ok = normalizeBER(rest, depth+1); !ok {
+				return nil, nil, false
+			}
+
+			children = append(children, child)
+		}
+	default:
+		if length&0x80 != 0 {
+			n := length & 0x7f
+
+			if n == 0x7f || i+n > len(ber) {
+				return nil, nil, false
+			}
+
+			length = 0
+
+			for _, b := range ber[i : i+n] {
+				if length = length<<8 | int(b); length > len(ber) {
+					return nil, nil, false
+				}
+			}
+
+			i += n
+		}
+
+		if length < 0 || i+length > len(ber) {
+			return nil, nil, false
+		}
+
+		content, rest = ber[i:i+length], ber[i+length:]
+
+		if constructed {
+			for remaining := content; len(remaining) != 0; {
+				var child []byte
+
+				if child, remaining, ok = normalizeBER(remaining, depth+1); !ok {
+					return nil, nil, false
+				}
+
+				children = append(children, child)
+			}
+		}
+	}
+
+	if !constructed {
+		if identifier[0] == asn1.TagBoolean && len(content) == 1 && content[0] != 0 {
+			content = []byte{0xff}
+		}
+
+		return encodeDER(identifier, content), rest, true
+	}
+
+	if len(identifier) == 1 && identifier[0]&0xc0 == 0 && slices.Contains(berStringTags, identifier[0]&0x1f) {
+		if content, ok = joinBERStringSegments(identifier[0]&0x1f, children); !ok {
+			return nil, nil, false
+		}
+
+		return encodeDER([]byte{identifier[0] &^ 0x20}, content), rest, true
+	}
+
+	if identifier[0]&0xc0 == 0 && identifier[0]&0x1f == asn1.TagSet {
+		slices.SortFunc(children, bytes.Compare)
+	}
+
+	return encodeDER(identifier, bytes.Join(children, nil)), rest, true
+}
+
+var berStringTags = []byte{
+	asn1.TagBitString,
+	asn1.TagOctetString,
+	asn1.TagUTF8String,
+	asn1.TagNumericString,
+	asn1.TagPrintableString,
+	asn1.TagT61String,
+	21,
+	asn1.TagIA5String,
+	25,
+	26,
+	asn1.TagGeneralString,
+	28,
+	asn1.TagBMPString,
+}
+
+func joinBERStringSegments(tag byte, segments [][]byte) (content []byte, ok bool) {
+	var unused byte
+
+	for i, segment := range segments {
+		var raw asn1.RawValue
+
+		if _, err := asn1.Unmarshal(segment, &raw); err != nil || raw.Class != asn1.ClassUniversal || raw.Tag != int(tag) {
+			return nil, false
+		}
+
+		if tag != asn1.TagBitString {
+			content = append(content, raw.Bytes...)
+
+			continue
+		}
+
+		if len(raw.Bytes) == 0 || (raw.Bytes[0] != 0 && i != len(segments)-1) {
+			return nil, false
+		}
+
+		unused = raw.Bytes[0]
+		content = append(content, raw.Bytes[1:]...)
+	}
+
+	if tag == asn1.TagBitString {
+		content = append([]byte{unused}, content...)
+	}
+
+	return content, true
+}
+
+func encodeDER(identifier, content []byte) (der []byte) {
+	der = append(der, identifier...)
+
+	switch n := len(content); {
+	case n < 0x80:
+		der = append(der, byte(n))
+	default:
+		var (
+			length []byte
+			count  byte
+		)
+
+		for ; n > 0; n >>= 8 {
+			length = append([]byte{byte(n)}, length...)
+			count++
+		}
+
+		der = append(der, 0x80|count)
+		der = append(der, length...)
+	}
+
+	return append(der, content...)
+}
+
+func compareDistinguishedNameAttributes(a, b distinguishedNameAttribute) (n int) {
+	if n = strings.Compare(a.kind, b.kind); n != 0 {
+		return n
+	}
+
+	if n = strings.Compare(a.value, b.value); n != 0 {
+		return n
+	}
+
+	switch {
+	case a.binary == b.binary:
+		return 0
+	case b.binary:
+		return -1
+	default:
+		return 1
+	}
+}
+
+func isDottedObjectIdentifier(s string) (ok bool) {
+	if !strings.Contains(s, ".") {
+		return false
+	}
+
+	for _, arc := range strings.Split(s, ".") {
+		if arc == "" || (len(arc) > 1 && arc[0] == '0') {
+			return false
+		}
+
+		for i := 0; i < len(arc); i++ {
+			if arc[i] < '0' || arc[i] > '9' {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func unescapeDistinguishedNameValue(value string) (unescaped string, ok bool) {
+	var builder strings.Builder
+
+	for i := 0; i < len(value); i++ {
+		if value[i] != '\\' {
+			if strings.IndexByte("\"+,;<>\x00", value[i]) >= 0 {
+				return "", false
+			}
+
+			builder.WriteByte(value[i])
+
+			continue
+		}
+
+		switch {
+		case i+1 < len(value) && strings.IndexByte(` "#+,;<=>\`, value[i+1]) >= 0:
+			builder.WriteByte(value[i+1])
+
+			i++
+		case i+2 < len(value):
+			decoded, err := hex.DecodeString(value[i+1 : i+3])
+			if err != nil {
+				return "", false
+			}
+
+			builder.WriteByte(decoded[0])
+
+			i += 2
+		default:
+			return "", false
+		}
+	}
+
+	if unescaped = builder.String(); !utf8.ValidString(unescaped) {
+		return "", false
+	}
+
+	return unescaped, true
 }
 
 // trimUnescapedSpace trims leading and trailing ASCII space (U+0020) characters from s. It is deliberately narrower
@@ -94,7 +522,7 @@ func trimUnescapedSpace(s string) (trimmed string) {
 	return s
 }
 
-func splitDistinguishedName(dn string) (rdns []string) {
+func splitDistinguishedName(dn string, separator rune) (rdns []string) {
 	var (
 		start   int
 		escaped bool
@@ -106,13 +534,26 @@ func splitDistinguishedName(dn string) (rdns []string) {
 			escaped = false
 		case r == '\\':
 			escaped = true
-		case r == ',':
+		case r == separator:
 			rdns = append(rdns, dn[start:i])
 			start = i + 1
 		}
 	}
 
 	return append(rdns, dn[start:])
+}
+
+func validateTLSClientAuthSubjectDN(dn string) (problem string) {
+	rdns, valid := parseDistinguishedName(dn)
+
+	switch {
+	case !valid:
+		return "is not a valid RFC 4514 distinguished name"
+	case len(rdns) == 0:
+		return "contains no relative distinguished names"
+	default:
+		return ""
+	}
 }
 
 // matchTLSClientAuthSubject performs the RFC 8705 Section 2.1 PKI method check, verifying that the subject information
@@ -141,14 +582,12 @@ func matchTLSClientAuthSubject(client TLSClientAuthClient, cert *x509.Certificat
 		match     func() bool
 	)
 
-	var subjectDNEmpty bool
+	var subjectDNProblem string
 
 	if dn := client.GetTLSClientAuthSubjectDN(); dn != "" {
 		count, parameter = count+1, "tls_client_auth_subject_dn"
-		// A registered value made only of separators and space names no relative distinguished name, and must not be
-		// left to match the empty subject of a SAN-only certificate.
-		subjectDNEmpty = len(normalizeDistinguishedName(dn)) == 0
-		match = func() bool { return EqualDistinguishedNames(dn, cert.Subject.String()) }
+		subjectDNProblem = validateTLSClientAuthSubjectDN(dn)
+		match = func() bool { return equalCertificateSubjectDistinguishedName(dn, cert) }
 	}
 
 	if dns := client.GetTLSClientAuthSANDNS(); dns != "" {
@@ -184,10 +623,10 @@ func matchTLSClientAuthSubject(client TLSClientAuthClient, cert *x509.Certificat
 	// Checked ahead of the match, for the same reason as the IP address below: a registered value that names no
 	// relative distinguished name is a registration error, and reporting it as a failed match would leave a bypass
 	// looking like an ordinary mismatch.
-	if subjectDNEmpty {
+	if subjectDNProblem != "" {
 		return errorsx.WithStack(ErrInvalidClient.
 			WithHint(hintClientCredentialsInvalid).
-			WithDebugf("The registered client with id '%s' has a 'tls_client_auth_subject_dn' value of '%s' which contains no relative distinguished names.", client.GetID(), client.GetTLSClientAuthSubjectDN()))
+			WithDebugf("The registered client with id '%s' has a 'tls_client_auth_subject_dn' value of '%s' which %s.", client.GetID(), client.GetTLSClientAuthSubjectDN(), subjectDNProblem))
 	}
 
 	// Checked ahead of the match so an unparsable registered value is reported as the registration error it is,

@@ -2418,6 +2418,94 @@ func TestRefreshFlow_CarriesClaimsRequest(t *testing.T) {
 	}
 }
 
+func TestRefreshFlow_ReusedRefreshTokenIsBoundToTheClient(t *testing.T) {
+	strategy := &hmacshaStrategy
+
+	stores := []struct {
+		name string
+		new  func() TokenRevocationStorage
+	}{
+		{"MemoryStore", func() TokenRevocationStorage { return storage.NewMemoryStore() }},
+		{"HydratingMemoryStore", func() TokenRevocationStorage { return storage.NewHydratingMemoryStore() }},
+	}
+
+	testCases := []struct {
+		name    string
+		client  string
+		revoked bool
+	}{
+		{"ShouldNotRevokeTheGrantWhenAnotherClientPresentsARotatedRefreshToken", "attacker", false},
+		{"ShouldRevokeTheGrantWhenTheClientPresentsARotatedRefreshToken", "victim", true},
+	}
+
+	for _, tc := range testCases {
+		for _, s := range stores {
+			t.Run(tc.name+"/"+s.name, func(t *testing.T) {
+				store := s.new()
+
+				clients := map[string]*oauth2.DefaultClient{
+					"victim":   {ID: "victim", GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}, Scopes: []string{consts.ScopeOffline}},
+					"attacker": {ID: "attacker", GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}, Scopes: []string{consts.ScopeOffline}, Public: true},
+				}
+
+				handler := &RefreshTokenGrantHandler{
+					TokenRevocationStorage: store,
+					RefreshTokenStrategy:   strategy,
+					AccessTokenStrategy:    strategy,
+					Config: &oauth2.Config{
+						AccessTokenLifespan:  time.Hour,
+						RefreshTokenLifespan: time.Hour,
+						ScopeStrategy:        oauth2.HierarchicScopeStrategy,
+						AudienceStrategy:     oauth2.DefaultAudienceStrategy,
+						RefreshTokenScopes:   []string{consts.ScopeOffline},
+					},
+				}
+
+				original := &oauth2.Request{
+					ID:           "grant",
+					Client:       clients["victim"],
+					RequestedAt:  time.Now().UTC(),
+					GrantedScope: oauth2.Arguments{consts.ScopeOffline},
+					Session:      &oauth2.DefaultSession{Subject: "peter", ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.RefreshToken: time.Now().UTC().Add(time.Hour)}},
+					Form:         url.Values{},
+				}
+
+				rotated, rotatedSignature, err := strategy.GenerateRefreshToken(t.Context(), nil)
+				require.NoError(t, err)
+				require.NoError(t, store.CreateRefreshTokenSession(t.Context(), rotatedSignature, "", original))
+				require.NoError(t, store.RotateRefreshToken(t.Context(), original.ID, rotatedSignature))
+
+				_, accessSignature, err := strategy.GenerateAccessToken(t.Context(), nil)
+				require.NoError(t, err)
+				require.NoError(t, store.CreateAccessTokenSession(t.Context(), accessSignature, original))
+
+				_, currentSignature, err := strategy.GenerateRefreshToken(t.Context(), nil)
+				require.NoError(t, err)
+				require.NoError(t, store.CreateRefreshTokenSession(t.Context(), currentSignature, accessSignature, original))
+
+				requester := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+				requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+				requester.Client = clients[tc.client]
+				requester.Form = url.Values{consts.FormParameterRefreshToken: {rotated}}
+
+				err = handler.HandleTokenEndpointRequest(t.Context(), requester)
+				require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+
+				_, err = store.GetRefreshTokenSession(t.Context(), currentSignature, &oauth2.DefaultSession{})
+				_, aerr := store.GetAccessTokenSession(t.Context(), accessSignature, &oauth2.DefaultSession{})
+
+				if tc.revoked {
+					assert.ErrorIs(t, err, oauth2.ErrInactiveToken)
+					assert.ErrorIs(t, aerr, oauth2.ErrNotFound)
+				} else {
+					assert.NoError(t, err)
+					assert.NoError(t, aerr)
+				}
+			})
+		}
+	}
+}
+
 type sessionWithoutDeadline struct {
 	oauth2.Session
 }

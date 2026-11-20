@@ -78,6 +78,10 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 			return errorsx.WithStack(oauth2.ErrInvalidGrant.WithWrap(verr).WithDebugError(verr))
 		}
 
+		if e := validateRefreshTokenClient(orequest, request); e != nil {
+			return e
+		}
+
 		if e := c.handleRefreshTokenReuse(ctx, signature, orequest); e != nil {
 			return errorsx.WithStack(e)
 		}
@@ -96,8 +100,8 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint(hint))
 	}
 
-	if orequest.GetClient().GetID() != request.GetClient().GetID() {
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the ID during the initial token issuance."))
+	if err = validateRefreshTokenClient(orequest, request); err != nil {
+		return err
 	}
 
 	request.SetID(orequest.GetID())
@@ -468,6 +472,14 @@ func recordedRefreshTokenRotation(request oauth2.AccessRequester) (disabled bool
 	}
 
 	return disabled, deadline, true
+}
+
+func validateRefreshTokenClient(orequest oauth2.Requester, request oauth2.AccessRequester) (err error) {
+	if orequest.GetClient().GetID() != request.GetClient().GetID() {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the ID during the initial token issuance."))
+	}
+
+	return nil
 }
 
 func (c *RefreshTokenGrantHandler) handleRefreshTokenReuse(ctx context.Context, signature string, request oauth2.Requester) (err error) {

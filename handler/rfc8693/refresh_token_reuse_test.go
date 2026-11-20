@@ -27,6 +27,8 @@ func TestRefreshTokenTypeHandlerAppliesTheRefreshTokenGrantChecks(t *testing.T) 
 		keyCorrupt              = "!!!!"
 		keyMismatched           = "AAAA"
 		hintNoRefreshTokenScope = "The refresh token was not granted scope offline or offline_access and may thus not be used for token exchange."
+		hintForeignSubjectToken = "The refresh token presented as a subject token was not issued to the OAuth 2.0 client."
+		hintForeignActorToken   = "The refresh token presented as an actor token was not issued to the OAuth 2.0 client."
 	)
 
 	offline := []string{consts.ScopeOffline, consts.ScopeOfflineAccess}
@@ -44,6 +46,7 @@ func TestRefreshTokenTypeHandlerAppliesTheRefreshTokenGrantChecks(t *testing.T) 
 		code               int
 		hint               string
 		revoked            bool
+		foreign            bool
 	}{
 		{
 			name:               "ShouldRejectASubjectTokenWithoutARefreshTokenScope",
@@ -179,6 +182,25 @@ func TestRefreshTokenTypeHandlerAppliesTheRefreshTokenGrantChecks(t *testing.T) 
 			code:               http.StatusInternalServerError,
 		},
 		{
+			name:               "ShouldNotRevokeTheGrantWhenAnotherClientReplaysARotatedSubjectToken",
+			granted:            []string{consts.ScopeOpenID, consts.ScopeOffline},
+			refreshTokenScopes: offline,
+			replay:             true,
+			foreign:            true,
+			code:               http.StatusBadRequest,
+			hint:               hintForeignSubjectToken,
+		},
+		{
+			name:               "ShouldNotRevokeTheGrantWhenAnotherClientReplaysARotatedActorToken",
+			actor:              true,
+			granted:            []string{consts.ScopeOpenID, consts.ScopeOffline},
+			refreshTokenScopes: offline,
+			replay:             true,
+			foreign:            true,
+			code:               http.StatusBadRequest,
+			hint:               hintForeignActorToken,
+		},
+		{
 			name:               "ShouldFailClosedWhenARotatedSubjectTokenIsReplayedWithoutRevocationStorage",
 			granted:            []string{consts.ScopeOpenID, consts.ScopeOffline},
 			refreshTokenScopes: offline,
@@ -219,6 +241,9 @@ func TestRefreshTokenTypeHandlerAppliesTheRefreshTokenGrantChecks(t *testing.T) 
 				client := store.GetClients()["my-client"]
 
 				owner := client
+				if tc.foreign {
+					owner = &oauth2.DefaultClient{ID: "victim", GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}}
+				}
 
 				family := newReuseFamily(ctx, t, coreStrategy, store, owner, tc.granted, tc.replay, tc.expired)
 

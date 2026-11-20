@@ -183,7 +183,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 			return nil, nil, errExchangeTokenValidation(err)
 		}
 	case errors.Is(err, oauth2.ErrInactiveToken):
-		return nil, nil, c.handleRefreshTokenReuse(ctx, or, token, signature, err)
+		return nil, nil, c.handleRefreshTokenReuse(ctx, request, or, token, signature, role, err)
 	default:
 		return nil, nil, errExchangeTokenLookup(err)
 	}
@@ -255,7 +255,7 @@ func (c *RefreshTokenTypeHandler) validateRefreshTokenUse(client oauth2.Client, 
 	return nil
 }
 
-func (c *RefreshTokenTypeHandler) handleRefreshTokenReuse(ctx context.Context, or oauth2.Requester, token, signature string, inactive error) (err error) {
+func (c *RefreshTokenTypeHandler) handleRefreshTokenReuse(ctx context.Context, request oauth2.AccessRequester, or oauth2.Requester, token, signature string, role tokenRole, inactive error) (err error) {
 	if or == nil {
 		return errors.WithStack(oauth2.ErrServerError.
 			WithHint("Misconfigured code lead to an error that prohibited the OAuth 2.0 Framework from processing this request.").
@@ -264,6 +264,10 @@ func (c *RefreshTokenTypeHandler) handleRefreshTokenReuse(ctx context.Context, o
 
 	if err = c.ValidateRefreshToken(ctx, or, token); !hoauth2.IsIntactToken(err) {
 		return errExchangeTokenValidation(err)
+	}
+
+	if or.GetClient().GetID() != request.GetClient().GetID() {
+		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The refresh token presented as %s was not issued to the OAuth 2.0 client.", role.hint()))
 	}
 
 	if c.TokenRevocationStorage == nil {

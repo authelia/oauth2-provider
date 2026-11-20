@@ -70,6 +70,60 @@ func TestGuardHTTPClient(t *testing.T) {
 		assert.Zero(t, hits.Load())
 	})
 
+	t.Run("ShouldNotRetryARefusal", func(t *testing.T) {
+		var checks atomic.Int64
+
+		base := retryablehttp.NewClient()
+		base.Logger = nil
+		base.RetryMax = 4
+		base.RetryWaitMin = time.Second
+		base.RetryWaitMax = 30 * time.Second
+		base.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+			checks.Add(1)
+
+			return retryablehttp.DefaultRetryPolicy(ctx, resp, err)
+		}
+
+		guarded, err := GuardHTTPClient(base)
+		require.NoError(t, err)
+
+		start := time.Now()
+
+		_, err = guarded.Get(server.URL) //nolint:bodyclose
+
+		assert.ErrorIs(t, err, ErrSpecialUseAddress)
+		assert.Less(t, time.Since(start), time.Second)
+		assert.Zero(t, checks.Load())
+	})
+
+	t.Run("ShouldRetryOtherFailuresWithThePolicyOfTheBase", func(t *testing.T) {
+		var failures atomic.Int64
+
+		failing := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+			failures.Add(1)
+			rw.WriteHeader(http.StatusServiceUnavailable)
+		}))
+		defer failing.Close()
+
+		base := retryablehttp.NewClient()
+		base.Logger = nil
+		base.RetryMax = 2
+		base.RetryWaitMin = time.Millisecond
+		base.RetryWaitMax = time.Millisecond
+		base.ErrorHandler = retryablehttp.PassthroughErrorHandler
+
+		guarded, err := GuardHTTPClient(base, WithSpecialUseAddressGuardAllowLoopback(netip.MustParseAddr("127.0.0.1")))
+		require.NoError(t, err)
+
+		response, err := guarded.Get(failing.URL)
+		require.NoError(t, err)
+
+		defer response.Body.Close()
+
+		assert.Equal(t, http.StatusServiceUnavailable, response.StatusCode)
+		assert.Equal(t, int64(3), failures.Load())
+	})
+
 	t.Run("ShouldReachLoopbackWhenAllowed", func(t *testing.T) {
 		guarded, err := GuardHTTPClient(sharedGuardTestClient(nil), WithSpecialUseAddressGuardAllowLoopback(netip.MustParseAddr("127.0.0.1")))
 		require.NoError(t, err)

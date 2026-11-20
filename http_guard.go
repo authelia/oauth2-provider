@@ -182,7 +182,7 @@ func NewSpecialUseAddressGuardedHTTPClient(opts ...SpecialUseAddressGuardOption)
 			},
 		},
 		RetryMax:     0,
-		CheckRetry:   retryablehttp.DefaultRetryPolicy,
+		CheckRetry:   noRetrySpecialUseAddress(retryablehttp.DefaultRetryPolicy),
 		Backoff:      retryablehttp.DefaultBackoff,
 		ErrorHandler: retryablehttp.PassthroughErrorHandler,
 	}
@@ -369,8 +369,9 @@ func closeDialResults(results <-chan dialResult, pending int) {
 // address in turn, the next attempt starting when the previous one fails or has not connected within 250 milliseconds,
 // and the remote address of the established connection is checked again before any request is sent. The proxy of the
 // transport is ignored. The transport must be a non-nil *[http.Transport] without a custom TLS dial function, or nil for
-// [http.DefaultTransport], since a custom TLS dial function connects before its address can be checked. Neither base
-// nor its transport is mutated.
+// [http.DefaultTransport], since a custom TLS dial function connects before its address can be checked. A refused
+// connection is never retried, as the same address would be refused again, and the retry policy of base decides every
+// other retry. Neither base nor its transport is mutated.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc8725bis-10#section-3.10
 func GuardHTTPClient(base *retryablehttp.Client, opts ...SpecialUseAddressGuardOption) (client *retryablehttp.Client, err error) {
@@ -432,11 +433,25 @@ func GuardHTTPClient(base *retryablehttp.Client, opts ...SpecialUseAddressGuardO
 		RetryMax:        base.RetryMax,
 		RequestLogHook:  base.RequestLogHook,
 		ResponseLogHook: base.ResponseLogHook,
-		CheckRetry:      base.CheckRetry,
+		CheckRetry:      noRetrySpecialUseAddress(base.CheckRetry),
 		Backoff:         base.Backoff,
 		ErrorHandler:    base.ErrorHandler,
 		PrepareRetry:    base.PrepareRetry,
 	}, nil
+}
+
+func noRetrySpecialUseAddress(check retryablehttp.CheckRetry) retryablehttp.CheckRetry {
+	if check == nil {
+		check = retryablehttp.DefaultRetryPolicy
+	}
+
+	return func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+		if errors.Is(err, ErrSpecialUseAddress) {
+			return false, err
+		}
+
+		return check(ctx, resp, err)
+	}
 }
 
 // SpecialUseAddressGuardProvider returns the provider for disabling the special-use address guard.

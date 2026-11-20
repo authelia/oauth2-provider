@@ -147,6 +147,23 @@ func TestRecordAuthenticationContextRequirements(t *testing.T) {
 			expected: []string{consts.ClaimAuthenticationContextClassReference},
 		},
 		{
+			name:     "ShouldRecordTheAuthTimeForDefaultMaxAge",
+			form:     url.Values{},
+			client:   &DefaultRegisteredClient{DefaultMaxAge: new(int64(0))},
+			expected: []string{consts.ClaimAuthenticationTime},
+		},
+		{
+			name:     "ShouldRecordTheAuthTimeForAMalformedMaxAge",
+			form:     url.Values{consts.FormParameterMaximumAge: {"soon"}},
+			expected: []string{consts.ClaimAuthenticationTime},
+		},
+		{
+			name:     "ShouldRecordNothingForRequireAuthTime",
+			form:     url.Values{},
+			client:   &DefaultRegisteredClient{RequireAuthTime: true},
+			expected: nil,
+		},
+		{
 			name:     "ShouldReplaceAPriorRecord",
 			form:     url.Values{},
 			prior:    []string{consts.ClaimAuthenticationTime},

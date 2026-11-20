@@ -94,6 +94,10 @@ func (v *LocalValidator) ValidateClientRegistrationMetadata(ctx context.Context,
 		return err
 	}
 
+	if err = validateDefaultMaxAge(metadata); err != nil {
+		return err
+	}
+
 	if err = validateJSONWebKeys(metadata); err != nil {
 		return err
 	}
@@ -442,6 +446,18 @@ func validateApplicationType(metadata *oauth2.ClientRegistrationMetadata) (err e
 	default:
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is not a recognized application type.", consts.ClientMetadataApplicationType, metadata.ApplicationType))
 	}
+}
+
+// validateDefaultMaxAge implements the OpenID Connect Dynamic Client Registration 1.0 'default_max_age' metadata: the
+// value must be absent or a non-negative number of seconds.
+//
+// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+func validateDefaultMaxAge(metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	if metadata.DefaultMaxAge != nil && *metadata.DefaultMaxAge < 0 {
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The 'default_max_age' value '%d' must be a non-negative integer.", *metadata.DefaultMaxAge))
+	}
+
+	return nil
 }
 
 // validateSubjectType implements the OpenID Connect Dynamic Client Registration 1.0 'subject_type' metadata: the

@@ -119,7 +119,7 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 	// Specification Note: prompt is case-sensitive.
 	requiredPrompt := oauth2.RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterPrompt), " "))
 
-	maxAge, hasMaxAge, _ := requestedMaxAge(request.GetRequestForm())
+	maxAge, hasMaxAge, _ := oauth2.GetRequestedMaxAge(request)
 
 	session, ok := request.GetSession().(Session)
 	if !ok {
@@ -139,13 +139,17 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 	// The auth_time claim has jwt.TimePrecision, so the request time is compared at the same precision.
 	rat := session.GetRequestedAt().Truncate(jwt.TimePrecision)
 
+	if isAuthTimeRequired(request.GetClient()) && (claims.AuthTime == nil || claims.AuthTime.IsZero()) {
+		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time claim is required when the client registered require_auth_time."))
+	}
+
 	if hasMaxAge {
 		switch {
 		case claims.AuthTime == nil, claims.AuthTime.IsZero():
 			return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time claim is required when max_age is set."))
 		case rat.IsZero():
 			return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because requested at claim is required when max_age is set."))
-		case claims.GetAuthTimeSafe().Add(time.Second * time.Duration(maxAge)).Before(rat):
+		case !oauth2.IsAuthenticationWithinMaxAge(claims.GetAuthTimeSafe(), rat, maxAge):
 			return nil, errorsx.WithStack(oauth2.ErrLoginRequired.WithDebug("Failed to validate OpenID Connect request because authentication time does not satisfy max_age time."))
 		}
 	}
@@ -223,7 +227,7 @@ func (v *OpenIDConnectRequestValidator) validatePromptParameters(ctx context.Con
 		}
 	}
 
-	if _, _, err = requestedMaxAge(request.GetRequestForm()); err != nil {
+	if _, _, err = oauth2.GetRequestedMaxAge(request); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'max_age' must be a non-negative integer.").WithWrap(err).WithDebugError(err))
 	}
 

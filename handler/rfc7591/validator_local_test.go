@@ -339,6 +339,21 @@ func TestLocalValidator(t *testing.T) {
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'application_type' value 'desktop' is not a recognized application type.",
 		},
 		{
+			name: "ShouldAcceptDefaultMaxAgeOfZero",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:  []string{"https://example.com/cb"},
+				DefaultMaxAge: new(int64(0)),
+			},
+		},
+		{
+			name: "ShouldRejectNegativeDefaultMaxAge",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:  []string{"https://example.com/cb"},
+				DefaultMaxAge: new(int64(-1)),
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'default_max_age' value '-1' must be a non-negative integer.",
+		},
+		{
 			name: "ShouldRejectUnknownSubjectType",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				RedirectURIs: []string{"https://example.com/cb"},

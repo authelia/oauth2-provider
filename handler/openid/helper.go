@@ -9,10 +9,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
-	"fmt"
 	"hash"
-	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/pkg/errors"
@@ -145,29 +142,10 @@ func hashFor(alg string) (h hash.Hash) {
 	}
 }
 
-// requestedMaxAge returns the 'max_age' authorization request parameter and whether it was present. A 'max_age' of 0
-// is distinct from an absent one as it is equivalent to 'prompt=login', and an empty or repeated parameter is rejected
-// rather than read as absent.
-//
-// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
-// See: https://datatracker.ietf.org/doc/html/rfc6749#section-3.1
-func requestedMaxAge(form url.Values) (maxAge int64, ok bool, err error) {
-	values, present := form[consts.FormParameterMaximumAge]
+func isAuthTimeRequired(client oauth2.Client) bool {
+	c, ok := client.(oauth2.RequireAuthTimeClient)
 
-	switch {
-	case !present, len(values) == 0:
-		return 0, false, nil
-	case len(values) != 1:
-		return 0, false, fmt.Errorf("the parameter was provided %d times but must be provided exactly once", len(values))
-	}
-
-	raw := values[0]
-
-	if maxAge, err = strconv.ParseInt(raw, 10, 64); err != nil || maxAge < 0 {
-		return 0, false, fmt.Errorf("the value '%s' could not be parsed as a non-negative integer", raw)
-	}
-
-	return maxAge, true, nil
+	return ok && c.GetRequireAuthTime()
 }
 
 // The authorization server makes a reasonable effort at detecting and preventing the use of a constant OpenID Connect

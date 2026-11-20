@@ -346,8 +346,8 @@ type Provider interface {
 	WriteRFC7592ClientConfigurationResponse(ctx context.Context, rw http.ResponseWriter, requester ClientConfigurationRequester, responder ClientConfigurationResponder)
 
 	// WriteRFC7592ClientConfigurationError writes a client configuration endpoint error response, mapping to the
-	// status codes described in RFC 7592 Section 3: 401 (with a 'WWW-Authenticate: Bearer' header) for a missing or
-	// invalid registration access token, 404 for an unknown client_id, and 405 for an unsupported method.
+	// status codes described in RFC 7592 Sections 2 and 3: 401 (with a 'WWW-Authenticate: Bearer' header) for a
+	// missing or invalid registration access token or a client that does not exist, and 405 for an unsupported method.
 	//
 	// The following specs must be considered in any implementation of this method:
 	// * https://datatracker.ietf.org/doc/html/rfc7592#section-3 (everything MUST be implemented).

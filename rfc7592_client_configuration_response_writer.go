@@ -35,10 +35,10 @@ func (f *Fosite) WriteRFC7592ClientConfigurationResponse(ctx context.Context, rw
 
 // WriteRFC7592ClientConfigurationError writes a client configuration endpoint error response.
 //
-// It reports 401 with a 'WWW-Authenticate: Bearer' header for a missing or invalid registration access token, 404 for
-// an unknown client_id, and 405 for a method other than GET, PUT, or DELETE. A valid token not authorized for the
-// target client is reported as 401 rather than 403 by DefaultEndpointAuthStrategy (handler/rfc7591), so the status
-// code does not distinguish it from an unknown token.
+// It reports 401 with a 'WWW-Authenticate: Bearer' header for a missing or invalid registration access token or a
+// client that does not exist, 404 for a request path without a client_id, and 405 for a method other than GET, PUT,
+// or DELETE. A valid token not authorized for the target client is reported as 401 rather than 403 by
+// DefaultEndpointAuthStrategy (handler/rfc7591), so the status code does not distinguish it from an unknown token.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7592#section-3
 func (f *Fosite) WriteRFC7592ClientConfigurationError(ctx context.Context, rw http.ResponseWriter, requester ClientConfigurationRequester, err error) {

@@ -30,8 +30,9 @@ type ClientConfigurationHandler struct {
 }
 
 // HandleRFC7592ClientConfigurationEndpointRequest implements oauth2.RFC7592ClientConfigurationEndpointHandler. It
-// returns oauth2.ErrNotFound when the client does not exist and oauth2.ErrInvalidRequest for a method other than GET,
-// PUT, or DELETE.
+// returns oauth2.ErrRequestUnauthorized and deletes the presented registration access token's session when the client
+// does not exist, per RFC 7592 Sections 2.1 to 2.3, and oauth2.ErrInvalidRequest for a method other than GET, PUT, or
+// DELETE.
 func (h *ClientConfigurationHandler) HandleRFC7592ClientConfigurationEndpointRequest(ctx context.Context, requester oauth2.ClientConfigurationRequester, responder oauth2.ClientConfigurationResponder) (err error) {
 	id := requester.GetClientID()
 
@@ -39,7 +40,11 @@ func (h *ClientConfigurationHandler) HandleRFC7592ClientConfigurationEndpointReq
 
 	if client, err = h.Store.GetClient(ctx, id); err != nil {
 		if errors.Is(err, oauth2.ErrNotFound) {
-			return errorsx.WithStack(oauth2.ErrNotFound.WithWrap(err).WithDebugError(err))
+			if signature := requester.GetSignature(); signature != "" {
+				_ = h.Store.DeleteClientRegistrationTokenSession(ctx, signature)
+			}
+
+			return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHint("The client does not exist.").WithWrap(err).WithDebugError(err))
 		}
 
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))

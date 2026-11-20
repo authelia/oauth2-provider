@@ -28,6 +28,7 @@ func TestNarrowsAuthorizationDetails(t *testing.T) {
 		{name: "ShouldAllowASubsetOfDetails", granted: AuthorizationDetails{requested[1]}, expected: true},
 		{name: "ShouldAllowFewerValues", granted: AuthorizationDetails{{Type: "payment", Actions: []string{"read"}, Locations: []string{"https://a.example.com"}, Extra: map[string]any{"amount": "100"}}}, expected: true},
 		{name: "ShouldAllowNoValuesOfAField", granted: AuthorizationDetails{{Type: "payment", Actions: []string{}, Locations: []string{"https://a.example.com"}, Extra: map[string]any{"amount": "100"}}}, expected: true},
+		{name: "ShouldDenyEmptyLocations", granted: AuthorizationDetails{{Type: "payment", Actions: []string{"read"}, Locations: []string{}, Extra: map[string]any{"amount": "100"}}}, expected: false},
 		{name: "ShouldDenyAnotherValue", granted: AuthorizationDetails{{Type: "payment", Actions: []string{"delete"}, Locations: []string{"https://a.example.com"}, Extra: map[string]any{"amount": "100"}}}, expected: false},
 		{name: "ShouldDenyAnOmittedField", granted: AuthorizationDetails{{Type: "payment", Locations: []string{"https://a.example.com"}, Extra: map[string]any{"amount": "100"}}}, expected: false},
 		{name: "ShouldDenyAnOmittedMember", granted: AuthorizationDetails{{Type: "payment", Actions: []string{"read"}, Locations: []string{"https://a.example.com"}}}, expected: false},

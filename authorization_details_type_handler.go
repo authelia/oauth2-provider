@@ -41,7 +41,7 @@ type DefaultAuthorizationDetailsTypeHandler struct {
 	Members []string
 
 	// Required are the names of the common data fields and type-specific members every detail requested for
-	// authorization must carry. An array field must not be empty.
+	// authorization, and every detail assigned at the token endpoint, must carry. An array field must not be empty.
 	Required []string
 
 	// Validator is called for each detail requested for authorization after every other check passes, for checks the
@@ -51,8 +51,10 @@ type DefaultAuthorizationDetailsTypeHandler struct {
 	// LimitDisclosure discloses a detail which has locations only to resource servers they identify. A JWT access token
 	// carries it only when every value of its audience is one of the locations, as every resource server in the
 	// audience can read the token; a client needing details for several resource servers requests a token for each.
-	// An introspection response carries it only when the identifier of the client making the request is one of the
-	// locations. A detail without locations is disclosed to every resource server.
+	// An introspection response carries it only when a value the client making the request serves is one of the
+	// locations: its introspection audience when it is an IntrospectionClient permitted to introspect the tokens
+	// intended for it and that audience is not nil, and otherwise its client ID. A detail without locations is
+	// disclosed to every resource server.
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-9
 	LimitDisclosure bool
@@ -76,10 +78,8 @@ func (h *DefaultAuthorizationDetailsTypeHandler) Validate(ctx context.Context, r
 		return err
 	}
 
-	for _, name := range h.Required {
-		if !hasAuthorizationDetailMember(detail, name) {
-			return fmt.Errorf("the '%s' member is required", name)
-		}
+	if err = h.validateRequired(detail); err != nil {
+		return err
 	}
 
 	if h.Validator != nil {
@@ -97,6 +97,12 @@ func (h *DefaultAuthorizationDetailsTypeHandler) IsUniqueAuthorizationContext(_ 
 // Assign implements AuthorizationDetailsTypeHandler.
 func (h *DefaultAuthorizationDetailsTypeHandler) Assign(_ context.Context, _ AccessRequester, granted, requested AuthorizationDetails) (assigned AuthorizationDetails, err error) {
 	if len(requested) == 0 {
+		for _, detail := range granted {
+			if err = h.validateRequired(detail); err != nil {
+				return nil, err
+			}
+		}
+
 		return granted, nil
 	}
 
@@ -130,6 +136,10 @@ func (h *DefaultAuthorizationDetailsTypeHandler) Assign(_ context.Context, _ Acc
 			detail.Privileges = slices.Clone(r.Privileges)
 		}
 
+		if err = h.validateRequired(detail); err != nil {
+			return nil, err
+		}
+
 		assigned = append(assigned, detail)
 	}
 
@@ -142,19 +152,35 @@ func (h *DefaultAuthorizationDetailsTypeHandler) Disclose(_ context.Context, _ R
 		return details, nil
 	}
 
-	identifiers := recipient.Audience
-
 	if recipient.Client != nil {
-		identifiers = []string{recipient.Client.GetID()}
+		served := introspectionServedValues(recipient.Client)
+
+		for _, detail := range details {
+			if len(detail.Locations) == 0 || slices.ContainsFunc(served, func(value string) bool { return slices.Contains(detail.Locations, value) }) {
+				disclosed = append(disclosed, detail)
+			}
+		}
+
+		return disclosed, nil
 	}
 
 	for _, detail := range details {
-		if len(detail.Locations) == 0 || isEveryLocation(identifiers, detail.Locations) {
+		if len(detail.Locations) == 0 || isEveryLocation(recipient.Audience, detail.Locations) {
 			disclosed = append(disclosed, detail)
 		}
 	}
 
 	return disclosed, nil
+}
+
+func introspectionServedValues(client Client) []string {
+	if c, ok := client.(IntrospectionClient); ok && c.GetIntrospectionPermitted() {
+		if served := c.GetIntrospectionAudience(); served != nil {
+			return served
+		}
+	}
+
+	return []string{client.GetID()}
 }
 
 func isEveryLocation(identifiers, locations []string) bool {
@@ -206,6 +232,16 @@ func (h *DefaultAuthorizationDetailsTypeHandler) validatePermitted(detail Author
 	return nil
 }
 
+func (h *DefaultAuthorizationDetailsTypeHandler) validateRequired(detail AuthorizationDetail) (err error) {
+	for _, name := range h.Required {
+		if !hasAuthorizationDetailMember(detail, name) {
+			return fmt.Errorf("the '%s' member is required", name)
+		}
+	}
+
+	return nil
+}
+
 func hasAuthorizationDetailMember(detail AuthorizationDetail, name string) bool {
 	switch name {
 	case authorizationDetailMemberType:
@@ -229,6 +265,13 @@ func hasAuthorizationDetailMember(detail AuthorizationDetail, name string) bool 
 
 func containsAuthorizationDetail(granted, requested AuthorizationDetail) bool {
 	if requested.Identifier != nil && (granted.Identifier == nil || *requested.Identifier != *granted.Identifier) {
+		return false
+	}
+
+	// Empty 'locations' read as no restriction to a resource server, so they never narrow a detail which has them.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1 and https://www.rfc-editor.org/rfc/rfc9396#section-12
+	if requested.Locations != nil && len(requested.Locations) == 0 && len(granted.Locations) != 0 {
 		return false
 	}
 

@@ -110,7 +110,8 @@ type Config struct {
 	Filter oauth2.ClientRegistrationMetadataStrategy
 
 	// Validators run in order against the metadata of a fetched document. When nil, a single rfc7591.LocalValidator
-	// built from ValidatorConfig is used. An empty non-nil slice runs none.
+	// built from ValidatorConfig with rfc7591.NewLocalMetadataDocumentValidator is used, which does not apply the grant
+	// types permitted for registration, as a document client is not registered. An empty non-nil slice runs none.
 	//
 	// A validator which fetches a URL from the document, such as rfc7591.SectorIdentifierValidator, must be built
 	// with a provider of an HTTP client which refuses special-use addresses.
@@ -118,7 +119,15 @@ type Config struct {
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-10.7
 	Validators []oauth2.ClientRegistrationValidator
 
-	// ValidatorConfig configures the default validator. Required when Validators is nil.
+	// ValidatorConfig configures the default validator. Required when Validators is nil. When set, it is also what
+	// the authorization server supports: a document is reduced to the grant types, response types and response modes
+	// it reports, and the token endpoint authentication method is selected from those it reports. A value it does not
+	// support is removed and is not an error, and a document left with no grant type, usable response type, response
+	// mode or authentication method is rejected. When nil, only GrantTypes, ResponseTypes and TokenEndpointAuthMethods
+	// apply.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-5
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6
 	ValidatorConfig rfc7591.LocalValidatorConfig
 
 	// Strategy builds the client. Defaults to DefaultClientStrategy.
@@ -129,26 +138,37 @@ type Config struct {
 	Scopes []string
 
 	// GrantTypes is the complete set of grant types a document client may use. The document 'grant_types' is reduced
-	// to the values also present here, when it is fetched and again whenever a stored document is served. Defaults to
+	// to the values also present here which the authorization server supports, see ValidatorConfig, when it is fetched
+	// and again whenever a stored document is served. It is the only grant type policy for a document client: the
+	// grant types permitted for registration do not apply. The OpenID Connect CIBA members of a document are discarded
+	// unless it permits the CIBA grant type, which also decides the push token delivery mode. Defaults to
 	// authorization_code and refresh_token.
+	//
+	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6
 	GrantTypes []string
 
 	// ResponseTypes is the complete set of response types a document client may use. The document 'response_types' is
-	// reduced to the values also present here, each compared as an unordered set of space-delimited values, when it is
-	// fetched and again whenever a stored document is served. A document left with no response type is rejected
-	// unless none of its grant types uses the authorization endpoint. Defaults to code.
+	// reduced to the values also present here which the authorization server supports, see ValidatorConfig, each
+	// compared as an unordered set of space-delimited values, when it is fetched and again whenever a stored document
+	// is served. A document left with no response type is rejected unless none of its grant types uses the
+	// authorization endpoint. Defaults to code.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6
 	// See: https://datatracker.ietf.org/doc/html/rfc9700#section-2.1.2
 	ResponseTypes []string
 
 	// TokenEndpointAuthMethods is the set of token endpoint authentication methods a document client may use, in order
-	// of preference. A document which declares 'private_key_jwt' in 'token_endpoint_auth_methods_supported' uses it when
-	// it is one of them, and otherwise the first of them the document declares is used. A document which declares none
-	// of them, or without that member has a 'token_endpoint_auth_method' which is not one of them, is rejected. A method
-	// based on a shared symmetric secret is not permitted. Defaults to DefaultTokenEndpointAuthMethods.
+	// of preference. Only those the token endpoint supports are used, see ValidatorConfig. A document which declares
+	// 'private_key_jwt' in 'token_endpoint_auth_methods_supported' uses it when it is one of them, and otherwise the
+	// first of them the document declares is used, passing over 'tls_client_auth' in a document without exactly one
+	// certificate subject member and 'self_signed_tls_client_auth' in a document without 'jwks' or 'jwks_uri'. The
+	// other values the document declares are not an error. A document which declares none of them, or without that
+	// member has a 'token_endpoint_auth_method' which is not one of them, is rejected. A method based on a shared
+	// symmetric secret is not permitted. Defaults to DefaultTokenEndpointAuthMethods.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-5
+	// See: https://datatracker.ietf.org/doc/html/rfc8705#section-2.1.2
+	// See: https://datatracker.ietf.org/doc/html/rfc8705#section-2.2.2
 	TokenEndpointAuthMethods []string
 
 	// MaxConcurrentFetches bounds the document fetches in progress at once. Defaults to 16. A party which controls
@@ -256,7 +276,7 @@ func NewResolver(config Config) (resolver *Resolver, err error) {
 			return nil, errors.New("cimd: the validator config is required when no validators are configured")
 		}
 
-		config.Validators = []oauth2.ClientRegistrationValidator{rfc7591.NewLocalValidator(config.ValidatorConfig)}
+		config.Validators = []oauth2.ClientRegistrationValidator{rfc7591.NewLocalMetadataDocumentValidator(config.ValidatorConfig)}
 	}
 
 	if config.Strategy == nil {
@@ -739,7 +759,8 @@ func (r *Resolver) newClient(ctx context.Context, record *oauth2.ClientIDMetadat
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("The Client ID Metadata Document '%s' could not be copied: %v.", record.ID, err))
 	}
 
-	// A stored document is held to the scopes and grant types permitted now, not those permitted when it was stored.
+	// A stored document is held to the scopes, grant types, response types and response modes permitted and supported
+	// now, not when it was stored. Its token endpoint authentication method is the one selected when it was fetched.
 	if cloned.Metadata != nil {
 		if err = r.applyBounds(ctx, cloned.Metadata); err != nil {
 			return nil, err

@@ -892,13 +892,15 @@ func TestLocalValidatorGrantTypePolicy(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			validator := NewLocalValidator(withTestCapabilities(&oauth2.Config{
+			config := withTestCapabilities(&oauth2.Config{
 				ScopeStrategy:                       oauth2.ExactScopeStrategy,
 				AudienceStrategy:                    oauth2.DefaultAudienceStrategy,
 				RFC7591ClientRegistrationGrantTypes: tc.permitted,
-			}))
+			})
 
-			err := validator.ValidateClientRegistrationMetadata(t.Context(), nil, tc.metadata)
+			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(NewLocalMetadataDocumentValidator(config).ValidateClientRegistrationMetadata(t.Context(), nil, tc.metadata)))
+
+			err := NewLocalValidator(config).ValidateClientRegistrationMetadata(t.Context(), nil, tc.metadata)
 
 			if tc.expected == "" {
 				assert.NoError(t, err)

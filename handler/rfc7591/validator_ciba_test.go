@@ -214,6 +214,8 @@ func TestValidateCIBARegistrationPermitted(t *testing.T) {
 			config := &oauth2.Config{RFC7591ClientRegistrationGrantTypes: tc.permitted}
 			config.TokenEndpointHandlers.Append(cibaGrantHandler{})
 
+			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(NewLocalMetadataDocumentValidator(withTestCapabilities(config)).ValidateClientRegistrationMetadata(t.Context(), nil, tc.metadata)))
+
 			err := NewLocalValidator(withTestCapabilities(config)).ValidateClientRegistrationMetadata(t.Context(), nil, tc.metadata)
 
 			if tc.expected == "" {

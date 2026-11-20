@@ -26,32 +26,32 @@ func TestApplyCeilingScope(t *testing.T) {
 	}{
 		{
 			name:     "ShouldPermitNoScopeByDefault",
-			config:   Config{ValidatorConfig: &oauth2.Config{}},
+			config:   Config{ValidatorConfig: newTestCeilingConfig(nil)},
 			scope:    "openid admin",
 			expected: "",
 		},
 		{
 			name:     "ShouldReduceToTheConfiguredScopesInDocumentOrder",
-			config:   Config{ValidatorConfig: &oauth2.Config{}, Scopes: []string{"openid", "offline", "profile"}},
+			config:   Config{ValidatorConfig: newTestCeilingConfig(nil), Scopes: []string{"openid", "offline", "profile"}},
 			scope:    "profile admin openid profile",
 			expected: "profile openid",
 		},
 		{
 			name:     "ShouldNotMatchByPrefixOrCase",
-			config:   Config{ValidatorConfig: &oauth2.Config{}, Scopes: []string{"openid"}},
+			config:   Config{ValidatorConfig: newTestCeilingConfig(nil), Scopes: []string{"openid"}},
 			scope:    "OpenID openid.admin open",
 			expected: "",
 		},
 		{
 			name:     "ShouldRemoveTheRegistrationScopeEvenWhenConfigured",
-			config:   Config{ValidatorConfig: &oauth2.Config{}, Scopes: []string{"openid", consts.ScopeClientRegistration}},
+			config:   Config{ValidatorConfig: newTestCeilingConfig(nil), Scopes: []string{"openid", consts.ScopeClientRegistration}},
 			scope:    consts.ScopeClientRegistration + " openid",
 			expected: "openid",
 		},
 		{
 			name: "ShouldRemoveTheConfiguredRegistrationScopesAndTheDefaultOne",
 			config: Config{
-				ValidatorConfig: &oauth2.Config{RFC7591ClientRegistrationScopes: []string{"register", "enroll"}},
+				ValidatorConfig: newTestCeilingConfig(&oauth2.Config{RFC7591ClientRegistrationScopes: []string{"register", "enroll"}}),
 				Scopes:          []string{"openid", "register", "enroll", consts.ScopeClientRegistration},
 			},
 			scope:    "register openid enroll " + consts.ScopeClientRegistration,
@@ -60,7 +60,7 @@ func TestApplyCeilingScope(t *testing.T) {
 		{
 			name: "ShouldRemoveAScopeTheWildcardStrategyMatchesAgainstARegistrationScope",
 			config: Config{
-				ValidatorConfig: &oauth2.Config{ScopeStrategy: oauth2.WildcardScopeStrategy, RFC7591ClientRegistrationScopes: []string{"clients.register"}},
+				ValidatorConfig: newTestCeilingConfig(&oauth2.Config{ScopeStrategy: oauth2.WildcardScopeStrategy, RFC7591ClientRegistrationScopes: []string{"clients.register"}}),
 				Scopes:          []string{"openid", "clients.*", "*", "users.*"},
 			},
 			scope:    "clients.* openid * users.*",
@@ -69,7 +69,7 @@ func TestApplyCeilingScope(t *testing.T) {
 		{
 			name: "ShouldRemoveAScopeTheHierarchicStrategyMatchesAgainstARegistrationScope",
 			config: Config{
-				ValidatorConfig: &oauth2.Config{ScopeStrategy: oauth2.HierarchicScopeStrategy, RFC7591ClientRegistrationScopes: []string{"clients.register"}},
+				ValidatorConfig: newTestCeilingConfig(&oauth2.Config{ScopeStrategy: oauth2.HierarchicScopeStrategy, RFC7591ClientRegistrationScopes: []string{"clients.register"}}),
 				Scopes:          []string{"openid", "clients", "users"},
 			},
 			scope:    "clients openid users",
@@ -78,7 +78,7 @@ func TestApplyCeilingScope(t *testing.T) {
 		{
 			name: "ShouldKeepAWildcardScopeTheExactStrategyDoesNotMatch",
 			config: Config{
-				ValidatorConfig: &oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, RFC7591ClientRegistrationScopes: []string{"clients.register"}},
+				ValidatorConfig: newTestCeilingConfig(&oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, RFC7591ClientRegistrationScopes: []string{"clients.register"}}),
 				Scopes:          []string{"clients.*"},
 			},
 			scope:    "clients.*",
@@ -92,7 +92,7 @@ func TestApplyCeilingScope(t *testing.T) {
 		},
 		{
 			name:     "ShouldRemoveTheRegistrationScopeWhenTheConfigHasNoRegistrationScopes",
-			config:   Config{ValidatorConfig: &oauth2.Config{}, Scopes: []string{"openid", consts.ScopeClientRegistration}},
+			config:   Config{ValidatorConfig: newTestCeilingConfig(nil), Scopes: []string{"openid", consts.ScopeClientRegistration}},
 			scope:    "openid " + consts.ScopeClientRegistration,
 			expected: "openid",
 		},
@@ -243,7 +243,7 @@ func TestApplyCeilingGrantAndResponseTypes(t *testing.T) {
 				permittedResp = all
 			}
 
-			resolver := &Resolver{config: withDefaults(Config{ValidatorConfig: &oauth2.Config{}, GrantTypes: tc.permitted, ResponseTypes: permittedResp})}
+			resolver := &Resolver{config: withDefaults(Config{ValidatorConfig: newTestCeilingConfig(nil), GrantTypes: tc.permitted, ResponseTypes: permittedResp})}
 
 			metadata := &oauth2.ClientRegistrationMetadata{GrantTypes: tc.grantTypes, ResponseTypes: tc.responseTypes}
 
@@ -265,7 +265,7 @@ func TestApplyCeilingGrantAndResponseTypes(t *testing.T) {
 }
 
 func TestApplyCeilingClearsPrivilegesAndKeepsRestrictions(t *testing.T) {
-	resolver := &Resolver{config: withDefaults(Config{ValidatorConfig: &oauth2.Config{}, GrantTypes: []string{"authorization_code"}})}
+	resolver := &Resolver{config: withDefaults(Config{ValidatorConfig: newTestCeilingConfig(nil), GrantTypes: []string{"authorization_code"}})}
 
 	metadata := &oauth2.ClientRegistrationMetadata{
 		GrantTypes:                            []string{"authorization_code"},
@@ -336,7 +336,7 @@ func TestApplyCeilingAuthorizationGrantProfiles(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			resolver := &Resolver{config: withDefaults(Config{ValidatorConfig: &oauth2.Config{}, GrantTypes: tc.permitted})}
+			resolver := &Resolver{config: withDefaults(Config{ValidatorConfig: newTestCeilingConfig(nil), GrantTypes: tc.permitted})}
 
 			profiles := slices.Clone(tc.profiles)
 
@@ -386,7 +386,7 @@ func TestSelectAuthMethod(t *testing.T) {
 			metadata, err := parseDocument(testClientID, document(body))
 			require.NoError(t, err)
 
-			config := withDefaults(Config{ValidatorConfig: &oauth2.Config{}, GrantTypes: []string{"authorization_code"}})
+			config := withDefaults(Config{ValidatorConfig: newTestCeilingConfig(nil), GrantTypes: []string{"authorization_code"}})
 
 			if tc.permitted != nil {
 				config.TokenEndpointAuthMethods = tc.permitted
@@ -407,6 +407,21 @@ func TestSelectAuthMethod(t *testing.T) {
 	}
 }
 
+func TestApplyCeilingWithoutAValidatorConfig(t *testing.T) {
+	metadata, err := parseDocument(testClientID, document(`"grant_types":["authorization_code","implicit"],"response_types":["code","token"],"response_modes":["query.jwt"],"token_endpoint_auth_methods_supported":["tls_client_auth","none"],"tls_client_auth_subject_dn":"CN=client"`))
+	require.NoError(t, err)
+
+	config := withDefaults(Config{GrantTypes: []string{"authorization_code", "implicit"}, ResponseTypes: []string{"code", "token"}})
+
+	require.NoError(t, (&Resolver{config: config}).applyCeiling(t.Context(), metadata))
+
+	assert.Equal(t, []string{"authorization_code", "implicit"}, metadata.GrantTypes)
+	assert.Equal(t, []string{"code", "token"}, metadata.ResponseTypes)
+	assert.Equal(t, []string{"query.jwt"}, metadata.ResponseModes)
+	assert.Equal(t, "tls_client_auth", metadata.TokenEndpointAuthMethod)
+	assert.Equal(t, "CN=client", metadata.TLSClientAuthSubjectDN)
+}
+
 func TestApplyCeilingRequiresKeysForPrivateKeyJWT(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -425,7 +440,7 @@ func TestApplyCeilingRequiresKeysForPrivateKeyJWT(t *testing.T) {
 			metadata, err := parseDocument(testClientID, document(tc.document))
 			require.NoError(t, err)
 
-			err = (&Resolver{config: withDefaults(Config{ValidatorConfig: &oauth2.Config{}, GrantTypes: []string{"authorization_code"}})}).applyCeiling(t.Context(), metadata)
+			err = (&Resolver{config: withDefaults(Config{ValidatorConfig: newTestCeilingConfig(nil), GrantTypes: []string{"authorization_code"}})}).applyCeiling(t.Context(), metadata)
 
 			if tc.err {
 				require.ErrorIs(t, err, oauth2.ErrInvalidClient)
@@ -458,7 +473,7 @@ func TestApplyCeilingRejectsNoUsableResponseType(t *testing.T) {
 			metadata, err := parseDocument(testClientID, document(tc.document))
 			require.NoError(t, err)
 
-			err = (&Resolver{config: withDefaults(Config{ValidatorConfig: &oauth2.Config{}, GrantTypes: tc.permitted})}).applyCeiling(t.Context(), metadata)
+			err = (&Resolver{config: withDefaults(Config{ValidatorConfig: newTestCeilingConfig(nil), GrantTypes: tc.permitted})}).applyCeiling(t.Context(), metadata)
 
 			if tc.err {
 				require.ErrorIs(t, err, oauth2.ErrInvalidClient)

@@ -24,7 +24,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/rfc7591"
+	"authelia.com/provider/oauth2/handler/rfc8628"
 	"authelia.com/provider/oauth2/internal"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
@@ -870,9 +872,264 @@ func TestResolverRejectsADocumentLeftWithNoPermittedResponseType(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 }
 
+func TestResolverReducesADocumentToWhatTheAuthorizationServerSupports(t *testing.T) {
+	testCases := []struct {
+		name          string
+		configure     func(config *Config, as *oauth2.Config)
+		document      string
+		method        string
+		subject       string
+		grantTypes    []string
+		responseTypes []string
+		responseModes []string
+		deliveryMode  string
+		err           string
+	}{
+		// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-5
+		{
+			name:     "ShouldSelectNoneWhenSelfSignedMutualTLSIsNotSupported",
+			document: `"token_endpoint_auth_methods_supported":["self_signed_tls_client_auth","none"],"jwks_uri":"https://client.example.com/jwks.json"`,
+			method:   "none",
+		},
+		{
+			name:      "ShouldSelectSelfSignedMutualTLSWhenSupported",
+			configure: func(_ *Config, as *oauth2.Config) { as.MTLSEnabled = true },
+			document:  `"token_endpoint_auth_methods_supported":["self_signed_tls_client_auth","none"],"jwks_uri":"https://client.example.com/jwks.json"`,
+			method:    "self_signed_tls_client_auth",
+		},
+		{
+			name:      "ShouldSelectNoneWhenSelfSignedMutualTLSHasNoKeys",
+			configure: func(_ *Config, as *oauth2.Config) { as.MTLSEnabled = true },
+			document:  `"token_endpoint_auth_methods_supported":["self_signed_tls_client_auth","none"]`,
+			method:    "none",
+		},
+		{
+			name:     "ShouldSelectNoneWhenMutualTLSIsNotSupported",
+			document: `"token_endpoint_auth_methods_supported":["tls_client_auth","none"]`,
+			method:   "none",
+		},
+		{
+			name:     "ShouldSelectNoneAndDiscardTheSubjectWhenMutualTLSIsNotSupported",
+			document: `"token_endpoint_auth_methods_supported":["tls_client_auth","none"],"tls_client_auth_subject_dn":"CN=client"`,
+			method:   "none",
+		},
+		{
+			name:      "ShouldSelectNoneWhenMutualTLSHasNoSubject",
+			configure: func(_ *Config, as *oauth2.Config) { as.MTLSEnabled = true },
+			document:  `"token_endpoint_auth_methods_supported":["tls_client_auth","none"]`,
+			method:    "none",
+		},
+		{
+			name:      "ShouldSelectNoneWhenMutualTLSHasTwoSubjects",
+			configure: func(_ *Config, as *oauth2.Config) { as.MTLSEnabled = true },
+			document:  `"token_endpoint_auth_methods_supported":["tls_client_auth","none"],"tls_client_auth_subject_dn":"CN=client","tls_client_auth_san_dns":"client.example.com"`,
+			method:    "none",
+		},
+		{
+			name:      "ShouldSelectMutualTLSWhenSupportedWithASubject",
+			configure: func(_ *Config, as *oauth2.Config) { as.MTLSEnabled = true },
+			document:  `"token_endpoint_auth_methods_supported":["tls_client_auth","none"],"tls_client_auth_subject_dn":"CN=client"`,
+			method:    "tls_client_auth",
+			subject:   "CN=client",
+		},
+		{
+			name:     "ShouldDiscardTheSubjectWhenPrivateKeyJWTIsSelected",
+			document: `"token_endpoint_auth_methods_supported":["tls_client_auth","private_key_jwt"],"tls_client_auth_subject_dn":"CN=client","jwks_uri":"https://client.example.com/jwks.json"`,
+			method:   "private_key_jwt",
+		},
+		{
+			name:     "ShouldRejectWhenNoDeclaredMethodIsSupported",
+			document: `"token_endpoint_auth_methods_supported":["tls_client_auth","self_signed_tls_client_auth"],"tls_client_auth_subject_dn":"CN=client","jwks_uri":"https://client.example.com/jwks.json"`,
+			err:      "'token_endpoint_auth_methods_supported' member has no value this authorization server supports",
+		},
+		{
+			name:     "ShouldDiscardTheSubjectForASingularMethodWhichIsNotMutualTLS",
+			document: `"token_endpoint_auth_method":"none","tls_client_auth_subject_dn":"CN=client"`,
+			method:   "none",
+		},
+		{
+			name:     "ShouldRejectASingularMethodWhichIsNotSupported",
+			document: `"token_endpoint_auth_method":"tls_client_auth","tls_client_auth_subject_dn":"CN=client"`,
+			err:      "'token_endpoint_auth_method' member has the value 'tls_client_auth' which this authorization server does not support",
+		},
+		// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6
+		{
+			name: "ShouldKeepAGrantTypeNotPermittedForRegistration",
+			configure: func(_ *Config, as *oauth2.Config) {
+				as.RFC7591ClientRegistrationGrantTypes = []string{"authorization_code"}
+			},
+			document:   `"grant_types":["authorization_code","refresh_token"]`,
+			grantTypes: []string{"authorization_code", "refresh_token"},
+		},
+		{
+			name: "ShouldRemoveAGrantTypeWithoutAHandler",
+			configure: func(config *Config, _ *oauth2.Config) {
+				config.GrantTypes = []string{"authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"}
+			},
+			document:   `"grant_types":["authorization_code","urn:ietf:params:oauth:grant-type:device_code","refresh_token"]`,
+			grantTypes: []string{"authorization_code", "refresh_token"},
+		},
+		{
+			name: "ShouldKeepACrossDeviceGrantTypeNotListedForRegistration",
+			configure: func(config *Config, as *oauth2.Config) {
+				config.GrantTypes = []string{"authorization_code", "urn:ietf:params:oauth:grant-type:device_code"}
+
+				as.TokenEndpointHandlers.Append(&rfc8628.DeviceAuthorizeTokenEndpointHandler{})
+			},
+			document:   `"grant_types":["authorization_code","urn:ietf:params:oauth:grant-type:device_code"]`,
+			grantTypes: []string{"authorization_code", "urn:ietf:params:oauth:grant-type:device_code"},
+		},
+		{
+			name: "ShouldKeepThePushTokenDeliveryModeWhenTheCIBAGrantTypeIsPermitted",
+			configure: func(config *Config, _ *oauth2.Config) {
+				config.GrantTypes = []string{"authorization_code", "urn:openid:params:grant-type:ciba"}
+			},
+			document:     `"backchannel_token_delivery_mode":"push","backchannel_client_notification_endpoint":"https://client.example.com/notify","token_endpoint_auth_method":"private_key_jwt","jwks_uri":"https://client.example.com/jwks.json"`,
+			grantTypes:   []string{"authorization_code"},
+			deliveryMode: "push",
+		},
+		{
+			name:       "ShouldDiscardThePushTokenDeliveryModeWhenTheCIBAGrantTypeIsNotPermitted",
+			document:   `"backchannel_token_delivery_mode":"push","backchannel_client_notification_endpoint":"https://client.example.com/notify","token_endpoint_auth_method":"private_key_jwt","jwks_uri":"https://client.example.com/jwks.json"`,
+			grantTypes: []string{"authorization_code"},
+		},
+		{
+			name: "ShouldDiscardThePollTokenDeliveryModeWhenTheCIBAGrantTypeIsNotSupported",
+			configure: func(config *Config, _ *oauth2.Config) {
+				config.GrantTypes = []string{"authorization_code", "urn:openid:params:grant-type:ciba"}
+			},
+			document:   `"grant_types":["authorization_code","urn:openid:params:grant-type:ciba"],"backchannel_token_delivery_mode":"poll","token_endpoint_auth_method":"private_key_jwt","jwks_uri":"https://client.example.com/jwks.json"`,
+			grantTypes: []string{"authorization_code"},
+		},
+		{
+			name: "ShouldRejectWhenNoDeclaredGrantTypeIsSupported",
+			configure: func(config *Config, _ *oauth2.Config) {
+				config.GrantTypes = []string{"authorization_code", "urn:ietf:params:oauth:grant-type:device_code"}
+			},
+			document: `"grant_types":["urn:ietf:params:oauth:grant-type:device_code"]`,
+			err:      "'grant_types' member has no value",
+		},
+		{
+			name: "ShouldRemoveAResponseTypeWithoutAHandler",
+			configure: func(config *Config, as *oauth2.Config) {
+				config.GrantTypes = []string{"authorization_code", "implicit"}
+				config.ResponseTypes = []string{"code", "token", "code id_token"}
+
+				as.AuthorizeEndpointHandlers.Append(&hoauth2.AuthorizeImplicitGrantTypeHandler{})
+			},
+			document:      `"grant_types":["authorization_code","implicit"],"response_types":["code id_token","code","token"]`,
+			grantTypes:    []string{"authorization_code", "implicit"},
+			responseTypes: []string{"code", "token"},
+		},
+		{
+			name: "ShouldRejectWhenNoDeclaredResponseTypeIsSupported",
+			configure: func(config *Config, as *oauth2.Config) {
+				config.GrantTypes = []string{"authorization_code", "implicit"}
+				config.ResponseTypes = []string{"code", "token", "code id_token"}
+
+				as.AuthorizeEndpointHandlers.Append(&hoauth2.AuthorizeImplicitGrantTypeHandler{})
+			},
+			document: `"grant_types":["authorization_code","implicit"],"response_types":["code id_token"]`,
+			err:      "'response_types' member has no value",
+		},
+		{
+			name:          "ShouldRemoveAResponseModeWhichIsNotSupported",
+			document:      `"response_modes":["query","query.jwt","form_post"]`,
+			responseModes: []string{"query", "form_post"},
+		},
+		{
+			name:     "ShouldRejectWhenNoDeclaredResponseModeIsSupported",
+			document: `"response_modes":["query.jwt","jwt"]`,
+			err:      "'response_modes' member has no value this authorization server supports",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newResolverEnv(t, func(config *Config) {
+				if tc.configure != nil {
+					tc.configure(config, config.ValidatorConfig.(*oauth2.Config))
+				}
+			})
+
+			env.documents = map[string]string{"/document": tc.document}
+
+			id := env.server.URL + "/document"
+
+			client, err := env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), id)
+
+			if tc.err != "" {
+				require.ErrorIs(t, err, oauth2.ErrInvalidClient)
+				assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
+
+				_, err = env.store.GetClientIDMetadataDocument(t.Context(), id)
+				assert.ErrorIs(t, err, oauth2.ErrNotFound)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			record, err := env.store.GetClientIDMetadataDocument(t.Context(), id)
+
+			require.NoError(t, err)
+
+			if tc.method != "" {
+				assert.Equal(t, tc.method, record.Metadata.TokenEndpointAuthMethod)
+				assert.Equal(t, tc.subject, record.Metadata.TLSClientAuthSubjectDN)
+				assert.Empty(t, record.Metadata.TLSClientAuthSANDNS)
+			}
+
+			if tc.grantTypes != nil {
+				assert.Equal(t, tc.grantTypes, record.Metadata.GrantTypes)
+				assert.Equal(t, oauth2.Arguments(tc.grantTypes), client.GetGrantTypes())
+				assert.Equal(t, tc.deliveryMode, record.Metadata.BackChannelTokenDeliveryMode)
+			}
+
+			if tc.responseTypes != nil {
+				assert.Equal(t, tc.responseTypes, record.Metadata.ResponseTypes)
+				assert.Equal(t, oauth2.Arguments(tc.responseTypes), client.GetResponseTypes())
+			}
+
+			if tc.responseModes != nil {
+				assert.Equal(t, tc.responseModes, record.Metadata.ResponseModes)
+			}
+		})
+	}
+}
+
+func TestResolverReappliesWhatTheAuthorizationServerSupportsToAStoredRecord(t *testing.T) {
+	var as *oauth2.Config
+
+	env := newResolverEnv(t, func(config *Config) {
+		config.GrantTypes = []string{"authorization_code", "urn:ietf:params:oauth:grant-type:device_code"}
+
+		as = config.ValidatorConfig.(*oauth2.Config)
+
+		as.TokenEndpointHandlers.Append(&rfc8628.DeviceAuthorizeTokenEndpointHandler{})
+	})
+
+	env.documents = map[string]string{"/document": `"grant_types":["authorization_code","urn:ietf:params:oauth:grant-type:device_code"]`}
+
+	id := env.server.URL + "/document"
+
+	client, err := env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), id)
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+	assert.Equal(t, oauth2.Arguments{"authorization_code", "urn:ietf:params:oauth:grant-type:device_code"}, client.GetGrantTypes())
+
+	as.TokenEndpointHandlers = as.TokenEndpointHandlers[:len(as.TokenEndpointHandlers)-1]
+
+	client, err = env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), id)
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+	assert.Equal(t, oauth2.Arguments{"authorization_code"}, client.GetGrantTypes())
+	assert.Equal(t, int64(1), env.hits.Load())
+}
+
 func TestResolverAcceptsNativeLoopbackRedirectURIsWithTheSameOriginValidator(t *testing.T) {
 	env := newResolverEnv(t, func(config *Config) {
-		config.Validators = []oauth2.ClientRegistrationValidator{rfc7591.NewLocalValidator(newTestValidatorConfig()), RedirectURISameOriginValidator{}}
+		config.Validators = []oauth2.ClientRegistrationValidator{rfc7591.NewLocalMetadataDocumentValidator(newTestValidatorConfig()), RedirectURISameOriginValidator{}}
 	})
 
 	client, err := env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), env.server.URL+"/native")
@@ -1488,13 +1745,14 @@ func (panicValidator) ValidateClientRegistrationMetadata(_ context.Context, _ oa
 }
 
 type resolverEnv struct {
-	server   *httptest.Server
-	store    *storage.MemoryStore
-	resolver *Resolver
-	hits     *atomic.Int64
-	accept   *atomic.Value
-	entered  chan struct{}
-	release  chan struct{}
+	server    *httptest.Server
+	store     *storage.MemoryStore
+	resolver  *Resolver
+	hits      *atomic.Int64
+	accept    *atomic.Value
+	entered   chan struct{}
+	release   chan struct{}
+	documents map[string]string
 }
 
 //nolint:gocyclo
@@ -1594,7 +1852,15 @@ func newResolverEnv(t *testing.T, configure func(config *Config)) *resolverEnv {
 			rw.Header().Set("Content-Type", "application/json")
 			_, _ = fmt.Fprintf(rw, `{"client_id":%q,"redirect_uris":["http://client.example.com/cb"]}`, id)
 		default:
-			http.NotFound(rw, r)
+			members, ok := env.documents[r.URL.Path]
+			if !ok {
+				http.NotFound(rw, r)
+
+				return
+			}
+
+			rw.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(rw, `{"client_id":%q,"redirect_uris":["https://client.example.com/cb"],%s}`, id, members)
 		}
 	}))
 

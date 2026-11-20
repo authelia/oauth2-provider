@@ -60,6 +60,7 @@ func TestDefaultAuthorizationDetailsTypeHandlerAssign(t *testing.T) {
 
 	testCases := []struct {
 		name      string
+		required  []string
 		requested oauth2.AuthorizationDetails
 		expected  oauth2.AuthorizationDetails
 		err       string
@@ -74,11 +75,15 @@ func TestDefaultAuthorizationDetailsTypeHandlerAssign(t *testing.T) {
 		{name: "ShouldRejectAnotherMemberValue", requested: oauth2.AuthorizationDetails{{Type: testRARTypeOther, Extra: map[string]any{testRARMemberCreditorName: testRARValueChanged}}}, err: testRARErrNotContained},
 		{name: "ShouldRejectMoreRequestsThanGrants", requested: oauth2.AuthorizationDetails{{Type: testRARTypeOther}, {Type: testRARTypeOther}, {Type: testRARTypeOther}}, err: testRARErrNotContained},
 		{name: "ShouldRejectAValueThatIsNotPermitted", requested: oauth2.AuthorizationDetails{{Type: testRARTypeOther, Privileges: []string{testRARPrivilegeAdmin}}}, err: testRARErrPrivilegeNotPermitted},
+		{name: "ShouldNarrowTheActionsToNone", requested: oauth2.AuthorizationDetails{{Type: testRARTypeOther, Identifier: &identifier, Actions: []string{}}}, expected: oauth2.AuthorizationDetails{{Type: testRARTypeOther, Locations: []string{testRARLocationA}, Actions: []string{}, Identifier: &identifier, Extra: map[string]any{testRARMemberCreditorName: testRARCreditorName}}}},
+		{name: "ShouldRejectEmptyLocations", requested: oauth2.AuthorizationDetails{{Type: testRARTypeOther, Locations: []string{}}}, err: testRARErrNotContained},
+		{name: "ShouldRejectAGrantWithoutARequiredFieldWithoutARequest", required: []string{"identifier"}, err: "the 'identifier' member is required"},
+		{name: "ShouldRejectARequiredFieldNarrowedToNone", required: []string{"actions"}, requested: oauth2.AuthorizationDetails{{Type: testRARTypeOther, Actions: []string{}}}, err: "the 'actions' member is required"},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			handler := &oauth2.DefaultAuthorizationDetailsTypeHandler{Name: testRARTypeOther, Privileges: []string{}}
+			handler := &oauth2.DefaultAuthorizationDetailsTypeHandler{Name: testRARTypeOther, Privileges: []string{}, Required: tc.required}
 
 			actual, err := handler.Assign(context.Background(), &oauth2.AccessRequest{}, granted, tc.requested)
 
@@ -113,6 +118,10 @@ func TestDefaultAuthorizationDetailsTypeHandlerDisclose(t *testing.T) {
 		{name: "ShouldDiscloseOnlyDetailsLocatedAtEveryAudience", limit: true, recipient: oauth2.AuthorizationDetailsRecipient{Audience: []string{testRARLocationA, testRARLocationB}}, expected: oauth2.AuthorizationDetails{ab, anywhere}},
 		{name: "ShouldDiscloseToTheClientIdentifier", limit: true, recipient: oauth2.AuthorizationDetailsRecipient{Client: &oauth2.DefaultClient{ID: testRARLocationB}}, expected: oauth2.AuthorizationDetails{b, ab, anywhere}},
 		{name: "ShouldNotDiscloseToTheClientAudience", limit: true, recipient: oauth2.AuthorizationDetailsRecipient{Client: &oauth2.DefaultClient{ID: testRARClientID, Audience: []string{testRARLocationA, testRARLocationB}}}, expected: oauth2.AuthorizationDetails{anywhere}},
+		{name: "ShouldDiscloseToTheServedAudienceOfAResourceServer", limit: true, recipient: oauth2.AuthorizationDetailsRecipient{Client: &testRARIntrospectionClient{DefaultClient: &oauth2.DefaultClient{ID: testRARClientID}, permitted: true, audience: []string{testRARLocationA}}}, expected: oauth2.AuthorizationDetails{a, ab, anywhere}},
+		{name: "ShouldDiscloseToAnyServedAudienceOfAResourceServer", limit: true, recipient: oauth2.AuthorizationDetailsRecipient{Client: &testRARIntrospectionClient{DefaultClient: &oauth2.DefaultClient{ID: testRARClientID}, permitted: true, audience: []string{testRARLocationA, testRARLocationB}}}, expected: oauth2.AuthorizationDetails{a, b, ab, anywhere}},
+		{name: "ShouldDiscloseToTheClientIdentifierOfAResourceServerWithoutAnAudience", limit: true, recipient: oauth2.AuthorizationDetailsRecipient{Client: &testRARIntrospectionClient{DefaultClient: &oauth2.DefaultClient{ID: testRARLocationB}, permitted: true}}, expected: oauth2.AuthorizationDetails{b, ab, anywhere}},
+		{name: "ShouldNotDiscloseToTheServedAudienceOfAClientNotPermitted", limit: true, recipient: oauth2.AuthorizationDetailsRecipient{Client: &testRARIntrospectionClient{DefaultClient: &oauth2.DefaultClient{ID: testRARClientID}, audience: []string{testRARLocationA}}}, expected: oauth2.AuthorizationDetails{anywhere}},
 		{name: "ShouldDiscloseOnlyDetailsWithoutLocationsToAnUnknownRecipient", limit: true, recipient: oauth2.AuthorizationDetailsRecipient{}, expected: oauth2.AuthorizationDetails{anywhere}},
 	}
 
@@ -151,3 +160,14 @@ func newDefaultRARTypeHandler() *oauth2.DefaultAuthorizationDetailsTypeHandler {
 		Required:   []string{"locations", "actions"},
 	}
 }
+
+type testRARIntrospectionClient struct {
+	*oauth2.DefaultClient
+
+	permitted bool
+	audience  []string
+}
+
+func (c *testRARIntrospectionClient) GetIntrospectionPermitted() bool { return c.permitted }
+
+func (c *testRARIntrospectionClient) GetIntrospectionAudience() []string { return c.audience }

@@ -1197,13 +1197,13 @@ func TestDeviceAuthorizeCodeConcurrentPollIsAnsweredWithSlowDownNotServerError(t
 	assert.Equal(t, oauth2.ErrSlowDown.ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
 }
 
-func TestDeviceAuthorizeCodeFirstPollWaitsForTheInterval(t *testing.T) {
+func TestDeviceAuthorizeCodeFirstPollDoesNotWaitForTheInterval(t *testing.T) {
 	testCases := []struct {
 		name        string
 		requestedAt time.Duration
 		expected    *oauth2.RFC6749Error
 	}{
-		{"ShouldSlowDownAFirstPollWithinTheInterval", -time.Second, oauth2.ErrSlowDown},
+		{"ShouldAnswerPendingAFirstPollWithinTheInterval", -time.Second, oauth2.ErrAuthorizationPending},
 		{"ShouldAnswerPendingAFirstPollAfterTheInterval", -2 * time.Minute, oauth2.ErrAuthorizationPending},
 	}
 
@@ -1265,6 +1265,11 @@ func TestDeviceAuthorizeCodeFirstPollWaitsForTheInterval(t *testing.T) {
 			require.Error(t, err)
 
 			assert.Equal(t, tc.expected.ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
+
+			err = h.HandleTokenEndpointRequest(t.Context(), requester)
+			require.Error(t, err)
+
+			assert.Equal(t, oauth2.ErrSlowDown.ErrorField, oauth2.ErrorToRFC6749Error(err).ErrorField)
 		})
 	}
 }

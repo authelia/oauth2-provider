@@ -47,6 +47,9 @@ const (
 	AuthorizeCode TokenType = "authorize_code"
 	// IDToken is the ID Token type.
 	IDToken TokenType = "id_token"
+	// LogoutToken is the OpenID Connect Back-Channel Logout 1.0 Logout Token type. It is not issued by a grant, so its
+	// lifespan is resolved independently of the GrantType.
+	LogoutToken TokenType = "logout_token"
 
 	// GrantTypeImplicit is the implicit grant type.
 	GrantTypeImplicit GrantType = consts.GrantTypeImplicit

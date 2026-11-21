@@ -54,6 +54,7 @@ type ClientLifespanConfig struct {
 	TokenExchangeGrantAccessTokenLifespan      *time.Duration `json:"token_exchange_grant_access_token_lifespan"`
 	TokenExchangeGrantRefreshTokenLifespan     *time.Duration `json:"token_exchange_grant_refresh_token_lifespan"`
 	TokenExchangeGrantIDTokenLifespan          *time.Duration `json:"token_exchange_grant_id_token_lifespan"`
+	BackChannelLogoutTokenLifespan             *time.Duration `json:"backchannel_logout_token_lifespan"`
 	// Hybrid grant tokens are not independently configurable, see the comment above.
 }
 
@@ -84,6 +85,10 @@ func (c *DefaultClientWithCustomTokenLifespans) GetEffectiveLifespan(gt GrantTyp
 	}
 
 	var cl *time.Duration
+
+	if tt == LogoutToken {
+		cl = c.TokenLifespans.BackChannelLogoutTokenLifespan
+	}
 
 	switch gt {
 	case GrantTypeAuthorizationCode:

@@ -277,7 +277,7 @@ type Config struct {
 	RFC8628SlowDownLimit int
 
 	// RFC8628EnableVerificationURIComplete includes the 'verification_uri_complete' member in the device authorization
-	// response. A client implementing RFC8628VerificationURICompleteClient overrides it.
+	// response for every client. When false, a client implementing RFC8628VerificationURICompleteClient decides.
 	RFC8628EnableVerificationURIComplete bool
 
 	// RFC8628DisableUserCodeSubjectBinding allows a subject to present an undecided user code another subject

@@ -97,6 +97,7 @@ func TestJWTSessionClone(t *testing.T) {
 					PublicKeyJWK:                []byte(`{"kty":"EC"}`),
 					KeyBindingGranted:           true,
 					ExpiryDeadline:              time.Unix(1700003600, 0).UTC(),
+					RefreshTokenMode:            oauth2.RefreshTokenModeOnline,
 				}
 
 				clonetest.AssertDeepCopy(t, s, s.Clone())

@@ -93,7 +93,7 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if len(c.Config.GetRefreshTokenScopes(ctx)) != 0 && !orequest.GetGrantedScopes().HasOneOf(c.Config.GetRefreshTokenScopes(ctx)...) {
+	if !oauth2.IsRefreshTokenModeAllowed(request.GetClient(), oauth2.GetRefreshTokenModeForScopes(c.Config.GetRefreshTokenScopes(ctx), orequest.GetGrantedScopes())) {
 		scopeNames := strings.Join(c.Config.GetRefreshTokenScopes(ctx), " or ")
 		hint := fmt.Sprintf("The OAuth 2.0 Client was not granted scope %s and may thus not perform the 'refresh_token' authorization grant.", scopeNames)
 
@@ -237,7 +237,12 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 
 	rtLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 
-	if !rotate {
+	// A rotated refresh token is issued for the scopes granted now, an unrotated one keeps those originally granted.
+	if rotate {
+		oauth2.RecordRefreshTokenMode(request.GetSession(), oauth2.GetRefreshTokenModeForScopes(c.Config.GetRefreshTokenScopes(ctx), request.GetGrantedScopes()))
+	} else {
+		oauth2.RecordRefreshTokenMode(request.GetSession(), oauth2.GetRefreshTokenModeForScopes(c.Config.GetRefreshTokenScopes(ctx), orequest.GetGrantedScopes()))
+
 		return nil
 	}
 

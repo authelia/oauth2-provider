@@ -31,12 +31,13 @@ type JWTSession struct {
 	ExpiresAt                   map[oauth2.TokenType]time.Time
 	Username                    string
 	Subject                     string
-	JWKThumbprint               string    `json:",omitempty"`
-	ClientCertificateThumbprint string    `json:",omitempty"`
-	RequestedJWKThumbprint      string    `json:",omitempty"`
-	PublicKeyJWK                []byte    `json:",omitempty"`
-	KeyBindingGranted           bool      `json:",omitempty"`
-	ExpiryDeadline              time.Time `json:",omitzero"`
+	JWKThumbprint               string                  `json:",omitempty"`
+	ClientCertificateThumbprint string                  `json:",omitempty"`
+	RequestedJWKThumbprint      string                  `json:",omitempty"`
+	PublicKeyJWK                []byte                  `json:",omitempty"`
+	KeyBindingGranted           bool                    `json:",omitempty"`
+	ExpiryDeadline              time.Time               `json:",omitzero"`
+	RefreshTokenMode            oauth2.RefreshTokenMode `json:",omitempty"`
 }
 
 // SetRequestedDPoPJWKThumbprint implements oauth2.DPoPBoundSession for JWTSession.
@@ -201,6 +202,20 @@ func (j *JWTSession) Clone() oauth2.Session {
 // SetExpiryDeadline implements oauth2.ExpiryDeadlineSetterSession for JWTSession.
 func (j *JWTSession) SetExpiryDeadline(deadline time.Time) {
 	j.ExpiryDeadline = deadline.UTC()
+}
+
+// SetRefreshTokenMode implements oauth2.RefreshTokenModeSession for JWTSession.
+func (j *JWTSession) SetRefreshTokenMode(mode oauth2.RefreshTokenMode) {
+	j.RefreshTokenMode = mode
+}
+
+// GetRefreshTokenMode implements oauth2.RefreshTokenModeSession for JWTSession.
+func (j *JWTSession) GetRefreshTokenMode() oauth2.RefreshTokenMode {
+	if j == nil {
+		return oauth2.RefreshTokenModeNone
+	}
+
+	return j.RefreshTokenMode
 }
 
 // GetExpiryDeadline implements oauth2.ExpiryDeadlineSession for JWTSession.

@@ -71,6 +71,9 @@ type DefaultSession struct {
 
 	// ExpiryDeadline is the latest time a token issued for the session may expire, if any.
 	ExpiryDeadline time.Time `json:"expiry_deadline,omitzero"`
+
+	// RefreshTokenMode is the kind of refresh token the grant carries.
+	RefreshTokenMode RefreshTokenMode `json:"refresh_token_mode,omitempty"`
 }
 
 // SetExpiresAt sets the expiration time of the token identified by key.
@@ -103,6 +106,20 @@ func (s *DefaultSession) GetExpiryDeadline() time.Time {
 	}
 
 	return s.ExpiryDeadline
+}
+
+// SetRefreshTokenMode implements RefreshTokenModeSession for DefaultSession.
+func (s *DefaultSession) SetRefreshTokenMode(mode RefreshTokenMode) {
+	s.RefreshTokenMode = mode
+}
+
+// GetRefreshTokenMode implements RefreshTokenModeSession for DefaultSession.
+func (s *DefaultSession) GetRefreshTokenMode() RefreshTokenMode {
+	if s == nil {
+		return RefreshTokenModeNone
+	}
+
+	return s.RefreshTokenMode
 }
 
 // GetUsername returns the username, or an empty string if it is not set.

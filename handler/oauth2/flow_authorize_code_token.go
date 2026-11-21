@@ -186,7 +186,11 @@ func (c *AuthorizeExplicitGrantHandler) HandleTokenEndpointRequest(ctx context.C
 
 	now := time.Now().UTC()
 
-	if canIssueRefreshToken(ctx, c.Config, authorizeRequest) {
+	mode := getRefreshTokenMode(ctx, c.Config, authorizeRequest, request.GetClient())
+
+	oauth2.RecordRefreshTokenMode(request.GetSession(), mode)
+
+	if mode != oauth2.RefreshTokenModeNone {
 		if err = oauth2.RecordRefreshTokenExpiryDeadline(ctx, c.Config, request.GetClient(), request.GetSession(), now); err != nil {
 			return err
 		}
@@ -222,20 +226,20 @@ func (c *AuthorizeExplicitGrantHandler) isTokenRequestRedirectURIOptional(ctx co
 	return ok && provider.GetTokenRequestRedirectURIOptional(ctx)
 }
 
-func canIssueRefreshToken(ctx context.Context, config oauth2.RefreshTokenScopesProvider, request oauth2.Requester) (issue bool) {
-	scope := config.GetRefreshTokenScopes(ctx)
+func canIssueRefreshToken(ctx context.Context, config oauth2.RefreshTokenScopesProvider, request oauth2.Requester, client oauth2.Client) (issue bool) {
+	return getRefreshTokenMode(ctx, config, request, client) != oauth2.RefreshTokenModeNone
+}
 
-	// Require one of the refresh token scopes, if set.
-	if len(scope) > 0 && !request.GetGrantedScopes().HasOneOf(scope...) {
-		return false
-	}
-
-	// Do not issue a refresh token to clients that cannot use the refresh token grant type.
+func getRefreshTokenMode(ctx context.Context, config oauth2.RefreshTokenScopesProvider, request oauth2.Requester, client oauth2.Client) (mode oauth2.RefreshTokenMode) {
 	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
-		return false
+		return oauth2.RefreshTokenModeNone
 	}
 
-	return true
+	if mode = oauth2.GetRefreshTokenModeForScopes(config.GetRefreshTokenScopes(ctx), request.GetGrantedScopes()); !oauth2.IsRefreshTokenModeAllowed(client, mode) {
+		return oauth2.RefreshTokenModeNone
+	}
+
+	return mode
 }
 
 // PopulateTokenEndpointResponse implements oauth2.TokenEndpointHandler.
@@ -307,7 +311,7 @@ func (c *AuthorizeExplicitGrantHandler) PopulateTokenEndpointResponse(ctx contex
 
 	var refresh, refreshSignature string
 
-	if canIssueRefreshToken(ctx, c.Config, ar) {
+	if canIssueRefreshToken(ctx, c.Config, ar, request.GetClient()) {
 		if refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}

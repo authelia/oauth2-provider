@@ -103,6 +103,7 @@ func TestDefaultSession_Clone(t *testing.T) {
 					RequestedJWKThumbprint:               "requested-jkt",
 					KeyBindingGranted:                    true,
 					RequestedAuthenticationContextClaims: []string{"acr"},
+					RefreshTokenMode:                     oauth2.RefreshTokenModeOnline,
 					ExpiryDeadline:                       time.Unix(1700003600, 0).UTC(),
 					RequestedAt:                          now,
 				}

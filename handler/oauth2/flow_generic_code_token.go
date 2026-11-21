@@ -177,7 +177,11 @@ func (c *GenericCodeTokenEndpointHandler) HandleTokenEndpointRequest(ctx context
 
 	now := time.Now().UTC()
 
-	if c.canIssueRefreshToken(ctx, deviceRequester) {
+	mode := getRefreshTokenMode(ctx, c.Config, deviceRequester, request.GetClient())
+
+	oauth2.RecordRefreshTokenMode(request.GetSession(), mode)
+
+	if mode != oauth2.RefreshTokenModeNone {
 		if err = oauth2.RecordRefreshTokenExpiryDeadline(ctx, c.Config, request.GetClient(), request.GetSession(), now); err != nil {
 			return err
 		}
@@ -293,7 +297,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if c.canIssueRefreshToken(ctx, ar) {
+	if canIssueRefreshToken(ctx, c.Config, ar, request.GetClient()) {
 		if refresh, refreshSignature, err = c.RefreshTokenStrategy.GenerateRefreshToken(ctx, request); err != nil {
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
@@ -374,22 +378,6 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 	}
 
 	return nil
-}
-
-func (c *GenericCodeTokenEndpointHandler) canIssueRefreshToken(ctx context.Context, request oauth2.Requester) (issue bool) {
-	scope := c.Config.GetRefreshTokenScopes(ctx)
-
-	// Require one of the refresh token scopes, if set.
-	if len(scope) > 0 && !request.GetGrantedScopes().HasOneOf(scope...) {
-		return false
-	}
-
-	// Do not issue a refresh token to clients that cannot use the refresh token grant type.
-	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
-		return false
-	}
-
-	return true
 }
 
 // CanHandleAuthorizationDetails implements oauth2.AuthorizationDetailsTokenEndpointHandler. The RFC 9396

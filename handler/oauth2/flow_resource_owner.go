@@ -106,7 +106,11 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) PopulateTokenEndpointResp
 
 	var refresh, refreshSignature string
 
-	if canIssueRefreshToken(ctx, c.Config, request) {
+	mode := getRefreshTokenMode(ctx, c.Config, request, request.GetClient())
+
+	oauth2.RecordRefreshTokenMode(request.GetSession(), mode)
+
+	if mode != oauth2.RefreshTokenModeNone {
 		now := time.Now().UTC()
 
 		if err = oauth2.RecordRefreshTokenExpiryDeadline(ctx, c.Config, request.GetClient(), request.GetSession(), now); err != nil {

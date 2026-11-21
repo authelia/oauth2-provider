@@ -23,7 +23,9 @@ func TestTokenExchangeRefreshTokenOptIn(t *testing.T) {
 		optedIn   bool
 		required  []string
 		requested string
+		online    *bool
 		issued    bool
+		mode      oauth2.RefreshTokenMode
 		err       error
 	}{
 		{name: "ShouldNotIssueWithAnAccessTokenWithoutOptingIn", requested: consts.TokenTypeRFC8693AccessToken},
@@ -32,6 +34,10 @@ func TestTokenExchangeRefreshTokenOptIn(t *testing.T) {
 		{name: "ShouldRefuseARefreshTokenWithoutOptingIn", requested: consts.TokenTypeRFC8693RefreshToken, err: oauth2.ErrUnauthorizedClient},
 		{name: "ShouldIssueARefreshTokenWhenOptedIn", optedIn: true, requested: consts.TokenTypeRFC8693RefreshToken, issued: true},
 		{name: "ShouldRefuseARefreshTokenWithoutTheRefreshScope", optedIn: true, required: []string{consts.ScopeOfflineAccess}, requested: consts.TokenTypeRFC8693RefreshToken, err: oauth2.ErrInvalidScope},
+		{name: "ShouldIssueOnlineWithAnAccessTokenWhenOnlineIsAllowed", optedIn: true, required: []string{consts.ScopeOfflineAccess}, online: new(true), requested: consts.TokenTypeRFC8693AccessToken, issued: true, mode: oauth2.RefreshTokenModeOnline},
+		{name: "ShouldNotIssueOnlineWithAnAccessTokenWhenOnlineIsNotAllowed", optedIn: true, required: []string{consts.ScopeOfflineAccess}, online: new(false), requested: consts.TokenTypeRFC8693AccessToken},
+		{name: "ShouldIssueAnOnlineRefreshTokenWhenOnlineIsAllowed", optedIn: true, required: []string{consts.ScopeOfflineAccess}, online: new(true), requested: consts.TokenTypeRFC8693RefreshToken, mode: oauth2.RefreshTokenModeOnline},
+		{name: "ShouldRefuseAnOnlineRefreshTokenWhenOnlineIsNotAllowed", optedIn: true, required: []string{consts.ScopeOfflineAccess}, online: new(false), requested: consts.TokenTypeRFC8693RefreshToken, err: oauth2.ErrInvalidScope},
 	}
 
 	for _, sc := range bindingExchangeStores() {
@@ -46,7 +52,12 @@ func TestTokenExchangeRefreshTokenOptIn(t *testing.T) {
 				token := chainSubjectToken(t, strategy, store, client, newOptInSubject(), true)
 
 				request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, token, tc.requested)
-				request.Client = &oauth2.DefaultRegisteredClient{DefaultClient: client, TokenExchangeRefreshToken: tc.optedIn}
+				registered := &oauth2.DefaultRegisteredClient{DefaultClient: client, TokenExchangeRefreshToken: tc.optedIn}
+				request.Client = registered
+
+				if tc.online != nil {
+					request.Client = &onlineRegisteredClient{DefaultRegisteredClient: registered, allow: *tc.online}
+				}
 
 				access := newLifetimeAccessTokenHandler(config, strategy, store)
 				access.RefreshTokenScopes = tc.required
@@ -76,6 +87,17 @@ func TestTokenExchangeRefreshTokenOptIn(t *testing.T) {
 
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 
+				if tc.issued || tc.requested == consts.TokenTypeRFC8693RefreshToken {
+					expected := tc.mode
+					if expected == oauth2.RefreshTokenModeNone {
+						expected = oauth2.RefreshTokenModeOffline
+					}
+
+					assert.Equal(t, expected, request.GetSession().(oauth2.RefreshTokenModeSession).GetRefreshTokenMode())
+				} else {
+					assert.Equal(t, oauth2.RefreshTokenModeNone, request.GetSession().(oauth2.RefreshTokenModeSession).GetRefreshTokenMode())
+				}
+
 				if tc.requested == consts.TokenTypeRFC8693RefreshToken {
 					assert.NotEmpty(t, response.GetAccessToken())
 
@@ -90,6 +112,16 @@ func TestTokenExchangeRefreshTokenOptIn(t *testing.T) {
 			})
 		}
 	}
+}
+
+type onlineRegisteredClient struct {
+	*oauth2.DefaultRegisteredClient
+
+	allow bool
+}
+
+func (c *onlineRegisteredClient) GetAllowOnlineRefreshTokens() bool {
+	return c.allow
 }
 
 func TestCustomJWTIsNotConsumedWhenARefreshTokenIsNotPermitted(t *testing.T) {

@@ -708,15 +708,14 @@ type TokenRequestRedirectURIOptionalClient interface {
 }
 
 // RFC8628VerificationURICompleteClient is a client which decides whether its device authorization responses include
-// the 'verification_uri_complete' member. When implemented it overrides RFC8628VerificationURICompleteProvider.
+// the 'verification_uri_complete' member when RFC8628VerificationURICompleteProvider does not enable it globally.
 //
 // See: https://www.rfc-editor.org/rfc/rfc8628#section-3.2
 // See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.14
 type RFC8628VerificationURICompleteClient interface {
 	// GetRFC8628VerificationURIComplete should return true if this client's device authorization responses include
-	// the 'verification_uri_complete' member, or the fallback value, which is the provider-wide option, when the
-	// client has no policy of its own.
-	GetRFC8628VerificationURIComplete(fallback bool) (enabled bool)
+	// the 'verification_uri_complete' member.
+	GetRFC8628VerificationURIComplete() (enabled bool)
 
 	Client
 }

@@ -90,15 +90,15 @@ func (d *DeviceAuthorizeHandler) HandleRFC8628DeviceAuthorizeEndpointRequest(ctx
 }
 
 func (d *DeviceAuthorizeHandler) isVerificationURICompleteEnabled(ctx context.Context, client oauth2.Client) (enabled bool) {
-	if config, ok := d.Config.(oauth2.RFC8628VerificationURICompleteProvider); ok {
-		enabled = config.GetRFC8628VerificationURIComplete(ctx)
+	if config, ok := d.Config.(oauth2.RFC8628VerificationURICompleteProvider); ok && config.GetRFC8628VerificationURIComplete(ctx) {
+		return true
 	}
 
 	if c, ok := client.(oauth2.RFC8628VerificationURICompleteClient); ok {
-		return c.GetRFC8628VerificationURIComplete(enabled)
+		return c.GetRFC8628VerificationURIComplete()
 	}
 
-	return enabled
+	return false
 }
 
 func (d *DeviceAuthorizeHandler) createWithUniqueUserCode(ctx context.Context, deviceCodeSignature string, request oauth2.DeviceAuthorizeRequester) (code string, err error) {

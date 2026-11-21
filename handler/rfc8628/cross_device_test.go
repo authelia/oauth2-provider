@@ -477,18 +477,16 @@ func TestDeviceCodeTokenHandlerSlowDown(t *testing.T) {
 
 // RFC 10027 Section 6.1.14.
 func TestDeviceAuthorizeHandlerVerificationURIComplete(t *testing.T) {
-	enabled, disabled := true, false
-
 	testCases := []struct {
 		name     string
 		global   bool
-		client   *bool
+		client   bool
 		expected bool
 	}{
-		{"ShouldOmitByDefault", false, nil, false},
-		{"ShouldIncludeWhenEnabledGlobally", true, nil, true},
-		{"ShouldIncludeWhenTheClientEnablesIt", false, &enabled, true},
-		{"ShouldOmitWhenTheClientDisablesIt", true, &disabled, false},
+		{"ShouldOmitByDefault", false, false, false},
+		{"ShouldIncludeWhenEnabledGlobally", true, false, true},
+		{"ShouldIncludeWhenTheClientEnablesIt", false, true, true},
+		{"ShouldIncludeWhenEnabledGloballyAndByTheClient", true, true, true},
 	}
 
 	for _, tc := range testCases {

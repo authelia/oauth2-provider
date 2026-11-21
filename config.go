@@ -764,8 +764,8 @@ type RFC8628SlowDownLimitProvider interface {
 
 // RFC8628VerificationURICompleteProvider is optionally implemented by the configuration to include the
 // 'verification_uri_complete' member in the device authorization response. A configuration which does not implement
-// this interface is treated as returning false. A client implementing RFC8628VerificationURICompleteClient overrides
-// this value.
+// this interface is treated as returning false. When false, a client implementing
+// RFC8628VerificationURICompleteClient decides.
 //
 // See: https://www.rfc-editor.org/rfc/rfc8628#section-3.2
 // See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.14

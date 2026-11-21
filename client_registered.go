@@ -211,7 +211,7 @@ type DefaultRegisteredClient struct {
 	RefreshTokenGracePeriod                       *time.Duration `json:"-"`
 	RefreshTokenMaximumLifespan                   time.Duration  `json:"-"`
 	EnforceSenderConstrainedAccessTokens          bool           `json:"-"`
-	RFC8628VerificationURIComplete                *bool          `json:"-"`
+	RFC8628VerificationURIComplete                bool           `json:"-"`
 	CIBARequireBindingMessage                     *bool          `json:"-"`
 	RFC8628EnforceSenderConstrainedAccessTokens   bool           `json:"-"`
 	CIBAEnforceSenderConstrainedAccessTokens      bool           `json:"-"`
@@ -566,13 +566,9 @@ func (c *DefaultRegisteredClient) GetEnforceSenderConstrainedAccessTokens() bool
 }
 
 // GetRFC8628VerificationURIComplete returns true if this client's device authorization responses include the
-// 'verification_uri_complete' member, or the fallback value when RFC8628VerificationURIComplete is nil.
-func (c *DefaultRegisteredClient) GetRFC8628VerificationURIComplete(fallback bool) (enabled bool) {
-	if c.RFC8628VerificationURIComplete == nil {
-		return fallback
-	}
-
-	return *c.RFC8628VerificationURIComplete
+// 'verification_uri_complete' member.
+func (c *DefaultRegisteredClient) GetRFC8628VerificationURIComplete() (enabled bool) {
+	return c.RFC8628VerificationURIComplete
 }
 
 // GetCIBARequireBindingMessage returns true if this client's backchannel authentication requests must carry the

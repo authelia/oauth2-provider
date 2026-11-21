@@ -409,6 +409,15 @@ type RefreshTokenMaximumLifespanClient interface {
 	Client
 }
 
+// RefreshTokenOnlineClient is a client which may be issued and redeem refresh tokens of grants without any of the
+// refresh token scopes, such as 'offline_access'; see RefreshTokenModeOnline.
+type RefreshTokenOnlineClient interface {
+	// GetAllowOnlineRefreshTokens should return true if this client may be issued and redeem online refresh tokens.
+	GetAllowOnlineRefreshTokens() (allow bool)
+
+	Client
+}
+
 // RevokeFlowRevokeRefreshTokensExplicitClient is a client which can be customized to only revoke Refresh Tokens
 // explicitly.
 type RevokeFlowRevokeRefreshTokensExplicitClient interface {

@@ -365,7 +365,7 @@ type Config struct {
 	// This is not compliant with RFC 9700 Section 2.6. Defaults to false.
 	AllowInsecureRedirectURIForPublicClients bool
 
-	// RefreshTokenScopes defines which OAuth scopes will be given refresh tokens during the authorization code grant exchange. This defaults to "offline" and "offline_access". When set to an empty array, all exchanges will be given refresh tokens.
+	// RefreshTokenScopes defines which OAuth scopes will be given refresh tokens during the authorization code grant exchange. This defaults to "offline" and "offline_access". When set to an empty array, all exchanges will be given refresh tokens. A grant without any of them is only given a refresh token when its client is an oauth2.RefreshTokenOnlineClient allowing online refresh tokens.
 	RefreshTokenScopes []string
 
 	// MinParameterEntropy controls the minimum size of the state and nonce parameters when they are present. Defaults to

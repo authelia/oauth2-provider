@@ -47,7 +47,29 @@ func TestRefreshTokenTypeHandlerAppliesTheRefreshTokenGrantChecks(t *testing.T) 
 		hint               string
 		revoked            bool
 		foreign            bool
+		online             *bool
 	}{
+		{
+			name:               "ShouldAcceptAnOnlineSubjectTokenWhenTheClientAllowsOnlineRefreshTokens",
+			granted:            []string{consts.ScopeOpenID},
+			refreshTokenScopes: offline,
+			online:             new(true),
+		},
+		{
+			name:               "ShouldAcceptAnOnlineActorTokenWhenTheClientAllowsOnlineRefreshTokens",
+			actor:              true,
+			granted:            []string{consts.ScopeOpenID},
+			refreshTokenScopes: offline,
+			online:             new(true),
+		},
+		{
+			name:               "ShouldRejectAnOnlineSubjectTokenWhenTheClientDisallowsOnlineRefreshTokens",
+			granted:            []string{consts.ScopeOpenID},
+			refreshTokenScopes: offline,
+			online:             new(false),
+			code:               http.StatusBadRequest,
+			hint:               hintNoRefreshTokenScope,
+		},
 		{
 			name:               "ShouldRejectASubjectTokenWithoutARefreshTokenScope",
 			granted:            []string{consts.ScopeOpenID},
@@ -240,6 +262,10 @@ func TestRefreshTokenTypeHandlerAppliesTheRefreshTokenGrantChecks(t *testing.T) 
 
 				client := store.GetClients()["my-client"]
 
+				if tc.online != nil {
+					client = &onlineRefreshTokenClient{Client: client, allow: *tc.online}
+				}
+
 				owner := client
 				if tc.foreign {
 					owner = &oauth2.DefaultClient{ID: "victim", GrantTypes: oauth2.Arguments{consts.GrantTypeRefreshToken}}
@@ -307,6 +333,16 @@ func TestRefreshTokenTypeHandlerAppliesTheRefreshTokenGrantChecks(t *testing.T) 
 			})
 		}
 	}
+}
+
+type onlineRefreshTokenClient struct {
+	oauth2.Client
+
+	allow bool
+}
+
+func (c *onlineRefreshTokenClient) GetAllowOnlineRefreshTokens() bool {
+	return c.allow
 }
 
 type failingRefreshTokenStrategy struct {

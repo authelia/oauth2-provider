@@ -58,6 +58,7 @@ type DefaultSession struct {
 	RequestedAt                          time.Time                      `json:"requested_at"`
 	ExpiryDeadline                       time.Time                      `json:"expiry_deadline,omitzero"`
 	RequestedAuthenticationContextClaims []string                       `json:"requested_authentication_context_claims,omitempty"`
+	RefreshTokenMode                     oauth2.RefreshTokenMode        `json:"refresh_token_mode,omitempty"`
 }
 
 // NewDefaultSession returns a DefaultSession with empty claims and headers, requested at the current time.
@@ -112,6 +113,20 @@ func (s *DefaultSession) GetExpiresAt(key oauth2.TokenType) time.Time {
 // SetExpiryDeadline implements oauth2.ExpiryDeadlineSetterSession for DefaultSession.
 func (s *DefaultSession) SetExpiryDeadline(deadline time.Time) {
 	s.ExpiryDeadline = deadline.UTC()
+}
+
+// SetRefreshTokenMode implements oauth2.RefreshTokenModeSession for DefaultSession.
+func (s *DefaultSession) SetRefreshTokenMode(mode oauth2.RefreshTokenMode) {
+	s.RefreshTokenMode = mode
+}
+
+// GetRefreshTokenMode implements oauth2.RefreshTokenModeSession for DefaultSession.
+func (s *DefaultSession) GetRefreshTokenMode() oauth2.RefreshTokenMode {
+	if s == nil {
+		return oauth2.RefreshTokenModeNone
+	}
+
+	return s.RefreshTokenMode
 }
 
 // GetExpiryDeadline implements oauth2.ExpiryDeadlineSession for DefaultSession.

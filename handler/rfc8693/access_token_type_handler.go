@@ -220,7 +220,10 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 
 	grant := grantedAuthorizationDetails(ctx, c.Config, request)
 
-	issueRefreshToken := c.canIssueRefreshToken(request)
+	mode := c.getRefreshTokenMode(request)
+	issueRefreshToken := mode != oauth2.RefreshTokenModeNone
+
+	oauth2.RecordRefreshTokenMode(request.GetSession(), mode)
 
 	var subjectSignature string
 
@@ -303,26 +306,18 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 	return nil
 }
 
-func (c *AccessTokenTypeHandler) canIssueRefreshToken(request oauth2.Requester) bool {
-	if !isRefreshTokenSubject(request) {
-		return false
+func (c *AccessTokenTypeHandler) getRefreshTokenMode(request oauth2.Requester) (mode oauth2.RefreshTokenMode) {
+	client := request.GetClient()
+
+	if !isRefreshTokenSubject(request) || !allowsRefreshTokenIssuance(client) || !client.GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
+		return oauth2.RefreshTokenModeNone
 	}
 
-	if !allowsRefreshTokenIssuance(request.GetClient()) {
-		return false
+	if mode = oauth2.GetRefreshTokenModeForScopes(c.RefreshTokenScopes, request.GetGrantedScopes()); !oauth2.IsRefreshTokenModeAllowed(client, mode) {
+		return oauth2.RefreshTokenModeNone
 	}
 
-	// Require one of the refresh token scopes, if set.
-	if len(c.RefreshTokenScopes) > 0 && !request.GetGrantedScopes().HasOneOf(c.RefreshTokenScopes...) {
-		return false
-	}
-
-	// Do not issue a refresh token to clients that cannot use the refresh token grant type.
-	if !request.GetClient().GetGrantTypes().Has(consts.GrantTypeRefreshToken) {
-		return false
-	}
-
-	return true
+	return mode
 }
 
 // GetScopeStrategy returns the locally-configured scope strategy if set, otherwise the one from Config.

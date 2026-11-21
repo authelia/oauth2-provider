@@ -270,6 +270,7 @@ func TestDefaultSessionClone(t *testing.T) {
 					RequestedJWKThumbprint:      "requested-jkt",
 					KeyBindingGranted:           true,
 					ExpiryDeadline:              time.Unix(1700003600, 0).UTC(),
+					RefreshTokenMode:            RefreshTokenModeOnline,
 				}
 
 				clonetest.AssertDeepCopy(t, s, s.Clone())

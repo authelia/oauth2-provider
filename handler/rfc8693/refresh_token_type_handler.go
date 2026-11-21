@@ -239,8 +239,8 @@ func (c *RefreshTokenTypeHandler) validateIDTokenGrant(ctx context.Context, requ
 }
 
 func (c *RefreshTokenTypeHandler) validateRefreshTokenUse(client oauth2.Client, or oauth2.Requester) (err error) {
-	if scopes := c.RefreshTokenScopes; len(scopes) != 0 && !or.GetGrantedScopes().HasOneOf(scopes...) {
-		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The refresh token was not granted scope %s and may thus not be used for token exchange.", strings.Join(scopes, " or ")))
+	if !oauth2.IsRefreshTokenModeAllowed(client, oauth2.GetRefreshTokenModeForScopes(c.RefreshTokenScopes, or.GetGrantedScopes())) {
+		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The refresh token was not granted scope %s and may thus not be used for token exchange.", strings.Join(c.RefreshTokenScopes, " or ")))
 	}
 
 	// A refresh token is only usable while its client may use the refresh_token grant, as ID-JAG draft 06 Section 4.3.3
@@ -395,7 +395,7 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		return err
 	}
 
-	// Apply the same refresh-token gating that AccessTokenTypeHandler.canIssueRefreshToken applies, but as an error
+	// Apply the same refresh-token gating that AccessTokenTypeHandler.getRefreshTokenMode applies, but as an error
 	// rather than a silent skip: when a client EXPLICITLY requests a refresh token via 'requested_token_type', the
 	// AS must refuse with the spec-appropriate code if policy disallows it rather than silently downgrading.
 	if !isRefreshTokenSubject(request) {
@@ -410,7 +410,9 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		return errors.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not registered for the '%s' grant type and so cannot be issued a refresh token via token exchange.", consts.GrantTypeRefreshToken))
 	}
 
-	if len(c.RefreshTokenScopes) > 0 && !request.GetGrantedScopes().HasOneOf(c.RefreshTokenScopes...) {
+	mode := oauth2.GetRefreshTokenModeForScopes(c.RefreshTokenScopes, request.GetGrantedScopes())
+
+	if !oauth2.IsRefreshTokenModeAllowed(request.GetClient(), mode) {
 		return errors.WithStack(oauth2.ErrInvalidScope.WithHintf("The token exchange request was not granted any of the scopes (%s) required by the authorization server to issue a refresh token.", strings.Join(c.RefreshTokenScopes, ", ")))
 	}
 
@@ -425,6 +427,7 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 	}
 
 	recordSubjectTokenDeadline(request)
+	oauth2.RecordRefreshTokenMode(request.GetSession(), mode)
 
 	rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.RefreshToken, c.RefreshTokenLifespan)
 	request.GetSession().SetExpiresAt(oauth2.RefreshToken, refreshTokenExpiry(request, rtLifespan))

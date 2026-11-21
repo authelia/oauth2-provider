@@ -134,17 +134,17 @@ func TestConfigBackChannelLogoutDefaults(t *testing.T) {
 	config := &Config{}
 
 	assert.Nil(t, config.GetBackChannelLogoutTokenStrategy(t.Context()))
-	assert.Equal(t, time.Minute*5, config.GetBackChannelLogoutLifespan(t.Context()))
+	assert.Equal(t, time.Minute*2, config.GetBackChannelLogoutLifespan(t.Context()))
 	assert.Equal(t, 10, config.GetBackChannelLogoutConcurrency(t.Context()))
 }
 
 func TestConfigBackChannelLogoutOverrides(t *testing.T) {
 	config := &Config{
-		BackChannelLogoutLifespan:    time.Minute * 2,
+		BackChannelLogoutLifespan:    time.Minute,
 		BackChannelLogoutConcurrency: 3,
 	}
 
-	assert.Equal(t, time.Minute*2, config.GetBackChannelLogoutLifespan(t.Context()))
+	assert.Equal(t, time.Minute, config.GetBackChannelLogoutLifespan(t.Context()))
 	assert.Equal(t, 3, config.GetBackChannelLogoutConcurrency(t.Context()))
 }
 
@@ -154,7 +154,7 @@ func TestConfigBackChannelLogoutNonPositiveFallsBackToDefaults(t *testing.T) {
 		BackChannelLogoutConcurrency: -1,
 	}
 
-	assert.Equal(t, time.Minute*5, config.GetBackChannelLogoutLifespan(t.Context()))
+	assert.Equal(t, time.Minute*2, config.GetBackChannelLogoutLifespan(t.Context()))
 	assert.Equal(t, 10, config.GetBackChannelLogoutConcurrency(t.Context()))
 }
 

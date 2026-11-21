@@ -21,7 +21,7 @@ import (
 
 const (
 	defaultExpiryTime                  = time.Hour
-	defaultBackChannelLogoutExpiryTime = 5 * time.Minute
+	defaultBackChannelLogoutExpiryTime = 2 * time.Minute
 )
 
 // The Session represents the structure that a valid OpenID Connect 1.0 session has.
@@ -463,7 +463,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 }
 
 // GenerateBackChannelLogoutToken generates a signed Logout Token for the client with the given subject, session ID,
-// audience and extra claims. The 'iss' claim defaults to the ID Token issuer and the lifespan to 5 minutes when zero.
+// audience and extra claims. The 'iss' claim defaults to the ID Token issuer and the lifespan to 2 minutes when zero.
 func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, client oauth2.Client, lifespan time.Duration, subject, sid string, audience []string, extra map[string]any) (token string, err error) {
 	if lifespan == 0 {
 		lifespan = defaultBackChannelLogoutExpiryTime
@@ -485,10 +485,15 @@ func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, cli
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate Logout Token because expiry claim can not be in the past."))
 	}
 
+	// An encrypted Logout Token SHOULD replicate 'iss' in its JWE header.
+	//
+	// See: https://openid.net/specs/openid-connect-backchannel-1_0.html#LogoutToken
+	// See: https://datatracker.ietf.org/doc/html/rfc7519#section-5.3
 	token, _, err = h.Encode(
 		ctx,
 		claims.ToMapClaims(),
 		jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: jwt.JSONWebTokenTypeLogoutToken}}),
+		jwt.WithHeadersJWE(&jwt.Headers{Extra: map[string]any{consts.ClaimIssuer: claims.Issuer}}),
 		jwt.WithClient(jwt.NewIDTokenClient(client)),
 	)
 

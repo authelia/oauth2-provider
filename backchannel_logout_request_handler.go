@@ -141,8 +141,14 @@ func (f *Fosite) sendBackChannelLogout(ctx context.Context, strategy BackChannel
 		err   error
 	)
 
+	lifespan := f.Config.GetBackChannelLogoutLifespan(ctx)
+
+	if custom := GetEffectiveLifespan(client, "", LogoutToken, lifespan); custom > 0 {
+		lifespan = custom
+	}
+
 	// The audience names only this client, so each Relying Party receives a token with its own 'jti'.
-	if token, err = strategy.GenerateBackChannelLogoutToken(ctx, client, f.Config.GetBackChannelLogoutLifespan(ctx), subject, sid, []string{client.GetID()}, extra); err != nil {
+	if token, err = strategy.GenerateBackChannelLogoutToken(ctx, client, lifespan, subject, sid, []string{client.GetID()}, extra); err != nil {
 		result.Err = errorsx.WithStack(ErrServerError.WithHint("Failed to generate the Logout Token.").WithWrap(err).WithDebugError(err))
 
 		return result

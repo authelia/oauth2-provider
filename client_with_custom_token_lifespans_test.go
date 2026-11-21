@@ -119,6 +119,7 @@ func TestDefaultClientWithCustomTokenLifespansGetEffectiveLifespan(t *testing.T)
 		TokenExchangeGrantAccessTokenLifespan:      &customLifespan,
 		TokenExchangeGrantRefreshTokenLifespan:     &customLifespan,
 		TokenExchangeGrantIDTokenLifespan:          &customLifespan,
+		BackChannelLogoutTokenLifespan:             &customLifespan,
 	}
 
 	testCases := []struct {
@@ -350,6 +351,25 @@ func TestDefaultClientWithCustomTokenLifespansGetEffectiveLifespan(t *testing.T)
 			config:   &ClientLifespanConfig{},
 			gt:       GrantTypeAuthorizationCode,
 			tt:       AccessToken,
+			expected: fallback,
+		},
+		{
+			name:     "ShouldReturnCustomForLogoutTokenWithoutAGrant",
+			config:   full,
+			tt:       LogoutToken,
+			expected: customLifespan,
+		},
+		{
+			name:     "ShouldReturnCustomForLogoutTokenRegardlessOfTheGrant",
+			config:   full,
+			gt:       GrantTypeAuthorizationCode,
+			tt:       LogoutToken,
+			expected: customLifespan,
+		},
+		{
+			name:     "ShouldReturnFallbackForLogoutTokenWhenUnset",
+			config:   &ClientLifespanConfig{AuthorizationCodeGrantIDTokenLifespan: &customLifespan},
+			tt:       LogoutToken,
 			expected: fallback,
 		},
 	}

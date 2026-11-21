@@ -219,6 +219,52 @@ func TestSendBackChannelLogout_MintsDistinctJTIPerClient(t *testing.T) {
 	assert.Contains(t, auds, []any{"rp-2"})
 }
 
+func TestSendBackChannelLogout_LogoutTokenLifespan(t *testing.T) {
+	custom, zero := 30*time.Second, time.Duration(0)
+
+	testCases := []struct {
+		name     string
+		config   time.Duration
+		client   *time.Duration
+		expected time.Duration
+	}{
+		{"ShouldUseTheConfigLifespan", time.Minute, nil, time.Minute},
+		{"ShouldUseTheClientLifespan", time.Minute, &custom, custom},
+		{"ShouldUseTheConfigLifespanWhenTheClientLifespanIsZero", time.Minute, &zero, time.Minute},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, config := newBCLProvider(t)
+			config.BackChannelLogoutLifespan = tc.config
+
+			server, tokens := bclServer(t, http.StatusOK)
+
+			client := &bclLifespanClient{
+				DefaultBackChannelLogoutClient: bclClient("rp-1", server.URL, false),
+				lifespans:                      &oauth2.ClientLifespanConfig{BackChannelLogoutTokenLifespan: tc.client},
+			}
+
+			results, err := f.SendBackChannelLogout(t.Context(), oauth2.NewBackChannelLogoutRequest("alice", "", []oauth2.Client{client}))
+
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+			require.NoError(t, results[0].Err)
+			require.Len(t, *tokens, 1)
+
+			claims := decodeLogoutToken(t, (*tokens)[0])
+
+			exp, ok := claims["exp"].(float64)
+			require.True(t, ok)
+
+			iat, ok := claims["iat"].(float64)
+			require.True(t, ok)
+
+			assert.InDelta(t, tc.expected.Seconds(), exp-iat, 1)
+		})
+	}
+}
+
 func TestSendBackChannelLogout_ResultsFollowInputOrder(t *testing.T) {
 	f, _ := newBCLProvider(t)
 
@@ -539,6 +585,16 @@ func decodeLogoutTokenHeader(t *testing.T, token string) map[string]any {
 	require.NoError(t, json.Unmarshal(header, &claims))
 
 	return claims
+}
+
+type bclLifespanClient struct {
+	*oauth2.DefaultBackChannelLogoutClient
+
+	lifespans *oauth2.ClientLifespanConfig
+}
+
+func (c *bclLifespanClient) GetEffectiveLifespan(gt oauth2.GrantType, tt oauth2.TokenType, fallback time.Duration) time.Duration {
+	return (&oauth2.DefaultClientWithCustomTokenLifespans{DefaultClient: c.DefaultClient, TokenLifespans: c.lifespans}).GetEffectiveLifespan(gt, tt, fallback)
 }
 
 type stubFailingBackChannelLogoutTokenStrategy struct{}

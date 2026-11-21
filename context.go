@@ -32,6 +32,9 @@ const (
 	PushedAuthorizeResponseContextKey = ContextKey("pushedAuthorizeResponse")
 	// DPoPProofContextKey is the context key for the DPoP proof.
 	DPoPProofContextKey = ContextKey("dpopProof")
+	// SkipStatelessIntrospectionContextKey is the context key which, when set to true, makes the stateless JWT Profile
+	// access token introspector decline every token so it is resolved from storage instead.
+	SkipStatelessIntrospectionContextKey = ContextKey("skipStatelessIntrospection")
 )
 
 // RequestFromContext returns the [http.Request] stored under RequestContextKey, or nil if there is none.

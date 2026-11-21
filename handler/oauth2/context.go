@@ -4,10 +4,12 @@
 
 package oauth2
 
-type contextKey int
+import (
+	"authelia.com/provider/oauth2"
+)
 
 var (
-	// ContextKeySkipStatelessIntrospection is utilized to communicate skipping StatelessJWTValidator which is useful for
-	// the UserInfo endpoint.
-	ContextKeySkipStatelessIntrospection = contextKey(0)
+	// ContextKeySkipStatelessIntrospection is utilized to communicate skipping StatelessJWTValidator. It is an alias of
+	// oauth2.SkipStatelessIntrospectionContextKey.
+	ContextKeySkipStatelessIntrospection = oauth2.SkipStatelessIntrospectionContextKey
 )

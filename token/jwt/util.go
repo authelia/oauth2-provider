@@ -15,6 +15,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"hash"
 	"reflect"
@@ -557,6 +558,50 @@ func EncodeNestedCompactEncrypted(ctx context.Context, claims Claims, headers, h
 	token.SetJWE(headersJWE, keyEnc.KeyID, jose.KeyAlgorithm(keyEnc.Algorithm), enc, jose.NONE)
 
 	return token.CompactEncrypted(keySig, keyEnc)
+}
+
+// EncodeCompactEncrypted encodes the claims as the plaintext of a compact serialized JWE without signing them. The
+// signature return value is always empty.
+//
+// See: https://www.rfc-editor.org/rfc/rfc7519#section-7.1
+func EncodeCompactEncrypted(_ context.Context, claims Claims, headersJWE Mapper, keyEnc *jose.JSONWebKey, enc jose.ContentEncryption) (tokenString string, signature string, err error) {
+	var plaintext []byte
+
+	if plaintext, err = json.Marshal(claims.ToMapClaims().ToMap()); err != nil {
+		return "", "", &ValidationError{Errors: ValidationErrorClaimsInvalid, Inner: err}
+	}
+
+	header := map[jose.HeaderKey]any{
+		JSONWebTokenHeaderType: JSONWebTokenTypeJWT,
+	}
+
+	if headersJWE != nil {
+		for k, v := range headersJWE.ToMap() {
+			if k == JSONWebTokenHeaderKeyIdentifier {
+				continue
+			}
+
+			header[jose.HeaderKey(k)] = v
+		}
+	}
+
+	var encrypter jose.Encrypter
+
+	if encrypter, err = jose.NewEncrypter(enc, jose.Recipient{Algorithm: jose.KeyAlgorithm(keyEnc.Algorithm), Key: keyEnc}, &jose.EncrypterOptions{ExtraHeaders: header}); err != nil {
+		return "", "", fmt.Errorf("error initializing jwt encrypter using key algorithm '%s' and content encryption '%s' and key id '%s': %w", keyEnc.Algorithm, enc, keyEnc.KeyID, errors.WithStack(err))
+	}
+
+	var token *jose.JSONWebEncryption
+
+	if token, err = encrypter.Encrypt(plaintext); err != nil {
+		return "", "", fmt.Errorf("error encrypting jwt using key algorithm '%s' and content encryption '%s' and key id '%s': %w", keyEnc.Algorithm, enc, keyEnc.KeyID, errors.WithStack(err))
+	}
+
+	if tokenString, err = token.CompactSerialize(); err != nil {
+		return "", "", errors.WithStack(err)
+	}
+
+	return tokenString, "", nil
 }
 
 func getJWTSignature(tokenString string) (signature string, err error) {

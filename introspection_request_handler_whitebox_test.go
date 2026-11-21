@@ -17,7 +17,10 @@ import (
 )
 
 func TestIntrospectionCredentialFromRequest(t *testing.T) {
-	const errMultiple = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Multiple methods used to include access token."
+	const (
+		errMultiple = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Multiple methods used to include access token."
+		errRepeated = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'access_token' parameter was included more than once."
+	)
 
 	testCases := []struct {
 		name     string
@@ -83,6 +86,28 @@ func TestIntrospectionCredentialFromRequest(t *testing.T) {
 			body:     "token=other-token",
 			query:    true,
 			expected: "some-token",
+		},
+		{
+			name: "ShouldRejectARepeatedFormBodyToken",
+			body: "access_token=some-token&access_token=other-token",
+			err:  errRepeated,
+		},
+		{
+			name: "ShouldRejectARepeatedEmptyFormBodyToken",
+			body: "access_token=&access_token=some-token",
+			err:  errRepeated,
+		},
+		{
+			name:   "ShouldRejectTheFormBodyTokenAlongsideTheQueryParameterToken",
+			target: "?access_token=some-token",
+			body:   "access_token=other-token",
+			err:    errRepeated,
+		},
+		{
+			name:   "ShouldRejectARepeatedFormBodyTokenBeforeTheHeader",
+			header: "Bearer some-token",
+			body:   "access_token=some-token&access_token=other-token",
+			err:    errRepeated,
 		},
 		{
 			name:   "ShouldRejectTheBearerSchemeTokenAlongsideTheFormBodyToken",

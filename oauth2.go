@@ -365,6 +365,28 @@ type Provider interface {
 	// * https://openid.net/specs/openid-connect-rpinitiated-1_0.html#ValidationAndErrorHandling (everything MUST be implemented).
 	NewRPInitiatedLogoutRequest(ctx context.Context, r *http.Request) (requester RPInitiatedLogoutRequester, err error)
 
+	// NewUserinfoRequest parses and validates a request to the OpenID Connect UserInfo endpoint, resolving the Access
+	// Token presented and the client it was issued to. The returned requester is never nil.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://openid.net/specs/openid-connect-core-1_0.html#UserInfoRequest (everything MUST be implemented)
+	// * https://www.rfc-editor.org/rfc/rfc6750#section-2 (everything MUST be implemented).
+	NewUserinfoRequest(ctx context.Context, r *http.Request, session Session) (requester UserinfoRequester, err error)
+
+	// WriteUserinfoError writes a UserInfo endpoint error response.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://openid.net/specs/openid-connect-core-1_0.html#UserInfoError (everything MUST be implemented)
+	// * https://www.rfc-editor.org/rfc/rfc6750#section-3 (everything MUST be implemented).
+	WriteUserinfoError(ctx context.Context, rw http.ResponseWriter, requester UserinfoRequester, err error)
+
+	// WriteUserinfoResponse writes the UserInfo Response as JSON or, as the client registered, as a signed and/or
+	// encrypted JWT.
+	//
+	// The following specs must be considered in any implementation of this method:
+	// * https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse (everything MUST be implemented).
+	WriteUserinfoResponse(ctx context.Context, rw http.ResponseWriter, requester UserinfoRequester, claims *UserinfoClaims)
+
 	// SendBackChannelLogout delivers a Logout Token to each client supplied by the requester. Delivery is best effort:
 	// a result is returned for every client, in the order supplied, and only whole-operation failures are returned as
 	// err.

@@ -61,6 +61,35 @@ const (
 	ClaimSubjectIdentifier                   = "sub_id"
 )
 
+// Standard Claim strings. See https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims.
+const (
+	ClaimGivenName           = "given_name"
+	ClaimFamilyName          = "family_name"
+	ClaimMiddleName          = "middle_name"
+	ClaimNickname            = "nickname"
+	ClaimProfile             = "profile"
+	ClaimPicture             = "picture"
+	ClaimWebsite             = "website"
+	ClaimGender              = "gender"
+	ClaimBirthdate           = "birthdate"
+	ClaimZoneinfo            = "zoneinfo"
+	ClaimLocale              = "locale"
+	ClaimPhoneNumber         = "phone_number"
+	ClaimPhoneNumberVerified = "phone_number_verified"
+	ClaimAddress             = "address"
+	ClaimUpdatedAt           = "updated_at"
+)
+
+// Address Claim member strings. See https://openid.net/specs/openid-connect-core-1_0.html#AddressClaim.
+const (
+	ClaimAddressFormatted     = "formatted"
+	ClaimAddressStreetAddress = "street_address"
+	ClaimAddressLocality      = "locality"
+	ClaimAddressRegion        = "region"
+	ClaimAddressPostalCode    = "postal_code"
+	ClaimAddressCountry       = "country"
+)
+
 const (
 	// ClaimEventBackChannelLogout is the back-channel logout event identifier from OpenID Connect Back-Channel Logout 1.0.
 	ClaimEventBackChannelLogout = "http://schemas.openid.net/event/backchannel-logout"

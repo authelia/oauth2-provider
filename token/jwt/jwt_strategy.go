@@ -184,7 +184,8 @@ func (j *DefaultStrategy) IssuerSigningJWK(ctx context.Context, kid, alg string)
 	return j.issuerStrictJWK(ctx, kid, alg, JSONWebTokenUseSignature)
 }
 
-// Encode handles encoding JWT's.
+// Encode handles encoding JWT's. A client whose signing algorithm is 'none' and which has an encryption algorithm
+// receives a JWE whose plaintext is the JSON claims set, which is not signed.
 //
 //nolint:gocyclo
 func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...StrategyOpt) (tokenString string, signature string, err error) {
@@ -222,12 +223,18 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 	} else {
 		kid, alg = o.client.GetSigningKeyID(), o.client.GetSigningAlg()
 
-		if len(kid) == 0 && IsSignedJWTClientSecretAlgStr(alg) {
+		switch {
+		case alg == JSONWebTokenAlgNone && !IsNoneAlg(o.client.GetEncryptionAlg()):
+			// See: https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
+			break
+		case len(kid) == 0 && IsSignedJWTClientSecretAlgStr(alg):
 			if keySig, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, "", JSONWebTokenUseSignature); err != nil {
 				return "", "", errorsx.WithStack(fmt.Errorf("failed to sign the JWT using the client secret: %w", err))
 			}
-		} else if keySig, err = j.issuerJWK(ctx, o.client.GetSigningKeyID(), o.client.GetSigningAlg(), JSONWebTokenUseSignature); err != nil {
-			return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
+		default:
+			if keySig, err = j.issuerJWK(ctx, o.client.GetSigningKeyID(), o.client.GetSigningAlg(), JSONWebTokenUseSignature); err != nil {
+				return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
+			}
 		}
 	}
 
@@ -262,6 +269,10 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 
 	if !IsKeyAlgorithmPermitted(ctx, j.Config, alg) || !IsKeyAlgorithmPermitted(ctx, j.Config, keyEnc.Algorithm) {
 		return "", "", errorsx.WithStack(fmt.Errorf("failed to encrypt the JWT: the JWE key management algorithm '%s' is not permitted", jose.RSA1_5))
+	}
+
+	if keySig == nil {
+		return EncodeCompactEncrypted(ctx, claims, o.headersJWE, keyEnc, jose.ContentEncryption(enc))
 	}
 
 	return EncodeNestedCompactEncrypted(ctx, claims, o.headers, o.headersJWE, keySig, keyEnc, jose.ContentEncryption(enc))

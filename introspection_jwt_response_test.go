@@ -6,6 +6,7 @@ package oauth2_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -206,4 +207,261 @@ func (i *fixedIntrospector) IntrospectToken(_ context.Context, token string, _ T
 	request.SetSession(&DefaultSession{Subject: "peter"})
 
 	return AccessToken, nil
+}
+
+func TestIntrospectionJWTResponseEncoding(t *testing.T) {
+	const (
+		secret       = "foobarfoobarfoobarfoobarfoobar12"
+		accept       = "application/token-introspection+jwt"
+		caller       = "rs"
+		introspected = "active-token"
+		issuer       = "https://as.example.com"
+	)
+
+	rsaKey := gen.MustRSAKey()
+	ecKey := gen.MustES256Key()
+	encryptionKey := gen.MustRSAKey()
+
+	issuerKeys := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+		{Key: rsaKey, KeyID: "rs256", Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature},
+		{Key: ecKey, KeyID: "es256", Algorithm: string(jose.ES256), Use: consts.JSONWebTokenUseSignature},
+	}}
+
+	clientKeys := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+		{Key: &encryptionKey.PublicKey, KeyID: "enc", Algorithm: string(jose.RSA_OAEP_256), Use: consts.JSONWebTokenUseEncryption},
+	}}
+
+	sum := sha256.Sum256([]byte(secret))
+	a128kw := sum[:16]
+
+	verifyRS256 := func(t *testing.T, raw string) map[string]any {
+		return verifyIntrospectionJWS(t, raw, jose.RS256, "rs256", &rsaKey.PublicKey)
+	}
+
+	testCases := []struct {
+		name   string
+		client func(c *DefaultRegisteredClient)
+		accept string
+		token  string
+		code   int
+		verify func(t *testing.T, body string) (payload map[string]any)
+	}{
+		{
+			name:   "ShouldSignWithRS256",
+			client: func(c *DefaultRegisteredClient) { c.IntrospectionSignedResponseAlg = string(jose.RS256) },
+			verify: verifyRS256,
+		},
+		{
+			name:   "ShouldSignWithES256",
+			client: func(c *DefaultRegisteredClient) { c.IntrospectionSignedResponseAlg = string(jose.ES256) },
+			verify: func(t *testing.T, body string) map[string]any {
+				return verifyIntrospectionJWS(t, body, jose.ES256, "es256", &ecKey.PublicKey)
+			},
+		},
+		{
+			name:   "ShouldSignWithTheClientSecret",
+			client: func(c *DefaultRegisteredClient) { c.IntrospectionSignedResponseAlg = string(jose.HS256) },
+			verify: func(t *testing.T, body string) map[string]any {
+				return verifyIntrospectionJWS(t, body, jose.HS256, "", []byte(secret))
+			},
+		},
+		{
+			name: "ShouldSignThenEncrypt",
+			client: func(c *DefaultRegisteredClient) {
+				c.IntrospectionSignedResponseAlg = string(jose.RS256)
+				c.IntrospectionEncryptedResponseAlg = string(jose.RSA_OAEP_256)
+				c.JSONWebKeys = clientKeys
+			},
+			verify: func(t *testing.T, body string) map[string]any {
+				return verifyRS256(t, decryptIntrospectionJWE(t, body, jose.RSA_OAEP_256, jose.A128CBC_HS256, "enc", encryptionKey))
+			},
+		},
+		{
+			name:   "ShouldSignThenEncryptForTheAcceptHeader",
+			accept: accept,
+			client: func(c *DefaultRegisteredClient) {
+				c.IntrospectionEncryptedResponseAlg = string(jose.RSA_OAEP_256)
+				c.JSONWebKeys = clientKeys
+			},
+			verify: func(t *testing.T, body string) map[string]any {
+				return verifyRS256(t, decryptIntrospectionJWE(t, body, jose.RSA_OAEP_256, jose.A128CBC_HS256, "enc", encryptionKey))
+			},
+		},
+		{
+			name: "ShouldSignThenEncryptWithTheRegisteredContentEncryption",
+			client: func(c *DefaultRegisteredClient) {
+				c.IntrospectionSignedResponseAlg = string(jose.RS256)
+				c.IntrospectionEncryptedResponseAlg = string(jose.RSA_OAEP_256)
+				c.IntrospectionEncryptedResponseEnc = string(jose.A256GCM)
+				c.JSONWebKeys = clientKeys
+			},
+			verify: func(t *testing.T, body string) map[string]any {
+				return verifyRS256(t, decryptIntrospectionJWE(t, body, jose.RSA_OAEP_256, jose.A256GCM, "enc", encryptionKey))
+			},
+		},
+		{
+			name: "ShouldSignThenEncryptWithTheClientSecret",
+			client: func(c *DefaultRegisteredClient) {
+				c.IntrospectionSignedResponseAlg = string(jose.HS256)
+				c.IntrospectionEncryptedResponseAlg = string(jose.A128KW)
+			},
+			verify: func(t *testing.T, body string) map[string]any {
+				return verifyIntrospectionJWS(t, decryptIntrospectionJWE(t, body, jose.A128KW, jose.A128CBC_HS256, "", a128kw), jose.HS256, "", []byte(secret))
+			},
+		},
+		{
+			name:  "ShouldSignThenEncryptAnInactiveResponse",
+			token: "unknown",
+			client: func(c *DefaultRegisteredClient) {
+				c.IntrospectionSignedResponseAlg = string(jose.RS256)
+				c.IntrospectionEncryptedResponseAlg = string(jose.RSA_OAEP_256)
+				c.JSONWebKeys = clientKeys
+			},
+			verify: func(t *testing.T, body string) map[string]any {
+				return verifyRS256(t, decryptIntrospectionJWE(t, body, jose.RSA_OAEP_256, jose.A128CBC_HS256, "enc", encryptionKey))
+			},
+		},
+		{
+			name: "ShouldFailWithoutAnEncryptionKey",
+			client: func(c *DefaultRegisteredClient) {
+				c.IntrospectionSignedResponseAlg = string(jose.RS256)
+				c.IntrospectionEncryptedResponseAlg = string(jose.RSA_OAEP_256)
+			},
+			code: http.StatusInternalServerError,
+		},
+		{
+			name: "ShouldFailForRSA1_5",
+			client: func(c *DefaultRegisteredClient) {
+				c.IntrospectionSignedResponseAlg = string(jose.RS256)
+				c.IntrospectionEncryptedResponseAlg = string(jose.RSA1_5)
+				c.JSONWebKeys = &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+					{Key: &encryptionKey.PublicKey, KeyID: "enc", Algorithm: string(jose.RSA1_5), Use: consts.JSONWebTokenUseEncryption},
+				}}
+			},
+			code: http.StatusInternalServerError,
+		},
+		{
+			name:   "ShouldFailForAnAlgorithmTheServerHasNoKeyFor",
+			client: func(c *DefaultRegisteredClient) { c.IntrospectionSignedResponseAlg = string(jose.PS256) },
+			code:   http.StatusInternalServerError,
+		},
+		{
+			name:   "ShouldFailToSignWithAShortClientSecret",
+			client: func(c *DefaultRegisteredClient) { c.IntrospectionSignedResponseAlg = string(jose.HS512) },
+			code:   http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: caller, ClientSecret: NewPlainTextClientSecret(secret)}}
+			tc.client(client)
+
+			store := storage.NewMemoryStore()
+			store.Clients[caller] = client
+
+			config := &Config{
+				Issuer:                     issuer,
+				TokenIntrospectionHandlers: TokenIntrospectionHandlers{&fixedIntrospector{token: introspected}},
+			}
+
+			config.IntrospectionJWTResponseStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(issuerKeys)}
+
+			provider := &Fosite{Store: store, Config: config}
+
+			token := tc.token
+			if token == "" {
+				token = introspected
+			}
+
+			r := httptest.NewRequest(http.MethodPost, issuer+"/introspect", strings.NewReader(url.Values{consts.FormParameterToken: {token}}.Encode()))
+			r.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+			r.SetBasicAuth(caller, secret)
+
+			if tc.accept != "" {
+				r.Header.Set(consts.HeaderAccept, tc.accept)
+			}
+
+			ctx := context.Background()
+			recorder := httptest.NewRecorder()
+
+			if responder, err := provider.NewIntrospectionRequest(ctx, r, &DefaultSession{}); err != nil {
+				provider.WriteIntrospectionError(ctx, recorder, err)
+			} else {
+				provider.WriteIntrospectionResponse(ctx, recorder, responder)
+			}
+
+			assert.Equal(t, consts.CacheControlNoStore, recorder.Header().Get(consts.HeaderCacheControl))
+
+			if tc.code != 0 {
+				assert.Equal(t, tc.code, recorder.Code)
+				assert.Contains(t, recorder.Header().Get(consts.HeaderContentType), consts.ContentTypeApplicationJSON)
+				assert.Contains(t, recorder.Body.String(), "server_error")
+				assert.NotContains(t, recorder.Body.String(), "peter")
+
+				return
+			}
+
+			require.Equal(t, http.StatusOK, recorder.Code)
+			assert.Contains(t, recorder.Header().Get(consts.HeaderContentType), consts.ContentTypeApplicationTokenIntrospectionJWT)
+
+			payload := tc.verify(t, recorder.Body.String())
+
+			// RFC 9701 Section 5.
+			assert.Equal(t, issuer, payload[consts.ClaimIssuer])
+			assert.Equal(t, []any{caller}, payload[consts.ClaimAudience])
+			assert.NotEmpty(t, payload[consts.ClaimIssuedAt])
+			assert.NotEmpty(t, payload[consts.ClaimJWTID])
+
+			introspection, ok := payload[consts.ClaimTokenIntrospection].(map[string]any)
+			require.True(t, ok)
+
+			if token == introspected {
+				assert.Equal(t, true, introspection[consts.ClaimActive])
+				assert.Equal(t, "peter", introspection[consts.ClaimSubject])
+			} else {
+				assert.Equal(t, map[string]any{consts.ClaimActive: false}, introspection)
+			}
+		})
+	}
+}
+
+// verifyIntrospectionJWS verifies an RFC 9701 Section 5 response JWS and returns its payload.
+func verifyIntrospectionJWS(t *testing.T, raw string, alg jose.SignatureAlgorithm, kid string, key any) (payload map[string]any) {
+	t.Helper()
+
+	signed, err := jose.ParseSignedCompact(raw, []jose.SignatureAlgorithm{alg})
+	require.NoError(t, err)
+	require.Len(t, signed.Signatures, 1)
+
+	header := signed.Signatures[0].Header
+
+	assert.Equal(t, string(alg), header.Algorithm)
+	assert.Equal(t, kid, header.KeyID)
+	assert.Equal(t, consts.JSONWebTokenTypeTokenIntrospection, header.ExtraHeaders[jose.HeaderType])
+
+	data, err := signed.Verify(key)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(data, &payload))
+
+	return payload
+}
+
+// decryptIntrospectionJWE decrypts an RFC 9701 Section 5 signed then encrypted response, which RFC 7519 Section 5.2
+// requires to declare the nested JWT with the 'cty' header, and returns the JWS it carries.
+func decryptIntrospectionJWE(t *testing.T, raw string, alg jose.KeyAlgorithm, enc jose.ContentEncryption, kid string, key any) (jws string) {
+	t.Helper()
+
+	encrypted, err := jose.ParseEncryptedCompact(raw, []jose.KeyAlgorithm{alg}, []jose.ContentEncryption{enc})
+	require.NoError(t, err)
+
+	assert.Equal(t, string(alg), encrypted.Header.Algorithm)
+	assert.Equal(t, kid, encrypted.Header.KeyID)
+	assert.Equal(t, string(enc), encrypted.Header.ExtraHeaders[jose.HeaderKey("enc")])
+	assert.Equal(t, "JWT", encrypted.Header.ExtraHeaders[jose.HeaderContentType])
+
+	plaintext, err := encrypted.Decrypt(key)
+	require.NoError(t, err)
+
+	return string(plaintext)
 }

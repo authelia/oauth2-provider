@@ -7,26 +7,37 @@ package consts
 const (
 	// HeaderContentType is the Content-Type HTTP header.
 	HeaderContentType = "Content-Type"
+
 	// HeaderCacheControl is the Cache-Control HTTP header.
 	HeaderCacheControl = "Cache-Control"
+
 	// HeaderAllow is the Allow HTTP header.
 	HeaderAllow = "Allow"
+
 	// HeaderPragma is the Pragma HTTP header.
 	HeaderPragma = "Pragma"
+
 	// HeaderAuthorization is the Authorization HTTP header.
 	HeaderAuthorization = "Authorization"
+
 	// HeaderLocation is the Location HTTP header.
 	HeaderLocation = "Location"
+
 	// HeaderAccept is the Accept HTTP header.
 	HeaderAccept = "Accept"
+
 	// HeaderAcceptLanguage is the Accept-Language HTTP header.
 	HeaderAcceptLanguage = "Accept-Language"
+
 	// HeaderWWWAuthenticate is the WWW-Authenticate HTTP header.
 	HeaderWWWAuthenticate = "WWW-Authenticate"
+
 	// HeaderXForwardedProto is the X-Forwarded-Proto HTTP header.
 	HeaderXForwardedProto = "X-Forwarded-Proto"
+
 	// HeaderDPoP is the DPoP HTTP header from RFC 9449.
 	HeaderDPoP = "DPoP"
+
 	// HeaderDPoPNonce is the DPoP-Nonce HTTP header from RFC 9449.
 	HeaderDPoPNonce = "DPoP-Nonce"
 )
@@ -34,10 +45,16 @@ const (
 const (
 	// ContentTypeApplicationURLEncodedForm is the application/x-www-form-urlencoded content type.
 	ContentTypeApplicationURLEncodedForm = "application/x-www-form-urlencoded"
+
 	// ContentTypeApplicationJSON is the application/json content type with a UTF-8 charset.
 	ContentTypeApplicationJSON = "application/json; charset=utf-8"
+
 	// ContentTypeApplicationTokenIntrospectionJWT is the application/token-introspection+jwt content type from RFC 9701 with a UTF-8 charset.
 	ContentTypeApplicationTokenIntrospectionJWT = "application/token-introspection+jwt; charset=utf-8"
+
+	// ContentTypeApplicationJWT is the application/jwt content type from RFC 7519.
+	ContentTypeApplicationJWT = "application/jwt; charset=utf-8"
+
 	// ContentTypeTextHTML is the text/html content type with a UTF-8 charset.
 	ContentTypeTextHTML = "text/html; charset=utf-8"
 )
@@ -75,6 +92,7 @@ const (
 const (
 	// PragmaNoCache is the no-cache Pragma header value.
 	PragmaNoCache = "no-cache"
+
 	// CacheControlNoStore is the no-store Cache-Control header value from RFC 9111.
 	CacheControlNoStore = "no-store"
 )
@@ -82,6 +100,7 @@ const (
 const (
 	// SchemeHTTP is the http URI scheme.
 	SchemeHTTP = "http"
+
 	// SchemeHTTPS is the https URI scheme.
 	SchemeHTTPS = "https"
 )

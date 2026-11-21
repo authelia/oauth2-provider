@@ -269,6 +269,11 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 func introspectionCredentialFromRequest(r *http.Request, query bool) (token string, err error) {
 	var scheme, value string
 
+	// See: https://www.rfc-editor.org/rfc/rfc6749#section-3.1
+	if len(r.Form[consts.FormParameterAccessToken]) > 1 {
+		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("The 'access_token' parameter was included more than once."))
+	}
+
 	if scheme, value, err = AuthorizationCredentialFromRequest(r); err != nil {
 		return "", err
 	}

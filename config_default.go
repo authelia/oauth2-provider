@@ -26,7 +26,7 @@ import (
 const (
 	defaultPARPrefix                      = consts.PrefixRequestURI
 	defaultPARContextLifetime             = 5 * time.Minute
-	defaultBackChannelLogoutLifespan      = 5 * time.Minute
+	defaultBackChannelLogoutLifespan      = 2 * time.Minute
 	defaultBackChannelLogoutConcurrency   = 10
 	defaultDPoPClockSkew                  = 10 * time.Second
 	defaultDPoPProofLifespan              = 10 * time.Second
@@ -103,7 +103,8 @@ type Config struct {
 	// Connect Back-Channel Logout. Has no default.
 	BackChannelLogoutTokenStrategy BackChannelLogoutTokenStrategy
 
-	// BackChannelLogoutLifespan is the lifespan of a Logout Token. Defaults to 5 minutes.
+	// BackChannelLogoutLifespan is the lifespan of a Logout Token. Defaults to 2 minutes, the longest OpenID Connect
+	// Back-Channel Logout 1.0 Section 4 encourages.
 	BackChannelLogoutLifespan time.Duration
 
 	// BackChannelLogoutConcurrency is the maximum number of Back-Channel Logout requests delivered
@@ -1271,7 +1272,9 @@ func (c *Config) GetBackChannelLogoutTokenStrategy(ctx context.Context) (strateg
 	return c.BackChannelLogoutTokenStrategy
 }
 
-// GetBackChannelLogoutLifespan returns the lifespan of a Logout Token. Defaults to 5 minutes.
+// GetBackChannelLogoutLifespan returns the lifespan of a Logout Token. Defaults to 2 minutes.
+//
+// See: https://openid.net/specs/openid-connect-backchannel-1_0.html#Security
 func (c *Config) GetBackChannelLogoutLifespan(ctx context.Context) (lifespan time.Duration) {
 	if c.BackChannelLogoutLifespan <= 0 {
 		return defaultBackChannelLogoutLifespan

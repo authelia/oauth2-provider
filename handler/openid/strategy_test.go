@@ -59,7 +59,7 @@ func TestGenerateBackChannelLogoutTokenSetsRequiredClaims(t *testing.T) {
 	assert.NotContains(t, claims, "nonce")
 }
 
-func TestGenerateBackChannelLogoutTokenDefaultsToFiveMinuteLifespan(t *testing.T) {
+func TestGenerateBackChannelLogoutTokenDefaultsToTwoMinuteLifespan(t *testing.T) {
 	config := &oauth2.Config{Issuer: "https://op.example/", MinParameterEntropy: 8}
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
@@ -88,8 +88,8 @@ func TestGenerateBackChannelLogoutTokenDefaultsToFiveMinuteLifespan(t *testing.T
 
 	expiresAt := time.Unix(int64(exp), 0).UTC()
 
-	assert.WithinDuration(t, before.Add(5*time.Minute), expiresAt, 5*time.Second)
-	assert.Less(t, expiresAt.Sub(before), time.Hour)
+	assert.WithinDuration(t, before.Add(2*time.Minute), expiresAt, 5*time.Second)
+	assert.LessOrEqual(t, expiresAt.Sub(before), 2*time.Minute+time.Second)
 }
 
 func TestGenerateBackChannelLogoutTokenRejectsNegativeLifespan(t *testing.T) {
@@ -106,4 +106,36 @@ func TestGenerateBackChannelLogoutTokenRejectsNegativeLifespan(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, token)
 	assert.ErrorIs(t, err, oauth2.ErrServerError)
+}
+
+func TestGenerateBackChannelLogoutTokenReplicatesTheIssuerInTheJWEHeader(t *testing.T) {
+	config := &oauth2.Config{Issuer: "https://op.example/", MinParameterEntropy: 8}
+
+	jwtStrategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
+
+	strategy := &openid.DefaultStrategy{Strategy: jwtStrategy, Config: config}
+
+	client := &oauth2.DefaultRegisteredClient{
+		DefaultClient: &oauth2.DefaultClient{
+			ID:           "rp-1",
+			ClientSecret: oauth2.NewPlainTextClientSecret("foobarfoobarfoobarfoobarfoobar12"),
+		},
+		IDTokenEncryptedResponseAlg: "dir",
+		IDTokenEncryptedResponseEnc: "A128CBC-HS256",
+	}
+
+	token, err := strategy.GenerateBackChannelLogoutToken(t.Context(), client, time.Minute*5, "alice", "session-1", []string{"rp-1"}, nil)
+	require.NoError(t, err)
+
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 5)
+
+	raw, err := base64.RawURLEncoding.DecodeString(parts[0])
+	require.NoError(t, err)
+
+	header := map[string]any{}
+	require.NoError(t, json.Unmarshal(raw, &header))
+
+	// Back-Channel Logout 1.0 Section 2.4.
+	assert.Equal(t, "https://op.example/", header["iss"])
 }

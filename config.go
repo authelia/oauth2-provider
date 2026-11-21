@@ -309,7 +309,7 @@ type BackChannelLogoutTokenStrategyProvider interface {
 
 // BackChannelLogoutLifespanProvider returns the provider for configuring the Logout Token lifespan.
 type BackChannelLogoutLifespanProvider interface {
-	// GetBackChannelLogoutLifespan returns the Logout Token lifespan. Defaults to 5 minutes.
+	// GetBackChannelLogoutLifespan returns the Logout Token lifespan. Defaults to 2 minutes.
 	GetBackChannelLogoutLifespan(ctx context.Context) (lifespan time.Duration)
 }
 

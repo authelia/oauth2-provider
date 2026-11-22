@@ -49,9 +49,14 @@ type BearerAuthorization struct {
 // passed, so the order bounds what an error discloses: the scope diagnostic only reaches a caller who has proven
 // possession, and discloses nothing about the audience.
 //
+// An access token bound to neither a DPoP key nor a client certificate is rejected when the configuration implements
+// EnforceSenderConstrainedAccessTokensProvider and enforces them, or the client it was issued to requires them, as a
+// client held to the FAPI 2.0 Security Profile does.
+//
 // See: https://www.rfc-editor.org/rfc/rfc6750#section-3.1
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.4
 func ValidateBearerAuthorization(ctx context.Context, config BearerAuthorizationConfig, r *http.Request, requester Requester, token string, auth BearerAuthorization) (err error) {
-	if err = validateBearerProofOfPossession(ctx, config, r, requester, token, auth.Endpoints); err != nil {
+	if err = validateBearerProofOfPossession(ctx, config, r, requester, requester.GetClient(), token, auth.Endpoints); err != nil {
 		return err
 	}
 
@@ -63,7 +68,8 @@ func ValidateBearerAuthorization(ctx context.Context, config BearerAuthorization
 }
 
 // validateBearerProofOfPossession enforces the RFC 9449 (DPoP) and RFC 8705 (mTLS) bindings the credential carries,
-// and - where the deployment enforces a binding method - that it carries one at all.
+// and - where the deployment enforces a binding method - that it carries one at all. The DPoP proof is validated with
+// the policy of client.
 //
 // The two methods are independent, and for each:
 //
@@ -72,10 +78,14 @@ func ValidateBearerAuthorization(ctx context.Context, config BearerAuthorization
 //     or the credential was presented using the DPoP authentication scheme, and is otherwise admitted.
 //   - A method disabled in configuration contributes neither check, whatever its enforcement setting.
 //
+// A credential bound by neither enabled method is rejected with ErrInvalidToken when
+// IsSenderConstrainedAccessTokenEnforced reports that the configuration or the client it was issued to requires
+// sender-constrained access tokens.
+//
 // Errors from the underlying strategies are returned unwrapped, as the response writers depend on their codes.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9449 and https://www.rfc-editor.org/rfc/rfc8705
-func validateBearerProofOfPossession(ctx context.Context, config BearerAuthorizationConfig, r *http.Request, requester Requester, token string, endpoints []string) (err error) {
+func validateBearerProofOfPossession(ctx context.Context, config BearerAuthorizationConfig, r *http.Request, requester Requester, client Client, token string, endpoints []string) (err error) {
 	// A nil session, and one whose type cannot record a binding, both leave the thumbprint empty below rather than
 	// returning early, which would bypass enforcement.
 	session := requester.GetSession()
@@ -99,7 +109,7 @@ func validateBearerProofOfPossession(ctx context.Context, config BearerAuthoriza
 					WithDebug("The credential used to authenticate the request is bound to a DPoP key but the configured DPoP strategy cannot validate resource access."))
 			}
 
-			if _, err = strategy.ValidateResourceAccess(ctx, r, token, jkt, config.GetDPoPNonceRequired(ctx), endpoints...); err != nil {
+			if _, err = strategy.ValidateResourceAccess(NewDPoPProofClientContext(ctx, client), r, token, jkt, config.GetDPoPNonceRequired(ctx), endpoints...); err != nil {
 				return err
 			}
 		case config.GetDPoPEnforce(ctx):
@@ -132,7 +142,20 @@ func validateBearerProofOfPossession(ctx context.Context, config BearerAuthoriza
 		}
 	}
 
-	return nil
+	return validateBearerSenderConstrained(ctx, config, requester.GetClient(), session)
+}
+
+func validateBearerSenderConstrained(ctx context.Context, config BearerAuthorizationConfig, client Client, session Session) (err error) {
+	enforced, _ := config.(EnforceSenderConstrainedAccessTokensProvider)
+
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.4
+	if !IsSenderConstrainedAccessTokenEnforced(ctx, enforced, client) || isSenderConstrained(ctx, config, session) {
+		return nil
+	}
+
+	return errorsx.WithStack(ErrInvalidToken.
+		WithHint("The credential used to authenticate the request is not sender-constrained.").
+		WithDebug("Sender-constrained access tokens are enforced, so every credential presented to authenticate a request must be bound to a DPoP key or a client certificate, but this credential records no binding of an enabled method."))
 }
 
 func isDPoPAuthorizationScheme(r *http.Request) bool {

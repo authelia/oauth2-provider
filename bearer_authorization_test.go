@@ -388,6 +388,105 @@ func TestValidateBearerAuthorizationBindingEnforcement(t *testing.T) {
 	})
 }
 
+func TestValidateBearerAuthorizationSenderConstrained(t *testing.T) {
+	const expected = "The access token provided is expired, revoked, malformed, or invalid for other reasons. The credential used to authenticate the request is not sender-constrained. Sender-constrained access tokens are enforced, so every credential presented to authenticate a request must be bound to a DPoP key or a client certificate, but this credential records no binding of an enabled method."
+
+	cert := gen.MustCertificate(gen.CertificateOptions{})
+
+	testCases := []struct {
+		name     string
+		config   BearerAuthorizationConfig
+		client   Client
+		session  Session
+		expected string
+	}{
+		{
+			name:    "ShouldAdmitAnUnboundCredentialByDefault",
+			config:  &Config{DPoPEnabled: true, MTLSEnabled: true},
+			client:  &DefaultClient{},
+			session: &DefaultSession{},
+		},
+		{
+			name:     "ShouldRejectAnUnboundCredentialWhenEnforced",
+			config:   &Config{DPoPEnabled: true, MTLSEnabled: true, EnforceSenderConstrainedAccessTokens: true},
+			client:   &DefaultClient{},
+			session:  &DefaultSession{},
+			expected: expected,
+		},
+		{
+			name:     "ShouldRejectANilSessionWhenEnforced",
+			config:   &Config{DPoPEnabled: true, EnforceSenderConstrainedAccessTokens: true},
+			client:   &DefaultClient{},
+			expected: expected,
+		},
+		{
+			name:     "ShouldRejectAnUnboundCredentialOfAFAPI2Client",
+			config:   &Config{DPoPEnabled: true, MTLSEnabled: true},
+			client:   newFAPI2Client(),
+			session:  &DefaultSession{},
+			expected: expected,
+		},
+		{
+			name:     "ShouldRejectAnUnboundCredentialOfAClientRequiringTheBinding",
+			config:   &Config{DPoPEnabled: true},
+			client:   &DefaultRegisteredClient{DefaultClient: &DefaultClient{}, EnforceSenderConstrainedAccessTokens: true},
+			session:  &DefaultSession{},
+			expected: expected,
+		},
+		{
+			name:     "ShouldRejectACredentialBoundByADisabledMethod",
+			config:   &Config{MTLSEnabled: true},
+			client:   newFAPI2Client(),
+			session:  &DefaultSession{JWKThumbprint: "some-jkt"},
+			expected: expected,
+		},
+		{
+			name:     "ShouldRejectWhenNoMethodIsEnabled",
+			config:   &Config{EnforceSenderConstrainedAccessTokens: true},
+			client:   &DefaultClient{},
+			session:  &DefaultSession{JWKThumbprint: "some-jkt"},
+			expected: expected,
+		},
+		{
+			name:    "ShouldAdmitADPoPBoundCredentialWhenEnforced",
+			config:  &Config{DPoPEnabled: true, MTLSEnabled: true, EnforceSenderConstrainedAccessTokens: true, DPoPStrategy: &bearerResourceStrategy{}},
+			client:  &DefaultClient{},
+			session: &DefaultSession{JWKThumbprint: "some-jkt"},
+		},
+		{
+			name:    "ShouldAdmitACertificateBoundCredentialOfAFAPI2Client",
+			config:  &Config{DPoPEnabled: true, MTLSEnabled: true},
+			client:  newFAPI2Client(),
+			session: &DefaultSession{ClientCertificateThumbprint: X509CertificateSHA256Thumbprint(cert)},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			requester := NewRequest()
+			requester.Client = tc.client
+			requester.Session = tc.session
+			requester.GrantAudience("urn:aud")
+
+			r := newBearerRequest()
+			r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
+
+			err := ValidateBearerAuthorization(t.Context(), tc.config, r, requester, "token", BearerAuthorization{Audiences: []string{"urn:aud"}})
+
+			if tc.expected == "" {
+				assert.NoError(t, ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			require.Error(t, err)
+
+			assert.Equal(t, http.StatusUnauthorized, ErrorToRFC6749Error(err).CodeField)
+			assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.expected)
+		})
+	}
+}
+
 type bearerEnforceWithoutEnableConfig struct {
 	Config
 }

@@ -23,7 +23,10 @@ import (
 // The Access Token is read as described by RFC 6750 Section 2, or using the DPoP scheme when DPoP is enabled. It is
 // always resolved from storage, never by stateless introspection, so a revoked token is rejected. It must be an Access
 // Token granted the 'openid' scope, any DPoP or mutual TLS binding it carries must be satisfied, and when it was
-// granted RFC 8707 resource indicators one of them must be the UserInfo endpoint or the issuer.
+// granted RFC 8707 resource indicators one of them must be the UserInfo endpoint or the issuer. A DPoP proof is
+// validated with the policy of the current registration. A token bound to
+// neither a DPoP key nor a client certificate is rejected when sender-constrained access tokens are enforced by the
+// configuration or for the client, as they are for a client held to the FAPI 2.0 Security Profile.
 //
 // The session passed in must implement DPoPBoundSession and MTLSBoundSession, otherwise a bound token looks unbound and
 // its binding is not enforced.
@@ -32,6 +35,7 @@ import (
 // See: https://www.rfc-editor.org/rfc/rfc6750#section-2
 // See: https://www.rfc-editor.org/rfc/rfc9449#section-7
 // See: https://www.rfc-editor.org/rfc/rfc9110#section-15.5.6
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.4
 func (f *Fosite) NewUserinfoRequest(ctx context.Context, r *http.Request, session Session) (requester UserinfoRequester, err error) {
 	request := &UserinfoRequest{
 		Lang:    i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r),
@@ -78,9 +82,15 @@ func (f *Fosite) NewUserinfoRequest(ctx context.Context, r *http.Request, sessio
 		return request, errorsx.WithStack(ErrInvalidToken.WithHint("The Access Token is missing, malformed, or invalid.").WithDebugf("The credential was of type '%s' rather than 'access_token'.", use))
 	}
 
+	var client Client
+
+	if client, err = f.userinfoClient(ctx, ar); err != nil {
+		return request, err
+	}
+
 	urls := f.Config.GetEndpointURLs(ctx).URLs(EndpointUserInfo)
 
-	if err = validateBearerProofOfPossession(ctx, f.Config, r, ar, token, urls); err != nil {
+	if err = validateBearerProofOfPossession(ctx, f.Config, r, ar, client, token, urls); err != nil {
 		return request, err
 	}
 
@@ -93,9 +103,9 @@ func (f *Fosite) NewUserinfoRequest(ctx context.Context, r *http.Request, sessio
 		return request, err
 	}
 
-	var client Client
-
-	if client, err = f.userinfoClient(ctx, ar); err != nil {
+	// The registration is checked as well as the client the storage returned with the credential, which need not be
+	// the registration.
+	if err = validateBearerSenderConstrained(ctx, f.Config, client, ar.GetSession()); err != nil {
 		return request, err
 	}
 

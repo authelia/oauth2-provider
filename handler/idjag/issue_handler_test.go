@@ -191,6 +191,48 @@ func TestIssueHandlerPopulate(t *testing.T) {
 	}
 }
 
+func TestIssueHandlerFAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name  string
+		fapi2 bool
+		err   string
+	}{
+		{name: "ShouldSignWithRS256ForAnotherClient"},
+		{name: "ShouldNotSignWithRS256ForAFAPI2Client", fapi2: true, err: "the signing algorithm 'RS256' is not permitted"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, _, _ := newIssueFixture(t, false)
+
+			session := newIssueSession(time.Now().Add(time.Hour))
+			session.SubjectToken[consts.ClaimAuthenticationTime] = float64(time.Now().Add(-time.Minute).Unix())
+
+			request := newIssueRequest(t, session, nil)
+			request.Client = &oauth2.DefaultRegisteredClient{DefaultClient: request.Client.(*oauth2.DefaultClient), FAPI2SecurityProfile: tc.fapi2}
+			request.RequestedAudience = oauth2.Arguments{redeemAudience}
+			request.RequestedScope = oauth2.Arguments{redeemRead}
+
+			require.NoError(t, handler.HandleTokenEndpointRequest(t.Context(), request))
+
+			response := oauth2.NewAccessResponse()
+
+			err := handler.PopulateTokenEndpointResponse(t.Context(), request, response)
+
+			if tc.err != "" {
+				require.ErrorIs(t, err, oauth2.ErrServerError)
+				assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
+				assert.Empty(t, response.GetAccessToken())
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.NotEmpty(t, response.GetAccessToken())
+		})
+	}
+}
+
 func TestIssueHandlerRejectsSubjectTokenExpiringTooSoon(t *testing.T) {
 	testCases := []struct {
 		name       string

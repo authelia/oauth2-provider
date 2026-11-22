@@ -240,6 +240,11 @@ type Config struct {
 	// identifier as the sole value of its 'aud' claim. See GetDisableClientAssertionIssuerAudience.
 	DisableClientAssertionIssuerAudience bool
 
+	// RequireStringClientAssertionAudience requires the 'aud' claim of a JWT client authentication assertion which
+	// must have the issuer identifier as its sole value to be a JSON string and not an array. It has no effect on an
+	// assertion DisableClientAssertionIssuerAudience exempts.
+	RequireStringClientAssertionAudience bool
+
 	// ClientAssertionClientSecretEncryptionDisabled rejects client assertions encrypted with a key derived from the
 	// client secret. Defaults to false, which accepts them when the request includes the 'client_id' parameter. See
 	// ClientAssertionClientSecretEncryptionDisabledProvider.
@@ -1170,6 +1175,14 @@ func (c *Config) GetAllowedJWTAssertionAudiences(ctx context.Context) []string {
 // See: https://www.rfc-editor.org/rfc/rfc10070#section-5
 func (c *Config) GetDisableClientAssertionIssuerAudience(ctx context.Context) (disable bool) {
 	return c.DisableClientAssertionIssuerAudience
+}
+
+// GetRequireStringClientAssertionAudience returns true if a JWT client authentication assertion which must have the
+// issuer identifier as its sole audience must carry it as a JSON string and not as an array. Defaults to false.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+func (c *Config) GetRequireStringClientAssertionAudience(_ context.Context) (require bool) {
+	return c.RequireStringClientAssertionAudience
 }
 
 // GetClientAssertionClientSecretEncryptionDisabled returns whether client assertions encrypted with a key derived from

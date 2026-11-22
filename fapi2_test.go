@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"testing"
@@ -16,6 +17,8 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestIsFAPI2SecurityProfileClient(t *testing.T) {
@@ -68,9 +71,180 @@ func TestFAPI2SigningAlgValues(t *testing.T) {
 
 	algs := []string{rs256, ps256, es256, consts.JSONWebTokenAlgNone}
 
-	assert.Equal(t, algs, fapi2SigningAlgValues(&DefaultClient{}, algs))
-	assert.Equal(t, []string{ps256, es256}, fapi2SigningAlgValues(newFAPI2Client(), algs))
+	assert.Equal(t, algs, FilterFAPI2SecurityProfileSigningAlgValues(&DefaultClient{}, algs))
+	assert.Equal(t, []string{ps256, es256}, FilterFAPI2SecurityProfileSigningAlgValues(newFAPI2Client(), algs))
 	assert.Equal(t, []string{rs256, ps256, es256, consts.JSONWebTokenAlgNone}, algs)
+}
+
+func TestGetJWTClockSkewFAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name     string
+		skew     time.Duration
+		client   Client
+		expected time.Duration
+	}{
+		{"ShouldKeepTheConfiguredSkew", 5 * time.Second, &DefaultClient{}, 5 * time.Second},
+		{"ShouldKeepADisabledSkew", 0, &DefaultClient{}, 0},
+		{"ShouldKeepALongSkew", 5 * time.Minute, &DefaultClient{}, 5 * time.Minute},
+		{"ShouldKeepASkewWithoutAClient", 5 * time.Minute, nil, 5 * time.Minute},
+		{"ShouldRaiseADisabledSkewForAFAPI2Client", 0, newFAPI2Client(), 10 * time.Second},
+		{"ShouldRaiseAShortSkewForAFAPI2Client", 5 * time.Second, newFAPI2Client(), 10 * time.Second},
+		{"ShouldKeepAPermittedSkewForAFAPI2Client", 30 * time.Second, newFAPI2Client(), 30 * time.Second},
+		{"ShouldLowerALongSkewForAFAPI2Client", 5 * time.Minute, newFAPI2Client(), time.Minute},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &fapi2ClockSkewConfig{skew: tc.skew}
+
+			assert.Equal(t, tc.expected, GetJWTClockSkew(t.Context(), config, tc.client))
+			assert.Equal(t, tc.expected, GetDPoPClockSkew(t.Context(), config, tc.client))
+		})
+	}
+}
+
+func TestFAPI2SecurityProfileEncodeOptions(t *testing.T) {
+	assert.Nil(t, FAPI2SecurityProfileEncodeOptions(nil))
+	assert.Nil(t, FAPI2SecurityProfileEncodeOptions(&DefaultClient{}))
+	assert.Len(t, FAPI2SecurityProfileEncodeOptions(newFAPI2Client()), 1)
+}
+
+func TestDPoPProofClientContext(t *testing.T) {
+	client := newFAPI2Client()
+
+	assert.Nil(t, DPoPProofClientFromContext(t.Context()))
+	assert.Nil(t, DPoPProofClientFromContext(NewDPoPProofClientContext(t.Context(), nil)))
+	assert.Equal(t, Client(client), DPoPProofClientFromContext(NewDPoPProofClientContext(t.Context(), client)))
+}
+
+func TestSetFAPI2SecurityProfileIssuer(t *testing.T) {
+	const issuer = "https://auth.example.com"
+
+	testCases := []struct {
+		name     string
+		config   *Config
+		client   Client
+		mode     ResponseModeType
+		existing string
+		expected string
+	}{
+		{"ShouldSetTheIssuerWithoutAHandler", &Config{Issuer: issuer, DisableAuthorizationServerIdentification: true}, newFAPI2Client(), ResponseModeQuery, "", issuer},
+		{"ShouldSetTheIssuerForTheDefaultMode", &Config{Issuer: issuer}, newFAPI2Client(), ResponseModeDefault, "", issuer},
+		{"ShouldKeepAnIssuerAlreadySet", &Config{Issuer: issuer}, newFAPI2Client(), ResponseModeQuery, "https://other.example.com", "https://other.example.com"},
+		{"ShouldNotSetTheIssuerForAJWTMode", &Config{Issuer: issuer}, newFAPI2Client(), ResponseModeQueryJWT, "", ""},
+		{"ShouldNotSetTheIssuerForAnotherClient", &Config{Issuer: issuer}, &DefaultClient{ID: "other"}, ResponseModeQuery, "", ""},
+		{"ShouldNotSetAnEmptyIssuer", &Config{}, newFAPI2Client(), ResponseModeQuery, "", ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := NewAuthorizeRequest()
+			request.Client = tc.client
+
+			parameters := url.Values{}
+
+			if tc.existing != "" {
+				parameters.Set(consts.FormParameterIssuer, tc.existing)
+			}
+
+			setFAPI2SecurityProfileIssuer(t.Context(), tc.config, request, tc.mode, parameters)
+
+			assert.Equal(t, tc.expected, parameters.Get(consts.FormParameterIssuer))
+		})
+	}
+}
+
+func TestDPoPProofClientIsCarriedToTheStrategy(t *testing.T) {
+	client := newFAPI2Client()
+
+	t.Run("ShouldCarryTheClientOfAPushedAuthorizationRequest", func(t *testing.T) {
+		strategy := &fapi2DPoPStrategy{}
+
+		f := &Fosite{Config: &Config{DPoPEnabled: true, DPoPStrategy: strategy}}
+
+		r := &http.Request{Method: http.MethodPost, Header: http.Header{}, URL: &url.URL{Path: "/par"}}
+		r.Header.Set(consts.HeaderDPoP, "proof")
+
+		request := NewAuthorizeRequest()
+		request.Client = client
+
+		require.ErrorIs(t, f.handlePushedAuthorizeRequestDPoP(t.Context(), r, request), ErrInvalidDPoPProof)
+		assert.Equal(t, Client(client), strategy.client)
+	})
+
+	t.Run("ShouldCarryTheClientOfABoundAccessToken", func(t *testing.T) {
+		strategy := &fapi2DPoPStrategy{}
+
+		requester := NewRequest()
+		requester.Client = client
+		requester.Session = &DefaultSession{JWKThumbprint: "some-jkt"}
+
+		require.ErrorIs(t, validateBearerProofOfPossession(t.Context(), &Config{DPoPEnabled: true, DPoPStrategy: strategy}, newBearerRequest(), requester, requester.GetClient(), "token", nil), ErrInvalidDPoPProof)
+		assert.Equal(t, Client(client), strategy.client)
+	})
+}
+
+func TestRequestObjectClockSkewFAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name   string
+		fapi2  bool
+		future time.Duration
+		err    bool
+	}{
+		{name: "ShouldRejectTheNearFutureWithoutSkew", future: 6 * time.Second, err: true},
+		{name: "ShouldAcceptTheNearFutureFromAFAPI2ClientWithoutSkew", fapi2: true, future: 6 * time.Second},
+		{name: "ShouldRejectTheFarFutureFromAFAPI2ClientWithoutSkew", fapi2: true, future: 2 * time.Minute, err: true},
+	}
+
+	key := gen.MustES256Key()
+
+	private := &jose.JSONWebKey{Key: key, KeyID: "es256", Algorithm: string(jose.ES256), Use: consts.JSONWebTokenUseSignature}
+	public := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey, KeyID: "es256", Algorithm: string(jose.ES256), Use: consts.JSONWebTokenUseSignature}}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newFAPI2Client()
+			client.FAPI2SecurityProfile = tc.fapi2
+			client.JSONWebKeys = public
+			client.RequestObjectSigningAlg = string(jose.ES256)
+
+			future := time.Now().Add(tc.future).Unix()
+
+			claims := jwt.MapClaims{
+				consts.ClaimIssuer:               client.GetID(),
+				consts.ClaimAudience:             []string{"https://auth.example.com"},
+				consts.ClaimIssuedAt:             future,
+				consts.ClaimNotBefore:            future,
+				consts.ClaimExpirationTime:       time.Now().Add(5 * time.Minute).Unix(),
+				consts.ClaimClientIdentifier:     client.GetID(),
+				consts.FormParameterResponseType: consts.ResponseTypeAuthorizationCodeFlow,
+			}
+
+			r := &AuthorizeRequest{
+				Request: Request{
+					Client: client,
+					Form: url.Values{
+						consts.FormParameterClientID:     {client.GetID()},
+						consts.FormParameterResponseType: {consts.ResponseTypeAuthorizationCodeFlow},
+						consts.FormParameterRequest:      {mustGenerateRequestObjectJWS(t, claims, nil, private)},
+					},
+				},
+			}
+
+			config := &Config{JWKSFetcherStrategy: NewDefaultJWKSFetcherStrategy(), Issuer: "https://auth.example.com", JWTClockSkew: -1}
+			config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{*private}})}
+
+			err := (&Fosite{Config: config}).authorizeRequestParametersFromJAR(t.Context(), r, false)
+
+			if tc.err {
+				require.ErrorIs(t, err, ErrInvalidRequestObject)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+		})
+	}
 }
 
 func TestFAPI2SecurityProfileClientPolicies(t *testing.T) {
@@ -158,6 +332,36 @@ func TestFAPI2SecurityProfileClientRequiresPushedAuthorizationRequests(t *testin
 }
 
 const testFAPI2RedirectURI = "https://client.example.com/cb"
+
+type fapi2DPoPStrategy struct {
+	DPoPStrategy
+
+	client Client
+}
+
+func (s *fapi2DPoPStrategy) ValidateDPoPProof(ctx context.Context, _, _, _ string, _ bool, _ ...string) (*DPoPProof, error) {
+	s.client = DPoPProofClientFromContext(ctx)
+
+	return nil, ErrInvalidDPoPProof
+}
+
+func (s *fapi2DPoPStrategy) ValidateResourceAccess(ctx context.Context, _ *http.Request, _, _ string, _ bool, _ ...string) (*DPoPProof, error) {
+	s.client = DPoPProofClientFromContext(ctx)
+
+	return nil, ErrInvalidDPoPProof
+}
+
+type fapi2ClockSkewConfig struct {
+	skew time.Duration
+}
+
+func (c *fapi2ClockSkewConfig) GetJWTClockSkew(_ context.Context) time.Duration {
+	return c.skew
+}
+
+func (c *fapi2ClockSkewConfig) GetDPoPClockSkew(_ context.Context) time.Duration {
+	return c.skew
+}
 
 func newFAPI2Client() *DefaultRegisteredClient {
 	return &DefaultRegisteredClient{

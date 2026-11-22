@@ -210,6 +210,48 @@ func TestCustomJWTIssuedWithScopesCanBeExchangedForThem(t *testing.T) {
 	}
 }
 
+func TestCustomJWTTypeHandlerFAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name  string
+		fapi2 bool
+		err   string
+	}{
+		{name: "ShouldSignWithRS256ForAnotherClient"},
+		{name: "ShouldNotSignWithRS256ForAFAPI2Client", fapi2: true, err: "the signing algorithm 'RS256' is not permitted"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := newSpecConfig(t)
+
+			store := storage.NewExampleStore()
+
+			handler := &CustomJWTTypeHandler{
+				Config:   config,
+				Strategy: &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)},
+				Storage:  store,
+			}
+
+			client := &oauth2.DefaultRegisteredClient{DefaultClient: store.Clients["my-client"].(*oauth2.DefaultClient), FAPI2SecurityProfile: tc.fapi2}
+
+			request := newCustomJWTScopeRequest(client, newValidatedSpecSession("alice"), oauth2.Arguments{"orders"})
+			response := oauth2.NewAccessResponse()
+
+			err := handler.PopulateTokenEndpointResponse(t.Context(), request, response)
+
+			if tc.err != "" {
+				require.ErrorContains(t, err, tc.err)
+				assert.Empty(t, response.GetAccessToken())
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.NotEmpty(t, response.GetAccessToken())
+		})
+	}
+}
+
 func newCustomJWTScopeRequest(client oauth2.Client, session oauth2.Session, granted oauth2.Arguments) *oauth2.AccessRequest {
 	return &oauth2.AccessRequest{
 		GrantTypes: oauth2.Arguments{consts.GrantTypeOAuthTokenExchange},

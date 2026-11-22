@@ -635,6 +635,17 @@ type AllowedJWTAssertionAudiencesProvider interface {
 	GetDisableClientAssertionIssuerAudience(ctx context.Context) (disable bool)
 }
 
+// RequireStringClientAssertionAudienceProvider is optionally implemented by the configuration to require the 'aud' claim
+// of a JWT client authentication assertion to be a JSON string. A configuration which does not implement this interface
+// is treated as returning false.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+type RequireStringClientAssertionAudienceProvider interface {
+	// GetRequireStringClientAssertionAudience returns true if a JWT client authentication assertion which must have
+	// the issuer identifier as its sole audience must carry it as a JSON string and not as an array. Defaults to false.
+	GetRequireStringClientAssertionAudience(ctx context.Context) (require bool)
+}
+
 // ClientAssertionClientSecretEncryptionDisabledProvider returns the provider for turning off client assertions that
 // are encrypted with a key derived from the client secret.
 type ClientAssertionClientSecretEncryptionDisabledProvider interface {

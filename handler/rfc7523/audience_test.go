@@ -90,7 +90,7 @@ func TestAuthorizeJWTGrantAssertionAudience(t *testing.T) {
 					claims := f.createStandardClaim()
 					claims.Audience = tc.aud
 
-					err := f.handler.validateTokenClaims(f.ctx, claims)
+					err := f.handler.validateTokenClaims(f.ctx, nil, claims)
 
 					if tc.err == nil {
 						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))

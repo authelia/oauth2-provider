@@ -26,22 +26,25 @@ import (
 const (
 	fapi2SectionGeneral               = "5.3.2.1"
 	fapi2SectionAuthorizationEndpoint = "5.3.2.2"
+	fapi2SectionResourceServer        = "5.3.4"
 	fapi2SectionCryptography          = "5.4.1"
 
 	fapi2MaximumAuthorizeCodeLifespan = oauth2.FAPI2SecurityProfileMaximumAuthorizeCodeLifespan
 	fapi2MaximumPushedAuthorizeLife   = 10 * time.Minute
-	fapi2MinimumClockSkew             = 10 * time.Second
-	fapi2MaximumClockSkew             = time.Minute
+	fapi2MinimumClockSkew             = oauth2.FAPI2SecurityProfileMinimumClockSkew
+	fapi2MaximumClockSkew             = oauth2.FAPI2SecurityProfileMaximumClockSkew
 )
 
 // ApplyFAPI2SecurityProfile sets the options of config which the FAPI 2.0 Security Profile requires of an authorization
 // server: pushed authorization requests with a redirect URI, PKCE with S256, the RFC 9207 'iss' parameter, the issuer
-// as the sole client assertion audience, no refresh token rotation, sender-constrained access tokens, an authorization
-// code lifetime of at most 60 seconds, a clock skew allowance between 10 and 60 seconds, and only the permitted client
-// authentication methods and JWS algorithms. A value already within the profile is kept.
+// as the sole client assertion audience and a string, no refresh token rotation, sender-constrained access tokens which
+// are refused when presented unbound or in the URI query, client authentication for the JWT bearer grant, an
+// authorization code lifetime of at most 60 seconds, a clock skew allowance between 10 and 60 seconds, and only the
+// permitted client authentication methods and JWS algorithms for the JWTs received. A value already within the profile
+// is kept.
 //
-// It does not set Issuer, enable DPoP or mTLS, or register handlers, so ValidateFAPI2SecurityProfile must still be
-// called once the provider is composed. An unset introspection endpoint list, which accepts every supported method, and
+// It does not set Issuer, enable DPoP or mTLS, register handlers, or choose the keys which sign the JWTs the server
+// issues, so ValidateFAPI2SecurityProfile must still be called once the provider is composed. An unset introspection endpoint list, which accepts every supported method, and
 // one holding only access token types are kept, so an unset one must be set when an introspection handler is
 // registered.
 //
@@ -53,8 +56,11 @@ func ApplyFAPI2SecurityProfile(config *oauth2.Config) {
 	config.EnablePKCEPlainChallengeMethod = false
 	config.DisableAuthorizationServerIdentification = false
 	config.DisableClientAssertionIssuerAudience = false
+	config.RequireStringClientAssertionAudience = true
 	config.DisableRefreshTokenRotation = true
 	config.EnforceSenderConstrainedAccessTokens = true
+	config.GrantTypeJWTBearerCanSkipClientAuth = false
+	config.AccessTokenURIQueryParameterEnabled = false
 
 	if config.AuthorizeCodeLifespan <= 0 || config.AuthorizeCodeLifespan > fapi2MaximumAuthorizeCodeLifespan {
 		config.AuthorizeCodeLifespan = fapi2MaximumAuthorizeCodeLifespan
@@ -93,8 +99,9 @@ func ApplyFAPI2SecurityProfile(config *oauth2.Config) {
 // fail the authorization server requirements of the FAPI 2.0 Security Profile which the configuration determines, or
 // nil when it meets them. Call it once the provider is composed. Of the authorize endpoint handlers it recognizes only
 // those of this library serving the implicit, hybrid and 'none' response types, not a custom handler serving another
-// response type. It does not check the clients, which must be confidential and register the 'code' response type, or
-// the keys which sign the JWTs the server issues, which must use PS256, ES256 or EdDSA.
+// response type. The signing algorithms of the JWTs the server issues are checked when the JWT strategy reports them
+// with a SigningAlgValues method, and not when it reports none. It does not check the clients, which must be
+// confidential, register the 'code' response type, and register only PS256, ES256 or EdDSA for the JWTs issued to them.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2
 func ValidateFAPI2SecurityProfile(ctx context.Context, config oauth2.Configurator) (err error) {
@@ -103,6 +110,7 @@ func ValidateFAPI2SecurityProfile(ctx context.Context, config oauth2.Configurato
 	v.general(ctx, config)
 	v.senderConstrained(ctx, config)
 	v.authorizationEndpoint(ctx, config)
+	v.resourceServer(ctx, config)
 	v.cryptography(ctx, config)
 
 	return errors.Join(v.errs...)
@@ -145,9 +153,8 @@ func (v *fapi2Violations) general(ctx context.Context, config oauth2.Configurato
 		}
 	}
 
-	if p, ok := config.(oauth2.AllowedJWTAssertionAudiencesProvider); !ok || p.GetDisableClientAssertionIssuerAudience(ctx) {
-		v.fail(fapi2SectionGeneral, "the issuer must be the sole client assertion audience, but DisableClientAssertionIssuerAudience is set")
-	}
+	v.clientAssertionAudience(ctx, config)
+	v.jwtBearerClientAuthentication(ctx, config)
 
 	if !config.GetDisableRefreshTokenRotation(ctx) {
 		v.fail(fapi2SectionGeneral, "refresh tokens must not be rotated, but DisableRefreshTokenRotation is not set")
@@ -161,6 +168,32 @@ func (v *fapi2Violations) general(ctx context.Context, config oauth2.Configurato
 		v.fail(fapi2SectionGeneral, "JWTs with an 'iat' or 'nbf' up to %s in the future must be accepted, but the configuration has no JWT clock skew", fapi2MinimumClockSkew)
 	} else if skew := p.GetJWTClockSkew(ctx); skew < fapi2MinimumClockSkew || skew > fapi2MaximumClockSkew {
 		v.fail(fapi2SectionGeneral, "the JWT clock skew must be between %s and %s, but is %s", fapi2MinimumClockSkew, fapi2MaximumClockSkew, skew)
+	}
+}
+
+func (v *fapi2Violations) clientAssertionAudience(ctx context.Context, config oauth2.Configurator) {
+	if p, ok := config.(oauth2.AllowedJWTAssertionAudiencesProvider); !ok || p.GetDisableClientAssertionIssuerAudience(ctx) {
+		v.fail(fapi2SectionGeneral, "the issuer must be the sole client assertion audience, but DisableClientAssertionIssuerAudience is set")
+	}
+
+	if p, ok := config.(oauth2.RequireStringClientAssertionAudienceProvider); !ok || !p.GetRequireStringClientAssertionAudience(ctx) {
+		v.fail(fapi2SectionGeneral, "the issuer must be the client assertion audience as a string, but RequireStringClientAssertionAudience is not set")
+	}
+}
+
+func (v *fapi2Violations) jwtBearerClientAuthentication(ctx context.Context, config oauth2.Configurator) {
+	if !fapi2Registered[*rfc7523.Handler](config.GetTokenEndpointHandlers(ctx)) {
+		return
+	}
+
+	if p, ok := config.(oauth2.GrantTypeJWTBearerCanSkipClientAuthProvider); ok && p.GetGrantTypeJWTBearerCanSkipClientAuth(ctx) {
+		v.fail(fapi2SectionGeneral, "clients must authenticate, but GrantTypeJWTBearerCanSkipClientAuth is set")
+	}
+}
+
+func (v *fapi2Violations) resourceServer(ctx context.Context, config oauth2.Configurator) {
+	if p, ok := config.(oauth2.AccessTokenURIQueryParameterEnabledProvider); ok && p.GetAccessTokenURIQueryParameterEnabled(ctx) {
+		v.fail(fapi2SectionResourceServer, "access tokens in the URI query must not be accepted, but AccessTokenURIQueryParameterEnabled is set")
 	}
 }
 
@@ -265,6 +298,14 @@ func (v *fapi2Violations) cryptography(ctx context.Context, config oauth2.Config
 	if len(config.GetTokenIntrospectionHandlers(ctx)) != 0 {
 		if algs := oauth2.SupportedEndpointAuthSigningAlgValues(ctx, config, oauth2.ClientAuthEndpointIntrospection); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
 			v.fail(fapi2SectionCryptography, "the introspection endpoint client assertion algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
+		}
+	}
+
+	if strategy, ok := config.GetJWTStrategy(ctx).(interface {
+		SigningAlgValues(ctx context.Context) []string
+	}); ok {
+		if algs := strategy.SigningAlgValues(ctx); len(algs) != 0 && !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
+			v.fail(fapi2SectionCryptography, "the issuer signing algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
 		}
 	}
 

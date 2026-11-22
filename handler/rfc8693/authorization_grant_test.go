@@ -435,6 +435,20 @@ func TestAuthorizationGrantSigning(t *testing.T) {
 		assert.Equal(t, "RS256", token.Header[consts.JSONWebTokenHeaderAlgorithm])
 	})
 
+	t.Run("ShouldNotSignWithRS256ForAFAPI2Client", func(t *testing.T) {
+		f := newGrantFixture(t, nil)
+		f.requester = &oauth2.DefaultRegisteredClient{
+			DefaultClient:                   f.client,
+			TokenExchangeAuthorizationGrant: true,
+			FAPI2SecurityProfile:            true,
+		}
+
+		_, err := f.exchange(t, grantExchange{audience: []string{grantTarget}})
+
+		require.ErrorIs(t, err, oauth2.ErrServerError)
+		assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "the signing algorithm 'RS256' is not permitted")
+	})
+
 	t.Run("ShouldSelectTheIssuerKeyWithTheSigningAlg", func(t *testing.T) {
 		f := newGrantFixture(t, func(jwtType *JWTType) {
 			jwtType.Issue.SigningAlg = "ES256"

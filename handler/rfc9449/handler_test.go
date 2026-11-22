@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/storage"
@@ -36,6 +38,46 @@ func TestHandlerBindsProof(t *testing.T) {
 
 	assert.NoError(t, h.BindAccessRequest(ctx, request))
 	assert.NotEmpty(t, session.GetDPoPJWKThumbprint())
+}
+
+func TestHandlerBindsProofForAFAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name   string
+		alg    jose.SignatureAlgorithm
+		client oauth2.Client
+		err    bool
+	}{
+		{name: "ShouldBindES384ForAnotherClient", alg: jose.ES384, client: &oauth2.DefaultClient{}},
+		{name: "ShouldBindES256ForAFAPI2Client", alg: jose.ES256, client: newTestFAPI2Client()},
+		{name: "ShouldNotBindES384ForAFAPI2Client", alg: jose.ES384, client: newTestFAPI2Client(), err: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, cfg := newTestHandler(false)
+			cfg.algs = []string{"ES256", "ES384"}
+
+			raw := signProof(t, newTestProofKeyWithAlgorithm(t, tc.alg), jwt.JSONWebTokenTypeDPoP, map[string]any{
+				jwt.ClaimJWTID: "fapi2", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Unix(),
+			})
+
+			session := &oauth2.DefaultSession{}
+			request := oauth2.NewAccessRequest(session)
+			request.Client = tc.client
+
+			err := h.BindAccessRequest(ctxWithDPoP("https://as.example.com/token", raw), request)
+
+			if tc.err {
+				require.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+				assert.Empty(t, session.GetDPoPJWKThumbprint())
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.NotEmpty(t, session.GetDPoPJWKThumbprint())
+		})
+	}
 }
 
 func TestHandlerRejectsMultipleDPoPHeaders(t *testing.T) {

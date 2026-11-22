@@ -63,7 +63,7 @@ func (h *Handler) BindBackChannelAuthenticationRequest(ctx context.Context, requ
 		return nil
 	}
 
-	return h.bindBackChannelProof(ctx, r, header, jkt, session)
+	return h.bindBackChannelProof(oauth2.NewDPoPProofClientContext(ctx, request.GetClient()), r, header, jkt, session)
 }
 
 // bindBackChannelProof validates the DPoP proof presented at the backchannel authentication endpoint and records its

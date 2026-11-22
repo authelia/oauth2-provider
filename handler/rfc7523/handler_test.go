@@ -56,6 +56,108 @@ func TestRFC7523RejectsUnadvertisedAlg(t *testing.T) {
 	}
 }
 
+func TestRFC7523FAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name   string
+		alg    jose.SignatureAlgorithm
+		fapi2  bool
+		future time.Duration
+		hint   string
+	}{
+		{name: "ShouldAcceptRS256FromAnotherClient", alg: jose.RS256},
+		{name: "ShouldRejectRS256FromAFAPI2Client", alg: jose.RS256, fapi2: true, hint: "Unable to parse the JWT authorization grant."},
+		{name: "ShouldAcceptEdDSAFromAFAPI2Client", alg: jose.EdDSA, fapi2: true},
+		{name: "ShouldRejectTheNearFutureFromAnotherClientWithoutSkew", alg: jose.EdDSA, future: 6 * time.Second, hint: "The JWT authorization grant is not yet valid."},
+		{name: "ShouldAcceptTheNearFutureFromAFAPI2ClientWithoutSkew", alg: jose.EdDSA, fapi2: true, future: 6 * time.Second},
+		{name: "ShouldRejectTheFarFutureFromAFAPI2ClientWithoutSkew", alg: jose.EdDSA, fapi2: true, future: 2 * time.Minute, hint: "The JWT authorization grant is not yet valid."},
+	}
+
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	for _, store := range jwtBearerStores {
+		t.Run(store.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					f := newJWTBearerFixture(t, store.new())
+
+					f.handler.Config.(*oauth2.Config).JWTClockSkew = -1
+
+					f.requester.Client = &oauth2.DefaultRegisteredClient{
+						DefaultClient:        &oauth2.DefaultClient{GrantTypes: []string{consts.GrantTypeOAuthJWTBearer}},
+						FAPI2SecurityProfile: tc.fapi2,
+					}
+
+					claims := f.createStandardClaim()
+					claims.NotBefore = jwt.NewNumericDate(time.Now().Add(tc.future))
+
+					assertion := f.createTestAssertion(claims, keyID)
+
+					if tc.alg == jose.EdDSA {
+						signer, err := jose.NewSigner(jose.SigningKey{Algorithm: tc.alg, Key: jose.JSONWebKey{Key: private, KeyID: "eddsa", Algorithm: string(tc.alg)}}, (&jose.SignerOptions{}).WithType("JWT"))
+						require.NoError(t, err)
+
+						assertion, err = jwt.Signed(signer).Claims(claims).Serialize()
+						require.NoError(t, err)
+
+						f.trust(func(trusted *oauth2.RFC7523TrustedIssuer) {
+							trusted.JSONWebKeys = f.createJWS(jose.JSONWebKey{Key: public, KeyID: "eddsa", Algorithm: string(tc.alg), Use: consts.JSONWebTokenUseSignature})
+							trusted.SigningAlgs = []string{string(tc.alg)}
+						})
+					}
+
+					f.requester.GrantTypes = []string{consts.GrantTypeOAuthJWTBearer}
+					f.requester.Form.Add(consts.FormParameterAssertion, assertion)
+
+					err := f.handler.HandleTokenEndpointRequest(f.ctx, f.requester)
+
+					if tc.hint == "" {
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+						return
+					}
+
+					require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+					assert.Equal(t, tc.hint, oauth2.ErrorToRFC6749Error(err).HintField)
+				})
+			}
+		})
+	}
+}
+
+func TestRFC7523ClockSkewFAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name   string
+		client oauth2.Client
+		err    bool
+	}{
+		{name: "ShouldRejectTheNearFutureWithoutAClient", err: true},
+		{name: "ShouldRejectTheNearFutureFromAnotherClient", client: &oauth2.DefaultClient{}, err: true},
+		{name: "ShouldAcceptTheNearFutureFromAFAPI2Client", client: &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{}, FAPI2SecurityProfile: true}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newJWTBearerFixture(t, storage.NewMemoryStore())
+
+			f.handler.Config.(*oauth2.Config).JWTClockSkew = -1
+
+			claims := f.createStandardClaim()
+			claims.NotBefore = jwt.NewNumericDate(time.Now().Add(6 * time.Second))
+
+			err := f.handler.validateTokenClaims(f.ctx, tc.client, claims)
+
+			if tc.err {
+				require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+		})
+	}
+}
+
 func TestRFC7523AcceptsEdDSA(t *testing.T) {
 	const keyID = "eddsa"
 

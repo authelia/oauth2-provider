@@ -442,6 +442,75 @@ func TestBackChannelSignedRequest(t *testing.T) {
 	}
 }
 
+func TestBackChannelSignedRequestClockSkewFAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name   string
+		fapi2  bool
+		future time.Duration
+		err    bool
+	}{
+		{name: "ShouldRejectTheNearFutureWithoutSkew", future: 6 * time.Second, err: true},
+		{name: "ShouldAcceptTheNearFutureFromAFAPI2ClientWithoutSkew", fapi2: true, future: 6 * time.Second},
+		{name: "ShouldRejectTheFarFutureFromAFAPI2ClientWithoutSkew", fapi2: true, future: 2 * time.Minute, err: true},
+	}
+
+	stores := map[string]func() (Storage, *storage.MemoryStore){
+		"MemoryStore": func() (Storage, *storage.MemoryStore) {
+			store := storage.NewMemoryStore()
+
+			return store, store
+		},
+		"HydratingMemoryStore": func() (Storage, *storage.MemoryStore) {
+			store := storage.NewHydratingMemoryStore()
+
+			return store, store.MemoryStore
+		},
+	}
+
+	key := gen.MustES256Key()
+
+	for storeName, newStore := range stores {
+		t.Run(storeName, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					provider := newCIBASignedTestProvider(newStore, key)
+					provider.Config.(*Config).JWTClockSkew = -1
+
+					client, err := provider.Store.GetClient(t.Context(), cibaSignedTestClientES256)
+					require.NoError(t, err)
+
+					client.(*DefaultRegisteredClient).FAPI2SecurityProfile = tc.fapi2
+
+					future := time.Now().Add(tc.future).Unix()
+
+					claims := jwt.MapClaims{
+						jwt.ClaimIssuer:               cibaSignedTestClientES256,
+						jwt.ClaimAudience:             cibaTestIssuer,
+						jwt.ClaimExpirationTime:       time.Now().Add(5 * time.Minute).Unix(),
+						jwt.ClaimIssuedAt:             future,
+						jwt.ClaimNotBefore:            future,
+						jwt.ClaimJWTID:                "jti-" + tc.name,
+						consts.FormParameterScope:     "openid profile",
+						consts.FormParameterLoginHint: "alice",
+					}
+
+					form := url.Values{consts.FormParameterRequest: {mustGenerateClientAssertion(t, claims, jose.ES256, "", cibaTestKID, key)}}
+
+					_, err = provider.DecodeBackChannelSignedRequestForTest(t.Context(), client, form)
+
+					if tc.err {
+						require.ErrorIs(t, err, ErrInvalidRequest)
+
+						return
+					}
+
+					require.NoError(t, ErrorToDebugRFC6749Error(err))
+				})
+			}
+		})
+	}
+}
+
 func newCIBASignedTestProvider(newStore func() (Storage, *storage.MemoryStore), key *ecdsa.PrivateKey) (provider *Fosite) {
 	store, memory := newStore()
 

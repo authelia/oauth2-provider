@@ -30,12 +30,13 @@ func EncodeParameters(token, _ string, tErr error) (parameters url.Values, err e
 
 // Generate generates the token and signature for a JARM response. The issuer is always the configured issuer, and
 // the session argument is not used. Per JARM Section 2.1 the numeric 'expires_in' parameter is encoded as a JSON number
-// and all other parameters as JSON strings. Per JARM Section 3 the signing algorithm 'none' is refused.
+// and all other parameters as JSON strings. Per JARM Section 3 the signing algorithm 'none' is refused. The opts are
+// passed to the jwt.Strategy ahead of the headers and the client.
 //
 // See: https://openid.net/specs/oauth-v2-jarm.html#section-3
 //
 //nolint:gocyclo
-func Generate(ctx context.Context, config Configurator, client Client, _ any, parameters url.Values) (token, signature string, err error) {
+func Generate(ctx context.Context, config Configurator, client Client, _ any, parameters url.Values, opts ...jwt.StrategyOpt) (token, signature string, err error) {
 	headers := map[string]any{}
 
 	var signer any = client
@@ -111,7 +112,7 @@ func Generate(ctx context.Context, config Configurator, client Client, _ any, pa
 		return "", "", errors.New("the JARM response modes require the JWTSecuredAuthorizeResponseModeSignerProvider to return a jwt.Strategy but it didn't")
 	}
 
-	return strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(&jwt.Headers{Extra: headers}), jwt.WithJARMClient(signer))
+	return strategy.Encode(ctx, claims.ToMapClaims(), append(slices.Clone(opts), jwt.WithHeaders(&jwt.Headers{Extra: headers}), jwt.WithJARMClient(signer))...)
 }
 
 func errSigningAlgNone(client Client) error {

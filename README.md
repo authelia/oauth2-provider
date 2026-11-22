@@ -399,14 +399,23 @@ For the [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profi
 setting that does not meet the profile and every missing required handler. Of the authorize endpoint handlers it refuses
 only `AuthorizeImplicitGrantTypeHandler`, `OpenIDConnectImplicitHandler`, `OpenIDConnectHybridHandler` and
 `NoneResponseTypeHandler`; a custom handler is not checked, even one serving a response type other than `code`. It does
-not set `Issuer` or enable DPoP or mTLS, and does not check the keys which sign the JWTs the server issues, such as ID
-Tokens and JWT access tokens: these must use PS256, ES256 or EdDSA, and a configuration signing with RS256 still passes.
-A client implementing `FAPI2SecurityProfileClient` is instead held to the profile at each request, whatever the options:
-it must push its authorization requests with a redirect URI, use the `code` response type, PKCE with S256,
-`private_key_jwt` or mutual-TLS client authentication, and a permitted algorithm for its client assertions and request
-objects. Its access tokens are sender-constrained, its refresh tokens are not rotated, and its authorization codes and
-pushed authorization requests are short-lived. The options that apply to every client, such as the RFC 9207 `iss`
-parameter and the DPoP proof algorithms, must still meet the profile.
+not set `Issuer`, enable DPoP or mTLS, or choose the keys which sign the JWTs the server issues, such as ID Tokens and
+JWT access tokens: these must use PS256, ES256 or EdDSA, and the check fails when the JWT strategy reports a signing
+algorithm outside them. `RequireStringClientAssertionAudience`, which it sets, refuses a client assertion carrying the
+issuer in an `aud` array rather than as a string. It also clears `GrantTypeJWTBearerCanSkipClientAuth` and
+`AccessTokenURIQueryParameterEnabled`, so a JWT bearer grant request must authenticate its client and an access token in
+the URI query is not accepted. An access token bound to neither a DPoP key nor a client certificate is refused by
+`ValidateBearerAuthorization` and the UserInfo endpoint when `EnforceSenderConstrainedAccessTokens` is set. A client
+implementing `FAPI2SecurityProfileClient` is instead held to the profile at each request, whatever the options: it must
+push its authorization requests with a redirect URI, use the `code` response type, PKCE with S256, `private_key_jwt` or
+mutual-TLS client authentication with the issuer as the string `aud` of its client assertions, and a permitted algorithm
+for its client assertions, request objects, JWT bearer grant assertions, Identity Assertion JWT Authorization Grants and
+DPoP proofs, whose `iat` and `nbf` are accepted between 10 and 60 seconds into the future. It may not use the resource
+owner password credentials grant, its authorization responses carry the RFC 9207 `iss` parameter, and a JWT is only
+issued to it when signed with a permitted algorithm, so it must register one wherever the default is RS256. Its access
+tokens are sender-constrained and refused when presented unbound, its refresh tokens are not rotated, and its
+authorization codes and pushed authorization requests are short-lived. What the registered handlers determine, such as
+the response types served, must still meet the profile.
 
 For [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html),
 `compose.ApplyFAPI2MessageSigning` sets the options each selected part requires, being signed authorization requests,

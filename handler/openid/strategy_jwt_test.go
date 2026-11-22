@@ -721,6 +721,61 @@ func TestJWTStrategy_GenerateIDTokenRefreshNonce(t *testing.T) {
 	}
 }
 
+func TestJWTStrategy_GenerateIDTokenFAPI2SecurityProfileClient(t *testing.T) {
+	config := &oauth2.Config{
+		MinParameterEntropy: oauth2.MinParameterEntropy,
+	}
+
+	strategy := &DefaultStrategy{
+		Strategy: &jwt.DefaultStrategy{
+			Config: config,
+			Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+		},
+		Config: config,
+	}
+
+	testCases := []struct {
+		name  string
+		fapi2 bool
+		err   string
+	}{
+		{name: "ShouldSignWithRS256ForAnotherClient"},
+		{name: "ShouldNotSignWithRS256ForAFAPI2Client", fapi2: true, err: "the signing algorithm 'RS256' is not permitted"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "client"}, FAPI2SecurityProfile: tc.fapi2}
+
+			requester := oauth2.NewAccessRequest(&DefaultSession{
+				Claims:  &jwt.IDTokenClaims{Subject: testSubjectPeter},
+				Headers: &jwt.Headers{},
+			})
+
+			requester.Client = client
+			requester.GrantTypes = oauth2.Arguments{consts.GrantTypeRefreshToken}
+
+			token, err := strategy.GenerateIDToken(t.Context(), time.Duration(0), requester)
+
+			logout, logoutErr := strategy.GenerateBackChannelLogoutToken(t.Context(), client, time.Minute, testSubjectPeter, "sid", []string{"client"}, nil)
+
+			if tc.err != "" {
+				require.ErrorContains(t, err, tc.err)
+				require.ErrorContains(t, logoutErr, tc.err)
+				assert.Empty(t, token)
+				assert.Empty(t, logout)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(logoutErr))
+			assert.NotEmpty(t, token)
+			assert.NotEmpty(t, logout)
+		})
+	}
+}
+
 func TestJWTStrategy_GenerateIDTokenClientAuthenticationTime(t *testing.T) {
 	config := &oauth2.Config{
 		MinParameterEntropy: oauth2.MinParameterEntropy,

@@ -249,7 +249,7 @@ func (s *DefaultClientAuthenticationStrategy) newClientAssertion(ctx context.Con
 		return a, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebug("The registered client does not support OAuth 2.0 JWT Profile Client Authentication RFC7523 or OpenID Connect 1.0 specific authentication methods."))
 	}
 
-	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion, append(clientAssertionJWEOptions(ctx, s.Config), jwt.WithClient(&EndpointClientAuthJWTClient{client: c, strategy: strategy}), jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(fapi2SigningAlgValues(client, s.clientAssertionSigningAlgValues(ctx, strategy)))...))...); err != nil {
+	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion, append(clientAssertionJWEOptions(ctx, s.Config), jwt.WithClient(&EndpointClientAuthJWTClient{client: c, strategy: strategy}), jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(FilterFAPI2SecurityProfileSigningAlgValues(client, s.clientAssertionSigningAlgValues(ctx, strategy)))...))...); err != nil {
 		return a, resolveJWTErrorToRFCError(err)
 	}
 
@@ -445,11 +445,12 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	// For client authentication the 'aud' claim must be solely the issuer identifier and never the token endpoint URL.
 	// This differs from the authorization grant handled in handler/rfc7523, which may use either. With
 	// DisableClientAssertionIssuerAudience set, the URL of the endpoint the assertion is presented to is also accepted,
-	// but still as the sole value.
+	// but still as the sole value, except from a client held to the FAPI 2.0 Security Profile.
 	//
 	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
 	// See: https://www.rfc-editor.org/rfc/rfc10070#section-5
-	enforceIssuerAudience := s.enforceIssuerAudience(ctx, strategy)
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	enforceIssuerAudience := s.enforceIssuerAudience(ctx, client, strategy)
 
 	if enforceIssuerAudience {
 		issuer := s.Config.GetIssuer(ctx)
@@ -475,7 +476,7 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 		return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' was signed with the 'alg' header value 'none' but client assertions must be signed or have a MAC applied.", client.GetID()))
 	}
 
-	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion.Assertion, append(clientAssertionJWEOptions(ctx, s.Config), jwt.WithClient(&EndpointClientAuthJWTClient{client: client, strategy: strategy}), jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(fapi2SigningAlgValues(client, s.clientAssertionSigningAlgValues(ctx, strategy)))...))...); err != nil {
+	if token, err = s.Config.GetJWTStrategy(ctx).Decode(ctx, assertion.Assertion, append(clientAssertionJWEOptions(ctx, s.Config), jwt.WithClient(&EndpointClientAuthJWTClient{client: client, strategy: strategy}), jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(FilterFAPI2SecurityProfileSigningAlgValues(client, s.clientAssertionSigningAlgValues(ctx, strategy)))...))...); err != nil {
 		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, strategy, audience, err))
 	}
 
@@ -483,27 +484,15 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 		jwt.ValidateAudienceAny(audience...), // Satisfies RFC7523 Section 3 Point 3.
 		jwt.ValidateRequireExpiresAt(),       // Satisfies RFC7523 Section 3 Point 4.
 		jwt.ValidateTimeFunc(time.Now),
-		jwt.ValidateClockSkew(s.Config.GetJWTClockSkew(ctx)),
+		jwt.ValidateClockSkew(GetJWTClockSkew(ctx, s.Config, client)),
 	}
 
 	if err = token.Claims.Valid(optsClaims...); err != nil {
 		return "", "", "", nil, errorsx.WithStack(fmtClientAssertionDecodeError(token, client, strategy, audience, err))
 	}
 
-	// Checked separately because ValidateAudienceAny is satisfied by any one entry matching, which cannot express
-	// the sole value requirement.
-	var aud jwt.ClaimStrings
-
-	if aud, err = token.Claims.GetAudience(); err != nil {
-		return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' had an 'aud' claim which could not be read: %s.", client.GetID(), err.Error()))
-	}
-
-	if len(aud) != 1 {
-		if enforceIssuerAudience {
-			return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' carries %d audience values but the issuer identifier must be its sole audience value.", client.GetID(), len(aud)))
-		}
-
-		return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' carries %d audience values but must carry exactly one of '%s'.", client.GetID(), len(aud), strings.Join(audience, "', '")))
+	if err = s.validateSoleAudience(ctx, client, token, audience, enforceIssuerAudience); err != nil {
+		return "", "", "", nil, err
 	}
 
 	var (
@@ -550,14 +539,16 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 	return assertion.Method, kid, alg, token, nil
 }
 
-// enforceIssuerAudience returns true if a client assertion at the endpoint of strategy must have the issuer as its sole
-// audience, which is when DisableClientAssertionIssuerAudience is not set or, at the backchannel authentication
-// endpoint, when CIBARequireSingleAudienceAssertion is set.
+// enforceIssuerAudience returns true if a client assertion from the client at the endpoint of strategy must have the
+// issuer as its sole audience, which is when DisableClientAssertionIssuerAudience is not set, when the client is held
+// to the FAPI 2.0 Security Profile or, at the backchannel authentication endpoint, when
+// CIBARequireSingleAudienceAssertion is set.
 //
 // See: https://www.rfc-editor.org/rfc/rfc10070#section-4
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 // See: https://openid.net/specs/fapi-ciba.html#section-4.1.1
-func (s *DefaultClientAuthenticationStrategy) enforceIssuerAudience(ctx context.Context, strategy EndpointClientAuthStrategy) bool {
-	if !s.Config.GetDisableClientAssertionIssuerAudience(ctx) {
+func (s *DefaultClientAuthenticationStrategy) enforceIssuerAudience(ctx context.Context, client Client, strategy EndpointClientAuthStrategy) bool {
+	if !s.Config.GetDisableClientAssertionIssuerAudience(ctx) || IsFAPI2SecurityProfileClient(client) {
 		return true
 	}
 
@@ -570,6 +561,45 @@ func (s *DefaultClientAuthenticationStrategy) enforceIssuerAudience(ctx context.
 	})
 
 	return ok && p.GetCIBARequireSingleAudienceAssertion(ctx)
+}
+
+func (s *DefaultClientAuthenticationStrategy) validateSoleAudience(ctx context.Context, client Client, token *jwt.Token, audience []string, enforceIssuerAudience bool) (err error) {
+	// Checked separately because ValidateAudienceAny is satisfied by any one entry matching, which cannot express
+	// the sole value requirement.
+	var aud jwt.ClaimStrings
+
+	if aud, err = token.Claims.GetAudience(); err != nil {
+		return errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' had an 'aud' claim which could not be read: %s.", client.GetID(), err.Error()))
+	}
+
+	if len(aud) != 1 {
+		if enforceIssuerAudience {
+			return errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' carries %d audience values but the issuer identifier must be its sole audience value.", client.GetID(), len(aud)))
+		}
+
+		return errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' carries %d audience values but must carry exactly one of '%s'.", client.GetID(), len(aud), strings.Join(audience, "', '")))
+	}
+
+	if !enforceIssuerAudience || !s.requireStringAudience(ctx, client) {
+		return nil
+	}
+
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	if _, ok := token.Claims.ToMapClaims()[consts.ClaimAudience].(string); !ok {
+		return errorsx.WithStack(ErrInvalidClient.WithHint(hintClientCredentialsInvalid).WithDebugf("The client assertion for the client with id '%s' carries the 'aud' claim as an array but the issuer identifier must be carried as a string.", client.GetID()))
+	}
+
+	return nil
+}
+
+func (s *DefaultClientAuthenticationStrategy) requireStringAudience(ctx context.Context, client Client) bool {
+	if IsFAPI2SecurityProfileClient(client) {
+		return true
+	}
+
+	p, ok := s.Config.(RequireStringClientAssertionAudienceProvider)
+
+	return ok && p.GetRequireStringClientAssertionAudience(ctx)
 }
 
 func (s *DefaultClientAuthenticationStrategy) getClientCredentialsSecretPost(form url.Values) (id, secret string, ok bool) {

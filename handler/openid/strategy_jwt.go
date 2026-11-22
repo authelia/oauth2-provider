@@ -463,7 +463,7 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		mapClaims[consts.ClaimAuthenticationContextClassReference] = acr
 	}
 
-	token, _, err = h.Encode(ctx, mapClaims, jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))
+	token, _, err = h.Encode(ctx, mapClaims, append(oauth2.FAPI2SecurityProfileEncodeOptions(request.GetClient()), jwt.WithHeaders(session.IDTokenHeaders()), jwt.WithClient(jwtClient))...)
 
 	return token, err
 }
@@ -498,9 +498,12 @@ func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, cli
 	token, _, err = h.Encode(
 		ctx,
 		claims.ToMapClaims(),
-		jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: jwt.JSONWebTokenTypeLogoutToken}}),
-		jwt.WithHeadersJWE(&jwt.Headers{Extra: map[string]any{consts.ClaimIssuer: claims.Issuer}}),
-		jwt.WithClient(jwt.NewIDTokenClient(client)),
+		append(
+			oauth2.FAPI2SecurityProfileEncodeOptions(client),
+			jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: jwt.JSONWebTokenTypeLogoutToken}}),
+			jwt.WithHeadersJWE(&jwt.Headers{Extra: map[string]any{consts.ClaimIssuer: claims.Issuer}}),
+			jwt.WithClient(jwt.NewIDTokenClient(client)),
+		)...,
 	)
 
 	return token, err

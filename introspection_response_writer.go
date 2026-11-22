@@ -308,7 +308,7 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 			signer = &introspectionSignedResponseAlgClient{IntrospectionClient: c, alg: alg}
 		}
 
-		if token, _, err = strategy.Encode(ctx, claims, jwt.WithHeaders(header), jwt.WithIntrospectionClient(signer)); err != nil {
+		if token, _, err = strategy.Encode(ctx, claims, append(FAPI2SecurityProfileEncodeOptions(caller), jwt.WithHeaders(header), jwt.WithIntrospectionClient(signer))...); err != nil {
 			f.WriteIntrospectionError(ctx, rw, nil, errors.WithStack(ErrServerError.WithHint("Failed to generate the response.").WithDebugf("The Introspection JWT itself could not be generated with error %+v.", err)))
 
 			return

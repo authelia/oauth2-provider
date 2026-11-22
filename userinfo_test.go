@@ -194,6 +194,100 @@ func TestNewUserinfoRequest(t *testing.T) {
 	}
 }
 
+func TestNewUserinfoRequestSenderConstrained(t *testing.T) {
+	testCases := []struct {
+		name    string
+		enforce bool
+		fapi2   bool
+		err     bool
+	}{
+		{name: "ShouldAcceptAnUnboundTokenByDefault"},
+		{name: "ShouldRejectAnUnboundTokenWhenEnforced", enforce: true, err: true},
+		{name: "ShouldRejectAnUnboundTokenOfAFAPI2Client", fapi2: true, err: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			introspector := mock.NewMockTokenIntrospector(ctrl)
+			provider, registered := newUserinfoProvider(introspector, nil)
+
+			provider.Config.(*Config).EnforceSenderConstrainedAccessTokens = tc.enforce
+			registered.FAPI2SecurityProfile = tc.fapi2
+
+			r := httptest.NewRequest(http.MethodGet, userinfoURL, nil)
+			r.Header.Set(consts.HeaderAuthorization, "Bearer "+userinfoToken)
+
+			introspector.EXPECT().IntrospectToken(gomock.Any(), userinfoToken, gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ context.Context, _ string, _ TokenUse, requester AccessRequester, _ []string) (TokenUse, error) {
+					ar := requester.(*AccessRequest)
+					ar.GrantedScope = []string{consts.ScopeOpenID}
+					ar.Client = &DefaultClient{ID: userinfoClientID}
+
+					return AccessToken, nil
+				})
+
+			_, err := provider.NewUserinfoRequest(context.Background(), r, &DefaultSession{})
+
+			if !tc.err {
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			require.ErrorIs(t, err, ErrInvalidToken)
+			assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), "is not sender-constrained")
+		})
+	}
+}
+
+func TestNewUserinfoRequestDPoPProofUsesTheRegistration(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	introspector := mock.NewMockTokenIntrospector(ctrl)
+	provider, registered := newUserinfoProvider(introspector, nil)
+
+	registered.FAPI2SecurityProfile = true
+
+	strategy := &userinfoDPoPStrategy{}
+
+	provider.Config.(*Config).DPoPEnabled = true
+	provider.Config.(*Config).DPoPStrategy = strategy
+
+	r := httptest.NewRequest(http.MethodGet, userinfoURL, nil)
+	r.Header.Set(consts.HeaderAuthorization, "Bearer "+userinfoToken)
+
+	introspector.EXPECT().IntrospectToken(gomock.Any(), userinfoToken, gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ TokenUse, requester AccessRequester, _ []string) (TokenUse, error) {
+			ar := requester.(*AccessRequest)
+			ar.GrantedScope = []string{consts.ScopeOpenID}
+			ar.Client = &DefaultClient{ID: userinfoClientID}
+			ar.Session.(*DefaultSession).JWKThumbprint = "some-jkt"
+
+			return AccessToken, nil
+		})
+
+	_, err := provider.NewUserinfoRequest(context.Background(), r, &DefaultSession{})
+
+	require.ErrorIs(t, err, ErrInvalidDPoPProof)
+	assert.Equal(t, Client(registered), strategy.client)
+}
+
+type userinfoDPoPStrategy struct {
+	DPoPStrategy
+
+	client Client
+}
+
+func (s *userinfoDPoPStrategy) ValidateResourceAccess(ctx context.Context, _ *http.Request, _, _ string, _ bool, _ ...string) (*DPoPProof, error) {
+	s.client = DPoPProofClientFromContext(ctx)
+
+	return nil, ErrInvalidDPoPProof
+}
+
 func TestWriteUserinfoResponse(t *testing.T) {
 	signingKey := gen.MustRSAKey()
 	encryptionKey := gen.MustRSAKey()
@@ -291,6 +385,28 @@ func TestWriteUserinfoResponse(t *testing.T) {
 
 				assertUserinfoJWTClaims(t, verifyUserinfoJWS(t, string(plaintext), signingKey))
 			},
+		},
+		{
+			// FAPI 2.0 Security Profile Section 5.4.1.
+			name: "ShouldNotWriteSignedJWTWithRS256ForAFAPI2Client",
+			client: func(c *DefaultRegisteredClient) {
+				c.FAPI2SecurityProfile = true
+				c.UserinfoSignedResponseAlg = string(jose.RS256)
+			},
+			claims:      claims,
+			code:        http.StatusInternalServerError,
+			contentType: consts.ContentTypeApplicationJSON,
+		},
+		{
+			name: "ShouldNotWriteEncryptedOnlyJWTForAFAPI2Client",
+			client: func(c *DefaultRegisteredClient) {
+				c.FAPI2SecurityProfile = true
+				c.UserinfoEncryptedResponseAlg = string(jose.RSA_OAEP_256)
+				c.JSONWebKeys = userinfoEncryptionJWKS(encryptionKey)
+			},
+			claims:      claims,
+			code:        http.StatusInternalServerError,
+			contentType: consts.ContentTypeApplicationJSON,
 		},
 		{
 			name: "ShouldWriteEncryptedOnlyJWT",

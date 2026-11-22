@@ -48,11 +48,16 @@ func NewDefaultStrategy(config StrategyConfig, store Storage) *DefaultStrategy {
 
 // ValidateDPoPProof parses the DPoP proof and validates it against the request method and URL. The 'htm' and normalized
 // 'htu' claims must match the request, the 'iat' claim must be within the proof lifespan allowing for the clock skew,
-// the 'nonce' claim must be valid when a nonce is required, and the proof must not have been used before.
+// the 'nonce' claim must be valid when a nonce is required, and the proof must not have been used before. For a client
+// held to the FAPI 2.0 Security Profile carried by oauth2.NewDPoPProofClientContext, only the algorithms the profile
+// permits are accepted and the clock skew is held between 10 and 60 seconds.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9449#section-4.3
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.4.1
 func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, requestURL, proof string, requireNonce bool, alternates ...string) (parsed *oauth2.DPoPProof, err error) {
-	if parsed, err = ParseProof(proof, s.allowedAlgorithms(ctx)); err != nil {
+	client := oauth2.DPoPProofClientFromContext(ctx)
+
+	if parsed, err = ParseProof(proof, s.allowedAlgorithms(ctx, client)); err != nil {
 		return nil, err
 	}
 
@@ -80,7 +85,7 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 	// until iat+lifespan+skew: the lifespan is how long a proof is good for after it was minted, and the skew is how
 	// far apart this server's clock and the client's are allowed to be.
 	var (
-		skew     = s.Config.GetDPoPClockSkew(ctx)
+		skew     = oauth2.GetDPoPClockSkew(ctx, s.Config, client)
 		lifespan = s.Config.GetDPoPProofLifespan(ctx)
 		now      = time.Now()
 	)
@@ -91,9 +96,12 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 			WithDebugf("The proof was issued at '%s', which is further into the future than the permitted clock skew of %s allows.", parsed.IssuedAt.UTC().Format(time.RFC3339), skew))
 	}
 
-	// expires is the instant the proof stops being acceptable, and is reused below as the replay marker's own
-	// expiry so the two can never disagree.
-	expires := parsed.IssuedAt.Add(lifespan + skew)
+	// expires is the instant the proof stops being acceptable to this client. The replay marker is kept until the
+	// latest instant the proof is acceptable to any client, as the replay check is not scoped to the client.
+	var (
+		expires = parsed.IssuedAt.Add(lifespan + skew)
+		marked  = parsed.IssuedAt.Add(lifespan + max(s.Config.GetDPoPClockSkew(ctx), oauth2.FAPI2SecurityProfileMinimumClockSkew))
+	)
 
 	if now.After(expires) {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.
@@ -112,12 +120,12 @@ func (s *DefaultStrategy) ValidateDPoPProof(ctx context.Context, method, request
 	}
 
 	// Check-and-mark the proof as used in a single atomic step so concurrent requests presenting the same proof cannot
-	// both pass the replay check. The marker is kept until 'expires', the instant the acceptance window above closes.
+	// both pass the replay check. The marker is kept until 'marked', the instant the longest acceptance window closes.
 	// The normalized 'htu' is passed rather than the raw claim so two spellings of the same target URI share one
 	// replay slot; see DPoPReplayStorage.
 	var used bool
 
-	if used, err = s.Store.CheckAndSetDPoPProofUsed(ctx, parsed.ID, parsed.Thumbprint, parsed.Nonce, parsed.Method, expected, expires); err != nil {
+	if used, err = s.Store.CheckAndSetDPoPProofUsed(ctx, parsed.ID, parsed.Thumbprint, parsed.Nonce, parsed.Method, expected, marked); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	} else if used {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHint("The DPoP proof has already been used."))
@@ -185,8 +193,8 @@ func (s *DefaultStrategy) ValidateDPoPNonce(ctx context.Context, nonce string) (
 	return nil
 }
 
-func (s *DefaultStrategy) allowedAlgorithms(ctx context.Context) []jose.SignatureAlgorithm {
-	raw := s.Config.GetDPoPAllowedJWSAlgorithms(ctx)
+func (s *DefaultStrategy) allowedAlgorithms(ctx context.Context, client oauth2.Client) []jose.SignatureAlgorithm {
+	raw := oauth2.FilterFAPI2SecurityProfileSigningAlgValues(client, s.Config.GetDPoPAllowedJWSAlgorithms(ctx))
 	algs := make([]jose.SignatureAlgorithm, 0, len(raw))
 
 	for _, a := range raw {

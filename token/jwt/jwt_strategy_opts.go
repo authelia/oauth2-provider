@@ -192,7 +192,8 @@ func WithStatelessJWTProfileIntrospectionClient(client any) StrategyOpt {
 	}
 }
 
-// WithSigAlgorithm sets the signature algorithms accepted when decoding a signed token.
+// WithSigAlgorithm sets the signature algorithms accepted when decoding a signed token. When encoding it sets the only
+// signature algorithms a token may be signed with, and an unsigned token is refused.
 func WithSigAlgorithm(algs ...jose.SignatureAlgorithm) StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.sigAlgorithm = algs

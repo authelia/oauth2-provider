@@ -88,7 +88,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The assertion request parameter must be set when using grant_type of '%s'.", consts.GrantTypeOAuthJWTBearer))
 	}
 
-	token, issuer, err := jwtgrant.Parse(grantName, oauth2jwt.ToAsymmetricSignatureAlgorithms(c.Config.GetRFC7523AssertionSigningAlgValues(ctx)), assertion)
+	token, issuer, err := jwtgrant.Parse(grantName, c.assertionSigningAlgs(ctx, request.GetClient()), assertion)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The JWT in 'assertion' request parameter contains a '%s' (confirmation) claim, which cannot be used with authorization grant '%s'.", consts.ClaimConfirmation, consts.GrantTypeOAuthJWTBearer))
 	}
 
-	if err = c.validateTokenClaims(ctx, claims); err != nil {
+	if err = c.validateTokenClaims(ctx, request.GetClient(), claims); err != nil {
 		return err
 	}
 
@@ -183,7 +183,7 @@ func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oau
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	if err = c.consume(ctx, assertion); err != nil {
+	if err = c.consume(ctx, request.GetClient(), assertion); err != nil {
 		return err
 	}
 
@@ -194,8 +194,12 @@ func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oau
 	return err
 }
 
-func (c *Handler) consume(ctx context.Context, assertion string) (err error) {
-	claims, _, err := jwtgrant.UnverifiedClaims(grantName, oauth2jwt.ToAsymmetricSignatureAlgorithms(c.Config.GetRFC7523AssertionSigningAlgValues(ctx)), assertion)
+func (c *Handler) assertionSigningAlgs(ctx context.Context, client oauth2.Client) []jose.SignatureAlgorithm {
+	return oauth2jwt.ToAsymmetricSignatureAlgorithms(oauth2.FilterFAPI2SecurityProfileSigningAlgValues(client, c.Config.GetRFC7523AssertionSigningAlgValues(ctx)))
+}
+
+func (c *Handler) consume(ctx context.Context, client oauth2.Client, assertion string) (err error) {
+	claims, _, err := jwtgrant.UnverifiedClaims(grantName, c.assertionSigningAlgs(ctx, client), assertion)
 	if err != nil {
 		return err
 	}
@@ -308,7 +312,7 @@ func (c *Handler) validateClient(request oauth2.AccessRequester, trusted *oauth2
 	return nil
 }
 
-func (c *Handler) validateTokenClaims(ctx context.Context, claims jwt.Claims) (err error) {
+func (c *Handler) validateTokenClaims(ctx context.Context, client oauth2.Client, claims jwt.Claims) (err error) {
 	// See: https://www.rfc-editor.org/rfc/rfc10070#section-4
 	audiences := oauth2.JWTBearerGrantAudiences(ctx, c.Config)
 
@@ -345,7 +349,7 @@ verify:
 	}
 
 	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
-	if err = jwtgrant.ValidateTime(grantName, claims, jwtgrant.TimeOptions{Skew: max(c.Config.GetJWTClockSkew(ctx), 0), MaxDuration: c.Config.GetJWTMaxDuration(ctx)}); err != nil {
+	if err = jwtgrant.ValidateTime(grantName, claims, jwtgrant.TimeOptions{Skew: max(oauth2.GetJWTClockSkew(ctx, c.Config, client), 0), MaxDuration: c.Config.GetJWTMaxDuration(ctx)}); err != nil {
 		return err
 	}
 

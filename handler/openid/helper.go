@@ -148,6 +148,32 @@ func isAuthTimeRequired(client oauth2.Client) bool {
 	return ok && c.GetRequireAuthTime()
 }
 
+func isClaimsParameterEnforced(ctx context.Context, config any) bool {
+	provider, ok := config.(oauth2.ClaimsParameterEnforcementProvider)
+
+	return ok && provider.GetEnforceClaimsParameter(ctx)
+}
+
+func isAuthTimeEssential(request oauth2.Requester) bool {
+	requester, ok := request.(oauth2.ClaimsRequester)
+	if !ok {
+		return false
+	}
+
+	claims := requester.GetClaims()
+	if claims == nil {
+		return false
+	}
+
+	authTime := claims.IDToken[consts.ClaimAuthenticationTime]
+
+	return authTime != nil && authTime.Essential
+}
+
+func isAuthTimeUnknown(claims *jwt.IDTokenClaims) bool {
+	return claims.AuthTime == nil || claims.AuthTime.IsZero()
+}
+
 // The authorization server makes a reasonable effort at detecting and preventing the use of a constant OpenID Connect
 // nonce.
 //

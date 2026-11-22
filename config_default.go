@@ -199,8 +199,10 @@ type Config struct {
 	AllowPublicClientsWithoutPKCE bool
 
 	// EnforceClaimsParameter enforces the requirements of the OpenID Connect 1.0 'claims' request parameter: a
-	// requested 'sub' value, an Essential 'acr' value, and the access token needed for a 'userinfo' request. Defaults
-	// to false.
+	// requested 'sub' value, an Essential 'acr' value, an Essential 'auth_time' in the ID Token, and the access token
+	// needed for a 'userinfo' request. Defaults to false.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
 	EnforceClaimsParameter bool
 
 	// EnableRedirectFragmentGuard appends the '#_' fragment to the 'Location' of an authorization response redirect in

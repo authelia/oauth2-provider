@@ -69,8 +69,7 @@ func (v *OpenIDConnectRequestValidator) ValidateRedirectURIs(ctx context.Context
 //
 // See: https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
 func (v *OpenIDConnectRequestValidator) ValidateClaims(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
-	provider, ok := v.Config.(oauth2.ClaimsParameterEnforcementProvider)
-	if !ok || !provider.GetEnforceClaimsParameter(ctx) {
+	if !isClaimsParameterEnforced(ctx, v.Config) {
 		return nil
 	}
 
@@ -101,6 +100,11 @@ func (v *OpenIDConnectRequestValidator) ValidateClaims(ctx context.Context, requ
 		if actual.AuthenticationContextClassReference == "" || !acr.Matches(actual.AuthenticationContextClassReference) {
 			return errorsx.WithStack(oauth2.ErrUnmetAuthenticationRequirements.WithHint("The Authentication Context Class Reference requested as an Essential Claim by the 'claims' parameter was not met."))
 		}
+	}
+
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#IDToken
+	if isAuthTimeEssential(request) && isAuthTimeUnknown(actual) {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because authentication time claim is required when the 'claims' parameter requests it as an Essential Claim."))
 	}
 
 	return nil

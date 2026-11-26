@@ -10,8 +10,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -78,6 +81,34 @@ func ParseOrderedObject(data []byte) (names []string, members map[string]json.Ra
 	}
 
 	return names, members, nil
+}
+
+// UnmarshalMembers decodes the members of a single JSON object into the targets by their exact names, in the order of
+// the names. A repeated name is an error, whether or not it has a target, and a member without a target is ignored. A
+// null in place of the object decodes nothing, as [json.Unmarshal] does.
+func UnmarshalMembers(data []byte, targets map[string]any) (err error) {
+	if string(bytes.TrimSpace(data)) == jsonNull {
+		return nil
+	}
+
+	var members map[string]json.RawMessage
+
+	if members, err = ParseObject(data); err != nil {
+		return err
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(targets)) {
+		value, ok := members[name]
+		if !ok {
+			continue
+		}
+
+		if err = json.Unmarshal(value, targets[name]); err != nil {
+			return fmt.Errorf("the '%s' member is not valid: %w", name, err)
+		}
+	}
+
+	return nil
 }
 
 // Member returns the named member, which is absent when it is null.

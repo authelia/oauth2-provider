@@ -743,6 +743,89 @@ func TestSSFMinVerificationInterval(t *testing.T) {
 	})
 }
 
+func TestSSFRequestBodyMemberNames(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     string
+		actual   any
+		expected any
+		err      string
+	}{
+		{
+			name:     "ShouldDecodeStreamBody",
+			have:     `{"stream_id":"s","iss":"https://tr.example.com","aud":["a"],"events_supported":["e1"],"events_delivered":["e2"],"events_requested":["e3",7],"delivery":{"method":"m","endpoint_url":"https://rx.example.com/push","authorization_header":"h"},"description":"d","min_verification_interval":1,"inactivity_timeout":2,"other":{"a":1}}`,
+			actual:   &SSFStreamRequestBody{},
+			expected: &SSFStreamRequestBody{StreamID: "s", Issuer: new("https://tr.example.com"), Audience: json.RawMessage(`["a"]`), EventsSupported: []string{"e1"}, EventsDelivered: []string{"e2"}, EventsRequested: []string{"e3"}, Delivery: &SSFStreamRequestDelivery{Method: "m", EndpointURL: "https://rx.example.com/push", AuthorizationHeader: new("h")}, Description: new("d"), MinVerificationInterval: new(1), InactivityTimeout: new(2)},
+		},
+		{
+			name:     "ShouldLeaveNullStreamMembers",
+			have:     `{"stream_id":null,"events_requested":null,"delivery":null,"description":null,"aud":null}`,
+			actual:   &SSFStreamRequestBody{},
+			expected: &SSFStreamRequestBody{Audience: json.RawMessage(`null`)},
+		},
+		{
+			name:     "ShouldNotMatchStreamMemberOfOtherCase",
+			have:     `{"Stream_ID":"s","ISS":"i","Aud":"a","Events_Requested":["e"],"DELIVERY":{"method":"m"},"Description":"d","Inactivity_Timeout":2}`,
+			actual:   &SSFStreamRequestBody{},
+			expected: &SSFStreamRequestBody{},
+		},
+		{
+			name:     "ShouldNotMatchDeliveryMemberOfOtherCase",
+			have:     `{"delivery":{"Method":"m","Endpoint_URL":"https://rx.example.com/push","AUTHORIZATION_HEADER":"h"}}`,
+			actual:   &SSFStreamRequestBody{},
+			expected: &SSFStreamRequestBody{Delivery: &SSFStreamRequestDelivery{}},
+		},
+		{name: "ShouldRejectRepeatedStreamMember", have: `{"stream_id":"a","stream_id":"b"}`, actual: &SSFStreamRequestBody{}, err: "a member name is repeated"},
+		{name: "ShouldRejectRepeatedDeliveryMember", have: `{"delivery":{"method":"a","method":"b"}}`, actual: &SSFStreamRequestBody{}, err: "a member name is repeated"},
+		{name: "ShouldRejectStreamBodyThatIsNotAnObject", have: `[]`, actual: &SSFStreamRequestBody{}, err: "the value is not a JSON object"},
+		{name: "ShouldRejectDeliveryThatIsNotAnObject", have: `{"delivery":"push"}`, actual: &SSFStreamRequestBody{}, err: "the value is not a JSON object"},
+		{name: "ShouldRejectStreamMemberOfWrongType", have: `{"description":7}`, actual: &SSFStreamRequestBody{}, err: "cannot unmarshal number"},
+		{
+			name:     "ShouldDecodeStatusBody",
+			have:     `{"stream_id":"s","status":"paused","reason":"r","other":true}`,
+			actual:   &SSFStreamStatusRequestBody{},
+			expected: &SSFStreamStatusRequestBody{StreamID: "s", Status: "paused", Reason: new("r")},
+		},
+		{
+			name:     "ShouldNotMatchStatusMemberOfOtherCase",
+			have:     `{"Stream_ID":"s","STATUS":"paused","Reason":"r"}`,
+			actual:   &SSFStreamStatusRequestBody{},
+			expected: &SSFStreamStatusRequestBody{},
+		},
+		{name: "ShouldRejectRepeatedStatusMember", have: `{"stream_id":"s","status":"enabled","status":"disabled"}`, actual: &SSFStreamStatusRequestBody{}, err: "a member name is repeated"},
+		{name: "ShouldRejectStatusMemberRepeatedInOtherCase", have: `{"status":"enabled","Status":"disabled","Status":"paused"}`, actual: &SSFStreamStatusRequestBody{}, err: "a member name is repeated"},
+		{
+			name:     "ShouldDecodeVerificationBody",
+			have:     `{"stream_id":"s","state":""}`,
+			actual:   &SSFVerificationRequestBody{},
+			expected: &SSFVerificationRequestBody{StreamID: "s", State: new("")},
+		},
+		{
+			name:     "ShouldNotMatchVerificationMemberOfOtherCase",
+			have:     `{"Stream_ID":"s","State":"x"}`,
+			actual:   &SSFVerificationRequestBody{},
+			expected: &SSFVerificationRequestBody{},
+		},
+		{name: "ShouldRejectRepeatedVerificationMember", have: `{"stream_id":"s","state":"a","state":"b"}`, actual: &SSFVerificationRequestBody{}, err: "a member name is repeated"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := json.Unmarshal([]byte(tc.have), tc.actual)
+
+			if tc.err != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, tc.actual)
+		})
+	}
+}
+
 func TestSSFStreamHandlerCreateRejects(t *testing.T) {
 	push := `{"delivery":{"method":"` + SSFDeliveryMethodPush + `","endpoint_url":"https://rx.example.com/push"}}`
 
@@ -790,6 +873,10 @@ func TestSSFStreamHandlerCreateRejects(t *testing.T) {
 		{name: "ShouldRejectMalformedJSON", contentType: "application/json", body: `{"description":`, code: http.StatusBadRequest, errCode: "invalid_request"},
 		{name: "ShouldRejectNullBody", contentType: "application/json", body: `null`, code: http.StatusBadRequest, errCode: "invalid_request"},
 		{name: "ShouldRejectTrailingData", contentType: "application/json", body: `{} {}`, code: http.StatusBadRequest, errCode: "invalid_request"},
+		{name: "ShouldRejectArrayBody", contentType: "application/json", body: `[]`, code: http.StatusBadRequest, errCode: "invalid_request"},
+		{name: "ShouldRejectRepeatedMember", contentType: "application/json", body: `{"description":"a","description":"b"}`, code: http.StatusBadRequest, errCode: "invalid_request"},
+		{name: "ShouldRejectRepeatedUnknownMember", contentType: "application/json", body: `{"other":1,"other":2}`, code: http.StatusBadRequest, errCode: "invalid_request"},
+		{name: "ShouldRejectRepeatedDeliveryMember", contentType: "application/json", body: `{"delivery":{"method":"` + SSFDeliveryMethodPush + `","endpoint_url":"https://rx.example.com/push","endpoint_url":"https://rx.example.com/other"}}`, code: http.StatusBadRequest, errCode: "invalid_request"},
 		{name: "ShouldRejectOversizeBody", contentType: "application/json", body: `{"description":"` + strings.Repeat("a", 600) + `"}`, code: http.StatusBadRequest, errCode: "invalid_request"},
 		{name: "ShouldNotTruncateOversizeIntoValidJSON", mutate: func(c *SSFConfig) { c.MaxRequestBytes = 2 }, contentType: "application/json", body: "{}    ", code: http.StatusBadRequest, errCode: "invalid_request"},
 		{name: "ShouldReadBodyAtTheLargestLimit", mutate: func(c *SSFConfig) { c.MaxRequestBytes = math.MaxInt64 }, contentType: "application/json", body: `this is not json`, code: http.StatusBadRequest, errCode: "invalid_request"},

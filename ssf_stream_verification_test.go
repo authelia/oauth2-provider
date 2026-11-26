@@ -161,6 +161,26 @@ func TestSSFVerification(t *testing.T) {
 		assert.Equal(t, 0, rec.calls)
 	})
 
+	t.Run("ShouldRejectRepeatedMember", func(t *testing.T) {
+		h, rec, id := newHarness(t, 0)
+
+		rw, err := h.doVerify(t, "a", http.MethodPost, "application/json", `{"stream_id":"nope","stream_id":"`+id+`"}`)
+		require.ErrorIs(t, err, ErrInvalidRequest)
+
+		assert.Equal(t, http.StatusBadRequest, rw.Code)
+		assert.Equal(t, 0, rec.calls)
+	})
+
+	t.Run("ShouldNotMatchMemberOfOtherCase", func(t *testing.T) {
+		h, rec, id := newHarness(t, 0)
+
+		_, err := h.doVerify(t, "a", http.MethodPost, "application/json", `{"stream_id":"`+id+`","State":"s-1"}`)
+		require.NoError(t, err)
+
+		require.Equal(t, 1, rec.calls)
+		assert.Nil(t, rec.state)
+	})
+
 	t.Run("ShouldAcceptMissingContentType", func(t *testing.T) {
 		h, rec, id := newHarness(t, 0)
 

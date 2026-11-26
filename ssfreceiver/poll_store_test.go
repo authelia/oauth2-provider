@@ -566,6 +566,52 @@ func TestReceiverPollOverStore(t *testing.T) {
 				assert.False(t, p.known(t, "jti-1"))
 			})
 
+			t.Run("ShouldLeaveSETUnacknowledgedWhenIssuedAheadOfTheClockSkew", func(t *testing.T) {
+				p := newTestStorePoll(t, st)
+
+				ahead := p.set(t, p.key, "jti-2", map[string]any{"iat": time.Now().Add(2 * time.Minute).Unix()})
+				beyond := p.set(t, p.key, "jti-3", map[string]any{"iat": time.Now().Add(time.Hour).Unix()})
+
+				p.respond(false, "jti-1", p.sessionRevoked(t, "jti-1"), "jti-2", ahead, "jti-3", beyond)
+
+				result := p.poll(t, ssfreceiver.PollRequest{})
+
+				// RFC 8936 Section 2.4: a SET which is not acknowledged is delivered again.
+				assert.Equal(t, []string{"jti-1"}, result.Ack)
+				require.Len(t, result.Unacknowledged, 1)
+				require.ErrorIs(t, result.Unacknowledged["jti-2"], ssfreceiver.ErrIssuedAtAhead)
+
+				require.Len(t, result.SetErrs, 1)
+				assert.Equal(t, ssfreceiver.SetErrorInvalidRequest, result.SetErrs["jti-3"].Err)
+
+				assert.Equal(t, []string{"jti-1"}, p.handler.handled())
+				assert.False(t, p.known(t, "jti-2"))
+			})
+
+			t.Run("ShouldReportKeyMismatchWithJTIWhenIssuedAheadOfTheClockSkew", func(t *testing.T) {
+				p := newTestStorePoll(t, st)
+
+				iat := map[string]any{"iat": time.Now().Add(2 * time.Minute).Unix()}
+
+				p.respond(false, "jti-other", p.set(t, p.key, "jti-1", iat), "jti-2", p.set(t, p.key, "jti-2", iat))
+
+				result := p.poll(t, ssfreceiver.PollRequest{})
+
+				// RFC 8936 Section 2.3: the name is not the 'jti' on a redelivery either, so the SET is reported.
+				assert.Empty(t, result.Ack)
+				assert.Equal(t, map[string]oauth2.SSFPollSetError{
+					"jti-other": {Err: ssfreceiver.SetErrorInvalidRequest, Description: "The 'jti' of the SET is not the name of its member in the 'sets'."},
+				}, result.SetErrs)
+
+				require.Len(t, result.Unacknowledged, 1)
+				require.ErrorIs(t, result.Unacknowledged["jti-2"], ssfreceiver.ErrIssuedAtAhead)
+
+				assert.Empty(t, p.handler.handled())
+				assert.False(t, p.known(t, "jti-1"))
+				assert.False(t, p.known(t, "jti-other"))
+				assert.False(t, p.known(t, "jti-2"))
+			})
+
 			t.Run("ShouldLeaveSETUnacknowledgedWhenHandlerFails", func(t *testing.T) {
 				p := newTestStorePoll(t, st)
 

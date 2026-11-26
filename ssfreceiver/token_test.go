@@ -338,10 +338,10 @@ func TestReceiverValidate(t *testing.T) {
 			},
 		},
 		{
-			"ShouldRejectIssuedAtInTheFuture", errSetClaims,
+			"ShouldRejectIssuedAtAheadOfTheRedeliveryWindow", errSetClaims,
 			func(t *testing.T, x *testTransmitter) string {
 				claims := x.claims()
-				claims["iat"] = x.now.Add(DefaultClockSkew + 2*time.Second).Unix()
+				claims["iat"] = x.now.Add(DefaultClockSkew + IssuedAtRedeliveryWindow + time.Second).Unix()
 
 				return x.set().sign(t, claims)
 			},
@@ -658,6 +658,85 @@ func TestReceiverValidate(t *testing.T) {
 		_, serr, err := x.receiver.validate(t.Context(), x.record, x.set().sign(t, claims))
 		require.NoError(t, err)
 		require.Nil(t, serr)
+	})
+
+	t.Run("ShouldNotReportIssuedAtAheadOfTheClockSkew", func(t *testing.T) {
+		for _, ahead := range []time.Duration{DefaultClockSkew + time.Second, DefaultClockSkew + IssuedAtRedeliveryWindow} {
+			x := newTestTransmitter(t)
+
+			claims := x.claims()
+			claims["iat"] = x.now.Add(ahead).Unix()
+
+			token := x.set().sign(t, claims)
+
+			event, serr, err := x.receiver.validate(t.Context(), x.record, token)
+			require.ErrorIs(t, err, ErrIssuedAtAhead)
+			assert.Nil(t, serr)
+			require.NotNil(t, event)
+			assert.Equal(t, testJTI, event.Claims.JTI)
+
+			// The SET is accepted on a redelivery once the clock has caught up.
+			x.now = x.now.Add(ahead - DefaultClockSkew)
+
+			event, serr, err = x.receiver.validate(t.Context(), x.record, token)
+			require.NoError(t, err)
+			require.Nil(t, serr)
+			assert.Equal(t, testJTI, event.Claims.JTI)
+		}
+	})
+
+	t.Run("ShouldNotReportIssuedAtAheadWithoutClockSkew", func(t *testing.T) {
+		x := newTestTransmitter(t)
+
+		x.receiver.Config.ClockSkew = -1
+
+		claims := x.claims()
+		claims["iat"] = x.now.Add(time.Second).Unix()
+
+		_, serr, err := x.receiver.validate(t.Context(), x.record, x.set().sign(t, claims))
+		require.ErrorIs(t, err, ErrIssuedAtAhead)
+		assert.Nil(t, serr)
+
+		claims["iat"] = x.now.Add(IssuedAtRedeliveryWindow + time.Second).Unix()
+
+		_, serr, err = x.receiver.validate(t.Context(), x.record, x.set().sign(t, claims))
+		require.NoError(t, err)
+		assert.Equal(t, errSetClaims, serr)
+	})
+
+	t.Run("ShouldReportOtherFaultOfSETIssuedAhead", func(t *testing.T) {
+		testCases := []struct {
+			name     string
+			mutate   func(claims map[string]any)
+			expected *SetError
+		}{
+			{"ShouldReportIssuer", func(claims map[string]any) { claims["iss"] = "https://other.example.com" }, errSetIssuer},
+			{"ShouldReportAudience", func(claims map[string]any) { claims["aud"] = "https://other.example.com" }, errSetAudience},
+			{"ShouldReportClaims", func(claims map[string]any) { delete(claims, "sub_id") }, errSetClaims},
+			{"ShouldReportEvent", func(claims map[string]any) {
+				claims["events"] = map[string]any{jwt.SecurityEventTypeCAEPSessionRevoked: map[string]any{"event_timestamp": "x"}}
+			}, nil},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				x := newTestTransmitter(t)
+
+				claims := x.claims()
+				claims["iat"] = x.now.Add(DefaultClockSkew + time.Minute).Unix()
+
+				tc.mutate(claims)
+
+				event, serr, err := x.receiver.validate(t.Context(), x.record, x.set().sign(t, claims))
+				require.NoError(t, err)
+				require.NotNil(t, serr)
+				assert.Nil(t, event)
+
+				if tc.expected != nil {
+					assert.Equal(t, tc.expected, serr)
+				}
+			})
+		}
 	})
 
 	t.Run("ShouldKeepLargeIntegerOfPayload", func(t *testing.T) {

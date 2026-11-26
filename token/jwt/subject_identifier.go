@@ -135,7 +135,9 @@ func (s SubjectIdentifier) MarshalJSON() (data []byte, err error) {
 }
 
 // UnmarshalJSON decodes a subject identifier. Member names are matched by exact case, and a duplicate member or a
-// member the format does not define is an error (RFC 9493 §3). A format that is unknown is left for Validate.
+// member the format does not define is an error (RFC 9493 §3). An identifier nested where RFC 9493 §3.2.8 and SSF 1.0
+// §3.3 permit none is an error, and is not decoded. A format that is unknown is left for Validate, and its members
+// which hold subject identifiers are not decoded.
 func (s *SubjectIdentifier) UnmarshalJSON(data []byte) (err error) {
 	return s.decode(data, false)
 }
@@ -143,6 +145,10 @@ func (s *SubjectIdentifier) UnmarshalJSON(data []byte) (err error) {
 // decode decodes a subject identifier. A receiver keeps a member the format does not define in Additional in place of
 // refusing it (SSF 1.0 §3.3, §4.2.3), at every depth.
 func (s *SubjectIdentifier) decode(data []byte, receiver bool) (err error) {
+	return s.decodeNested(data, receiver, "")
+}
+
+func (s *SubjectIdentifier) decodeNested(data []byte, receiver bool, parent string) (err error) {
 	if string(bytes.TrimSpace(data)) == jsonNull {
 		return nil
 	}
@@ -155,44 +161,12 @@ func (s *SubjectIdentifier) decode(data []byte, receiver bool) (err error) {
 
 	var format string
 
-	if raw, ok := members[subjectIdentifierMemberFormat]; ok {
-		if err = jjson.Unmarshal(raw, &format); err != nil {
-			return fmt.Errorf("%w: the 'format' member is not a string", ErrInvalidSubjectIdentifier)
-		}
+	if format, err = subjectIdentifierNestedFormat(members, parent); err != nil {
+		return err
 	}
 
 	defined, known := subjectIdentifierMembers(format)
 
-	if receiver {
-		return s.decodeReceived(format, members, defined)
-	}
-
-	if known {
-		for _, member := range slices.Sorted(maps.Keys(members)) {
-			if member != subjectIdentifierMemberFormat && !slices.Contains(defined, member) {
-				return fmt.Errorf("%w: format '%s' does not define the '%s' member", ErrInvalidSubjectIdentifier, format, member)
-			}
-		}
-	}
-
-	type subjectIdentifier SubjectIdentifier
-
-	var decoded subjectIdentifier
-
-	if err = jjson.Unmarshal(data, &decoded); err != nil {
-		if errors.Is(err, ErrInvalidSubjectIdentifier) {
-			return err
-		}
-
-		return fmt.Errorf("%w: %w", ErrInvalidSubjectIdentifier, err)
-	}
-
-	*s = SubjectIdentifier(decoded)
-
-	return nil
-}
-
-func (s *SubjectIdentifier) decodeReceived(format string, members map[string]jjson.RawMessage, defined []string) (err error) {
 	decoded := SubjectIdentifier{Format: format}
 	simple := map[string]jjson.RawMessage{}
 
@@ -201,29 +175,23 @@ func (s *SubjectIdentifier) decodeReceived(format string, members map[string]jjs
 		case member == subjectIdentifierMemberFormat:
 			continue
 		case !slices.Contains(defined, member):
-			var value any
-
-			if value, err = decodeJSONValue(members[member]); err == nil {
-				if decoded.Additional == nil {
-					decoded.Additional = map[string]any{}
-				}
-
-				decoded.Additional[member] = value
-			}
+			err = decoded.decodeUndefinedMember(member, members[member], receiver, known, simple)
 		case format == SubjectIdentifierFormatComplex:
-			err = decoded.decodeReceivedComplexMember(member, members[member])
+			err = decoded.decodeComplexMember(member, members[member], receiver)
 		case format == SubjectIdentifierFormatAliases:
-			err = decoded.decodeReceivedAliases(members[member])
+			err = decoded.decodeAliases(members[member], receiver)
 		default:
 			simple[member] = members[member]
 		}
 
 		if err != nil {
+			if errors.Is(err, ErrInvalidSubjectIdentifier) {
+				return fmt.Errorf("the '%s' member is invalid: %w", member, err)
+			}
+
 			return fmt.Errorf("%w: the '%s' member is invalid: %w", ErrInvalidSubjectIdentifier, member, err)
 		}
 	}
-
-	var data []byte
 
 	if data, err = jjson.Marshal(simple); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidSubjectIdentifier, err)
@@ -240,7 +208,50 @@ func (s *SubjectIdentifier) decodeReceived(format string, members map[string]jjs
 	return nil
 }
 
-func (s *SubjectIdentifier) decodeReceivedComplexMember(name string, raw jjson.RawMessage) (err error) {
+func subjectIdentifierNestedFormat(members map[string]jjson.RawMessage, parent string) (format string, err error) {
+	if raw, ok := members[subjectIdentifierMemberFormat]; ok {
+		if err = jjson.Unmarshal(raw, &format); err != nil {
+			return "", fmt.Errorf("%w: the 'format' member is not a string", ErrInvalidSubjectIdentifier)
+		}
+	}
+
+	switch {
+	case parent == SubjectIdentifierFormatAliases && format == SubjectIdentifierFormatAliases:
+		// RFC 9493 §3.2.8: aliases are not nested.
+		return "", fmt.Errorf("%w: 'aliases' identifiers must not be nested", ErrInvalidSubjectIdentifier)
+	case parent != "" && format == SubjectIdentifierFormatComplex:
+		// RFC 9493 §3.2.8, SSF 1.0 §3.3: an alias identifies one entity, and each member of a complex subject is a
+		// simple subject.
+		return "", fmt.Errorf("%w: a nested identifier must not be a complex subject", ErrInvalidSubjectIdentifier)
+	default:
+		return format, nil
+	}
+}
+
+func (s *SubjectIdentifier) decodeUndefinedMember(name string, raw jjson.RawMessage, receiver, known bool, simple map[string]jjson.RawMessage) (err error) {
+	switch {
+	case receiver:
+		var value any
+
+		if value, err = decodeJSONValue(raw); err != nil {
+			return err
+		}
+
+		if s.Additional == nil {
+			s.Additional = map[string]any{}
+		}
+
+		s.Additional[name] = value
+	case known:
+		return fmt.Errorf("%w: format '%s' does not define the '%s' member", ErrInvalidSubjectIdentifier, s.Format, name)
+	case !isSubjectIdentifierNestingMember(name):
+		simple[name] = raw
+	}
+
+	return nil
+}
+
+func (s *SubjectIdentifier) decodeComplexMember(name string, raw jjson.RawMessage, receiver bool) (err error) {
 	if string(bytes.TrimSpace(raw)) == jsonNull {
 		return nil
 	}
@@ -249,29 +260,39 @@ func (s *SubjectIdentifier) decodeReceivedComplexMember(name string, raw jjson.R
 		if member.name == name {
 			*member.value = &SubjectIdentifier{}
 
-			return (*member.value).decode(raw, true)
+			return (*member.value).decodeNested(raw, receiver, SubjectIdentifierFormatComplex)
 		}
 	}
 
 	return nil
 }
 
-func (s *SubjectIdentifier) decodeReceivedAliases(raw jjson.RawMessage) (err error) {
+func (s *SubjectIdentifier) decodeAliases(raw jjson.RawMessage, receiver bool) (err error) {
 	var identifiers []jjson.RawMessage
 
 	if err = jjson.Unmarshal(raw, &identifiers); err != nil {
 		return err
 	}
 
+	if identifiers == nil {
+		return nil
+	}
+
 	s.Identifiers = make([]SubjectIdentifier, len(identifiers))
 
 	for i := range identifiers {
-		if err = s.Identifiers[i].decode(identifiers[i], true); err != nil {
+		if err = s.Identifiers[i].decodeNested(identifiers[i], receiver, SubjectIdentifierFormatAliases); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func isSubjectIdentifierNestingMember(name string) bool {
+	members, _ := subjectIdentifierMembers(SubjectIdentifierFormatComplex)
+
+	return name == subjectIdentifierMemberIdentifiers || slices.Contains(members, name)
 }
 
 // decodeJSONValue decodes a JSON value without losing the precision of an integer.
@@ -301,7 +322,7 @@ func subjectIdentifierMembers(format string) (members []string, known bool) {
 	case SubjectIdentifierFormatDID:
 		return []string{"url"}, true
 	case SubjectIdentifierFormatAliases:
-		return []string{"identifiers"}, true
+		return []string{subjectIdentifierMemberIdentifiers}, true
 	case SubjectIdentifierFormatComplex:
 		for _, member := range (&SubjectIdentifier{}).complexMembers() {
 			members = append(members, member.name)
@@ -368,7 +389,8 @@ func subjectMember(format, member, value, rule string, valid func(value string) 
 }
 
 const (
-	subjectIdentifierMemberFormat = "format"
+	subjectIdentifierMemberFormat      = "format"
+	subjectIdentifierMemberIdentifiers = "identifiers"
 
 	subjectRuleStringOrURI = "a string without a ':' or a URI"
 	subjectRuleURI         = "a URI"

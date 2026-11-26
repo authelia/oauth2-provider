@@ -49,7 +49,6 @@ func TestSecurityEventTokenClaimsReceiver(t *testing.T) {
 		{"ShouldRejectInvalidMemberOfKnownFormat", head + `"sub_id":{"format":"email","email":"not an email"},` + event, ValidationErrorClaimsInvalid, ValidationErrorClaimsInvalid},
 		{"ShouldRejectMissingMemberOfKnownFormat", head + `"sub_id":{"format":"email","EMAIL":"user@example.com"},` + event, ValidationErrorClaimsInvalid, ValidationErrorClaimsInvalid},
 		{"ShouldRejectInvalidKnownFormatOfComplexMember", head + `"sub_id":{"format":"complex","user":{"format":"email"}},` + event, ValidationErrorClaimsInvalid, ValidationErrorClaimsInvalid},
-		{"ShouldRejectNestedComplexSubject", head + `"sub_id":{"format":"complex","user":{"format":"complex","catalog":{"format":"catalog_item"}}},` + event, ValidationErrorClaimsInvalid, ValidationErrorClaimsInvalid},
 		{"ShouldRejectDuplicateAlias", head + `"sub_id":{"format":"aliases","identifiers":[{"format":"opaque","id":"x"},{"format":"opaque","id":"x"}]},` + event, ValidationErrorClaimsInvalid, ValidationErrorClaimsInvalid},
 		{"ShouldRejectDuplicateAliasWithAdditionalMembers", head + `"sub_id":{"format":"aliases","identifiers":[{"format":"opaque","id":"x","extra":true},{"format":"opaque","id":"x","extra":true}]},` + event, ValidationErrorClaimsInvalid, ValidationErrorClaimsInvalid},
 		{"ShouldRejectDuplicateAliasOfUnknownFormat", head + `"sub_id":{"format":"aliases","identifiers":[{"format":"catalog_item","catalog_id":"c0384"},{"format":"catalog_item","catalog_id":"c0384"}]},` + event, ValidationErrorClaimsInvalid, ValidationErrorClaimsInvalid},
@@ -98,6 +97,19 @@ func TestSecurityEventTokenClaimsReceiver(t *testing.T) {
 			check(t, claims.Valid(now, iss, aud), tc.transmitter)
 		})
 	}
+
+	t.Run("ShouldRejectNestedSubject", func(t *testing.T) {
+		for _, subject := range []string{
+			`{"format":"complex","user":{"format":"complex","catalog":{"format":"catalog_item"}}}`,
+			`{"format":"aliases","identifiers":[{"format":"aliases","identifiers":[{"format":"opaque","id":"x"}]}]}`,
+			`{"format":"aliases","identifiers":[{"format":"complex","user":{"format":"opaque","id":"x"}}]}`,
+		} {
+			claims, err := ParseSecurityEventTokenClaims([]byte(head + `"sub_id":` + subject + `,` + event))
+
+			assert.Error(t, err, subject)
+			assert.Nil(t, claims, subject)
+		}
+	})
 
 	t.Run("ShouldKeepUnknownSubjectMembers", func(t *testing.T) {
 		claims, err := ParseSecurityEventTokenClaims([]byte(head + catalog + event))

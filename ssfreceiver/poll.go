@@ -172,13 +172,15 @@ func (r *Receiver) receivePolled(ctx context.Context, record *StreamRecord, set 
 		err           error
 	)
 
-	if event, serr, err = r.validate(ctx, record, set.token); err == nil && serr == nil {
+	event, serr, err = r.validate(ctx, record, set.token)
+
+	switch {
+	case event == nil:
+	case event.Claims.JTI != set.name:
 		// RFC 8936 Section 2.3: the name of the member is the 'jti' of the SET.
-		if event.Claims.JTI != set.name {
-			serr = errPollSetName
-		} else {
-			handed, serr, err = r.accept(ctx, event)
-		}
+		serr, err = errPollSetName, nil
+	case err == nil:
+		handed, serr, err = r.accept(ctx, event)
 	}
 
 	switch {

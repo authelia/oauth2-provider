@@ -237,12 +237,11 @@ func (c *RefreshTokenGrantHandler) HandleTokenEndpointRequest(ctx context.Contex
 
 	rtLifespan := oauth2.GetEffectiveLifespan(client, oauth2.GrantTypeRefreshToken, oauth2.RefreshToken, c.Config.GetRefreshTokenLifespan(ctx))
 
-	// A rotated refresh token is issued for the scopes granted now, an unrotated one keeps those originally granted.
-	if rotate {
-		oauth2.RecordRefreshTokenMode(request.GetSession(), oauth2.GetRefreshTokenModeForScopes(c.Config.GetRefreshTokenScopes(ctx), request.GetGrantedScopes()))
-	} else {
-		oauth2.RecordRefreshTokenMode(request.GetSession(), oauth2.GetRefreshTokenModeForScopes(c.Config.GetRefreshTokenScopes(ctx), orequest.GetGrantedScopes()))
+	// RFC 6749 Section 6: a refresh token keeps the scope originally granted, rotated or not, so its mode is that of
+	// the grant and not of the scope this request asked for.
+	oauth2.RecordRefreshTokenMode(request.GetSession(), oauth2.GetRefreshTokenModeForScopes(c.Config.GetRefreshTokenScopes(ctx), orequest.GetGrantedScopes()))
 
+	if !rotate {
 		return nil
 	}
 
@@ -325,29 +324,30 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		}
 	}()
 
-	srequester, srtrequester := request.Sanitize(nil), request.Sanitize(nil)
+	// The original refresh token session restores the scope, audience, resources and authorization details originally
+	// granted onto the rotated refresh token session, as narrowing the access token does not shrink the grant. It must
+	// be read before rotation deactivates it. Rotation itself does not need it as HandleTokenEndpointRequest has already
+	// copied the original request ID onto the requester.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc6749#section-6
+	// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
+	var orequest oauth2.Requester
 
-	// The original refresh token session is only needed to restore the scopes originally requested and granted onto
-	// the rotated refresh token session. It must be read before rotation deactivates it. Rotation itself does not need
-	// it as HandleTokenEndpointRequest has already copied the original request ID onto the requester.
-	if rtrequester, ok := request.(oauth2.RefreshTokenAccessRequester); ok {
-		var orequest oauth2.Requester
+	if orequest, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); errors.Is(err, oauth2.ErrInactiveToken) {
+		replayed = err
 
-		if orequest, err = c.TokenRevocationStorage.GetRefreshTokenSession(ctx, signature, nil); errors.Is(err, oauth2.ErrInactiveToken) {
-			replayed = err
+		return err
+	} else if errors.Is(err, oauth2.ErrNotFound) {
+		revoked = err
 
-			return err
-		} else if errors.Is(err, oauth2.ErrNotFound) {
-			revoked = err
-
-			return err
-		} else if err != nil {
-			return err
-		}
-
-		srtrequester = rtrequester.SanitizeRestoreRefreshTokenOriginalRequester(orequest)
-		srtrequester.SetSession(request.GetSession().Clone())
+		return err
+	} else if err != nil {
+		return err
 	}
+
+	srtrequester := refreshTokenRequester(request, orequest)
+	srtrequester.SetSession(request.GetSession().Clone())
 
 	if err = c.rotateRefreshToken(ctx, request, signature, deadline); errors.Is(err, oauth2.ErrInactiveToken) {
 		replayed = err
@@ -361,7 +361,7 @@ func (c *RefreshTokenGrantHandler) PopulateTokenEndpointResponse(ctx context.Con
 		return err
 	}
 
-	if err = c.TokenRevocationStorage.CreateAccessTokenSession(ctx, accessSignature, srequester); err != nil {
+	if err = c.TokenRevocationStorage.CreateAccessTokenSession(ctx, accessSignature, request.Sanitize(nil)); err != nil {
 		return err
 	}
 
@@ -419,11 +419,7 @@ func (c *RefreshTokenGrantHandler) populateTokenEndpointResponseWithoutRotation(
 		return err
 	}
 
-	srtrequester := request.Sanitize(nil)
-
-	if rtrequester, ok := request.(oauth2.RefreshTokenAccessRequester); ok {
-		srtrequester = rtrequester.SanitizeRestoreRefreshTokenOriginalRequester(orequest)
-	}
+	srtrequester := refreshTokenRequester(request, orequest)
 
 	srtrequester.SetSession(request.GetSession().Clone())
 	srtrequester.SetRequestedAt(orequest.GetRequestedAt())

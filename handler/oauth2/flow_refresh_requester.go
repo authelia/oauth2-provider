@@ -5,6 +5,8 @@
 package oauth2
 
 import (
+	"maps"
+
 	"authelia.com/provider/oauth2"
 )
 
@@ -13,21 +15,15 @@ func refreshTokenRequester(request oauth2.AccessRequester, grant oauth2.Requeste
 		return restorer.SanitizeRestoreRefreshTokenOriginalRequester(grant)
 	}
 
-	requester = request.Sanitize([]string{})
+	requester = grant.Sanitize([]string{})
 
-	requester.SetRequestedAudience(grant.GetRequestedAudience())
-	requester.SetRequestedResource(grant.GetRequestedResource())
+	requester.SetSession(request.GetSession())
+	requester.SetRequestedAt(request.GetRequestedAt())
 
-	for _, audience := range grant.GetGrantedAudience() {
-		requester.GrantAudience(audience)
+	if form := requester.GetRequestForm(); form != nil {
+		clear(form)
+		maps.Copy(form, request.Sanitize([]string{}).GetRequestForm())
 	}
-
-	for _, resource := range grant.GetGrantedResource() {
-		requester.GrantResource(resource)
-	}
-
-	requester.SetRequestedAuthorizationDetails(grant.GetRequestedAuthorizationDetails())
-	requester.SetGrantedAuthorizationDetails(grant.GetGrantedAuthorizationDetails())
 
 	return requester
 }

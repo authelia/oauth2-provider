@@ -22,6 +22,7 @@ import (
 
 	"authelia.com/provider/oauth2/i18n"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/iox"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -233,12 +234,13 @@ func decodeSSFRequestBody[T any](f *Fosite, ctx context.Context, r *http.Request
 func readSSFRequestBody(f *Fosite, ctx context.Context, r *http.Request) (data []byte, err error) {
 	limit := f.getSSFConfig(ctx).MaxRequestBytes
 
-	// One byte over the limit is read so an oversize body is rejected rather than truncated into valid JSON.
-	if data, err = io.ReadAll(io.LimitReader(r.Body, limit+1)); err != nil {
+	var large bool
+
+	if data, large, err = iox.ReadLimited(r.Body, limit); err != nil {
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to read the HTTP body.").WithWrap(err).WithDebugError(err))
 	}
 
-	if int64(len(data)) > limit {
+	if large {
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The request body is too large."))
 	}
 

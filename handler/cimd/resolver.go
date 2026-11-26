@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"mime"
 	"net/http"
 	"net/netip"
@@ -26,6 +25,7 @@ import (
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/rfc7591"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/iox"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -571,14 +571,17 @@ func (r *Resolver) fetch(ctx context.Context, id string) (record *oauth2.ClientI
 		return nil, errResolve(nil, "The Client ID Metadata Document '%s' was served with the media type '%s' which is not JSON.", id, mediaType)
 	}
 
-	var body []byte
+	var (
+		body  []byte
+		large bool
+	)
 
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-10.11
-	if body, err = io.ReadAll(io.LimitReader(response.Body, r.config.MaxBodyBytes+1)); err != nil {
+	if body, large, err = iox.ReadLimited(response.Body, r.config.MaxBodyBytes); err != nil {
 		return nil, errTransient(err, "The Client ID Metadata Document '%s' could not be read: %v.", id, err)
 	}
 
-	if int64(len(body)) > r.config.MaxBodyBytes {
+	if large {
 		return nil, errResolve(nil, "The Client ID Metadata Document '%s' is larger than the limit of %d bytes.", id, r.config.MaxBodyBytes)
 	}
 

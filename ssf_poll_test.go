@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -104,6 +105,20 @@ func TestSSFPoll(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Nil(t, request.MaxEvents)
+	})
+
+	t.Run("ShouldReadBodyAtTheLargestLimit", func(t *testing.T) {
+		large := newSSFHandlerHarness(t, func(c *SSFConfig) { c.MaxRequestBytes = math.MaxInt64 })
+		largeID := large.createStream(t, "a", `{}`)
+
+		request, err := large.parsePoll("application/json", ack, largeID)
+		require.NoError(t, err)
+
+		assert.Equal(t, []string{"3d0c3cf797584bd193bd0fb1bd4e7d30"}, request.Ack)
+		assert.Len(t, request.SetErrs, 1)
+
+		_, err = large.parsePoll("application/json", `this is not json`, largeID)
+		assert.ErrorIs(t, err, ErrInvalidRequest)
 	})
 
 	t.Run("EmptyBodyNoContentType", func(t *testing.T) {

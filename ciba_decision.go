@@ -95,7 +95,8 @@ func (f *Fosite) NewBackChannelAuthenticationDecisionRequest(ctx context.Context
 // 'openid' scope must be granted when requested, else ErrAccessDenied. An ID Token subject set on the session must be
 // the ID Token subject recorded when the request was made or, when none was recorded and the client does not use
 // pairwise subject identifiers, the subject, else ErrAccessDenied. The request time of the session is set to when the
-// request was made.
+// request was made. Every BackChannelAuthenticationApprovalValidator among the decision handlers then checks the
+// request, and the error of one which refuses the approval is returned with nothing recorded.
 //
 // The application must grant the scopes, audience, resources and authorization details the end user approved on
 // request, with GrantScope, GrantAudience, GrantResource and SetGrantedAuthorizationDetails, before calling it.
@@ -180,6 +181,12 @@ func (f *Fosite) ApproveBackChannelAuthentication(ctx context.Context, request B
 
 	RecordAuthenticationContextRequirements(request, session)
 
+	if err = f.validateBackChannelAuthenticationApproval(ctx, request); err != nil {
+		request.SetSession(restored)
+
+		return nil, err
+	}
+
 	if request.GetDeliveryMode() == consts.CIBAModePush {
 		result, err = f.approveBackChannelAuthenticationPush(ctx, request, restored)
 	} else {
@@ -221,6 +228,18 @@ func (f *Fosite) FailBackChannelAuthentication(ctx context.Context, request Back
 	}
 
 	return f.decideBackChannelAuthentication(ctx, request, CIBAStatusFailed, cause)
+}
+
+func (f *Fosite) validateBackChannelAuthenticationApproval(ctx context.Context, request BackChannelAuthenticationRequester) (err error) {
+	for _, h := range f.Config.GetBackChannelAuthenticationDecisionHandlers(ctx) {
+		if v, ok := h.(BackChannelAuthenticationApprovalValidator); ok {
+			if err = v.ValidateBackChannelAuthenticationApproval(ctx, request); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 var errBackChannelAuthenticationDecided = ErrInvalidRequest.WithHint("The backchannel authentication request is already decided.")

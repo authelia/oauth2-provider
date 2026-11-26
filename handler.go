@@ -168,6 +168,19 @@ type RFC8628DeviceAuthorizeEndpointBindingHandler interface {
 	BindRFC8628DeviceAuthorizeRequest(ctx context.Context, request DeviceAuthorizeRequester) (err error)
 }
 
+// RFC8628DeviceAuthorizeRequestValidator is implemented by a RFC8628DeviceAuthorizeEndpointHandler,
+// RFC8628DeviceAuthorizeEndpointBindingHandler or RFC8628UserAuthorizeEndpointHandler which can check a device
+// authorization request without the user's session. NewRFC862DeviceAuthorizeRequest runs these checks so that an
+// invalid request is refused before a device code is issued.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.1
+type RFC8628DeviceAuthorizeRequestValidator interface {
+	// ValidateRFC8628DeviceAuthorizeRequest returns the error the handler would later return for the request for a
+	// reason which does not depend on the user's session. It must not store anything or modify the request, and returns
+	// nil when the handler is not responsible for the request.
+	ValidateRFC8628DeviceAuthorizeRequest(ctx context.Context, request DeviceAuthorizeRequester) (err error)
+}
+
 // RevocationHandler is the interface that allows token revocation for an OAuth2.0 provider. RevokeToken is invoked
 // after a new token revocation request is parsed.
 //
@@ -212,6 +225,18 @@ type BackChannelAuthenticationEndpointHandler interface {
 type BackChannelAuthenticationDecisionHandler interface {
 	// HandleBackChannelAuthenticationDecision handles the decision recorded on the request by its status.
 	HandleBackChannelAuthenticationDecision(ctx context.Context, request BackChannelAuthenticationRequester, result *BackChannelAuthenticationDecisionResult) (err error)
+}
+
+// BackChannelAuthenticationApprovalValidator is implemented by a BackChannelAuthenticationDecisionHandler which can
+// refuse the approval of an OpenID Connect CIBA authentication request. ApproveBackChannelAuthentication runs these
+// checks with the approval session set on the request and before any decision handler runs, so a refused approval is
+// not recorded in any token delivery mode and the request can be approved again.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.8
+type BackChannelAuthenticationApprovalValidator interface {
+	// ValidateBackChannelAuthenticationApproval returns the error which refuses the approval of the request. It must
+	// not store anything or modify the request, and returns nil when the handler is not responsible for the request.
+	ValidateBackChannelAuthenticationApproval(ctx context.Context, request BackChannelAuthenticationRequester) (err error)
 }
 
 // BackChannelAuthenticationEndpointBindingHandler records a proof-of-possession binding onto the session of a CIBA

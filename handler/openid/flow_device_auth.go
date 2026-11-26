@@ -15,6 +15,8 @@ import (
 )
 
 // OpenIDConnectDeviceAuthorizeHandler issues ID Tokens for the RFC 8628 device authorization grant. As a
+// oauth2.RFC8628DeviceAuthorizeRequestValidator it checks the OpenID Connect 1.0 parameters of the device authorization
+// request in any registration order. As a
 // oauth2.RFC8628UserAuthorizeEndpointHandler it must be registered before rfc8628.UserAuthorizeHandler, so an approval
 // it rejects is not recorded. As a oauth2.TokenEndpointHandler it must be registered after
 // rfc8628.DeviceAuthorizeTokenEndpointHandler, so the granted scopes are set on the token request.
@@ -40,8 +42,14 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) HandleRFC8628UserAuthorizeEndpoint
 
 // PopulateRFC8628UserAuthorizeEndpointResponse persists the OpenID Connect 1.0 session under the device code signature
 // when the request is approved, the 'openid' scope was granted and the client is registered for the device code grant
-// type, and otherwise does nothing. A 'nonce' the client already used while the device code issued for it could still
-// be redeemed is rejected.
+// type, and otherwise does nothing. An approval whose session does not meet the 'max_age', 'prompt' and 'id_token_hint'
+// parameters of the device authorization request, the 'default_max_age' or the 'require_auth_time' of the client is
+// rejected with the error the authorization endpoint returns for it, such as oauth2.ErrLoginRequired, so the decision
+// is not recorded and the user code can be approved again once the End-User has authenticated as required. A 'nonce'
+// the client already used while the device code issued for it could still be redeemed is rejected.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthError
 func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx context.Context, req oauth2.DeviceAuthorizeRequester, _ oauth2.DeviceUserAuthorizeResponder) (err error) {
 	if req.GetStatus() != oauth2.DeviceAuthorizeStatusApproved {
 		return nil
@@ -59,6 +67,10 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpoi
 		return errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebug("The device code has not been issued yet, indicating a broken code configuration."))
 	}
 
+	if _, err = c.OpenIDConnectRequestValidator.ValidateSession(ctx, req); err != nil {
+		return err
+	}
+
 	if err = setNonceUsed(ctx, c.OpenIDConnectRequestStorage, req, getSessionExpiresAt(req, oauth2.DeviceCode, c.Config.GetIDTokenLifespan(ctx))); err != nil {
 		return err
 	}
@@ -68,6 +80,19 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpoi
 	}
 
 	return nil
+}
+
+// ValidateRFC8628DeviceAuthorizeRequest returns oauth2.ErrInvalidRequest for a malformed 'prompt', 'max_age' or
+// 'id_token_hint' parameter of a device authorization request for the 'openid' scope, so no device code is issued for
+// a request which could never be approved.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+func (c *OpenIDConnectDeviceAuthorizeHandler) ValidateRFC8628DeviceAuthorizeRequest(ctx context.Context, request oauth2.DeviceAuthorizeRequester) (err error) {
+	if !request.GetRequestedScopes().Has(consts.ScopeOpenID) {
+		return nil
+	}
+
+	return c.OpenIDConnectRequestValidator.ValidateParameters(ctx, request)
 }
 
 // HandleTokenEndpointRequest always returns oauth2.ErrUnknownRequest as this handler only acts when the token response
@@ -178,6 +203,7 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) RFC8693TokenTypesSupported(ctx con
 }
 
 var (
-	_ oauth2.RFC8628UserAuthorizeEndpointHandler = (*OpenIDConnectDeviceAuthorizeHandler)(nil)
-	_ oauth2.TokenEndpointHandler                = (*OpenIDConnectDeviceAuthorizeHandler)(nil)
+	_ oauth2.RFC8628UserAuthorizeEndpointHandler    = (*OpenIDConnectDeviceAuthorizeHandler)(nil)
+	_ oauth2.RFC8628DeviceAuthorizeRequestValidator = (*OpenIDConnectDeviceAuthorizeHandler)(nil)
+	_ oauth2.TokenEndpointHandler                   = (*OpenIDConnectDeviceAuthorizeHandler)(nil)
 )

@@ -21,8 +21,10 @@ import (
 // redeemed at the token endpoint. As a oauth2.BackChannelAuthenticationEndpointHandler it must be registered before
 // ciba.EndpointHandler, so a reused 'nonce' is rejected before the request is persisted. As a
 // oauth2.BackChannelAuthenticationDecisionHandler it must be registered after ciba.DecisionHandler, so only the
-// decision which was recorded writes a session. As a oauth2.TokenEndpointHandler it must be registered after
-// ciba.TokenEndpointHandler, so the granted scopes are set on the token request.
+// decision which was recorded writes a session. As a oauth2.BackChannelAuthenticationApprovalValidator it refuses an
+// approval which does not meet the registration of the client before any decision is recorded. As a
+// oauth2.TokenEndpointHandler it must be registered after ciba.TokenEndpointHandler, so the granted scopes are set on
+// the token request.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1.1
 type OpenIDConnectCIBAHandler struct {
@@ -57,6 +59,23 @@ func (c *OpenIDConnectCIBAHandler) HandleBackChannelAuthenticationEndpointReques
 	return setNonceUsed(ctx, c.OpenIDConnectRequestStorage, request, expiresAt)
 }
 
+// ValidateBackChannelAuthenticationApproval refuses the approval of a request which will be issued an ID Token when
+// the approval session does not meet the 'default_max_age' or the 'require_auth_time' of the client, with the error
+// the authorization endpoint returns for it, such as oauth2.ErrLoginRequired. The request has no 'max_age' or 'prompt'
+// parameter, and its 'id_token_hint' identifies the end user and was validated when the request was made.
+//
+// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.1
+func (c *OpenIDConnectCIBAHandler) ValidateBackChannelAuthenticationApproval(ctx context.Context, request oauth2.BackChannelAuthenticationRequester) (err error) {
+	if !c.issuesIDToken(request) {
+		return nil
+	}
+
+	_, err = c.OpenIDConnectRequestValidator.ValidateSession(ctx, request.Sanitize(cibaIDTokenParameters))
+
+	return err
+}
+
 // HandleBackChannelAuthenticationDecision persists the OpenID Connect 1.0 session under the 'auth_req_id' signature
 // when the request is approved, the 'openid' scope was granted, and the request is in the push token delivery mode or
 // the client is registered for the 'urn:openid:params:grant-type:ciba' grant type, and otherwise does nothing.
@@ -65,14 +84,7 @@ func (c *OpenIDConnectCIBAHandler) HandleBackChannelAuthenticationDecision(ctx c
 		return nil
 	}
 
-	if !request.GetGrantedScopes().Has(consts.ScopeOpenID) {
-		return nil
-	}
-
-	// A push client is not registered for the grant type, as its tokens are issued when the request is approved.
-	//
-	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.4
-	if request.GetDeliveryMode() != consts.CIBAModePush && !request.GetClient().GetGrantTypes().Has(consts.GrantTypeOpenIDCIBA) {
+	if !c.issuesIDToken(request) {
 		return nil
 	}
 
@@ -87,6 +99,17 @@ func (c *OpenIDConnectCIBAHandler) HandleBackChannelAuthenticationDecision(ctx c
 	}
 
 	return nil
+}
+
+func (c *OpenIDConnectCIBAHandler) issuesIDToken(request oauth2.BackChannelAuthenticationRequester) (issues bool) {
+	if !request.GetGrantedScopes().Has(consts.ScopeOpenID) {
+		return false
+	}
+
+	// A push client is not registered for the grant type, as its tokens are issued when the request is approved.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.4
+	return request.GetDeliveryMode() == consts.CIBAModePush || request.GetClient().GetGrantTypes().Has(consts.GrantTypeOpenIDCIBA)
 }
 
 // HandleTokenEndpointRequest always returns oauth2.ErrUnknownRequest as this handler only acts when the token response
@@ -269,7 +292,8 @@ var cibaIDTokenParameters = []string{
 }
 
 var (
-	_ oauth2.BackChannelAuthenticationEndpointHandler = (*OpenIDConnectCIBAHandler)(nil)
-	_ oauth2.BackChannelAuthenticationDecisionHandler = (*OpenIDConnectCIBAHandler)(nil)
-	_ oauth2.TokenEndpointHandler                     = (*OpenIDConnectCIBAHandler)(nil)
+	_ oauth2.BackChannelAuthenticationEndpointHandler   = (*OpenIDConnectCIBAHandler)(nil)
+	_ oauth2.BackChannelAuthenticationDecisionHandler   = (*OpenIDConnectCIBAHandler)(nil)
+	_ oauth2.BackChannelAuthenticationApprovalValidator = (*OpenIDConnectCIBAHandler)(nil)
+	_ oauth2.TokenEndpointHandler                       = (*OpenIDConnectCIBAHandler)(nil)
 )

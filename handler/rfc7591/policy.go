@@ -476,6 +476,7 @@ func policyOmissions() (omissions map[string]policyOmission) {
 		"token_exchange_actor_token_types":        policyOmittedRequired,
 		"token_exchange_request_token_types":      policyOmittedRequired,
 		"token_exchange_permitted_client_ids":     policyOmittedRequired,
+		"response_modes":                          policyOmittedRequired,
 		"authorization_details_types":             policyOmittedAuthorizationDetailsTypes,
 	}
 

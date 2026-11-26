@@ -613,6 +613,61 @@ func TestRegistrationPolicyCheck(t *testing.T) {
 	}
 }
 
+func TestRegistrationPolicyCheckResponseModes(t *testing.T) {
+	rules := map[string]map[string]any{
+		policyRuleSubsetOf: {policyRuleSubsetOf: []any{consts.ResponseModeQuery, consts.ResponseModeFormPost}},
+		policyRulePattern:  {policyRulePattern: "query|form_post"},
+		policyRuleOneOf:    {policyRuleOneOf: []any{consts.ResponseModeQuery, consts.ResponseModeFormPost}},
+	}
+
+	testCases := []struct {
+		name     string
+		modes    []string
+		expected string
+	}{
+		{
+			name:     "ShouldRequireOmittedResponseModes",
+			expected: "The 'response_modes' value is required by the registration policy.",
+		},
+		{
+			name:     "ShouldRequireEmptyResponseModes",
+			modes:    []string{},
+			expected: "The 'response_modes' value is required by the registration policy.",
+		},
+		{
+			name:  "ShouldPassResponseModesInsideTheSet",
+			modes: []string{consts.ResponseModeQuery},
+		},
+		{
+			name:     "ShouldRejectResponseModesOutsideTheSet",
+			modes:    []string{consts.ResponseModeFragment},
+			expected: "The 'response_modes' value 'fragment' is not permitted by the registration policy.",
+		},
+	}
+
+	for kind, rule := range rules {
+		t.Run(kind, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					policy, err := ParseRegistrationPolicy(map[string]any{consts.ClientMetadataResponseModes: rule}, nil, true)
+					require.NoError(t, err)
+
+					err = policy.Check(&oauth2.ClientRegistrationMetadata{ResponseModes: tc.modes})
+
+					if tc.expected == "" {
+						assert.NoError(t, err)
+
+						return
+					}
+
+					assert.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
+					assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), policyErrorPrefix+tc.expected)
+				})
+			}
+		})
+	}
+}
+
 func TestParseRegistrationPolicyAcceptsGoTypedValues(t *testing.T) {
 	policy, err := ParseRegistrationPolicy(map[string]any{
 		consts.ClientMetadataGrantTypes:    map[string]any{policyRuleSubsetOf: []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken}},
@@ -685,7 +740,7 @@ func TestRegistrationPolicyOmittedMembersClassified(t *testing.T) {
 		"backchannel_endpoint_login_hint_token_types",
 		"tls_client_auth_subject_dn", "tls_client_auth_san_dns", "tls_client_auth_san_uri", "tls_client_auth_san_ip",
 		"tls_client_auth_san_email", "tls_client_certificate_bound_access_tokens",
-		"require_pushed_authorization_requests", "dpop_bound_access_tokens", "response_modes", "audience", "resource",
+		"require_pushed_authorization_requests", "dpop_bound_access_tokens", "audience", "resource",
 	}
 
 	for _, member := range policyStandardMembers {

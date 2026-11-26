@@ -402,7 +402,12 @@ func TestIDJAGRequestRefreshTokenAuthenticationContext(t *testing.T) {
 
 			session := newSpecSession(idjagSubject)
 
-			request := newExchangeRequest(t, newIDJAGRegisteredClient(), session, url.Values{
+			var requester oauth2.Client = newIDJAGRegisteredClient()
+			if tc.requested != consts.TokenTypeRFC8693IDJAG {
+				requester = ownRefreshTokenClient(requester)
+			}
+
+			request := newExchangeRequest(t, requester, session, url.Values{
 				consts.FormParameterSubjectToken:       {token},
 				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
 				consts.FormParameterRequestedTokenType: {tc.requested},
@@ -425,13 +430,13 @@ func TestIDJAGRequestRefreshTokenAuthenticationContext(t *testing.T) {
 	}
 }
 
-func TestIDJAGRequestOtherExchangesKeepTheRefreshTokenAudience(t *testing.T) {
+func TestIDJAGRequestOtherExchangesAreRestrictedToTheRefreshTokenGrant(t *testing.T) {
 	testCases := []struct {
 		name      string
 		requested string
 	}{
-		{name: "ShouldAcceptAnAudienceOutsideTheGrantForAnAccessToken", requested: consts.TokenTypeRFC8693AccessToken},
-		{name: "ShouldAcceptAnAudienceOutsideTheGrantForARefreshToken", requested: consts.TokenTypeRFC8693RefreshToken},
+		{name: "ShouldRejectAnAudienceOutsideTheGrantForAnAccessToken", requested: consts.TokenTypeRFC8693AccessToken},
+		{name: "ShouldRejectAnAudienceOutsideTheGrantForARefreshToken", requested: consts.TokenTypeRFC8693RefreshToken},
 	}
 
 	for _, tc := range testCases {
@@ -441,7 +446,7 @@ func TestIDJAGRequestOtherExchangesKeepTheRefreshTokenAudience(t *testing.T) {
 
 			handler := newRefreshTokenTypeHandler(cfg, store, strategy)
 
-			request := newExchangeRequest(t, store.Clients[idjagClientID], newSpecSession(idjagSubject), url.Values{
+			request := newExchangeRequest(t, ownRefreshTokenClient(store.Clients[idjagClientID]), newSpecSession(idjagSubject), url.Values{
 				consts.FormParameterSubjectToken:       {createIDJAGRefreshToken(t, strategy, store, store.Clients[idjagClientID], []string{idjagScope}, nil, nil)},
 				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
 				consts.FormParameterRequestedTokenType: {tc.requested},
@@ -449,7 +454,8 @@ func TestIDJAGRequestOtherExchangesKeepTheRefreshTokenAudience(t *testing.T) {
 			request.RequestedAudience = oauth2.Arguments{idjagAudience}
 			request.RequestedResource = oauth2.Arguments{idjagResource}
 
-			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
+			// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+			assert.ErrorIs(t, handler.HandleTokenEndpointRequest(t.Context(), request), oauth2.ErrInvalidTarget)
 		})
 	}
 }
@@ -461,7 +467,7 @@ func TestIDJAGRequestOtherRequestedTypesUnchanged(t *testing.T) {
 	client := store.Clients[idjagClientID]
 	refreshToken := createExchangeRefreshToken(t, strategy, store, client, idjagSubject, "openid")
 
-	request := newExchangeRequest(t, client, newSpecSession(idjagSubject), url.Values{
+	request := newExchangeRequest(t, ownRefreshTokenClient(client), newSpecSession(idjagSubject), url.Values{
 		consts.FormParameterSubjectToken:       {refreshToken},
 		consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
 		consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693AccessToken},

@@ -44,18 +44,20 @@ func TestExchangePolicy(t *testing.T) {
 		hintNotPermitted = "not permitted to exchange"
 		hintNotIssued    = "was not issued to the OAuth 2.0 client"
 		hintOwnAccess    = "on their own access tokens"
+		hintOwnRefresh   = "on their own refresh tokens"
 	)
 
 	testCases := []struct {
-		name      string
-		refresh   bool
-		actor     bool
-		owner     func() oauth2.Client
-		self      bool
-		unaddress bool
-		ownAccess bool
-		requested string
-		hint      string
+		name       string
+		refresh    bool
+		actor      bool
+		owner      func() oauth2.Client
+		self       bool
+		unaddress  bool
+		ownAccess  bool
+		ownRefresh bool
+		requested  string
+		hint       string
 	}{
 		{name: "ShouldAcceptAnAddressedAccessTokenOfAPlainClient", owner: plain},
 		{name: "ShouldAcceptAnAddressedAccessTokenWithAnEmptyList", owner: registered()},
@@ -73,7 +75,11 @@ func TestExchangePolicy(t *testing.T) {
 		{name: "ShouldRejectAnActorAccessTokenWhenAnotherClientIsListed", actor: true, owner: registered("someone-else"), hint: hintNotPermitted},
 		{name: "ShouldAcceptAnActorAccessTokenWhenListed", actor: true, owner: registered(requesterID)},
 		{name: "ShouldAcceptTheRequestersOwnActorAccessToken", actor: true, self: true},
-		{name: "ShouldAcceptTheRequestersOwnRefreshToken", refresh: true, self: true},
+		{name: "ShouldRejectTheRequestersOwnRefreshToken", refresh: true, self: true, hint: hintOwnRefresh},
+		{name: "ShouldRejectTheRequestersOwnRefreshTokenWhenOptedInForAccessTokens", refresh: true, self: true, ownAccess: true, hint: hintOwnRefresh},
+		{name: "ShouldRejectAnIDTokenFromTheRequestersOwnRefreshToken", refresh: true, self: true, requested: consts.TokenTypeRFC8693IDToken, hint: hintOwnRefresh},
+		{name: "ShouldAcceptTheRequestersOwnRefreshTokenWhenOptedIn", refresh: true, self: true, ownRefresh: true},
+		{name: "ShouldRejectTheRequestersOwnAccessTokenWhenOptedInForRefreshTokens", self: true, ownRefresh: true, hint: hintOwnAccess},
 		{name: "ShouldRejectARefreshTokenOfAPlainClient", refresh: true, owner: plain, hint: hintNotIssued},
 		{name: "ShouldRejectARefreshTokenWithAnEmptyList", refresh: true, owner: registered(), hint: hintNotIssued},
 		{name: "ShouldRejectARefreshTokenEvenWhenListed", refresh: true, owner: registered(requesterID), hint: hintNotIssued},
@@ -93,10 +99,11 @@ func TestExchangePolicy(t *testing.T) {
 
 				var requester oauth2.Client = &oauth2.DefaultClient{ID: requesterID, GrantTypes: grants}
 
-				if tc.ownAccess {
+				if tc.ownAccess || tc.ownRefresh {
 					requester = &oauth2.DefaultRegisteredClient{
-						DefaultClient:               &oauth2.DefaultClient{ID: requesterID, GrantTypes: grants},
-						TokenExchangeOwnAccessToken: true,
+						DefaultClient:                &oauth2.DefaultClient{ID: requesterID, GrantTypes: grants},
+						TokenExchangeOwnAccessToken:  tc.ownAccess,
+						TokenExchangeOwnRefreshToken: tc.ownRefresh,
 					}
 				}
 

@@ -52,7 +52,7 @@ func TestTokenExchangeRefreshTokenOptIn(t *testing.T) {
 				token := chainSubjectToken(t, strategy, store, client, newOptInSubject(), true)
 
 				request := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693RefreshToken, token, tc.requested)
-				registered := &oauth2.DefaultRegisteredClient{DefaultClient: client, TokenExchangeRefreshToken: tc.optedIn}
+				registered := &oauth2.DefaultRegisteredClient{DefaultClient: client, TokenExchangeRefreshToken: tc.optedIn, TokenExchangeOwnRefreshToken: true}
 				request.Client = registered
 
 				if tc.online != nil {
@@ -144,7 +144,7 @@ func TestCustomJWTIsNotConsumedWhenARefreshTokenIsNotPermitted(t *testing.T) {
 				consts.FormParameterActorToken:         {f.token(t, uuid.New().String())},
 				consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693RefreshToken},
 			})
-			request.Client = &oauth2.DefaultRegisteredClient{DefaultClient: f.client.(*oauth2.DefaultClient), TokenExchangeRefreshToken: tc.optedIn}
+			request.Client = &oauth2.DefaultRegisteredClient{DefaultClient: f.client.(*oauth2.DefaultClient), TokenExchangeRefreshToken: tc.optedIn, TokenExchangeOwnRefreshToken: true}
 
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.custom.HandleTokenEndpointRequest(t.Context(), request)))
 

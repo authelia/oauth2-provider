@@ -432,7 +432,7 @@ func newRotationFixture(t *testing.T, store rfc8693ExchangeStore) *rotationFixtu
 		config:   config,
 		store:    store,
 		strategy: strategy,
-		client:   &oauth2.DefaultRegisteredClient{DefaultClient: client, TokenExchangeRefreshToken: true},
+		client:   &oauth2.DefaultRegisteredClient{DefaultClient: client, TokenExchangeRefreshToken: true, TokenExchangeOwnRefreshToken: true},
 		access:   access,
 		refresh:  refresh,
 		subject:  chainSubjectToken(t, strategy, store, client, newOptInSubject(), true),

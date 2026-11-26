@@ -260,7 +260,7 @@ func TestRefreshTokenTypeHandlerAppliesTheRefreshTokenGrantChecks(t *testing.T) 
 					handler.TokenRevocationStorage = nil
 				}
 
-				client := store.GetClients()["my-client"]
+				client := ownRefreshTokenClient(store.GetClients()["my-client"])
 
 				if tc.online != nil {
 					client = &onlineRefreshTokenClient{Client: client, allow: *tc.online}
@@ -343,6 +343,10 @@ type onlineRefreshTokenClient struct {
 
 func (c *onlineRefreshTokenClient) GetAllowOnlineRefreshTokens() bool {
 	return c.allow
+}
+
+func (c *onlineRefreshTokenClient) GetAllowOwnRefreshTokenExchange() bool {
+	return true
 }
 
 type failingRefreshTokenStrategy struct {

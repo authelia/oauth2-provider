@@ -102,7 +102,7 @@ func TestRefreshTokenTypeHandlerRecordsTheSubjectRequester(t *testing.T) {
 			}
 
 			session := NewDefaultSession()
-			request := newSubjectRequesterExchange(client, form, session)
+			request := newSubjectRequesterExchange(ownRefreshTokenClient(client), form, session)
 
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(newLifetimeRefreshTokenHandler(config, coreStrategy, store).HandleTokenEndpointRequest(t.Context(), request)))
 

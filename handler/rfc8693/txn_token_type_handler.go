@@ -442,7 +442,7 @@ func (c *TxnTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRe
 		return err
 	}
 
-	if err = consumeTokenJTIs(ctx, c.Config, c.JTIStorage, request, session); err != nil {
+	if err = consumeTokenJTIs(ctx, c.Config, c.JTIStorage, request); err != nil {
 		return err
 	}
 

@@ -33,11 +33,6 @@ type TokenExchangeGrantHandler struct {
 	ScopeStrategy    oauth2.ScopeStrategy
 	AudienceStrategy oauth2.AudienceStrategy
 	ResourceStrategy oauth2.ResourceStrategy
-
-	// Storage marks a custom or self-signed JWT presented as a subject or actor token as used. It is required when a
-	// *JWTType validation or *SelfSignedTokenType sets ValidateJTI, other than on a request for a Transaction Token, where
-	// TxnTokenTypeHandler.JTIStorage marks it once the token is signed.
-	Storage CustomJWTStorage
 }
 
 // HandleTokenEndpointRequest implements https://tools.ietf.org/html/rfc6749#section-4.3.2
@@ -323,8 +318,6 @@ func (c *TokenExchangeGrantHandler) GetResourceStrategy(ctx context.Context, cli
 // 'invalid_request' per RFC 8693 Section 2.2.2.
 //
 // See https://datatracker.ietf.org/doc/html/rfc8693#section-4.1.
-//
-//nolint:gocyclo
 func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
 	if !c.CanHandleTokenEndpointRequest(ctx, request) {
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
@@ -369,24 +362,48 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 		session.SetClaimActor(act)
 	}
 
-	// The authorization details are assigned before any 'jti' is consumed, so a request they fail does not spend a
-	// single-use token.
-	//
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6
 	if err = assignAuthorizationDetails(ctx, c.Config, request); err != nil {
 		return err
 	}
 
-	if !isTxnTokenRequest(ctx, request, c.Config) {
-		if err = consumeTokenJTIs(ctx, c.Config, c.Storage, request, session); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
-func consumeTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, store CustomJWTStorage, request oauth2.AccessRequester, session Session) (err error) {
+// ConsumeTokenJTIs marks the 'jti' of each 'subject_token' and 'actor_token' of a token type which sets ValidateJTI as
+// used. A token type handler calls it once every check that can refuse the request has passed, so that a refused
+// request does not consume a single-use token. A 'jti' which is already used is an 'invalid_request' error per RFC 8693
+// Section 2.2.2.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7523#section-3
+func ConsumeTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, store CustomJWTStorage, request oauth2.AccessRequester) (err error) {
+	return consumeTokenJTIs(ctx, config, store, request)
+}
+
+type tokenJTI struct {
+	iss, jti string
+	exp      time.Time
+}
+
+func consumeTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, store CustomJWTStorage, request oauth2.AccessRequester) (err error) {
+	var jtis []tokenJTI
+
+	if jtis, err = presentedTokenJTIs(ctx, config, store, request); err != nil || len(jtis) == 0 {
+		return err
+	}
+
+	return createInTransaction(ctx, store, func(ctx context.Context) error {
+		return markTokenJTIs(ctx, store, jtis)
+	})
+}
+
+func presentedTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, store CustomJWTStorage, request oauth2.AccessRequester) (jtis []tokenJTI, err error) {
+	var session Session
+
+	if session, err = exchangeSession(request); err != nil {
+		return nil, err
+	}
+
 	form := request.GetRequestForm()
 	types := config.GetRFC8693TokenTypes(ctx)
 
@@ -398,62 +415,43 @@ func consumeTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, 
 		{form.Get(consts.FormParameterSubjectTokenType), session.GetSubjectToken()},
 	}
 
-	type marker struct {
-		iss, jti string
-		exp      time.Time
-	}
-
-	var markers []marker
-
 	for _, token := range presented {
 		if !validatesJTI(types[token.kind]) {
 			continue
 		}
 
 		if store == nil {
-			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the storage required to validate the 'jti' claim of a JSON Web Token is not configured."))
+			return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to perform token exchange because the storage required to validate the 'jti' claim of a JSON Web Token is not configured."))
 		}
 
 		iss, _ := token.claims[consts.ClaimIssuer].(string)
 		jti, _ := token.claims[consts.ClaimJWTID].(string)
 
 		if jti == "" {
-			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from token is missing."))
+			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from token is missing."))
 		}
 
-		if slices.ContainsFunc(markers, func(m marker) bool { return m.iss == iss && m.jti == jti }) {
+		if slices.ContainsFunc(jtis, func(t tokenJTI) bool { return t.iss == iss && t.jti == jti }) {
 			continue
 		}
 
 		exp, _ := claimvalue.Number[int64](token.claims[consts.ClaimExpirationTime])
 
-		markers = append(markers, marker{iss: iss, jti: jti, exp: time.Unix(exp, 0)})
+		jtis = append(jtis, tokenJTI{iss: iss, jti: jti, exp: time.Unix(exp, 0)})
 	}
 
-	if len(markers) == 0 {
-		return nil
-	}
+	return jtis, nil
+}
 
-	if ctx, err = storage.MaybeBeginTx(ctx, store); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
-	}
-
-	for _, m := range markers {
-		if err = store.SetTokenExchangeCustomJWT(ctx, m.iss, m.jti, m.exp); err != nil {
-			if rollback := storage.MaybeRollbackTx(ctx, store); rollback != nil {
-				return errorsx.WithStack(oauth2.ErrServerError.WithWrap(rollback).WithDebugError(rollback))
-			}
-
+func markTokenJTIs(ctx context.Context, store CustomJWTStorage, jtis []tokenJTI) (err error) {
+	for _, t := range jtis {
+		if err = store.SetTokenExchangeCustomJWT(ctx, t.iss, t.jti, t.exp); err != nil {
 			if errors.Is(err, oauth2.ErrJTIKnown) {
 				return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from the token must be used only once.").WithWrap(err))
 			}
 
 			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 		}
-	}
-
-	if err = storage.MaybeCommitTx(ctx, store); err != nil {
-		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	return nil
@@ -842,11 +840,19 @@ func beginSubjectRefreshTokenRotation(ctx context.Context, strategy hoauth2.Refr
 	}
 }
 
-func commitSubjectRefreshTokenRotation(ctx context.Context, store hoauth2.TokenRevocationStorage, request oauth2.AccessRequester, signature string, create func(ctx context.Context) error) (err error) {
+func commitSubjectRefreshTokenRotation(ctx context.Context, store hoauth2.TokenRevocationStorage, request oauth2.AccessRequester, signature string, mark, create func(ctx context.Context) error) (err error) {
 	parent := ctx
 
 	if ctx, err = storage.MaybeBeginTx(ctx, store); err != nil {
 		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	if err = mark(ctx); err != nil {
+		if rollback := storage.MaybeRollbackTx(ctx, store); rollback != nil {
+			return errRollback(err, rollback)
+		}
+
+		return err
 	}
 
 	if err = store.RotateRefreshToken(ctx, request.GetID(), signature); err == nil {
@@ -885,12 +891,18 @@ func commitSubjectRefreshTokenRotation(ctx context.Context, store hoauth2.TokenR
 	}
 }
 
-func createInTransaction(ctx context.Context, store any, create func(ctx context.Context) error) (err error) {
+func createInTransaction(ctx context.Context, store any, steps ...func(ctx context.Context) error) (err error) {
 	if ctx, err = storage.MaybeBeginTx(ctx, store); err != nil {
 		return errors.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if err = create(ctx); err == nil {
+	for _, step := range steps {
+		if err = step(ctx); err != nil {
+			break
+		}
+	}
+
+	if err == nil {
 		err = storage.MaybeCommitTx(ctx, store)
 	}
 

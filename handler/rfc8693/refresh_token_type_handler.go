@@ -431,6 +431,12 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		return err
 	}
 
+	var jtis []tokenJTI
+
+	if jtis, err = presentedTokenJTIs(ctx, c.Config, c.Storage, request); err != nil {
+		return err
+	}
+
 	var subjectSignature string
 
 	rotate := rotatesSubjectRefreshToken(ctx, c.Config, request)
@@ -463,6 +469,10 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		requester.SetGrantedAuthorizationDetails(grant)
 	}
 
+	mark := func(ctx context.Context) error {
+		return markTokenJTIs(ctx, c.Storage, jtis)
+	}
+
 	create := func(ctx context.Context) (err error) {
 		if signature == "" {
 			return nil
@@ -476,9 +486,12 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		return nil
 	}
 
-	if rotate {
-		err = commitSubjectRefreshTokenRotation(ctx, c.TokenRevocationStorage, request, subjectSignature, create)
-	} else {
+	switch {
+	case rotate:
+		err = commitSubjectRefreshTokenRotation(ctx, c.TokenRevocationStorage, request, subjectSignature, mark, create)
+	case len(jtis) != 0:
+		err = createInTransaction(ctx, c.Storage, mark, create)
+	default:
 		err = create(ctx)
 	}
 

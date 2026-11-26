@@ -233,6 +233,12 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 		return err
 	}
 
+	var jtis []tokenJTI
+
+	if jtis, err = presentedTokenJTIs(ctx, c.Config, c.Storage, request); err != nil {
+		return err
+	}
+
 	grant := grantedAuthorizationDetails(ctx, c.Config, request)
 
 	mode := c.getRefreshTokenMode(request)
@@ -258,6 +264,10 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 
 	if token, signature, err = c.GenerateAccessToken(ctx, request); err != nil {
 		return err
+	}
+
+	mark := func(ctx context.Context) error {
+		return markTokenJTIs(ctx, c.Storage, jtis)
 	}
 
 	create := func(ctx context.Context) (err error) {
@@ -297,9 +307,9 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 
 	switch {
 	case rotate:
-		err = commitSubjectRefreshTokenRotation(ctx, c.TokenRevocationStorage, request, subjectSignature, create)
-	case issueRefreshToken:
-		err = createInTransaction(ctx, c.Storage, create)
+		err = commitSubjectRefreshTokenRotation(ctx, c.TokenRevocationStorage, request, subjectSignature, mark, create)
+	case issueRefreshToken, len(jtis) != 0:
+		err = createInTransaction(ctx, c.Storage, mark, create)
 	default:
 		err = create(ctx)
 	}

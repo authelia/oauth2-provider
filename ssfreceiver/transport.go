@@ -21,6 +21,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/iox"
 	"authelia.com/provider/oauth2/internal/ssfjson"
 )
 
@@ -290,7 +291,7 @@ func (r *Receiver) transmitOnce(ctx context.Context, client *retryablehttp.Clien
 		large bool
 	)
 
-	if data, large, err = readLimited(res.Body, limit); err != nil {
+	if data, large, err = iox.ReadLimited(res.Body, limit); err != nil {
 		return nil, false, fmt.Errorf("ssfreceiver: the transmitter response could not be read: %w", &unconfirmedError{err: err, status: res.StatusCode})
 	}
 
@@ -473,19 +474,6 @@ func isIdempotentMethod(method string) (ok bool) {
 	default:
 		return false
 	}
-}
-
-// readLimited reads at most limit bytes, and reports whether there are more.
-func readLimited(reader io.Reader, limit int64) (data []byte, large bool, err error) {
-	if data, err = io.ReadAll(io.LimitReader(reader, limit+1)); err != nil {
-		return nil, false, err
-	}
-
-	if int64(len(data)) > limit {
-		return nil, true, nil
-	}
-
-	return data, false, nil
 }
 
 func isJSONContentType(header http.Header) (ok bool) {

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -791,6 +792,7 @@ func TestSSFStreamHandlerCreateRejects(t *testing.T) {
 		{name: "ShouldRejectTrailingData", contentType: "application/json", body: `{} {}`, code: http.StatusBadRequest, errCode: "invalid_request"},
 		{name: "ShouldRejectOversizeBody", contentType: "application/json", body: `{"description":"` + strings.Repeat("a", 600) + `"}`, code: http.StatusBadRequest, errCode: "invalid_request"},
 		{name: "ShouldNotTruncateOversizeIntoValidJSON", mutate: func(c *SSFConfig) { c.MaxRequestBytes = 2 }, contentType: "application/json", body: "{}    ", code: http.StatusBadRequest, errCode: "invalid_request"},
+		{name: "ShouldReadBodyAtTheLargestLimit", mutate: func(c *SSFConfig) { c.MaxRequestBytes = math.MaxInt64 }, contentType: "application/json", body: `this is not json`, code: http.StatusBadRequest, errCode: "invalid_request"},
 	}
 
 	for _, tc := range testCases {

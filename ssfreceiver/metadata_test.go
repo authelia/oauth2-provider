@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -276,6 +277,18 @@ func TestReceiverDiscover(t *testing.T) {
 					data := testMetadata(issuer, nil)
 
 					writeTestJSON(w, append(data, []byte(strings.Repeat(" ", 512-len(data)))...))
+				}
+			},
+			hits: 1,
+		},
+		{
+			name:   "ShouldAcceptBodyAtTheLargestLimit",
+			config: func(config *Config) { config.MaxResponseBytes = math.MaxInt64 },
+			handler: func(t *testing.T, issuer string, hits *atomic.Int32) http.HandlerFunc {
+				return func(w http.ResponseWriter, r *http.Request) {
+					hits.Add(1)
+
+					writeTestJSON(w, testMetadata(issuer, nil))
 				}
 			},
 			hits: 1,

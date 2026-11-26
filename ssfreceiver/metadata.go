@@ -17,6 +17,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/iox"
 	"authelia.com/provider/oauth2/internal/ssfjson"
 )
 
@@ -106,7 +107,7 @@ func (r *Receiver) fetchMetadata(ctx context.Context, issuer, location string) (
 		large bool
 	)
 
-	if data, large, err = readLimited(response.Body, limit); err != nil {
+	if data, large, err = iox.ReadLimited(response.Body, limit); err != nil {
 		return nil, fmt.Errorf("ssfreceiver: the transmitter configuration metadata could not be read: %w", err)
 	}
 

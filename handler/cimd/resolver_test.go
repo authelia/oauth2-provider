@@ -120,6 +120,17 @@ func TestResolverResolvesADocument(t *testing.T) {
 	assert.Equal(t, "application/json", env.accept.Load())
 }
 
+func TestResolverReadsADocumentAtTheLargestBodyLimit(t *testing.T) {
+	env := newResolverEnv(t, func(config *Config) { config.MaxBodyBytes = math.MaxInt64 })
+
+	id := env.server.URL + "/ok"
+
+	client, err := env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), id)
+
+	require.NoError(t, err)
+	assert.Equal(t, id, client.GetID())
+}
+
 func TestResolverCachesAFreshDocument(t *testing.T) {
 	env := newResolverEnv(t, nil)
 

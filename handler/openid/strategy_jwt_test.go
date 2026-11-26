@@ -844,6 +844,122 @@ func TestJWTStrategy_GenerateIDTokenClientAuthenticationTime(t *testing.T) {
 	}
 }
 
+func TestJWTStrategy_GenerateIDTokenEssentialAuthTime(t *testing.T) {
+	const (
+		essential = `{"id_token":{"auth_time":{"essential":true}}}`
+		voluntary = `{"id_token":{"auth_time":null}}`
+		userinfo  = `{"userinfo":{"auth_time":{"essential":true}}}`
+
+		errEssentialAuthTime = "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because authentication time claim is required when the 'claims' parameter requests it as an Essential Claim."
+	)
+
+	now := time.Now().UTC().Truncate(time.Second)
+
+	known := jwt.NewNumericDate(now.Add(-48 * time.Hour))
+
+	access := func(grant string) func() oauth2.Requester {
+		return func() oauth2.Requester {
+			requester := oauth2.NewAccessRequest(nil)
+			requester.GrantTypes = oauth2.Arguments{grant}
+
+			return requester
+		}
+	}
+
+	authorize := func() oauth2.Requester { return oauth2.NewAuthorizeRequest() }
+
+	testCases := []struct {
+		name     string
+		enforce  bool
+		request  func() oauth2.Requester
+		raw      string
+		authTime *jwt.NumericDate
+		expected any
+		err      string
+	}{
+		{name: "ShouldIncludeEssentialAuthTime", enforce: true, request: authorize, raw: essential, authTime: known, expected: float64(known.Unix())},
+		{name: "ShouldFailEssentialAuthTimeUnknown", enforce: true, request: authorize, raw: essential, err: errEssentialAuthTime},
+		{name: "ShouldFailEssentialAuthTimeZero", enforce: true, request: authorize, raw: essential, authTime: &jwt.NumericDate{}, err: errEssentialAuthTime},
+		{name: "ShouldIncludeEssentialAuthTimeForTheAuthorizationCodeGrant", enforce: true, request: access(consts.GrantTypeAuthorizationCode), raw: essential, authTime: known, expected: float64(known.Unix())},
+		{name: "ShouldFailEssentialAuthTimeUnknownForTheAuthorizationCodeGrant", enforce: true, request: access(consts.GrantTypeAuthorizationCode), raw: essential, err: errEssentialAuthTime},
+		{name: "ShouldIncludeEssentialAuthTimeOnRefresh", enforce: true, request: access(consts.GrantTypeRefreshToken), raw: essential, authTime: known, expected: float64(known.Unix())},
+		{name: "ShouldFailEssentialAuthTimeUnknownOnRefresh", enforce: true, request: access(consts.GrantTypeRefreshToken), raw: essential, err: errEssentialAuthTime},
+		{name: "ShouldOmitVoluntaryAuthTimeUnknown", enforce: true, request: authorize, raw: voluntary, expected: nil},
+		{name: "ShouldOmitUserInfoEssentialAuthTimeUnknown", enforce: true, request: authorize, raw: userinfo, expected: nil},
+		{name: "ShouldOmitAuthTimeUnknownWithoutClaims", enforce: true, request: authorize, expected: nil},
+		{name: "ShouldOmitEssentialAuthTimeUnknownWhenNotEnforced", request: authorize, raw: essential, expected: nil},
+		{name: "ShouldOmitEssentialAuthTimeUnknownOnRefreshWhenNotEnforced", request: access(consts.GrantTypeRefreshToken), raw: essential, expected: nil},
+		{name: "ShouldIncludeEssentialAuthTimeWhenNotEnforced", request: authorize, raw: essential, authTime: known, expected: float64(known.Unix())},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{
+				MinParameterEntropy:    oauth2.MinParameterEntropy,
+				EnforceClaimsParameter: tc.enforce,
+			}
+
+			strategy := &DefaultStrategy{
+				Strategy: &jwt.DefaultStrategy{
+					Config: config,
+					Issuer: jwt.NewDefaultIssuerRS256Unverified(key),
+				},
+				Config: config,
+			}
+
+			requester := tc.request()
+
+			requester.SetSession(&DefaultSession{
+				Claims: &jwt.IDTokenClaims{
+					Subject:  testSubjectPeter,
+					AuthTime: tc.authTime,
+				},
+				Headers:     &jwt.Headers{},
+				RequestedAt: now,
+			})
+
+			client := &oauth2.DefaultClient{ID: "foo"}
+
+			switch r := requester.(type) {
+			case *oauth2.AccessRequest:
+				r.Client = client
+			case *oauth2.AuthorizeRequest:
+				r.Client = client
+			}
+
+			if tc.raw != "" {
+				claims, err := oauth2.ParseClaimsRequest(url.Values{consts.FormParameterClaims: {tc.raw}})
+				require.NoError(t, err)
+
+				requester.(oauth2.ClaimsRequester).SetClaims(claims)
+			}
+
+			token, err := strategy.GenerateIDToken(t.Context(), time.Hour, requester)
+
+			if tc.err != "" {
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), tc.err)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			claims := map[string]any{}
+
+			_, err = jwt.UnsafeParseSignedAny(token, &claims)
+			require.NoError(t, err)
+
+			if tc.expected == nil {
+				assert.NotContains(t, claims, consts.ClaimAuthenticationTime)
+
+				return
+			}
+
+			assert.Equal(t, tc.expected, claims[consts.ClaimAuthenticationTime])
+		})
+	}
+}
+
 func TestJWTStrategy_GenerateIDTokenMinimumACR(t *testing.T) {
 	config := &oauth2.Config{
 		MinParameterEntropy: oauth2.MinParameterEntropy,

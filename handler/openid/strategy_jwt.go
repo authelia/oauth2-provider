@@ -329,6 +329,12 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because authentication time claim is required when the client registered require_auth_time."))
 	}
 
+	// OpenID Connect Core 1.0 Section 2: the 'auth_time' Claim is REQUIRED when the 'claims' parameter requested it as
+	// an Essential Claim.
+	if isClaimsParameterEnforced(ctx, h.Config) && isAuthTimeEssential(request) && isAuthTimeUnknown(claims) {
+		return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because authentication time claim is required when the 'claims' parameter requests it as an Essential Claim."))
+	}
+
 	var acr string
 
 	// OpenID Connect Core 1.0 Section 12.2: an ID Token issued for a refresh carries the auth_time of the original

@@ -653,12 +653,20 @@ func TestValidateClaims(t *testing.T) {
 		subjectPeter  = `{"id_token":{"sub":{"value":"peter"}}}`
 		subjectValues = `{"id_token":{"sub":{"values":["peter","alice"]}}}`
 		userinfoEmail = `{"userinfo":{"email":null}}`
+		essentialTime = `{"id_token":{"auth_time":{"essential":true}}}`
 	)
 
 	session := func(subject, acr string) *DefaultSession {
 		return &DefaultSession{
 			Subject: subject,
 			Claims:  &jwt.IDTokenClaims{Subject: subject, AuthenticationContextClassReference: acr},
+		}
+	}
+
+	authenticated := func(authTime *jwt.NumericDate) *DefaultSession {
+		return &DefaultSession{
+			Subject: "peter",
+			Claims:  &jwt.IDTokenClaims{Subject: "peter", AuthTime: authTime},
 		}
 	}
 
@@ -688,6 +696,13 @@ func TestValidateClaims(t *testing.T) {
 		{name: "ShouldPassUserInfoWithToken", enforce: true, raw: userinfoEmail, responseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken, consts.ResponseTypeImplicitFlowToken}, session: session("peter", "")},
 		{name: "ShouldFailUserInfoWithIDTokenOnly", enforce: true, raw: userinfoEmail, responseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}, session: session("peter", ""), err: oauth2.ErrInvalidRequest},
 		{name: "ShouldFailEmptyUserInfoWithIDTokenOnly", enforce: true, raw: `{"userinfo":{}}`, responseTypes: oauth2.Arguments{consts.ResponseTypeImplicitFlowIDToken}, session: session("peter", ""), err: oauth2.ErrInvalidRequest},
+		{name: "ShouldPassEssentialAuthTimeKnown", enforce: true, raw: essentialTime, responseTypes: code, session: authenticated(jwt.NewNumericDate(time.Now().Add(-time.Minute)))},
+		{name: "ShouldFailEssentialAuthTimeMissingFromSession", enforce: true, raw: essentialTime, responseTypes: code, session: authenticated(nil), err: oauth2.ErrServerError},
+		{name: "ShouldFailEssentialAuthTimeZero", enforce: true, raw: essentialTime, responseTypes: code, session: authenticated(&jwt.NumericDate{}), err: oauth2.ErrServerError},
+		{name: "ShouldPassVoluntaryAuthTimeMissingFromSession", enforce: true, raw: `{"id_token":{"auth_time":{"essential":false}}}`, responseTypes: code, session: authenticated(nil)},
+		{name: "ShouldPassNullAuthTimeMissingFromSession", enforce: true, raw: `{"id_token":{"auth_time":null}}`, responseTypes: code, session: authenticated(nil)},
+		{name: "ShouldPassUserInfoEssentialAuthTimeMissingFromSession", enforce: true, raw: `{"userinfo":{"auth_time":{"essential":true}}}`, responseTypes: code, session: authenticated(nil)},
+		{name: "ShouldPassEssentialAuthTimeMissingFromSessionWhenNotEnforced", raw: essentialTime, responseTypes: code, session: authenticated(nil)},
 		{name: "ShouldFailUnknownSessionType", enforce: true, raw: essentialGold, responseTypes: code, session: &oauth2.DefaultSession{}, err: oauth2.ErrServerError},
 		{name: "ShouldPassEssentialACRNotMatchedWhenNotEnforced", raw: essentialGold, responseTypes: code, session: session("peter", "bronze")},
 		{name: "ShouldPassSubjectNotMatchedWhenNotEnforced", raw: subjectPeter, responseTypes: code, session: session("alice", "")},
@@ -718,6 +733,8 @@ func TestValidateClaims(t *testing.T) {
 
 				return
 			}
+
+			require.NoError(t, err)
 
 			assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 		})

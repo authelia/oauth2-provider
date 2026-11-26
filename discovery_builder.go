@@ -766,11 +766,12 @@ func validateOAuth2AuthorizationServerMetadataRequired(metadata *OAuth2Authoriza
 }
 
 // isClaimsParameterEnforced reports whether the authorization server meets the requirements OpenID Connect Core 1.0
-// places on an OP which supports the 'claims' parameter: a requested 'sub' value and an Essential 'acr' value are
-// enforced. Only then is 'claims_parameter_supported' advertised.
+// places on an OP which supports the 'claims' parameter: a requested 'sub' value, an Essential 'acr' value and an
+// Essential 'auth_time' are enforced. Only then is 'claims_parameter_supported' advertised.
 //
 // See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequestValidation
 // See: https://openid.net/specs/openid-connect-core-1_0.html#acrSemantics
+// See: https://openid.net/specs/openid-connect-core-1_0.html#IDToken
 func isClaimsParameterEnforced(ctx context.Context, config Configurator) bool {
 	provider, ok := config.(ClaimsParameterEnforcementProvider)
 

@@ -308,13 +308,19 @@ func TestImplicit_HandleAuthorizeEndpointRequest(t *testing.T) {
 }
 
 func TestImplicit_HandleAuthorizeEndpointRequestEnforcesClaims(t *testing.T) {
+	acr := map[string]*oauth2.ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}
+	authTime := map[string]*oauth2.ClaimRequest{"auth_time": {Essential: true}}
+
 	testCases := []struct {
 		name    string
 		enforce bool
+		claims  map[string]*oauth2.ClaimRequest
 		err     error
 	}{
-		{name: "ShouldFailWhenEnforcedAndACRNotMet", enforce: true, err: oauth2.ErrUnmetAuthenticationRequirements},
-		{name: "ShouldPassWhenNotEnforced"},
+		{name: "ShouldFailWhenEnforcedAndACRNotMet", enforce: true, claims: acr, err: oauth2.ErrUnmetAuthenticationRequirements},
+		{name: "ShouldPassWhenNotEnforced", claims: acr},
+		{name: "ShouldFailWhenEnforcedAndEssentialAuthTimeUnknown", enforce: true, claims: authTime, err: oauth2.ErrServerError},
+		{name: "ShouldPassEssentialAuthTimeUnknownWhenNotEnforced", claims: authTime},
 	}
 
 	for _, tc := range testCases {
@@ -348,7 +354,7 @@ func TestImplicit_HandleAuthorizeEndpointRequestEnforcesClaims(t *testing.T) {
 			}
 			request.RedirectURI, _ = url.Parse("https://example.com")
 
-			request.SetClaims(&oauth2.ClaimsRequest{IDToken: map[string]*oauth2.ClaimRequest{"acr": {Essential: true, Values: []any{"gold"}}}})
+			request.SetClaims(&oauth2.ClaimsRequest{IDToken: tc.claims})
 
 			err := handler.HandleAuthorizeEndpointRequest(t.Context(), request, oauth2.NewAuthorizeResponse())
 

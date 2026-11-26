@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -292,6 +293,32 @@ func TestReceiverHandlePush(t *testing.T) {
 				assert.Empty(t, p.store.marks)
 			})
 		}
+	})
+
+	t.Run("ShouldAnswer503WhenTheSETIsIssuedAheadOfTheClockSkew", func(t *testing.T) {
+		p := newTestPush(t)
+
+		claims := p.x.claims()
+		claims["iat"] = p.x.now.Add(DefaultClockSkew + time.Minute).Unix()
+
+		token := p.x.set().sign(t, claims)
+
+		rw, err := p.do(t, p.request(strings.NewReader(token)))
+
+		// RFC 8935 Section 2: the failure is recoverable, so the Transmitter delivers the SET again.
+		require.ErrorIs(t, err, ErrIssuedAtAhead)
+		assert.Equal(t, http.StatusServiceUnavailable, rw.Code)
+		assert.Empty(t, rw.Body.Bytes())
+		assert.Empty(t, p.handler.events)
+		assert.Empty(t, p.store.marks)
+
+		p.x.now = p.x.now.Add(time.Minute)
+
+		rw, err = p.do(t, p.request(strings.NewReader(token)))
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusAccepted, rw.Code)
+		assert.Len(t, p.handler.events, 1)
 	})
 
 	t.Run("ShouldAnswer503WhenThePushAuthorizerIsUnavailable", func(t *testing.T) {

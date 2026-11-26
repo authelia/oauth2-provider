@@ -23,6 +23,7 @@ import (
 	"authelia.com/provider/oauth2/i18n"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/iox"
+	"authelia.com/provider/oauth2/internal/ssfjson"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -76,20 +77,26 @@ type SSFStreamRequestBody struct {
 }
 
 // UnmarshalJSON decodes the body, dropping the values of 'events_requested' that are not strings (SSF Section 8.1.1).
+// A member is matched by its exact name, and a repeated member name is an error (RFC 8259 Section 4).
 func (b *SSFStreamRequestBody) UnmarshalJSON(data []byte) (err error) {
-	type body SSFStreamRequestBody
+	var events ssfEventTypes
 
-	aux := struct {
-		*body
-
-		EventsRequested ssfEventTypes `json:"events_requested"`
-	}{body: (*body)(b)}
-
-	if err = json.Unmarshal(data, &aux); err != nil {
+	if err = ssfjson.UnmarshalMembers(data, map[string]any{
+		"events_requested":          &events,
+		"delivery":                  &b.Delivery,
+		"description":               &b.Description,
+		ssfStreamQueryStreamID:      &b.StreamID,
+		"iss":                       &b.Issuer,
+		"aud":                       &b.Audience,
+		"events_supported":          &b.EventsSupported,
+		"events_delivered":          &b.EventsDelivered,
+		"min_verification_interval": &b.MinVerificationInterval,
+		"inactivity_timeout":        &b.InactivityTimeout,
+	}); err != nil {
 		return err
 	}
 
-	b.EventsRequested = aux.EventsRequested
+	b.EventsRequested = events
 
 	return nil
 }
@@ -131,6 +138,16 @@ type SSFStreamRequestDelivery struct {
 	Method              string  `json:"method"`
 	EndpointURL         string  `json:"endpoint_url"`
 	AuthorizationHeader *string `json:"authorization_header"`
+}
+
+// UnmarshalJSON decodes the delivery object. A member is matched by its exact name, and a repeated member name is an
+// error (RFC 8259 Section 4).
+func (d *SSFStreamRequestDelivery) UnmarshalJSON(data []byte) (err error) {
+	return ssfjson.UnmarshalMembers(data, map[string]any{
+		"method":               &d.Method,
+		"endpoint_url":         &d.EndpointURL,
+		"authorization_header": &d.AuthorizationHeader,
+	})
 }
 
 // MarshalJSON omits the authorization header.

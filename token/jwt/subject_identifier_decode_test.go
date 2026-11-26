@@ -6,6 +6,8 @@ package jwt
 
 import (
 	"encoding/json"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -163,4 +165,114 @@ func TestSubjectIdentifierDecodeStrict(t *testing.T) {
 		require.NoError(t, err)
 		assert.JSONEq(t, `{"format":"opaque","id":"x"}`, string(data))
 	})
+}
+
+func TestSubjectIdentifierDecodeNesting(t *testing.T) {
+	const email = `{"format":"email","email":"user@example.com"}`
+
+	testCases := []struct {
+		name     string
+		have     string
+		receiver bool
+		strict   bool
+	}{
+		{"ShouldDecodeAliasesInComplex", `{"format":"complex","user":{"format":"aliases","identifiers":[` + email + `]}}`, true, true},
+		{"ShouldRejectComplexInComplex", `{"format":"complex","user":{"format":"complex","user":` + email + `}}`, false, false},
+		{"ShouldRejectAliasesInAliases", `{"format":"aliases","identifiers":[{"format":"aliases","identifiers":[` + email + `]}]}`, false, false},
+		{"ShouldRejectComplexInAliases", `{"format":"aliases","identifiers":[{"format":"complex","user":` + email + `}]}`, false, false},
+		{"ShouldRejectComplexInAliasesInComplex", `{"format":"complex","user":{"format":"aliases","identifiers":[{"format":"complex","user":` + email + `}]}}`, false, false},
+		{"ShouldNotDecodeNestedMemberOfUnknownFormatOnStrictPath", `{"format":"catalog_item","user":{"format":"catalog_item","user":` + email + `}}`, true, true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for receiver, expected := range map[bool]bool{true: tc.receiver, false: tc.strict} {
+				actual := &SubjectIdentifier{}
+
+				err := actual.decode([]byte(tc.have), receiver)
+
+				if expected {
+					assert.NoError(t, err)
+				} else {
+					assert.ErrorIs(t, err, ErrInvalidSubjectIdentifier)
+				}
+			}
+		})
+	}
+
+	t.Run("ShouldLeaveNestedMemberOfUnknownFormatOnStrictPath", func(t *testing.T) {
+		actual := &SubjectIdentifier{}
+
+		require.NoError(t, json.Unmarshal([]byte(`{"format":"catalog_item","email":"user@example.com","user":`+email+`,"identifiers":[`+email+`]}`), actual))
+		assert.Equal(t, &SubjectIdentifier{Format: "catalog_item", Email: "user@example.com"}, actual)
+	})
+}
+
+// RFC 9493 Section 3.2.8 and SSF Section 3.3 bound the nesting, so the cost of decoding is linear in the size of the
+// input: twice the depth costs less than three times as much.
+func TestSubjectIdentifierDecodeNestingCost(t *testing.T) {
+	const depth = 1000
+
+	testCases := []struct {
+		name  string
+		nest  func(depth int) string
+		paths []bool
+	}{
+		{"ShouldRejectNestedComplex", func(depth int) string { return testNestSubjectIdentifier(`{"format":"complex","user":`, `}`, depth) }, []bool{true, false}},
+		{"ShouldRejectNestedAliases", func(depth int) string {
+			return testNestSubjectIdentifier(`{"format":"aliases","identifiers":[`, `]}`, depth)
+		}, []bool{true, false}},
+		{"ShouldNotDecodeNestedMemberOfUnknownFormat", func(depth int) string {
+			return testNestSubjectIdentifier(`{"format":"catalog_item","user":`, `}`, depth)
+		}, []bool{false}},
+	}
+
+	for _, tc := range testCases {
+		for _, receiver := range tc.paths {
+			name := tc.name + "Strict"
+			if receiver {
+				name = tc.name + "Receiver"
+			}
+
+			t.Run(name, func(t *testing.T) {
+				allocs := func(depth int) float64 {
+					data := []byte(tc.nest(depth))
+
+					return testing.AllocsPerRun(5, func() {
+						_ = (&SubjectIdentifier{}).decode(data, receiver)
+					})
+				}
+
+				assert.Less(t, allocs(2*depth), 3*allocs(depth))
+			})
+		}
+	}
+
+	t.Run("ShouldRejectNestedSubjectOfReceivedClaims", func(t *testing.T) {
+		for _, tc := range testCases[:2] {
+			allocated := func(depth int) uint64 {
+				payload := []byte(`{"iss":"https://issuer.example.com","jti":"1","iat":1,"aud":"a","events":{"https://example.com/event":{}},"sub_id":` + tc.nest(depth) + `}`)
+
+				var before, after runtime.MemStats
+
+				runtime.ReadMemStats(&before)
+
+				for range 4 {
+					_, err := ParseSecurityEventTokenClaims(payload)
+
+					require.Error(t, err)
+				}
+
+				runtime.ReadMemStats(&after)
+
+				return after.TotalAlloc - before.TotalAlloc
+			}
+
+			assert.Less(t, allocated(2*depth), 3*allocated(depth), tc.name)
+		}
+	})
+}
+
+func testNestSubjectIdentifier(open, shut string, depth int) string {
+	return strings.Repeat(open, depth) + `{"format":"email","email":"user@example.com"}` + strings.Repeat(shut, depth)
 }

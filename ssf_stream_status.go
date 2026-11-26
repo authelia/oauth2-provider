@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"slices"
 
+	"authelia.com/provider/oauth2/internal/ssfjson"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -38,6 +39,16 @@ type SSFStreamStatusRequestBody struct {
 	StreamID string  `json:"stream_id"`
 	Status   string  `json:"status"`
 	Reason   *string `json:"reason"`
+}
+
+// UnmarshalJSON decodes the body. A member is matched by its exact name, and a repeated member name is an error (RFC
+// 8259 Section 4).
+func (b *SSFStreamStatusRequestBody) UnmarshalJSON(data []byte) (err error) {
+	return ssfjson.UnmarshalMembers(data, map[string]any{
+		ssfStreamQueryStreamID: &b.StreamID,
+		"status":               &b.Status,
+		"reason":               &b.Reason,
+	})
 }
 
 // SSFStreamStatus is the stream status resource.

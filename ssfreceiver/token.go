@@ -22,8 +22,16 @@ import (
 
 const (
 	// DefaultClockSkew is how far in the future the 'iat' of a SET may be when Config.ClockSkew is zero. A negative
-	// Config.ClockSkew permits none.
+	// Config.ClockSkew permits none. A SET issued further ahead is left for a redelivery or refused, by
+	// IssuedAtRedeliveryWindow.
 	DefaultClockSkew = 10 * time.Second
+
+	// IssuedAtRedeliveryWindow is how far past Config.ClockSkew the 'iat' of a SET may be for the SET to be left for
+	// the Transmitter to deliver again, with ErrIssuedAtAhead, in place of being refused. A SET issued further ahead
+	// is refused, as it is not one a redelivery soon makes acceptable.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc8935#section-2
+	IssuedAtRedeliveryWindow = 5 * time.Minute
 
 	// DefaultTokenRetention is how long the 'jti' of a received SET is remembered when Config.TokenRetention is not
 	// positive, and the oldest 'iat' accepted when Config.MaxTokenAge is zero and Config.TokenRetention is not
@@ -156,7 +164,7 @@ func (r *Receiver) validate(ctx context.Context, record *StreamRecord, token str
 		return reject(errSetClaims)
 	}
 
-	now := r.time()
+	now, skew := r.time(), r.clockSkew()
 
 	var faults uint32
 
@@ -165,7 +173,7 @@ func (r *Receiver) validate(ctx context.Context, record *StreamRecord, token str
 	if err = claims.Valid(
 		jwt.ValidateIssuer(record.Issuer),
 		jwt.ValidateAudienceAny(record.Audience...),
-		jwt.ValidateClockSkew(r.clockSkew()),
+		jwt.ValidateClockSkew(skew+IssuedAtRedeliveryWindow),
 		jwt.ValidateTimeFunc(func() time.Time { return now }),
 		jwt.ValidateSecurityEventReceiver(),
 	); err != nil {
@@ -217,6 +225,12 @@ func (r *Receiver) validate(ctx context.Context, record *StreamRecord, token str
 		if event.Event, err = jwt.DecodeSecurityEvent(uri, event.Payload); err != nil {
 			return reject(errSetEvent)
 		}
+	}
+
+	// RFC 8935 Section 2, RFC 8936 Section 2.3: a SET with no other fault which is issued ahead of the clock is not
+	// reported, so it is delivered again.
+	if claims.GetIssuedAtSafe().Unix() > now.Unix()+int64(skew/time.Second) {
+		return event, nil, ErrIssuedAtAhead
 	}
 
 	return event, nil, nil

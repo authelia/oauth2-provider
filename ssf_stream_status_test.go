@@ -349,6 +349,8 @@ func TestSSFStreamStatusRejects(t *testing.T) {
 		{"MissingStreamID", "a", http.MethodPost, ssfStatusURL, "application/json", `{"status":"paused"}`, http.StatusBadRequest, "invalid_request"},
 		{"WrongContentType", "a", http.MethodPost, ssfStatusURL, "text/plain", `{"stream_id":"` + id + `","status":"paused"}`, http.StatusBadRequest, "invalid_request"},
 		{"MalformedBody", "a", http.MethodPost, ssfStatusURL, "application/json", `{`, http.StatusBadRequest, "invalid_request"},
+		{"RepeatedMember", "a", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"` + id + `","status":"enabled","status":"paused"}`, http.StatusBadRequest, "invalid_request"},
+		{"StatusMemberOfOtherCase", "a", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"` + id + `","Status":"paused"}`, http.StatusBadRequest, "invalid_request"},
 		{"EmptyBody", "a", http.MethodPost, ssfStatusURL, "", ``, http.StatusBadRequest, "invalid_request"},
 		{"OversizeBody", "a", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"` + id + `","status":"paused","reason":"` + strings.Repeat("x", 600) + `"}`, http.StatusBadRequest, "invalid_request"},
 		{"ForeignStream", "b", http.MethodPost, ssfStatusURL, "application/json", `{"stream_id":"` + id + `","status":"paused"}`, http.StatusNotFound, "not_found"},

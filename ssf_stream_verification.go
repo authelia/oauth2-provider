@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"authelia.com/provider/oauth2/internal/ssfjson"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -23,6 +24,15 @@ type SSFVerificationRequestBody struct {
 
 	// State is the 'state' member, or nil when it is absent or null. An empty string is a value.
 	State *string `json:"state"`
+}
+
+// UnmarshalJSON decodes the body. A member is matched by its exact name, and a repeated member name is an error (RFC
+// 8259 Section 4).
+func (b *SSFVerificationRequestBody) UnmarshalJSON(data []byte) (err error) {
+	return ssfjson.UnmarshalMembers(data, map[string]any{
+		ssfStreamQueryStreamID: &b.StreamID,
+		"state":                &b.State,
+	})
 }
 
 // HandleSSFVerificationRequest authorizes a verification request, which needs 'ssf.manage', and calls the configured

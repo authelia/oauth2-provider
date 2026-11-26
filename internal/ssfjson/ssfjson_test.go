@@ -66,6 +66,51 @@ func TestParseObject(t *testing.T) {
 	}
 }
 
+func TestUnmarshalMembers(t *testing.T) {
+	type target struct {
+		name   string
+		number *int
+		raw    json.RawMessage
+	}
+
+	testCases := []struct {
+		name     string
+		have     string
+		expected target
+		err      string
+	}{
+		{name: "ShouldDecodeMembers", have: `{"name":"x","number":1,"raw":[1],"other":true}`, expected: target{name: "x", number: new(1), raw: json.RawMessage(`[1]`)}},
+		{name: "ShouldLeaveAbsentMembers", have: `{}`},
+		{name: "ShouldLeaveNullMembers", have: `{"name":null,"number":null}`},
+		{name: "ShouldMatchNamesExactly", have: `{"Name":"x","NUMBER":1}`},
+		{name: "ShouldRejectRepeatedName", have: `{"name":"x","name":"y"}`, err: "a member name is repeated"},
+		{name: "ShouldRejectRepeatedNameWithoutTarget", have: `{"other":1,"other":2}`, err: "a member name is repeated"},
+		{name: "ShouldRejectMemberOfWrongType", have: `{"name":1}`, err: "the 'name' member is not valid"},
+		{name: "ShouldRejectFirstNameOfWrongType", have: `{"number":"x","name":1}`, err: "the 'name' member is not valid"},
+		{name: "ShouldRejectArray", have: `[]`, err: "the value is not a JSON object"},
+		{name: "ShouldLeaveNull", have: ` null `},
+		{name: "ShouldRejectTrailingData", have: `{} {}`, err: "the value is followed by more data"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var actual target
+
+			err := UnmarshalMembers([]byte(tc.have), map[string]any{"name": &actual.name, "number": &actual.number, "raw": &actual.raw})
+
+			if tc.err != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
 func TestParseOrderedObject(t *testing.T) {
 	testCases := []struct {
 		name     string

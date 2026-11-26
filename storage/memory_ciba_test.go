@@ -182,6 +182,37 @@ func TestMemoryStoreCIBA(t *testing.T) {
 				assert.ErrorIs(t, err, oauth2.ErrNotFound)
 			})
 
+			t.Run("ShouldDecideWithoutThePollingState", func(t *testing.T) {
+				store := sc.new()
+
+				require.NoError(t, store.CreateCIBASession(ctx, "sig", newCIBATestRequest()))
+
+				stale, err := store.GetCIBASession(ctx, "sig", &oauth2.DefaultSession{})
+				require.NoError(t, err)
+
+				polled := time.Now().UTC().Add(time.Minute).Truncate(time.Second)
+
+				current := newCIBATestRequest()
+				current.SetLastPolled(polled)
+				current.SetPollingInterval(15 * time.Second)
+				current.SetSlowDownCount(7)
+
+				require.NoError(t, store.UpdateCIBASession(ctx, "sig", current))
+
+				stale.SetStatus(oauth2.CIBAStatusApproved)
+
+				require.NoError(t, store.DecideCIBASession(ctx, "sig", stale))
+
+				got, err := store.GetCIBASession(ctx, "sig", &oauth2.DefaultSession{})
+				require.NoError(t, err)
+
+				assert.Equal(t, oauth2.CIBAStatusApproved, got.GetStatus())
+				assert.True(t, polled.Equal(got.GetLastPolled()))
+				assert.Equal(t, 15*time.Second, got.GetPollingInterval())
+				assert.Equal(t, 7, got.GetSlowDownCount())
+				assert.False(t, polled.Equal(stale.GetLastPolled()))
+			})
+
 			t.Run("ShouldUpdateOnlyThePollingState", func(t *testing.T) {
 				store := sc.new()
 
@@ -215,6 +246,77 @@ func TestMemoryStoreCIBA(t *testing.T) {
 				assert.True(t, polled.Equal(got.GetLastPolled()))
 				assert.Equal(t, 15*time.Second, got.GetPollingInterval())
 				assert.Equal(t, 7, got.GetSlowDownCount())
+			})
+
+			t.Run("ShouldNotMoveTheLastPollBackwards", func(t *testing.T) {
+				store := sc.new()
+
+				require.NoError(t, store.CreateCIBASession(ctx, "sig", newCIBATestRequest()))
+
+				polled := time.Now().UTC().Add(time.Minute).Truncate(time.Second)
+
+				write := func(at time.Time, interval time.Duration, count int) {
+					request := newCIBATestRequest()
+					request.SetLastPolled(at)
+					request.SetPollingInterval(interval)
+					request.SetSlowDownCount(count)
+
+					require.NoError(t, store.UpdateCIBASession(ctx, "sig", request))
+				}
+
+				requireState := func(at time.Time, interval time.Duration, count int) {
+					got, err := store.GetCIBASession(ctx, "sig", &oauth2.DefaultSession{})
+					require.NoError(t, err)
+
+					assert.True(t, at.Equal(got.GetLastPolled()), "last polled %s", got.GetLastPolled())
+					assert.Equal(t, interval, got.GetPollingInterval())
+					assert.Equal(t, count, got.GetSlowDownCount())
+				}
+
+				write(polled, 10*time.Second, 1)
+				requireState(polled, 10*time.Second, 1)
+
+				write(polled.Add(-time.Second), 5*time.Second, 0)
+				requireState(polled, 10*time.Second, 1)
+
+				write(time.Time{}, 5*time.Second, 0)
+				requireState(polled, 10*time.Second, 1)
+
+				write(polled, 15*time.Second, 2)
+				requireState(polled, 15*time.Second, 2)
+
+				write(polled.Add(time.Second), 5*time.Second, 0)
+				requireState(polled.Add(time.Second), 5*time.Second, 0)
+			})
+
+			t.Run("ShouldKeepTheLatestLastPollWhenWrittenConcurrently", func(t *testing.T) {
+				store := sc.new()
+
+				require.NoError(t, store.CreateCIBASession(ctx, "sig", newCIBATestRequest()))
+
+				const writes = 32
+
+				polled := time.Now().UTC().Add(time.Minute).Truncate(time.Second)
+
+				var wg sync.WaitGroup
+
+				for i := range writes {
+					wg.Go(func() {
+						request := newCIBATestRequest()
+						request.SetLastPolled(polled.Add(time.Duration(i) * time.Second))
+						request.SetSlowDownCount(i)
+
+						assert.NoError(t, store.UpdateCIBASession(ctx, "sig", request))
+					})
+				}
+
+				wg.Wait()
+
+				got, err := store.GetCIBASession(ctx, "sig", &oauth2.DefaultSession{})
+				require.NoError(t, err)
+
+				assert.True(t, polled.Add((writes-1)*time.Second).Equal(got.GetLastPolled()))
+				assert.Equal(t, writes-1, got.GetSlowDownCount())
 			})
 
 			t.Run("ShouldInvalidate", func(t *testing.T) {

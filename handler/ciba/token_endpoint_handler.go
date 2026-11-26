@@ -73,7 +73,9 @@ func (c *TokenHandler) ValidateCodeAndSession(ctx context.Context, _ oauth2.Acce
 // GetCodeAndSession loads the authentication request for the 'auth_req_id' parameter and decides the outcome of this
 // poll: 'invalid_grant' for an unknown request or one issued to another client, 'unauthorized_client' for a push
 // request, 'expired_token', 'access_denied', 'transaction_failed', 'slow_down' and 'authorization_pending'. An approved
-// request is returned for issuance. A pending request is held open for the long polling timeout, if enabled. Tokens
+// request is returned for issuance. A pending request is held open for the long polling timeout, if enabled, and only
+// the latest poll recorded for a request redeems it: a held poll answers 'authorization_pending' once a later poll is
+// recorded, and 'invalid_grant' without revoking the grant when the request is invalidated while it is held. Tokens
 // issued internally for an approved push request skip the push rejection and the polling checks.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1
@@ -130,7 +132,8 @@ func (c *TokenHandler) GetCodeAndSession(ctx context.Context, request oauth2.Acc
 		return code, signature, nil, c.slowDown(ctx, signature, stored, now, interval)
 	}
 
-	// The poll is recorded before it is held open, so a poll overlapping it is answered 'slow_down'.
+	// The poll is recorded before it is held open, so a poll overlapping it is answered 'slow_down' within the interval
+	// and takes its place after it.
 	stored.SetLastPolled(now)
 	stored.SetPollingInterval(interval)
 	stored.SetSlowDownCount(0)
@@ -142,7 +145,7 @@ func (c *TokenHandler) GetCodeAndSession(ctx context.Context, request oauth2.Acc
 	if timeout := c.longPollingTimeout(ctx, now); timeout > 0 {
 		var decided bool
 
-		if r, decided, err = c.longPoll(ctx, request, code, signature, base, timeout); decided {
+		if r, decided, err = c.longPoll(ctx, request, code, signature, base, now, timeout); decided {
 			return code, signature, r, err
 		}
 	}
@@ -318,7 +321,7 @@ func unverifiedDPoPProofClaims(proof string) (claims dpopProofClaims, ok bool) {
 // or the context is done. It returns decided as true with the outcome once the request is no longer pending.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1
-func (c *TokenHandler) longPoll(ctx context.Context, request oauth2.AccessRequester, code, signature string, base oauth2.Session, timeout time.Duration) (r oauth2.Requester, decided bool, err error) {
+func (c *TokenHandler) longPoll(ctx context.Context, request oauth2.AccessRequester, code, signature string, base oauth2.Session, polled time.Time, timeout time.Duration) (r oauth2.Requester, decided bool, err error) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
@@ -341,6 +344,14 @@ func (c *TokenHandler) longPoll(ctx context.Context, request oauth2.AccessReques
 		}
 
 		stored, gerr := c.Storage.GetCIBASession(ctx, signature, session)
+
+		if errors.Is(gerr, oauth2.ErrInvalidatedCIBASession) {
+			return nil, true, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'auth_req_id' is no longer valid.").WithDebug("The authentication request was invalidated while this request was held open."))
+		}
+
+		if gerr == nil && stored != nil && stored.GetLastPolled().After(polled) {
+			return nil, false, nil
+		}
 
 		var pending bool
 

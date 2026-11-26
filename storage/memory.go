@@ -1696,13 +1696,18 @@ func (s *MemoryStore) getCIBASession(signature string) (oauth2.BackChannelAuthen
 
 // UpdateCIBASession writes the polling state of the request, its last poll time, polling interval and slow down count,
 // onto the request stored against the 'auth_req_id' signature. It never alters the stored status, failure cause or
-// session. It does nothing when no request is stored.
+// session. It does nothing when no request is stored, or when the last poll time of the request is earlier than the
+// stored one.
 func (s *MemoryStore) UpdateCIBASession(_ context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) error {
 	s.cibaSessionsMutex.Lock()
 	defer s.cibaSessionsMutex.Unlock()
 
 	stored, exists := s.CIBASessions[signature]
 	if !exists {
+		return nil
+	}
+
+	if request.GetLastPolled().Before(stored.GetLastPolled()) {
 		return nil
 	}
 
@@ -1717,7 +1722,7 @@ func (s *MemoryStore) UpdateCIBASession(_ context.Context, signature string, req
 	return nil
 }
 
-// DecideCIBASession implements ciba.Storage. An invalidated request is decided.
+// DecideCIBASession implements ciba.Storage. An invalidated request is decided. The stored polling state is kept.
 func (s *MemoryStore) DecideCIBASession(_ context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) error {
 	s.cibaSessionsMutex.Lock()
 	defer s.cibaSessionsMutex.Unlock()
@@ -1731,7 +1736,13 @@ func (s *MemoryStore) DecideCIBASession(_ context.Context, signature string, req
 		return oauth2.ErrCIBADecided
 	}
 
-	s.CIBASessions[signature] = cloneCIBARequest(request)
+	decided := cloneCIBARequest(request)
+
+	decided.SetLastPolled(stored.GetLastPolled())
+	decided.SetPollingInterval(stored.GetPollingInterval())
+	decided.SetSlowDownCount(stored.GetSlowDownCount())
+
+	s.CIBASessions[signature] = decided
 	s.CIBARequestIDs[request.GetID()] = signature
 
 	return nil

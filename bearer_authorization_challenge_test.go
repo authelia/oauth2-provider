@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -145,6 +146,82 @@ func TestWriteBearerAuthorizationChallenge(t *testing.T) {
 
 			assert.Equal(t, tc.expectedAuth, rw.Header().Get("WWW-Authenticate"))
 			assert.Equal(t, tc.expectedCode, rfc.CodeField)
+		})
+	}
+}
+
+func TestWriteBearerAuthorizationChallengeTokenTransmission(t *testing.T) {
+	const (
+		location = "https://as.example.com/.well-known/oauth-protected-resource"
+		failed   = `error="invalid_token", error_description="The access token provided is expired, revoked, malformed, or invalid for other reasons."`
+	)
+
+	testCases := []struct {
+		name     string
+		method   string
+		target   string
+		header   string
+		body     string
+		query    bool
+		unparsed bool
+		dpop     bool
+		metadata bool
+		expected string
+	}{
+		// RFC 6750 Section 3.1: a request lacking any authentication information carries no error information.
+		{name: "ShouldOmitErrorWithoutAToken", method: http.MethodPost, expected: `Bearer`},
+		{name: "ShouldOmitErrorWithoutATokenInTheFormBody", method: http.MethodPost, body: "token=abc", expected: `Bearer`},
+		{name: "ShouldOmitErrorForAnEmptyFormBodyToken", method: http.MethodPost, body: "access_token=", expected: `Bearer`},
+		{name: "ShouldOmitErrorForAnIgnoredURIQueryToken", method: http.MethodGet, target: "?access_token=abc", expected: `Bearer`},
+		{name: "ShouldOmitErrorForAFormBodyTokenTheEndpointDidNotParse", method: http.MethodPost, body: "access_token=abc", unparsed: true, expected: `Bearer`},
+		{name: "ShouldOmitErrorForAURIQueryTokenTheEndpointDidNotParse", method: http.MethodGet, target: "?access_token=abc", query: true, unparsed: true, expected: `Bearer`},
+		{name: "ShouldOmitErrorWithoutATokenWhenDPoPEnabled", method: http.MethodPost, body: "token=abc", dpop: true, expected: `Bearer, DPoP algs="ES256 RS256"`},
+		// RFC 6750 Section 3: a request which included an access token and failed authentication carries the error.
+		{name: "ShouldCarryErrorForAHeaderToken", method: http.MethodGet, header: "Bearer abc", expected: `Bearer ` + failed},
+		{name: "ShouldCarryErrorForAFormBodyToken", method: http.MethodPost, body: "access_token=abc", expected: `Bearer ` + failed},
+		{name: "ShouldCarryErrorForAFormBodyTokenWithAURIQueryPermitted", method: http.MethodPost, body: "access_token=abc", query: true, expected: `Bearer ` + failed},
+		{name: "ShouldCarryErrorForAURIQueryToken", method: http.MethodGet, target: "?access_token=abc", query: true, expected: `Bearer ` + failed},
+		{name: "ShouldCarryErrorForAFormBodyTokenBesideClientCredentials", method: http.MethodPost, header: "Basic cnM6c2VjcmV0", body: "access_token=abc", expected: `Bearer ` + failed},
+		{name: "ShouldCarryErrorOnBearerAloneForAFormBodyTokenWhenDPoPEnabled", method: http.MethodPost, body: "access_token=abc", dpop: true, expected: `Bearer ` + failed + `, DPoP algs="ES256 RS256"`},
+		{name: "ShouldCarryErrorOnDPoPAloneForADPoPHeaderToken", method: http.MethodPost, header: "DPoP abc", body: "token=abc", dpop: true, expected: `Bearer, DPoP ` + failed + `, algs="ES256 RS256"`},
+		{name: "ShouldCarryResourceMetadataForAFormBodyToken", method: http.MethodPost, body: "access_token=abc", metadata: true, expected: `Bearer resource_metadata="` + location + `", ` + failed},
+		{name: "ShouldCarryResourceMetadataWithoutAToken", method: http.MethodPost, body: "token=abc", metadata: true, expected: `Bearer resource_metadata="` + location + `"`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{DPoPEnabled: tc.dpop, DPoPAllowedJWSAlgorithms: []string{"ES256", "RS256"}, AccessTokenURIQueryParameterEnabled: tc.query}
+
+			if tc.metadata {
+				config.ProtectedResourceMetadataURL = func(ctx context.Context, r *http.Request) string { return location }
+			}
+
+			f := &Fosite{Config: config}
+
+			r := httptest.NewRequest(tc.method, "https://as.example.com/userinfo"+tc.target, strings.NewReader(tc.body))
+
+			if tc.body != "" {
+				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			}
+
+			if tc.header != "" {
+				r.Header.Set("Authorization", tc.header)
+			}
+
+			if !tc.unparsed {
+				require.NoError(t, r.ParseForm())
+			}
+
+			rw := httptest.NewRecorder()
+
+			rfc := f.WriteBearerAuthorizationChallenge(context.Background(), rw, r, errorsx.WithStack(ErrInvalidToken))
+
+			assert.Equal(t, tc.expected, rw.Header().Get("WWW-Authenticate"))
+			assert.Equal(t, http.StatusUnauthorized, rfc.CodeField)
+
+			if tc.unparsed {
+				assert.Nil(t, r.Form)
+			}
 		})
 	}
 }

@@ -65,6 +65,7 @@ func TestNewUserinfoRequest(t *testing.T) {
 		{name: "ShouldRejectDPoPSchemeWhenDisabled", method: http.MethodGet, header: "DPoP " + userinfoToken, noToken: true, code: http.StatusUnauthorized, errCode: "invalid_token"},
 		{name: "ShouldRejectTokenInHeaderAndBody", method: http.MethodPost, body: url.Values{consts.FormParameterAccessToken: {userinfoToken}}, noToken: true, code: http.StatusBadRequest, errCode: "invalid_request"},
 		{name: "ShouldRejectUnknownToken", method: http.MethodGet, introErr: ErrTokenExpired, code: http.StatusUnauthorized, errCode: "invalid_token", challenge: `Bearer error="invalid_token"`},
+		{name: "ShouldRejectUnknownFormBodyToken", method: http.MethodPost, header: "-", body: url.Values{consts.FormParameterAccessToken: {userinfoToken}}, introErr: ErrTokenExpired, code: http.StatusUnauthorized, errCode: "invalid_token", challenge: `Bearer error="invalid_token"`},
 		{name: "ShouldRejectRefreshToken", method: http.MethodGet, use: RefreshToken, granted: []string{consts.ScopeOpenID}, code: http.StatusUnauthorized, errCode: "invalid_token"},
 		{name: "ShouldRejectMissingOpenIDScope", method: http.MethodGet, granted: []string{"profile"}, code: http.StatusForbidden, errCode: "insufficient_scope", challenge: `Bearer error="insufficient_scope"`},
 		{name: "ShouldRejectOtherResource", method: http.MethodGet, granted: []string{consts.ScopeOpenID}, resource: []string{"https://api.example.com"}, code: http.StatusUnauthorized, errCode: "invalid_token"},
@@ -167,7 +168,7 @@ func TestNewUserinfoRequest(t *testing.T) {
 				assert.Contains(t, rw.Header().Get(consts.HeaderWWWAuthenticate), `scope="openid"`)
 			}
 
-			if tc.header == "-" && tc.errCode == "invalid_token" {
+			if tc.challenge == "Bearer" {
 				assert.Equal(t, "Bearer", rw.Header().Get(consts.HeaderWWWAuthenticate))
 			}
 		})

@@ -65,7 +65,7 @@ func (f *Fosite) NewUserinfoRequest(ctx context.Context, r *http.Request, sessio
 	)
 
 	if use, ar, err = f.IntrospectToken(ctx, token, AccessToken, session); err != nil {
-		if failure, ok := userinfoServerFailure(err); ok {
+		if failure, ok := requestServerFailure(err); ok {
 			return request, failure
 		}
 
@@ -110,7 +110,7 @@ func (f *Fosite) userinfoClient(ctx context.Context, requester AccessRequester) 
 	id := client.GetID()
 
 	if client, err = GetClient(ctx, f.Config, f.Store, id); err != nil {
-		if failure, ok := userinfoServerFailure(err); ok {
+		if failure, ok := requestServerFailure(err); ok {
 			return nil, failure
 		}
 
@@ -120,9 +120,9 @@ func (f *Fosite) userinfoClient(ctx context.Context, requester AccessRequester) 
 	return client, nil
 }
 
-// userinfoServerFailure reports whether err is a failure of the server rather than a rejection of the request, so it is
-// not answered as an invalid Access Token. An error that is not an RFC6749Error is reported as ErrServerError.
-func userinfoServerFailure(err error) (failure error, ok bool) {
+// requestServerFailure reports whether err is a failure of the server rather than a rejection of the request, so it is
+// not answered as an invalid credential. An error that is not an RFC6749Error is reported as ErrServerError.
+func requestServerFailure(err error) (failure error, ok bool) {
 	rfc := ErrorToRFC6749Error(err)
 
 	switch {

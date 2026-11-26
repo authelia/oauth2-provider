@@ -158,7 +158,7 @@ func TestIntrospectionCallerAuthorizationUsesTheCurrentRegistration(t *testing.T
 
 			switch {
 			case tc.unauthorized:
-				assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+				assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 			case tc.inactive:
 				assert.ErrorIs(t, err, oauth2.ErrInactiveToken)
 				assert.False(t, responder.IsActive())
@@ -193,7 +193,7 @@ func TestIntrospectionCallerAuthorizationWithoutAClient(t *testing.T) {
 		responder, err := provider.NewIntrospectionRequest(context.Background(), r, &oauth2.DefaultSession{})
 
 		if enforce {
-			assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+			assert.ErrorIs(t, err, oauth2.ErrInvalidToken)
 		} else {
 			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 			assert.True(t, responder.IsActive())

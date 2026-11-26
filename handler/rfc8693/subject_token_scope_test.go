@@ -356,19 +356,17 @@ func TestCustomJWTSubjectTokenJTIIsScopedToTheIssuer(t *testing.T) {
 			ID:     uuid.New().String(),
 			Client: client,
 			Form: url.Values{
-				consts.FormParameterGrantType:        {consts.GrantTypeOAuthTokenExchange},
-				consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
-				consts.FormParameterSubjectToken:     {token},
+				consts.FormParameterGrantType:          {consts.GrantTypeOAuthTokenExchange},
+				consts.FormParameterRequestedTokenType: {"urn:spec:jwt"},
+				consts.FormParameterSubjectTokenType:   {"urn:spec:jwt"},
+				consts.FormParameterSubjectToken:       {token},
 			},
 			Session: newSpecSession("peter"),
 		},
 	}
 
 	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
-
-	grant := &TokenExchangeGrantHandler{Config: cfg, Storage: store}
-
-	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(grant.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())))
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())))
 
 	assert.Contains(t, store.TokenExchangeJTIs, storage.JTIMarker{Issuer: "https://as.example.com", JTI: jti})
 }

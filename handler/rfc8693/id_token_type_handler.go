@@ -279,6 +279,10 @@ func (c *IDTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessReq
 		return err
 	}
 
+	if err = consumeTokenJTIs(ctx, c.Config, c.Storage, request); err != nil {
+		return err
+	}
+
 	response.SetAccessToken(token)
 	response.SetTokenType(oauth2.RFC8693NAToken)
 	response.SetExpiresIn(time.Until(claims.ExpirationTime.Time))

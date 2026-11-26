@@ -138,17 +138,17 @@ func TestCustomJWTIsNotConsumedWhenARefreshTokenIsNotPermitted(t *testing.T) {
 			f := newCustomJWTConsumeFixture(t, true)
 
 			request := f.request(url.Values{
-				consts.FormParameterSubjectTokenType:   {"urn:spec:jwt"},
-				consts.FormParameterSubjectToken:       {f.token(t, uuid.New().String())},
+				consts.FormParameterSubjectTokenType:   {consts.TokenTypeRFC8693RefreshToken},
+				consts.FormParameterSubjectToken:       {f.refreshToken(t)},
 				consts.FormParameterActorTokenType:     {"urn:spec:jwt"},
 				consts.FormParameterActorToken:         {f.token(t, uuid.New().String())},
 				consts.FormParameterRequestedTokenType: {consts.TokenTypeRFC8693RefreshToken},
 			})
-			request.Client = &oauth2.DefaultRegisteredClient{DefaultClient: f.client.(*oauth2.DefaultClient), TokenExchangeRefreshToken: tc.optedIn, TokenExchangeOwnRefreshToken: true}
+			request.Client = &oauth2.DefaultRegisteredClient{DefaultClient: f.client.(*oauth2.DefaultRegisteredClient).DefaultClient, TokenExchangeRefreshToken: tc.optedIn, TokenExchangeOwnRefreshToken: true}
 
-			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.custom.HandleTokenEndpointRequest(t.Context(), request)))
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.handle(t, request)))
 
-			err := f.grant.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())
+			err := f.populate(t, request, oauth2.NewAccessResponse())
 
 			if tc.optedIn {
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))

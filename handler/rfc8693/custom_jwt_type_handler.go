@@ -255,7 +255,7 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, err
 	}
 
-	// The JTI is marked as used by TokenExchangeGrantHandler.PopulateTokenEndpointResponse.
+	// The JTI is marked as used by the token type handler which issues the token.
 	if validation.ValidateJTI {
 		if jti, _ := claims[consts.ClaimJWTID].(string); jti == "" {
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from token is missing."))
@@ -439,6 +439,10 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 		return err
 	}
 
+	if err = consumeTokenJTIs(ctx, c.Config, c.Storage, request); err != nil {
+		return err
+	}
+
 	response.SetAccessToken(token)
 	response.SetTokenType(oauth2.RFC8693NAToken)
 	response.SetExpiresIn(time.Duration(claims.GetExpirationTimeSafe().UnixNano() - time.Now().UTC().UnixNano()))
@@ -536,6 +540,10 @@ func (c *CustomJWTTypeHandler) issueAuthorizationGrant(ctx context.Context, requ
 
 	if token, _, err = c.Encode(ctx, jwt.MapClaims(claims), jwt.WithIssuerSigningAlg(jwtType.Issue.SigningAlg)); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	if err = consumeTokenJTIs(ctx, c.Config, c.Storage, request); err != nil {
+		return err
 	}
 
 	response.SetAccessToken(token)

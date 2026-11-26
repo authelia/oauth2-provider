@@ -119,16 +119,20 @@ func TestCustomJWTMarkError(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newCustomJWTConsumeFixture(t, true)
-			f.grant.Storage = &failingJTIStore{err: tc.err}
+			f.access.Storage = &failingJTIStore{Storage: f.exchange, err: tc.err}
 
 			request := f.request(url.Values{
 				consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
 				consts.FormParameterSubjectToken:     {f.token(t, uuid.New().String())},
 			})
 
-			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.custom.HandleTokenEndpointRequest(t.Context(), request)))
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.handle(t, request)))
 
-			assert.ErrorIs(t, f.grant.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse()), tc.expected)
+			response := oauth2.NewAccessResponse()
+
+			assert.ErrorIs(t, f.populate(t, request, response), tc.expected)
+			assert.Empty(t, response.GetAccessToken())
+			assert.Empty(t, f.store.AccessTokens)
 		})
 	}
 }
@@ -261,6 +265,8 @@ func (s *failingLookupStore) GetRefreshTokenSession(_ context.Context, _ string,
 }
 
 type failingJTIStore struct {
+	Storage
+
 	err error
 }
 

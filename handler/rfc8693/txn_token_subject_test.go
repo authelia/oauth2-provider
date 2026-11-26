@@ -554,7 +554,6 @@ func TestTxnTokenJTINotConsumedWhenIssuanceFails(t *testing.T) {
 					f := newTxnIssueFixture(t, storage.NewExampleStore())
 					f.scopes.scopes = []string{"trade.stocks"}
 					f.cfg.RFC8693TokenTypes[consts.TokenTypeRFC8693SelfSigned].(*SelfSignedTokenType).ValidateJTI = true
-					f.handlers[0].(*TokenExchangeGrantHandler).Storage = store
 					f.txn.JTIStorage = store
 
 					claims := selfSignedClaims()

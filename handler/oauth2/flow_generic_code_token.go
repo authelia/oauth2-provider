@@ -41,6 +41,18 @@ type CodeTokenEndpointHandler interface {
 	DeviceCodeSignature(ctx context.Context, code string) (signature string, err error)
 }
 
+// OverlapCodeTokenEndpointHandler is an optional CodeTokenEndpointHandler for a grant whose code may be presented by
+// overlapping requests. PopulateTokenEndpointResponse only runs for a request whose HandleTokenEndpointRequest read the
+// code as valid, so a code it finds invalidated was redeemed by another request while this one was being processed.
+// Without this interface that is a replay which revokes the grant.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+type OverlapCodeTokenEndpointHandler interface {
+	// CanOverlapRedemption reports whether a code redeemed by another request while this request was being processed
+	// is answered with invalid_grant without revoking the grant.
+	CanOverlapRedemption(ctx context.Context, request oauth2.AccessRequester) (overlap bool)
+}
+
 // GenericCodeTokenEndpointHandler handles token endpoint requests for grants that exchange a code for tokens.
 type GenericCodeTokenEndpointHandler struct {
 	CodeTokenEndpointHandler
@@ -208,6 +220,14 @@ func (c *GenericCodeTokenEndpointHandler) isCodeInvalidated(ctx context.Context,
 	return isInvalidatedCode(err)
 }
 
+func (c *GenericCodeTokenEndpointHandler) overlappedOrRevoke(ctx context.Context, request oauth2.AccessRequester, requestID string) (err error) {
+	if handler, ok := c.CodeTokenEndpointHandler.(OverlapCodeTokenEndpointHandler); ok && handler.CanOverlapRedemption(ctx, request) {
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The grant has already been redeemed.").WithDebug("The grant was redeemed by another request while this request was being processed."))
+	}
+
+	return revokeCodeGrant(ctx, c.TokenRevocationStorage, requestID)
+}
+
 // isInvalidatedCode reports whether err shows the code was already redeemed.
 func isInvalidatedCode(err error) bool {
 	return errors.Is(err, oauth2.ErrInvalidatedDeviceCode) || errors.Is(err, oauth2.ErrInvalidatedAuthorizeCode) ||
@@ -226,7 +246,9 @@ func isPassThroughCodeError(err error) bool {
 		errors.Is(err, oauth2.ErrInvalidRequest) || errors.Is(err, oauth2.ErrUnauthorizedClient)
 }
 
-// PopulateTokenEndpointResponse handles populating the access response.
+// PopulateTokenEndpointResponse handles populating the access response. A code another request redeemed while this
+// request was being processed is a replay which revokes the grant, unless the CodeTokenEndpointHandler implements
+// OverlapCodeTokenEndpointHandler and reports it as an overlap.
 //
 // oauth2.ErrSerializationFailure does not show the code was replayed, as a store may also return it for lock contention,
 // so the code is read again once the transaction has rolled back. A code another request has invalidated is a replay,
@@ -261,7 +283,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 					WithDebug(`getCodeSession must return a value for "oauth2.Requester" when returning "ErrInvalidatedAuthorizeCode", "ErrInvalidatedDeviceCode" or "ErrInvalidatedCIBASession".`))
 			}
 
-			return revokeCodeGrant(ctx, c.TokenRevocationStorage, ar.GetID())
+			return c.overlappedOrRevoke(ctx, request, ar.GetID())
 		case isPassThroughCodeError(err):
 			return errorsx.WithStack(err)
 		case errors.Is(err, oauth2.ErrNotFound):
@@ -320,7 +342,7 @@ func (c *GenericCodeTokenEndpointHandler) PopulateTokenEndpointResponse(ctx cont
 			if rollBackTxnErr := storage.MaybeRollbackTx(ctx, c.CoreStorage); rollBackTxnErr != nil {
 				err = errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("error: %s; rollback error: %s", err, rollBackTxnErr))
 			} else if replayed || (errors.Is(err, oauth2.ErrSerializationFailure) && c.isCodeInvalidated(parent, request)) {
-				err = revokeCodeGrant(parent, c.TokenRevocationStorage, ar.GetID())
+				err = c.overlappedOrRevoke(parent, request, ar.GetID())
 			}
 		}
 	}()

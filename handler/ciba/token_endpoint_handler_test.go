@@ -140,12 +140,18 @@ func (f *tokenFixture) decide(t *testing.T, ctx context.Context, client oauth2.C
 	assert.NoError(t, f.store.DecideCIBASession(ctx, signature, decided))
 }
 
-func (f *tokenFixture) poll(ctx context.Context, client oauth2.Client, id string, at time.Time) (response *oauth2.AccessResponse, err error) {
+func newTokenTestPoll(client oauth2.Client, id string, at time.Time) *oauth2.AccessRequest {
 	request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
 	request.GrantTypes = oauth2.Arguments{consts.GrantTypeOpenIDCIBA}
 	request.Client = client
 	request.Form = url.Values{consts.FormParameterAuthReqID: []string{id}}
 	request.RequestedAt = at
+
+	return request
+}
+
+func (f *tokenFixture) poll(ctx context.Context, client oauth2.Client, id string, at time.Time) (response *oauth2.AccessResponse, err error) {
+	request := newTokenTestPoll(client, id, at)
 
 	if err = f.handler.HandleTokenEndpointRequest(ctx, request); err != nil {
 		return nil, err
@@ -239,7 +245,8 @@ func TestCIBATokenEndpoint(t *testing.T) {
 			},
 		},
 		{
-			name: "ShouldSlowDownAFirstPollWithinTheIntervalOfTheRequest",
+			name:      "ShouldNotSlowDownAFirstPollWithinTheIntervalOfTheRequest",
+			configure: func(config *oauth2.Config) { config.CIBASlowDownLimit = 1 },
 			run: func(t *testing.T, f *tokenFixture) {
 				client := newTokenTestClient("client", consts.CIBAModePoll)
 
@@ -251,15 +258,25 @@ func TestCIBATokenEndpoint(t *testing.T) {
 
 				require.NoError(t, f.store.CreateCIBASession(t.Context(), signature, request))
 
-				_, err = f.poll(t.Context(), client, id, request.RequestedAt.Add(time.Second))
-				requireRFC6749Error(t, err, "slow_down")
+				_, err = f.poll(t.Context(), client, id, request.RequestedAt)
+				requireRFC6749Error(t, err, "authorization_pending")
 
 				stored, err := f.stored(t, signature)
+				require.NoError(t, err)
+				assert.True(t, request.RequestedAt.Equal(stored.GetLastPolled()))
+				assert.Equal(t, 5*time.Second, stored.GetPollingInterval())
+				assert.Equal(t, 0, stored.GetSlowDownCount())
+
+				// The interval is measured from the first poll.
+				_, err = f.poll(t.Context(), client, id, request.RequestedAt.Add(4*time.Second))
+				requireRFC6749Error(t, err, "slow_down")
+
+				stored, err = f.stored(t, signature)
 				require.NoError(t, err)
 				assert.Equal(t, 10*time.Second, stored.GetPollingInterval())
 				assert.Equal(t, 1, stored.GetSlowDownCount())
 
-				_, err = f.poll(t.Context(), client, id, request.RequestedAt.Add(15*time.Second))
+				_, err = f.poll(t.Context(), client, id, request.RequestedAt.Add(14*time.Second))
 				requireRFC6749Error(t, err, "authorization_pending")
 			},
 		},
@@ -573,8 +590,8 @@ func (c *lifespanTokenTestClient) GetEffectiveLifespan(gt oauth2.GrantType, tt o
 	return c.lifespans.GetEffectiveLifespan(gt, tt, fallback)
 }
 
-// barrierTokenTestStore holds the first two GetCIBASession calls until both have arrived, so two redemptions read the
-// approved request before either invalidates it.
+// barrierTokenTestStore holds the first two GetCIBASession calls until both have read the request, so two redemptions
+// read the approved request before either invalidates it.
 type barrierTokenTestStore struct {
 	tokenTestStore
 
@@ -590,12 +607,16 @@ func newBarrierTokenTestStore(store tokenTestStore) *barrierTokenTestStore {
 }
 
 func (s *barrierTokenTestStore) GetCIBASession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.BackChannelAuthenticationRequester, err error) {
-	if s.calls.Add(1) <= 2 {
+	held := s.calls.Add(1) <= 2
+
+	request, err = s.tokenTestStore.GetCIBASession(ctx, signature, session)
+
+	if held {
 		s.arrived.Done()
 		s.arrived.Wait()
 	}
 
-	return s.tokenTestStore.GetCIBASession(ctx, signature, session)
+	return request, err
 }
 
 // TestCIBATokenConcurrentRedemptionIssuesOnce runs against the HydratingMemoryStore only: the MemoryStore hands both
@@ -622,7 +643,10 @@ func TestCIBATokenConcurrentRedemptionIssuesOnce(t *testing.T) {
 		}()
 	}
 
-	var issued, rejected int
+	var (
+		issued   []*oauth2.AccessResponse
+		rejected int
+	)
 
 	for range 2 {
 		o := <-outcomes
@@ -630,7 +654,7 @@ func TestCIBATokenConcurrentRedemptionIssuesOnce(t *testing.T) {
 		if o.err == nil {
 			requireTokens(t, o.response, o.err)
 
-			issued++
+			issued = append(issued, o.response)
 
 			continue
 		}
@@ -640,9 +664,117 @@ func TestCIBATokenConcurrentRedemptionIssuesOnce(t *testing.T) {
 		rejected++
 	}
 
-	assert.Equal(t, 1, issued)
+	require.Len(t, issued, 1)
 	assert.Equal(t, 1, rejected)
 	assert.GreaterOrEqual(t, store.calls.Load(), int32(2))
+
+	f.requireTokensValid(t, issued[0])
+}
+
+// interceptingTokenTestStore runs before ahead of the first InvalidateCIBASession, and answers that call with err
+// when it is set.
+type interceptingTokenTestStore struct {
+	tokenTestStore
+
+	before func()
+	err    error
+	called bool
+}
+
+func (s *interceptingTokenTestStore) InvalidateCIBASession(ctx context.Context, signature string) (err error) {
+	if s.called {
+		return s.tokenTestStore.InvalidateCIBASession(ctx, signature)
+	}
+
+	s.called = true
+
+	s.before()
+
+	if s.err != nil {
+		return s.err
+	}
+
+	return s.tokenTestStore.InvalidateCIBASession(ctx, signature)
+}
+
+func TestCIBATokenOverlappingRedemptionDoesNotRevoke(t *testing.T) {
+	testCases := []struct {
+		name string
+		run  func(t *testing.T, f *tokenFixture, store *interceptingTokenTestStore, client oauth2.Client, id string) (response *oauth2.AccessResponse, err error)
+	}{
+		{
+			name: "ShouldNotRevokeWhenRedeemedBeforeTheSecondRead",
+			run: func(t *testing.T, f *tokenFixture, store *interceptingTokenTestStore, client oauth2.Client, id string) (response *oauth2.AccessResponse, err error) {
+				store.called = true
+
+				request := newTokenTestPoll(client, id, time.Now().UTC())
+
+				require.NoError(t, f.handler.HandleTokenEndpointRequest(t.Context(), request))
+
+				response, err = f.poll(t.Context(), client, id, time.Now().UTC())
+				requireTokens(t, response, err)
+
+				return response, f.handler.PopulateTokenEndpointResponse(t.Context(), request, oauth2.NewAccessResponse())
+			},
+		},
+		{
+			name: "ShouldNotRevokeWhenRedeemedBeforeTheInvalidation",
+			run: func(t *testing.T, f *tokenFixture, store *interceptingTokenTestStore, client oauth2.Client, id string) (response *oauth2.AccessResponse, err error) {
+				store.before = func() {
+					response, err = f.poll(t.Context(), client, id, time.Now().UTC())
+				}
+
+				_, perr := f.poll(t.Context(), client, id, time.Now().UTC())
+
+				requireTokens(t, response, err)
+
+				return response, perr
+			},
+		},
+		{
+			name: "ShouldNotRevokeWhenRedeemedBeforeASerializationFailure",
+			run: func(t *testing.T, f *tokenFixture, store *interceptingTokenTestStore, client oauth2.Client, id string) (response *oauth2.AccessResponse, err error) {
+				store.err = oauth2.ErrSerializationFailure
+				store.before = func() {
+					response, err = f.poll(t.Context(), client, id, time.Now().UTC())
+				}
+
+				_, perr := f.poll(t.Context(), client, id, time.Now().UTC())
+
+				requireTokens(t, response, err)
+
+				return response, perr
+			},
+		},
+	}
+
+	for _, sc := range tokenTestStores() {
+		t.Run(sc.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					store := &interceptingTokenTestStore{tokenTestStore: sc.new()}
+					f := newTokenFixture(store, nil)
+
+					client := newTokenTestClient("client", consts.CIBAModePoll)
+					id, signature := f.create(t, client, consts.CIBAModePoll, time.Minute)
+					f.decide(t, t.Context(), client, consts.CIBAModePoll, signature, oauth2.CIBAStatusApproved)
+
+					response, err := tc.run(t, f, store, client, id)
+
+					requireRFC6749Error(t, err, "invalid_grant")
+
+					f.requireTokensValid(t, response)
+
+					// A redemption sent after the tokens were issued is still a replay.
+					_, err = f.poll(t.Context(), client, id, time.Now().UTC())
+					requireRFC6749Error(t, err, "invalid_grant")
+
+					_, err = f.store.GetAccessTokenSession(t.Context(), f.strategy.AccessTokenSignature(t.Context(), response.GetAccessToken()), &oauth2.DefaultSession{})
+					assert.Error(t, err)
+				})
+			}
+		})
+	}
 }
 
 // recordingTokenTestStore signals each UpdateCIBASession, which records a poll before it is held open.
@@ -811,6 +943,39 @@ func TestCIBALongPolling(t *testing.T) {
 				assert.Less(t, elapsed, 5*time.Second)
 			})
 
+			t.Run("ShouldHoldAFirstPollWithinTheIntervalOfTheRequest", func(t *testing.T) {
+				store := newRecordingTokenTestStore(sc.new())
+				f := newTokenFixture(store, configure)
+
+				client := newTokenTestClient("client", consts.CIBAModePoll)
+
+				id, signature, err := f.strategy.GenerateCIBAAuthRequestID(t.Context())
+				require.NoError(t, err)
+
+				request := newTokenTestRequest(client, consts.CIBAModePoll, signature, time.Minute, "pending")
+				request.RequestedAt = time.Now().UTC()
+
+				require.NoError(t, store.CreateCIBASession(t.Context(), signature, request))
+
+				done := make(chan struct{})
+
+				go func() {
+					defer close(done)
+
+					if !store.waitRecorded(t) {
+						return
+					}
+
+					f.decide(t, context.Background(), client, consts.CIBAModePoll, signature, oauth2.CIBAStatusApproved)
+				}()
+
+				response, err := f.poll(t.Context(), client, id, request.RequestedAt)
+
+				<-done
+
+				requireTokens(t, response, err)
+			})
+
 			t.Run("ShouldSlowDownAnOverlappingPoll", func(t *testing.T) {
 				store := newRecordingTokenTestStore(sc.new())
 				f := newTokenFixture(store, configure)
@@ -941,6 +1106,59 @@ func TestCIBALongPolling(t *testing.T) {
 				assert.Nil(t, o.response)
 
 				o = <-second
+				requireTokens(t, o.response, o.err)
+
+				f.requireTokensValid(t, o.response)
+			})
+
+			t.Run("ShouldYieldToAPollRecordedWithTheSameTime", func(t *testing.T) {
+				store := newGatedTokenTestStore(sc.new())
+				f := newTokenFixture(store, configure)
+
+				client := newTokenTestClient("client", consts.CIBAModePoll)
+				id, signature := f.create(t, client, consts.CIBAModePoll, time.Minute)
+
+				now := time.Now().UTC()
+
+				type outcome struct {
+					response *oauth2.AccessResponse
+					err      error
+				}
+
+				first, second := make(chan outcome, 1), make(chan outcome, 1)
+
+				// Both polls read the request before either is recorded, and both are recorded with the same time.
+				go func() {
+					response, err := f.poll(store.held(store.delayed(context.Background())), client, id, now)
+					first <- outcome{response, err}
+				}()
+
+				require.True(t, store.waitArrived(t))
+
+				go func() {
+					response, err := f.poll(context.Background(), client, id, now)
+					second <- outcome{response, err}
+				}()
+
+				require.True(t, store.waitRecorded(t))
+
+				close(store.release)
+
+				require.True(t, store.waitRecorded(t))
+
+				// The poll recorded first reads the approved request before the poll recorded last does.
+				store.gate.Lock()
+
+				f.decide(t, context.Background(), client, consts.CIBAModePoll, signature, oauth2.CIBAStatusApproved)
+
+				o := <-second
+
+				store.gate.Unlock()
+
+				requireRFC6749Error(t, o.err, "authorization_pending")
+				assert.Nil(t, o.response)
+
+				o = <-first
 				requireTokens(t, o.response, o.err)
 
 				f.requireTokensValid(t, o.response)

@@ -1694,8 +1694,8 @@ func (s *MemoryStore) getCIBASession(signature string) (oauth2.BackChannelAuthen
 	return cloneCIBARequest(rel), nil
 }
 
-// UpdateCIBASession writes the polling state of the request, its last poll time, polling interval and slow down count,
-// onto the request stored against the 'auth_req_id' signature. It never alters the stored status, failure cause or
+// UpdateCIBASession writes the polling state of the request, its last poll time, poll ID, polling interval and slow
+// down count, onto the request stored against the 'auth_req_id' signature. It never alters the stored status, failure cause or
 // session. It does nothing when no request is stored, or when the last poll time of the request is earlier than the
 // stored one.
 func (s *MemoryStore) UpdateCIBASession(_ context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) error {
@@ -1714,6 +1714,7 @@ func (s *MemoryStore) UpdateCIBASession(_ context.Context, signature string, req
 	updated := cloneCIBARequest(stored)
 
 	updated.SetLastPolled(request.GetLastPolled())
+	updated.SetPollID(request.GetPollID())
 	updated.SetPollingInterval(request.GetPollingInterval())
 	updated.SetSlowDownCount(request.GetSlowDownCount())
 
@@ -1739,6 +1740,7 @@ func (s *MemoryStore) DecideCIBASession(_ context.Context, signature string, req
 	decided := cloneCIBARequest(request)
 
 	decided.SetLastPolled(stored.GetLastPolled())
+	decided.SetPollID(stored.GetPollID())
 	decided.SetPollingInterval(stored.GetPollingInterval())
 	decided.SetSlowDownCount(stored.GetSlowDownCount())
 

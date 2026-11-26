@@ -53,7 +53,7 @@ func TestRefreshTokenSubjectPastTheExpiryDeadline(t *testing.T) {
 				require.NoError(t, err)
 				require.NoError(t, store.CreateRefreshTokenSession(t.Context(), signature, "", issued.Sanitize(nil)))
 
-				req := newExchangeRequest(t, client, newSpecSession("alice"), url.Values{
+				req := newExchangeRequest(t, ownRefreshTokenClient(client), newSpecSession("alice"), url.Values{
 					consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693RefreshToken},
 					consts.FormParameterSubjectToken:     {token},
 				})

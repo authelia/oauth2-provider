@@ -359,8 +359,9 @@ func newExchangeRAREnvironment(t *testing.T, newStore func() (hoauth2.CoreStorag
 				GrantTypes:   []string{consts.GrantTypeOAuthTokenExchange, consts.GrantTypeRefreshToken},
 				Scopes:       []string{testScopeOAuth2, consts.ScopeOfflineAccess},
 			},
-			AuthorizationDetailsTypes: types,
-			TokenExchangeRefreshToken: true,
+			AuthorizationDetailsTypes:    types,
+			TokenExchangeRefreshToken:    true,
+			TokenExchangeOwnRefreshToken: true,
 		},
 	}
 

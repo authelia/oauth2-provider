@@ -26,6 +26,13 @@ import (
 // 9700 Section 4.14.2, unless oauth2.IsRefreshTokenRotationDisabledForRequest or RefreshTokenRotationOverrideClient
 // disables rotation.
 //
+// A refresh token 'subject_token' is only accepted from a client which opts in with GetAllowOwnRefreshTokenExchange,
+// and may only request the audience and resources it was granted, per RFC 8707 Section 2.2.
+// The access token is issued for the request the refresh token was issued for, so that revoking the grant revokes it as
+// RFC 7009 Section 2.1 describes, and the storage rotating that refresh token revokes it as it does any access token of
+// the request. A refresh token issued with it is bound to the scope, audience and resources of the 'subject_token'
+// rather than to those of the access token.
+//
 // AccessTokenLifespan and RefreshTokenLifespan apply unless the client sets its own lifespans for the token exchange
 // grant. A RefreshTokenLifespan of -1 removes the configured limit, but the refresh token still expires with the
 // 'subject_token'.
@@ -38,6 +45,8 @@ import (
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.1
 // See: https://www.rfc-editor.org/rfc/rfc9396#section-6
+// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+// See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 type AccessTokenTypeHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 
@@ -218,6 +227,12 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 		return err
 	}
 
+	var subject oauth2.Requester
+
+	if subject, err = linkSubjectRefreshTokenGrant(request); err != nil {
+		return err
+	}
+
 	grant := grantedAuthorizationDetails(ctx, c.Config, request)
 
 	mode := c.getRefreshTokenMode(request)
@@ -264,7 +279,7 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 		}
 
 		if refreshSignature != "" {
-			requester := request.Sanitize([]string{})
+			requester := sanitizeRefreshTokenRequester(request, subject)
 
 			// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
 			requester.SetRequestedAuthorizationDetails(grant)

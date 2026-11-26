@@ -82,6 +82,7 @@ func (s *DefaultClientRegistrationStrategy) PatchClient(ctx context.Context, cli
 	replacement.FAPI2SecurityProfile = registered.FAPI2SecurityProfile
 	replacement.TokenExchangeOwnAccessTokenRestrictTargets = registered.TokenExchangeOwnAccessTokenRestrictTargets
 	replacement.TokenExchangeOwnAccessToken = registered.TokenExchangeOwnAccessToken
+	replacement.TokenExchangeOwnRefreshToken = registered.TokenExchangeOwnRefreshToken
 	replacement.TokenExchangeRefreshToken = registered.TokenExchangeRefreshToken
 	replacement.TokenExchangeAuthorizationGrant = registered.TokenExchangeAuthorizationGrant
 	replacement.TokenExchangeRefreshTokenRotationOverride = registered.TokenExchangeRefreshTokenRotationOverride

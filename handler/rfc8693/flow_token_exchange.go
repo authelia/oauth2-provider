@@ -707,13 +707,19 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 	}
 
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17#section-2.1
-	if self && role == tokenRoleSubject && !refresh && authorizationGrantType(ctx, request, config) == nil {
-		if !allowsOwnAccessTokenExchange(client) {
+	if self && role == tokenRoleSubject {
+		grant := authorizationGrantType(ctx, request, config) != nil
+
+		switch {
+		case refresh && !allowsOwnRefreshTokenExchange(client):
+			return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Clients are not allowed to perform a token exchange on their own refresh tokens."))
+		case !refresh && !grant && !allowsOwnAccessTokenExchange(client):
 			return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Clients are not allowed to perform a token exchange on their own access tokens."))
 		}
 
-		if restrictsOwnAccessTokenTargets(client) {
-			if err := validateOwnAccessTokenTarget(ctx, request, config, original); err != nil {
+		// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+		if !grant && (refresh || restrictsOwnAccessTokenTargets(client)) {
+			if err = validateOwnTokenTarget(ctx, request, config, original); err != nil {
 				return err
 			}
 		}
@@ -763,7 +769,7 @@ func permitsExchange(owner, client oauth2.Client, requested oauth2.RFC8693TokenT
 	return c.GetTokenExchangePermitted(client, requested)
 }
 
-func validateOwnAccessTokenTarget(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, original oauth2.Requester) (err error) {
+func validateOwnTokenTarget(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, original oauth2.Requester) (err error) {
 	client := request.GetClient()
 
 	if err = oauth2.GetAudienceStrategy(ctx, config, client)(original.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
@@ -787,6 +793,12 @@ func allowsOwnAccessTokenExchange(client oauth2.Client) bool {
 	c, ok := client.(OwnAccessTokenExchangeClient)
 
 	return ok && c.GetAllowOwnAccessTokenExchange()
+}
+
+func allowsOwnRefreshTokenExchange(client oauth2.Client) bool {
+	c, ok := client.(OwnRefreshTokenExchangeClient)
+
+	return ok && c.GetAllowOwnRefreshTokenExchange()
 }
 
 func allowsRefreshTokenIssuance(client oauth2.Client) bool {
@@ -1373,6 +1385,41 @@ func requireActorToken(request oauth2.AccessRequester) (err error) {
 
 func isRefreshTokenSubject(request oauth2.Requester) bool {
 	return request.GetRequestForm().Get(consts.FormParameterSubjectTokenType) == consts.TokenTypeRFC8693RefreshToken
+}
+
+func linkSubjectRefreshTokenGrant(request oauth2.AccessRequester) (grant oauth2.Requester, err error) {
+	if !isRefreshTokenSubject(request) {
+		return nil, nil
+	}
+
+	if session, ok := request.GetSession().(Session); ok {
+		grant = session.GetSubjectRequester()
+	}
+
+	if grant == nil {
+		return nil, errors.WithStack(oauth2.ErrServerError.WithDebug("The session of the token exchange does not hold the request the refresh token 'subject_token' was issued for."))
+	}
+
+	request.SetID(grant.GetID())
+
+	return grant, nil
+}
+
+func sanitizeRefreshTokenRequester(request oauth2.AccessRequester, grant oauth2.Requester) oauth2.Requester {
+	if restorer, ok := request.(oauth2.RefreshTokenAccessRequester); ok && grant != nil {
+		return restorer.SanitizeRestoreRefreshTokenOriginalRequester(grant)
+	}
+
+	if grant == nil {
+		return request.Sanitize([]string{})
+	}
+
+	requester := grant.Sanitize([]string{})
+
+	requester.SetSession(request.GetSession())
+	requester.SetRequestedAt(request.GetRequestedAt())
+
+	return requester
 }
 
 func subjectTokenExpiry(request oauth2.Requester) time.Time {

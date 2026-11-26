@@ -19,6 +19,16 @@ func permittingOwner(client oauth2.Client) oauth2.Client {
 	return &permittingOwnerClient{Client: client}
 }
 
+func ownRefreshTokenClient(client oauth2.Client) oauth2.Client {
+	return &ownRefreshTokenExchangeClient{Client: client}
+}
+
+type ownRefreshTokenExchangeClient struct {
+	oauth2.Client
+}
+
+func (c *ownRefreshTokenExchangeClient) GetAllowOwnRefreshTokenExchange() bool { return true }
+
 type permittingOwnerClient struct {
 	oauth2.Client
 }
@@ -26,6 +36,8 @@ type permittingOwnerClient struct {
 func (c *permittingOwnerClient) GetEffectiveLifespan(gt oauth2.GrantType, tt oauth2.TokenType, fallback time.Duration) time.Duration {
 	return oauth2.GetEffectiveLifespan(c.Client, gt, tt, fallback)
 }
+
+func (c *permittingOwnerClient) GetAllowOwnRefreshTokenExchange() bool { return true }
 
 func (c *permittingOwnerClient) GetSupportedSubjectTokenTypes() []string { return nil }
 

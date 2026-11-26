@@ -74,19 +74,45 @@ func TestSpec_2_1_ActorToken_RefreshTokenIssuedToRequestingClientIsAccepted(t *t
 	assert.Equal(t, client.GetID(), actor[consts.ClaimClientIdentifier])
 }
 
-// §5.2 'invalid_grant': self-exchange is still refused for a refresh token supplied as the 'subject_token'.
-func TestSpec_2_1_SubjectToken_RefreshTokenOfTheRequestingClientIsAccepted(t *testing.T) {
-	cfg, store, strategy := newExchangeFixture(t)
+// §2.2.2 'invalid_request': a refresh token supplied as the 'subject_token' by the client it was issued to is refused
+// unless that client opts in.
+func TestSpec_2_1_SubjectToken_RefreshTokenOfTheRequestingClientRequiresOptIn(t *testing.T) {
+	testCases := []struct {
+		name    string
+		optedIn bool
+	}{
+		{name: "ShouldRejectWithoutOptingIn"},
+		{name: "ShouldAcceptWhenOptedIn", optedIn: true},
+	}
 
-	client := store.Clients["my-client"]
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, store, strategy := newExchangeFixture(t)
 
-	req := newExchangeRequest(t, client, newSpecSession("alice"), url.Values{
-		consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693RefreshToken},
-		consts.FormParameterSubjectToken:     {createExchangeRefreshToken(t, strategy, store, client, "alice")},
-	})
+			client := store.Clients["my-client"]
 
-	err := newRefreshTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(context.Background(), req)
-	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			requester := client
+			if tc.optedIn {
+				requester = ownRefreshTokenClient(client)
+			}
+
+			req := newExchangeRequest(t, requester, newSpecSession("alice"), url.Values{
+				consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693RefreshToken},
+				consts.FormParameterSubjectToken:     {createExchangeRefreshToken(t, strategy, store, client, "alice")},
+			})
+
+			err := newRefreshTokenTypeHandler(cfg, store, strategy).HandleTokenEndpointRequest(context.Background(), req)
+
+			if tc.optedIn {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+			assert.ErrorContains(t, oauth2.ErrorToDebugRFC6749Error(err), "Clients are not allowed to perform a token exchange on their own refresh tokens.")
+		})
+	}
 }
 
 func TestSpec_2_1_ActorToken_SelfIssuedSkipsExchangePolicy(t *testing.T) {

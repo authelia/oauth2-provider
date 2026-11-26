@@ -77,12 +77,31 @@ type OwnAccessTokenExchangeClient interface {
 	GetAllowOwnAccessTokenExchange() (allow bool)
 }
 
+// OwnRefreshTokenExchangeClient is an optional client interface. A client which does not implement it may not exchange
+// a refresh token issued to itself, which RFC 8693 Section 2.2.2 refuses with 'invalid_request', other than for an
+// Identity Assertion JWT Authorization Grant. A refresh token is never exchanged by any other client.
+//
+// A client which opts in may only request the audience and resources the refresh token was granted, per RFC 8707
+// Section 2.2. The issued access token or refresh token belongs to the request the refresh token was issued for, so
+// revoking that grant revokes it as RFC 7009 Section 2.1 describes.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.2
+// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+// See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.3.3
+type OwnRefreshTokenExchangeClient interface {
+	// GetAllowOwnRefreshTokenExchange reports whether the client may exchange a refresh token issued to itself as a
+	// 'subject_token'. An attacker holding the client's credentials and one of its refresh tokens can otherwise use it
+	// to mint tokens of another type without rotating it.
+	GetAllowOwnRefreshTokenExchange() (allow bool)
+}
+
 // RefreshTokenIssuanceClient is an optional client interface. A client which does not implement it is not issued a
 // refresh token by a token exchange.
 type RefreshTokenIssuanceClient interface {
 	// GetAllowTokenExchangeRefreshToken reports whether a token exchange may issue a refresh token to the client. An
-	// issued refresh token also requires a refresh token 'subject_token', the 'refresh_token' grant type, and one of the
-	// configured refresh token scopes.
+	// issued refresh token also requires a refresh token 'subject_token', which OwnRefreshTokenExchangeClient permits,
+	// the 'refresh_token' grant type, and one of the configured refresh token scopes.
 	GetAllowTokenExchangeRefreshToken() (allow bool)
 }
 

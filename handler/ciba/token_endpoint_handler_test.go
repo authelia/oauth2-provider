@@ -681,6 +681,85 @@ func (s *recordingTokenTestStore) waitRecorded(t *testing.T) (recorded bool) {
 	}
 }
 
+// gatedTokenTestStore blocks every GetCIBASession made with a context marked by held while the gate is closed, so a
+// poll which is held open cannot read the request until the gate opens. It blocks every UpdateCIBASession made with a
+// context marked by delayed until release is closed, so a poll can be recorded after a later one.
+type gatedTokenTestStore struct {
+	*recordingTokenTestStore
+
+	gate    sync.RWMutex
+	arrived chan struct{}
+	release chan struct{}
+}
+
+type gatedTokenTestKey struct{}
+
+type delayedTokenTestKey struct{}
+
+func newGatedTokenTestStore(store tokenTestStore) *gatedTokenTestStore {
+	return &gatedTokenTestStore{
+		recordingTokenTestStore: newRecordingTokenTestStore(store),
+		arrived:                 make(chan struct{}, 1),
+		release:                 make(chan struct{}),
+	}
+}
+
+func (s *gatedTokenTestStore) held(ctx context.Context) context.Context {
+	return context.WithValue(ctx, gatedTokenTestKey{}, true)
+}
+
+func (s *gatedTokenTestStore) delayed(ctx context.Context) context.Context {
+	return context.WithValue(ctx, delayedTokenTestKey{}, true)
+}
+
+func (s *gatedTokenTestStore) UpdateCIBASession(ctx context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) (err error) {
+	if ctx.Value(delayedTokenTestKey{}) != nil {
+		select {
+		case s.arrived <- struct{}{}:
+		default:
+		}
+
+		<-s.release
+	}
+
+	return s.recordingTokenTestStore.UpdateCIBASession(ctx, signature, request)
+}
+
+// waitArrived waits until a delayed poll is about to be recorded.
+func (s *gatedTokenTestStore) waitArrived(t *testing.T) (arrived bool) {
+	t.Helper()
+
+	select {
+	case <-s.arrived:
+		return true
+	case <-time.After(5 * time.Second):
+		t.Error("the delayed poll did not arrive")
+
+		return false
+	}
+}
+
+func (s *gatedTokenTestStore) GetCIBASession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.BackChannelAuthenticationRequester, err error) {
+	if ctx.Value(gatedTokenTestKey{}) != nil {
+		s.gate.RLock()
+		defer s.gate.RUnlock()
+	}
+
+	return s.recordingTokenTestStore.GetCIBASession(ctx, signature, session)
+}
+
+func (f *tokenFixture) requireTokensValid(t *testing.T, response *oauth2.AccessResponse) {
+	t.Helper()
+
+	_, err := f.store.GetAccessTokenSession(t.Context(), f.strategy.AccessTokenSignature(t.Context(), response.GetAccessToken()), &oauth2.DefaultSession{})
+	assert.NoError(t, err)
+
+	refresh, _ := response.GetExtra(consts.AccessResponseRefreshToken).(string)
+
+	_, err = f.store.GetRefreshTokenSession(t.Context(), f.strategy.RefreshTokenSignature(t.Context(), refresh), &oauth2.DefaultSession{})
+	assert.NoError(t, err)
+}
+
 func TestCIBALongPolling(t *testing.T) {
 	configure := func(config *oauth2.Config) { config.CIBALongPollingTimeout = 2 * time.Second }
 
@@ -760,6 +839,200 @@ func TestCIBALongPolling(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, 10*time.Second, stored.GetPollingInterval())
 				assert.Equal(t, 1, stored.GetSlowDownCount())
+			})
+
+			t.Run("ShouldYieldToALaterPollWhichRedeems", func(t *testing.T) {
+				store := newGatedTokenTestStore(sc.new())
+				f := newTokenFixture(store, configure)
+
+				client := newTokenTestClient("client", consts.CIBAModePoll)
+				id, signature := f.create(t, client, consts.CIBAModePoll, time.Minute)
+
+				now := time.Now().UTC()
+
+				type outcome struct {
+					response *oauth2.AccessResponse
+					err      error
+				}
+
+				first, second := make(chan outcome, 1), make(chan outcome, 1)
+
+				go func() {
+					response, err := f.poll(context.Background(), client, id, now.Add(-6*time.Second))
+					first <- outcome{response, err}
+				}()
+
+				require.True(t, store.waitRecorded(t))
+
+				// The second poll is sent once the interval has passed, while the first is still held open.
+				go func() {
+					response, err := f.poll(store.held(context.Background()), client, id, now)
+					second <- outcome{response, err}
+				}()
+
+				require.True(t, store.waitRecorded(t))
+
+				// The first poll reads the approved request before the second does.
+				store.gate.Lock()
+
+				f.decide(t, context.Background(), client, consts.CIBAModePoll, signature, oauth2.CIBAStatusApproved)
+
+				o := <-first
+
+				store.gate.Unlock()
+
+				requireRFC6749Error(t, o.err, "authorization_pending")
+
+				o = <-second
+				requireTokens(t, o.response, o.err)
+
+				f.requireTokensValid(t, o.response)
+			})
+
+			t.Run("ShouldYieldToALaterPollRecordedBeforeIt", func(t *testing.T) {
+				store := newGatedTokenTestStore(sc.new())
+				f := newTokenFixture(store, configure)
+
+				client := newTokenTestClient("client", consts.CIBAModePoll)
+				id, signature := f.create(t, client, consts.CIBAModePoll, time.Minute)
+
+				now := time.Now().UTC()
+
+				type outcome struct {
+					response *oauth2.AccessResponse
+					err      error
+				}
+
+				first, second := make(chan outcome, 1), make(chan outcome, 1)
+
+				// Both polls read the request before either is recorded, and the later poll is recorded first.
+				go func() {
+					response, err := f.poll(store.delayed(context.Background()), client, id, now.Add(-time.Second))
+					first <- outcome{response, err}
+				}()
+
+				require.True(t, store.waitArrived(t))
+
+				go func() {
+					response, err := f.poll(store.held(context.Background()), client, id, now)
+					second <- outcome{response, err}
+				}()
+
+				require.True(t, store.waitRecorded(t))
+
+				close(store.release)
+
+				require.True(t, store.waitRecorded(t))
+
+				stored, err := f.stored(t, signature)
+				require.NoError(t, err)
+				assert.True(t, now.Equal(stored.GetLastPolled()), "last polled %s", stored.GetLastPolled())
+
+				// The earlier poll reads the approved request before the later one does.
+				store.gate.Lock()
+
+				f.decide(t, context.Background(), client, consts.CIBAModePoll, signature, oauth2.CIBAStatusApproved)
+
+				o := <-first
+
+				store.gate.Unlock()
+
+				requireRFC6749Error(t, o.err, "authorization_pending")
+				assert.Nil(t, o.response)
+
+				o = <-second
+				requireTokens(t, o.response, o.err)
+
+				f.requireTokensValid(t, o.response)
+			})
+
+			t.Run("ShouldNotRevokeWhenRedeemedWhileHeld", func(t *testing.T) {
+				store := newGatedTokenTestStore(sc.new())
+				f := newTokenFixture(store, configure)
+
+				client := newTokenTestClient("client", consts.CIBAModePoll)
+				id, signature := f.create(t, client, consts.CIBAModePoll, time.Minute)
+
+				now := time.Now().UTC()
+				first := make(chan error, 1)
+
+				go func() {
+					_, err := f.poll(store.held(context.Background()), client, id, now.Add(-6*time.Second))
+					first <- err
+				}()
+
+				require.True(t, store.waitRecorded(t))
+
+				// The request is approved and redeemed by a second poll before the held poll reads it again.
+				store.gate.Lock()
+
+				f.decide(t, t.Context(), client, consts.CIBAModePoll, signature, oauth2.CIBAStatusApproved)
+
+				response, err := f.poll(t.Context(), client, id, now)
+
+				store.gate.Unlock()
+
+				requireTokens(t, response, err)
+				requireRFC6749Error(t, <-first, "invalid_grant")
+
+				f.requireTokensValid(t, response)
+
+				// A redemption sent after the tokens were issued is still a replay.
+				_, err = f.poll(t.Context(), client, id, time.Now().UTC())
+				requireRFC6749Error(t, err, "invalid_grant")
+
+				_, err = f.store.GetAccessTokenSession(t.Context(), f.strategy.AccessTokenSignature(t.Context(), response.GetAccessToken()), &oauth2.DefaultSession{})
+				assert.Error(t, err)
+			})
+
+			t.Run("ShouldIssueOnceForManyOverlappingPolls", func(t *testing.T) {
+				store := newRecordingTokenTestStore(sc.new())
+				f := newTokenFixture(store, configure)
+
+				client := newTokenTestClient("client", consts.CIBAModePoll)
+				id, signature := f.create(t, client, consts.CIBAModePoll, time.Minute)
+
+				const polls = 6
+
+				type outcome struct {
+					response *oauth2.AccessResponse
+					err      error
+				}
+
+				now := time.Now().UTC()
+				outcomes := make(chan outcome, polls)
+
+				for i := range polls {
+					go func() {
+						response, err := f.poll(context.Background(), client, id, now.Add(-time.Duration(polls-1-i)*6*time.Second))
+						outcomes <- outcome{response, err}
+					}()
+
+					require.True(t, store.waitRecorded(t))
+				}
+
+				f.decide(t, context.Background(), client, consts.CIBAModePoll, signature, oauth2.CIBAStatusApproved)
+
+				var issued *oauth2.AccessResponse
+
+				for range polls {
+					o := <-outcomes
+
+					if o.err == nil {
+						requireTokens(t, o.response, o.err)
+						require.Nil(t, issued)
+
+						issued = o.response
+
+						continue
+					}
+
+					assert.Contains(t, []string{"authorization_pending", "invalid_grant"}, oauth2.ErrorToRFC6749Error(o.err).ErrorField)
+				}
+
+				require.NotNil(t, issued)
+
+				f.requireTokensValid(t, issued)
 			})
 
 			t.Run("ShouldStopWhenTheContextIsDone", func(t *testing.T) {

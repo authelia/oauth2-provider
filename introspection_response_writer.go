@@ -26,7 +26,8 @@ import (
 //
 // The outermost RFC6749Error of err decides the response, not the errors it wraps. A rejection of the caller is answered
 // with the error, and for a bearer credential with the RFC 6750 Section 3 'WWW-Authenticate' challenge, even when the
-// cause is an inactive credential.
+// cause is an inactive credential. An error with a 5xx status, such as ErrTemporarilyUnavailable, or a 429 status
+// describes the server or the caller and never the introspected token, so it is answered with the error as well.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.3
 func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWriter, err error) {
@@ -54,7 +55,7 @@ func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWr
 	// error whatever it wraps, as its cause describes the credential of the caller and not the introspected token.
 	outer := outermostRFC6749Error(err)
 
-	if errors.Is(outer, ErrInvalidRequest) || errors.Is(outer, ErrInvalidClient) || errors.Is(outer, ErrRequestUnauthorized) {
+	if errors.Is(outer, ErrInvalidRequest) || errors.Is(outer, ErrInvalidClient) || errors.Is(outer, ErrRequestUnauthorized) || outer.CodeField >= http.StatusInternalServerError || outer.CodeField == http.StatusTooManyRequests {
 		f.writeErrorJSON(ctx, rw, nil, err)
 
 		return

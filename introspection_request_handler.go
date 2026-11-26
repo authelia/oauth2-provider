@@ -41,15 +41,26 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 	token := r.PostForm.Get(consts.FormParameterToken)
 	tokenTypeHint := r.PostForm.Get(consts.FormParameterTokenTypeHint)
 
-	var client Client
+	var (
+		client Client
+		bearer bool
+	)
 
-	if client, err = f.handleNewIntrospectionRequestClientAuthentication(ctx, r, session, token); err != nil {
+	if client, bearer, err = f.handleNewIntrospectionRequestClientAuthentication(ctx, r, session, token); err != nil {
 		return &IntrospectionResponse{Active: false}, err
 	}
 
 	// FAPI 2.0 Message Signing Section 6.2: only a resource server may call the introspection endpoint.
 	if f.enforcesIntrospectionPermission(ctx) && !isIntrospectionPermitted(client) {
-		return &IntrospectionResponse{Active: false}, errorsx.WithStack(ErrRequestUnauthorized.WithHint("The client is not permitted to call the introspection endpoint.").WithDebugf("The client with id '%s' is not registered as permitted to introspect tokens.", clientID(client)))
+		rfc := ErrRequestUnauthorized
+
+		// RFC 7662 Section 2.3: a bearer token which "does not contain sufficient privileges" is answered as described
+		// in RFC 6750 Section 3.
+		if bearer {
+			rfc = ErrInvalidToken
+		}
+
+		return &IntrospectionResponse{Active: false}, errorsx.WithStack(rfc.WithHint("The client is not permitted to call the introspection endpoint.").WithDebugf("The client with id '%s' is not registered as permitted to introspect tokens.", clientID(client)))
 	}
 
 	// RFC 7662 Section 2.1 makes 'token' REQUIRED, and RFC 6749 Section 3.1 treats an empty value as omitted. A request
@@ -64,7 +75,7 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 	use, ar, err := f.IntrospectToken(ctx, token, TokenUse(tokenTypeHint), session, RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterScope), " "))...)
 	if err != nil {
 		// A failure of the server says nothing about the token, so it is not answered as an inactive token.
-		if errors.Is(err, ErrServerError) {
+		if errors.Is(err, ErrServerError) || isIntrospectorServerFailure(err) {
 			return &IntrospectionResponse{Client: client, Active: false, JWTRequested: jwtRequested}, errorsx.WithStack(err)
 		}
 
@@ -136,6 +147,12 @@ func isIntrospectionTokenVisible(client Client, token Requester) bool {
 	return slices.ContainsFunc(JoinGrantedAudienceAndResource(token.GetGrantedAudience(), token.GetGrantedResource()), func(value string) bool { return slices.Contains(served, value) })
 }
 
+func isIntrospectorServerFailure(err error) bool {
+	rfc, ok := errors.AsType[*RFC6749Error](err)
+
+	return ok && rfc.ErrorField != errUnknownErrorName && rfc.CodeField >= http.StatusInternalServerError
+}
+
 func clientID(client Client) string {
 	if client == nil {
 		return ""
@@ -185,11 +202,11 @@ func isZeroQuality(value string) bool {
 // See: https://www.rfc-editor.org/rfc/rfc9449#section-6.2
 //
 //nolint:gocyclo
-func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.Context, r *http.Request, session Session, token string) (client Client, err error) {
+func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.Context, r *http.Request, session Session, token string) (client Client, bearer bool, err error) {
 	var clientToken string
 
 	if clientToken, err = introspectionCredentialFromRequest(r, f.Config.GetAccessTokenURIQueryParameterEnabled(ctx)); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if clientToken != "" {
@@ -201,12 +218,12 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 
 			// See: https://www.rfc-editor.org/rfc/rfc8414#section-2
 			if !slices.Contains(types, tokenType) {
-				return nil, errorsx.WithStack(ErrInvalidClient.WithHint(fmt.Sprintf("The introspection endpoint does not permit authentication using the access token type '%s'.", tokenType)))
+				return nil, true, errorsx.WithStack(ErrInvalidClient.WithHint(fmt.Sprintf("The introspection endpoint does not permit authentication using the access token type '%s'.", tokenType)))
 			}
 		}
 
 		if token == clientToken {
-			return nil, errorsx.WithStack(ErrInvalidToken.WithHint("Bearer and introspection token are identical."))
+			return nil, true, errorsx.WithStack(ErrInvalidToken.WithHint("Bearer and introspection token are identical."))
 		}
 
 		var (
@@ -218,12 +235,13 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 		// covering "expired, revoked, malformed, or invalid for other reasons", so an unresolvable credential and
 		// one of the wrong kind stay indistinguishable on the wire; the distinction goes in the debug field, which
 		// only a deployment that opts in surfaces.
-		if use, ar, err = f.IntrospectToken(ctx, clientToken, AccessToken, session.Clone()); errors.Is(err, ErrServerError) {
-			return nil, err
-		} else if err != nil {
-			return nil, errorsx.WithStack(ErrInvalidToken.WithHint("HTTP Authorization header missing, malformed, or credentials used are invalid.").WithWrap(err).WithDebugError(err))
-		} else if use != "" && use != AccessToken {
-			return nil, errorsx.WithStack(ErrInvalidToken.WithHint("HTTP Authorization header missing, malformed, or credentials used are invalid.").WithDebugf("The HTTP Authorization header did not provide a token of type 'access_token', got type '%s'.", use))
+		switch use, ar, err = f.IntrospectToken(ctx, clientToken, AccessToken, session.Clone()); {
+		case errors.Is(err, ErrServerError), isIntrospectorServerFailure(err):
+			return nil, true, err
+		case err != nil:
+			return nil, true, errorsx.WithStack(ErrInvalidToken.WithHint("HTTP Authorization header missing, malformed, or credentials used are invalid.").WithWrap(err).WithDebugError(err))
+		case use != "" && use != AccessToken:
+			return nil, true, errorsx.WithStack(ErrInvalidToken.WithHint("HTTP Authorization header missing, malformed, or credentials used are invalid.").WithDebugf("The HTTP Authorization header did not provide a token of type 'access_token', got type '%s'.", use))
 		}
 
 		urls := f.Config.GetEndpointURLs(ctx)
@@ -235,7 +253,7 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 			Endpoints: urls.URLs(EndpointIntrospection),
 			Scopes:    f.Config.GetAllowedIntrospectionScopes(ctx),
 		}); err != nil {
-			return nil, err
+			return nil, true, err
 		}
 
 		// The permission and audience checks apply to the caller's current registration, not the one recorded when the
@@ -243,24 +261,45 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 		if client = ar.GetClient(); client != nil && client.GetID() != "" {
 			id := client.GetID()
 
+			// RFC 7662 Section 2.3: a bearer token which is "otherwise invalid for this request" is answered as
+			// described in RFC 6750 Section 3.
 			if client, err = GetClient(ctx, f.Config, f.Store, id); err != nil {
-				return nil, errClientLookup(err, ErrRequestUnauthorized.WithHint("The client which the credential was issued to is not registered.").WithWrap(err).WithDebugf("The client with id '%s' could not be found.", id))
+				if failure, ok := requestServerFailure(err); ok {
+					return nil, true, failure
+				}
+
+				return nil, true, errorsx.WithStack(ErrInvalidToken.WithHint("The client which the credential was issued to is not registered.").WithWrap(err).WithDebugf("The client with id '%s' could not be found.", id))
 			}
 		}
+
+		return client, true, nil
 	} else if f.Config.GetIntrospectionEndpointClientAuthDisabled(ctx) {
 		// ErrInvalidToken rather than ErrRequestUnauthorized, so that WriteIntrospectionError answers with the RFC 6750
 		// Section 3 'WWW-Authenticate' challenge.
-		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The request did not include an Access Token to authorize the call, and client authentication is disabled at this endpoint."))
+		return nil, false, errorsx.WithStack(ErrInvalidToken.WithHint("The request did not include an Access Token to authorize the call, and client authentication is disabled at this endpoint."))
 	} else if client, _, err = f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, f.Config.GetIntrospectionEndpointClientAuthStrategy(ctx)); err != nil {
-		// See: https://www.rfc-editor.org/rfc/rfc7662#section-2.3
-		if errors.Is(err, ErrInvalidClient) {
-			return nil, err
-		}
-
-		return nil, errorsx.WithStack(ErrRequestUnauthorized.WithHint("The request either did not include a known client authentication method, or contained invalid authentication details.").WithWrap(err).WithDebugError(err))
+		return nil, false, f.introspectionClientAuthenticationError(ctx, r, err)
 	}
 
-	return client, nil
+	return client, false, nil
+}
+
+func (f *Fosite) introspectionClientAuthenticationError(ctx context.Context, r *http.Request, err error) error {
+	if errors.Is(err, ErrInvalidClient) {
+		return err
+	}
+
+	if failure, ok := requestServerFailure(err); ok {
+		return failure
+	}
+
+	if rfc := ErrorToRFC6749Error(err); rfc.ErrorField == errInvalidRequestName {
+		return err
+	}
+
+	// RFC 7662 Section 2.3: invalid client credentials are answered as described in RFC 6749 Section 5.2, which is
+	// 'invalid_client' with a 'WWW-Authenticate' challenge when the client used the Authorization header.
+	return withClientAuthenticationChallenge(r, errorsx.WithStack(ErrInvalidClient.WithHint("The request either did not include a known client authentication method, or contained invalid authentication details.").WithWrap(err).WithDebugError(err)), f.Config.GetClientAuthenticationRealm(ctx))
 }
 
 // introspectionCredentialFromRequest extracts the access token presented to authenticate a request to the introspection

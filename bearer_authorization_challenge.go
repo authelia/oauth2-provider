@@ -19,8 +19,13 @@ import (
 // for an endpoint acting as an OAuth 2.0 protected resource, and returns the error with its status corrected for that
 // context. The caller writes the response body.
 //
-// The schemes passed to BearerAuthorizationChallenge are those of the 'Authorization' header values of r. r may be nil,
-// in which case the scheme used cannot be established and both the Bearer and DPoP challenges carry the error
+// The schemes passed to BearerAuthorizationChallenge are those of the 'Authorization' header values of r. An access
+// token sent in the form-encoded body (RFC 6750 Section 2.2), or in the URI query (RFC 6750 Section 2.3) when
+// GetAccessTokenURIQueryParameterEnabled permits it, is a credential of the Bearer scheme, so a request which included
+// an access token by any method carries the error information and only a request with none carries a challenge without
+// it (RFC 6750 Section 3 and Section 3.1). The 'access_token' parameter is read from the form the endpoint parsed and r
+// is never parsed here, so an endpoint which only accepts the header leaves a parameter it ignored unreported. r may be
+// nil, in which case the scheme used cannot be established and both the Bearer and DPoP challenges carry the error
 // information.
 //
 // ErrInvalidDPoPProof, ErrUseDPoPNonce and ErrInsufficientUserAuthentication are HTTP 400 at the token endpoint but
@@ -49,6 +54,10 @@ func (f *Fosite) WriteBearerAuthorizationChallenge(ctx context.Context, rw http.
 		for _, value := range r.Header.Values(consts.HeaderAuthorization) {
 			scheme, _, _ := strings.Cut(value, " ")
 			schemes = append(schemes, scheme)
+		}
+
+		if len(presentedSchemes(schemes)) == 0 && hasAccessTokenParameter(r, f.Config.GetAccessTokenURIQueryParameterEnabled(ctx)) {
+			schemes = append(schemes, consts.AuthSchemeBearer)
 		}
 	}
 
@@ -101,7 +110,8 @@ type ProtectedResourceMetadataURLProvider interface {
 // callers that do not write a net/http response; see WriteBearerAuthorizationChallenge for one that does.
 //
 // schemes are the authentication schemes of the credentials the request presented, compared case-insensitively with
-// empty values ignored. The value follows RFC 9449 Section 7.2:
+// empty values ignored. An access token sent in the form-encoded body or the URI query (RFC 6750 Section 2.2 and
+// Section 2.3) is presented using the Bearer scheme. The value follows RFC 9449 Section 7.2:
 //
 //   - No scheme means the request carried no authentication information, and the challenges carry no error
 //     parameters at all (Figure 17), which RFC 6750 Section 3.1 also requires. The nonce challenge is the sole
@@ -183,6 +193,14 @@ func BearerAuthorizationChallengeWithResourceMetadata(ctx context.Context, confi
 	default:
 		return bearer() + ", " + dpop()
 	}
+}
+
+func hasAccessTokenParameter(r *http.Request, query bool) (has bool) {
+	if query {
+		return r.Form.Get(consts.FormParameterAccessToken) != ""
+	}
+
+	return r.PostForm.Get(consts.FormParameterAccessToken) != ""
 }
 
 func presentedSchemes(schemes []string) (presented []string) {

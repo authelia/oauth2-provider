@@ -126,6 +126,50 @@ func TestClientConfigurationHandlerPolicy(t *testing.T) {
 	}
 }
 
+func TestClientConfigurationHandlerPolicyResponseModes(t *testing.T) {
+	for name, factory := range policyTestStores() {
+		t.Run(name, func(t *testing.T) {
+			for kind, rule := range policyHandlerResponseModeRules() {
+				t.Run(kind, func(t *testing.T) {
+					for _, tc := range policyHandlerResponseModeCases() {
+						t.Run(tc.name, func(t *testing.T) {
+							claim := policyHandlerExample(1)
+							claim[consts.ClientMetadataResponseModes] = rule
+
+							fixture := newPolicyConfigurationFixture(t, factory, claim)
+
+							metadata := fixture.inPolicy("b")
+							metadata.ResponseModes = tc.modes
+
+							responder := oauth2.NewClientRegistrationResponse()
+
+							err := fixture.put(t, fixture.token, metadata, responder)
+
+							client, getErr := fixture.store.GetClient(context.Background(), fixture.id)
+							require.NoError(t, getErr)
+
+							registered, ok := client.(oauth2.ResponseModeClient)
+							require.True(t, ok)
+
+							if tc.expected == "" {
+								require.NoError(t, err)
+								assert.Equal(t, http.StatusOK, responder.GetStatusCode())
+								assert.Equal(t, []oauth2.ResponseModeType{oauth2.ResponseModeQuery}, registered.GetResponseModes())
+
+								return
+							}
+
+							assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), policyErrorPrefix+tc.expected)
+							assert.Equal(t, []string{policyHandlerRedirect}, client.GetRedirectURIs())
+							assert.Equal(t, []oauth2.ResponseModeType{oauth2.ResponseModeFormPost}, registered.GetResponseModes())
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
 type policyConfigurationFixture struct {
 	handler *ClientConfigurationHandler
 	auth    *DefaultEndpointAuthStrategy
@@ -143,6 +187,10 @@ func newPolicyConfigurationFixture(t *testing.T, factory func() Storage, claim m
 	requester := policyRegistrationRequest(claim, policyHandlerKey)
 
 	requester.Metadata.Scope = consts.ScopeOpenID
+
+	if _, constrained := claim[consts.ClientMetadataResponseModes]; constrained {
+		requester.Metadata.ResponseModes = []string{consts.ResponseModeFormPost}
+	}
 
 	if claim == nil {
 		requester.Metadata.Scope = ""

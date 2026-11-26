@@ -336,6 +336,50 @@ func TestClientRegistrationHandlerPolicy(t *testing.T) {
 	}
 }
 
+func TestClientRegistrationHandlerPolicyResponseModes(t *testing.T) {
+	for name, factory := range policyTestStores() {
+		t.Run(name, func(t *testing.T) {
+			for kind, rule := range policyHandlerResponseModeRules() {
+				t.Run(kind, func(t *testing.T) {
+					for _, tc := range policyHandlerResponseModeCases() {
+						t.Run(tc.name, func(t *testing.T) {
+							handler, store, memory := newPolicyRegistrationHandler(t, factory)
+
+							claim := policyHandlerExample(1)
+							claim[consts.ClientMetadataResponseModes] = rule
+
+							requester := policyRegistrationRequest(claim, policyHandlerKey)
+							requester.Metadata.ResponseModes = tc.modes
+
+							responder := oauth2.NewClientRegistrationResponse()
+
+							err := handler.HandleRFC7591ClientRegistrationEndpointRequest(context.Background(), requester, responder)
+
+							if tc.expected == "" {
+								require.NoError(t, err)
+								assert.Equal(t, http.StatusCreated, responder.GetStatusCode())
+
+								client, getErr := store.GetClient(context.Background(), responder.ClientID)
+								require.NoError(t, getErr)
+
+								registered, ok := client.(oauth2.ResponseModeClient)
+								require.True(t, ok)
+								assert.Equal(t, []oauth2.ResponseModeType{oauth2.ResponseModeQuery}, registered.GetResponseModes())
+
+								return
+							}
+
+							assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), policyErrorPrefix+tc.expected)
+							assert.Empty(t, memory.Clients)
+							assert.Zero(t, memory.ClientRegistrationCounts[policyHandlerKey])
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
 func newPolicyRegistrationHandler(t *testing.T, factory func() Storage) (handler *ClientRegistrationHandler, store Storage, memory *storage.MemoryStore) {
 	t.Helper()
 
@@ -402,6 +446,43 @@ func policyRegistrationRequest(claim map[string]any, key string) (requester *oau
 	}
 
 	return requester
+}
+
+type policyHandlerResponseModeCase struct {
+	name     string
+	modes    []string
+	expected string
+}
+
+func policyHandlerResponseModeRules() (rules map[string]map[string]any) {
+	return map[string]map[string]any{
+		policyRuleSubsetOf: {policyRuleSubsetOf: []any{consts.ResponseModeQuery, consts.ResponseModeFormPost}},
+		policyRulePattern:  {policyRulePattern: "query|form_post"},
+		policyRuleOneOf:    {policyRuleOneOf: []any{consts.ResponseModeQuery, consts.ResponseModeFormPost}},
+	}
+}
+
+func policyHandlerResponseModeCases() (cases []policyHandlerResponseModeCase) {
+	return []policyHandlerResponseModeCase{
+		{
+			name:     "ShouldRequireOmittedResponseModes",
+			expected: "The 'response_modes' value is required by the registration policy.",
+		},
+		{
+			name:     "ShouldRequireEmptyResponseModes",
+			modes:    []string{},
+			expected: "The 'response_modes' value is required by the registration policy.",
+		},
+		{
+			name:  "ShouldPassResponseModesInsideTheSet",
+			modes: []string{consts.ResponseModeQuery},
+		},
+		{
+			name:     "ShouldRejectResponseModesOutsideTheSet",
+			modes:    []string{consts.ResponseModeFragment},
+			expected: "The 'response_modes' value 'fragment' is not permitted by the registration policy.",
+		},
+	}
 }
 
 type uncountedStore struct {

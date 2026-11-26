@@ -171,7 +171,8 @@ func TestRefreshGrantOnlineRefreshToken(t *testing.T) {
 		{name: "ShouldRedeemOfflineWhenOnlineIsNotAllowed", granted: oauth2.Arguments{"foo", consts.ScopeOfflineAccess}, expected: oauth2.RefreshTokenModeOffline},
 		{name: "ShouldKeepOfflineWhenOnlineIsAllowed", granted: oauth2.Arguments{"foo", consts.ScopeOfflineAccess}, allow: true, expected: oauth2.RefreshTokenModeOffline},
 		{name: "ShouldKeepOfflineWithoutRotationWhenOnlineIsAllowed", granted: oauth2.Arguments{"foo", consts.ScopeOfflineAccess}, allow: true, disable: true, expected: oauth2.RefreshTokenModeOffline},
-		{name: "ShouldRecordOnlineWhenTheRefreshNarrowsOfflineAccessAway", granted: oauth2.Arguments{"foo", consts.ScopeOfflineAccess}, scope: "foo", allow: true, expected: oauth2.RefreshTokenModeOnline},
+		{name: "ShouldKeepOfflineWhenTheRefreshNarrowsOfflineAccessAway", granted: oauth2.Arguments{"foo", consts.ScopeOfflineAccess}, scope: "foo", allow: true, expected: oauth2.RefreshTokenModeOffline},
+		{name: "ShouldKeepOfflineWhenTheRefreshNarrowsOfflineAccessAwayAndOnlineIsNotAllowed", granted: oauth2.Arguments{"foo", consts.ScopeOfflineAccess}, scope: "foo", expected: oauth2.RefreshTokenModeOffline},
 		{name: "ShouldKeepThePresentedModeWithoutRotation", granted: oauth2.Arguments{"foo", consts.ScopeOfflineAccess}, scope: "foo", allow: true, disable: true, expected: oauth2.RefreshTokenModeOffline},
 		{name: "ShouldRejectOnlineWithoutRotationWhenNotAllowed", granted: oauth2.Arguments{"foo"}, disable: true, err: oauth2.ErrInvalidGrant},
 	}

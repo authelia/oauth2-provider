@@ -120,6 +120,15 @@ type BackChannelAuthenticationRequester interface {
 	// SetLastPolled sets the time of the most recent token endpoint poll.
 	SetLastPolled(t time.Time)
 
+	// GetPollID returns the identifier of the most recent token endpoint poll recorded for the request. Each
+	// recorded poll has its own, so two polls recorded with the same time are told apart.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1
+	GetPollID() (id string)
+
+	// SetPollID sets the identifier of the most recent token endpoint poll recorded for the request.
+	SetPollID(id string)
+
 	// GetPollingInterval returns the minimum polling interval currently in force for the request.
 	GetPollingInterval() (interval time.Duration)
 
@@ -154,6 +163,7 @@ type BackChannelAuthenticationRequest struct {
 	AuthRequestIDSignature string
 	Status                 CIBAStatus
 	LastPolled             time.Time
+	PollID                 string
 	PollingInterval        time.Duration
 	SlowDownCount          int
 	FailureCause           string
@@ -252,6 +262,12 @@ func (r *BackChannelAuthenticationRequest) GetLastPolled() time.Time { return r.
 // SetLastPolled records the time of the most recent poll, normalized to UTC.
 func (r *BackChannelAuthenticationRequest) SetLastPolled(t time.Time) { r.LastPolled = t.UTC() }
 
+// GetPollID returns the identifier of the most recent recorded poll.
+func (r *BackChannelAuthenticationRequest) GetPollID() string { return r.PollID }
+
+// SetPollID sets the identifier of the most recent recorded poll.
+func (r *BackChannelAuthenticationRequest) SetPollID(id string) { r.PollID = id }
+
 // GetPollingInterval returns the minimum polling interval.
 func (r *BackChannelAuthenticationRequest) GetPollingInterval() time.Duration {
 	return r.PollingInterval
@@ -295,6 +311,7 @@ func (r *BackChannelAuthenticationRequest) Merge(requester Requester) {
 	r.AuthRequestIDSignature = src.AuthRequestIDSignature
 	r.Status = src.Status
 	r.LastPolled = src.LastPolled
+	r.PollID = src.PollID
 	r.PollingInterval = src.PollingInterval
 	r.SlowDownCount = src.SlowDownCount
 	r.FailureCause = src.FailureCause

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -74,8 +76,9 @@ func (c *TokenHandler) ValidateCodeAndSession(ctx context.Context, _ oauth2.Acce
 // poll: 'invalid_grant' for an unknown request or one issued to another client, 'unauthorized_client' for a push
 // request, 'expired_token', 'access_denied', 'transaction_failed', 'slow_down' and 'authorization_pending'. An approved
 // request is returned for issuance. A pending request is held open for the long polling timeout, if enabled, and only
-// the latest poll recorded for a request redeems it: a held poll answers 'authorization_pending' once a later poll is
-// recorded, and 'invalid_grant' without revoking the grant when the request is invalidated while it is held. Tokens
+// the latest poll recorded for a request redeems it: a held poll answers 'authorization_pending' once another poll is
+// recorded, which its poll ID tells apart from one recorded with the same time, and 'invalid_grant' without revoking
+// the grant when the request is invalidated while it is held. A first poll is never 'slow_down'. Tokens
 // issued internally for an approved push request skip the push rejection and the polling checks.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1
@@ -116,25 +119,23 @@ func (c *TokenHandler) GetCodeAndSession(ctx context.Context, request oauth2.Acc
 		interval = c.Config.GetCIBAPollingInterval(ctx)
 	}
 
-	// The interval is measured from the instant a polling request is sent, or for the first from the instant the
-	// authentication request was received, and grows by 5 seconds for this and every later request after each
-	// 'slow_down'.
+	// The client waits the interval between polling requests, measured from the instant the previous one was sent, not
+	// before the first, so a poll is only early when one was made before it. The interval grows by 5 seconds for this
+	// and every later request after each 'slow_down'.
 	//
 	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.3
 	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1
 	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.11
-	last := stored.GetLastPolled()
-	if last.IsZero() {
-		last = stored.GetRequestedAt()
-	}
-
-	if !last.IsZero() && now.Before(last.Add(interval)) {
+	if last := stored.GetLastPolled(); !last.IsZero() && now.Before(last.Add(interval)) {
 		return code, signature, nil, c.slowDown(ctx, signature, stored, now, interval)
 	}
 
 	// The poll is recorded before it is held open, so a poll overlapping it is answered 'slow_down' within the interval
 	// and takes its place after it.
+	poll := uuid.NewString()
+
 	stored.SetLastPolled(now)
+	stored.SetPollID(poll)
 	stored.SetPollingInterval(interval)
 	stored.SetSlowDownCount(0)
 
@@ -145,7 +146,7 @@ func (c *TokenHandler) GetCodeAndSession(ctx context.Context, request oauth2.Acc
 	if timeout := c.longPollingTimeout(ctx, now); timeout > 0 {
 		var decided bool
 
-		if r, decided, err = c.longPoll(ctx, request, code, signature, base, now, timeout); decided {
+		if r, decided, err = c.longPoll(ctx, request, code, signature, base, poll, timeout); decided {
 			return code, signature, r, err
 		}
 	}
@@ -207,6 +208,7 @@ func (c *TokenHandler) slowDown(ctx context.Context, signature string, stored oa
 	count := stored.GetSlowDownCount() + 1
 
 	stored.SetLastPolled(now)
+	stored.SetPollID(uuid.NewString())
 	stored.SetPollingInterval(interval + slowDownIncrement)
 	stored.SetSlowDownCount(count)
 
@@ -321,7 +323,7 @@ func unverifiedDPoPProofClaims(proof string) (claims dpopProofClaims, ok bool) {
 // or the context is done. It returns decided as true with the outcome once the request is no longer pending.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1
-func (c *TokenHandler) longPoll(ctx context.Context, request oauth2.AccessRequester, code, signature string, base oauth2.Session, polled time.Time, timeout time.Duration) (r oauth2.Requester, decided bool, err error) {
+func (c *TokenHandler) longPoll(ctx context.Context, request oauth2.AccessRequester, code, signature string, base oauth2.Session, poll string, timeout time.Duration) (r oauth2.Requester, decided bool, err error) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
@@ -349,7 +351,7 @@ func (c *TokenHandler) longPoll(ctx context.Context, request oauth2.AccessReques
 			return nil, true, errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The 'auth_req_id' is no longer valid.").WithDebug("The authentication request was invalidated while this request was held open."))
 		}
 
-		if gerr == nil && stored != nil && stored.GetLastPolled().After(polled) {
+		if gerr == nil && stored != nil && stored.GetPollID() != poll {
 			return nil, false, nil
 		}
 
@@ -361,8 +363,8 @@ func (c *TokenHandler) longPoll(ctx context.Context, request oauth2.AccessReques
 	}
 }
 
-// UpdateLastChecked records the time of this request as the last poll of the authentication request. Tokens issued
-// internally for an approved push request are not a poll, so nothing is recorded for them.
+// UpdateLastChecked records this request, with a poll ID of its own, as the last poll of the authentication request.
+// Tokens issued internally for an approved push request are not a poll, so nothing is recorded for them.
 func (c *TokenHandler) UpdateLastChecked(ctx context.Context, request oauth2.AccessRequester, authorizeRequest oauth2.Requester) (err error) {
 	if oauth2.IsInternalIssuance(ctx) {
 		return nil
@@ -379,6 +381,7 @@ func (c *TokenHandler) UpdateLastChecked(ctx context.Context, request oauth2.Acc
 	}
 
 	r.SetLastPolled(lastPolled)
+	r.SetPollID(uuid.NewString())
 
 	return c.Storage.UpdateCIBASession(ctx, r.GetAuthRequestIDSignature(), r)
 }
@@ -389,6 +392,17 @@ func (c *TokenHandler) UpdateLastChecked(ctx context.Context, request oauth2.Acc
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1.1
 func (c *TokenHandler) InvalidateSession(ctx context.Context, signature string, _ oauth2.Requester) (err error) {
 	return c.Storage.InvalidateCIBASession(ctx, signature)
+}
+
+// CanOverlapRedemption reports that an 'auth_req_id' redeemed by another poll while this poll was being processed is
+// not a use after its redemption: the client may cancel a poll the provider is slow to answer and make a new request,
+// and a cancellation does not always reach the provider. The poll is answered 'invalid_grant' and the grant is not
+// revoked. Tokens issued internally for an approved push request are not a poll and never overlap.
+//
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1
+// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1.1
+func (c *TokenHandler) CanOverlapRedemption(ctx context.Context, _ oauth2.AccessRequester) (overlap bool) {
+	return !oauth2.IsInternalIssuance(ctx)
 }
 
 // CanSkipClientAuth always returns false: the client must be authenticated.
@@ -444,6 +458,7 @@ func (c *TokenEndpointHandler) GrantTypesSupported(ctx context.Context) (types [
 }
 
 var (
-	_ hoauth2.CodeTokenEndpointHandler = (*TokenHandler)(nil)
-	_ oauth2.TokenEndpointHandler      = (*TokenEndpointHandler)(nil)
+	_ hoauth2.CodeTokenEndpointHandler        = (*TokenHandler)(nil)
+	_ hoauth2.OverlapCodeTokenEndpointHandler = (*TokenHandler)(nil)
+	_ oauth2.TokenEndpointHandler             = (*TokenEndpointHandler)(nil)
 )

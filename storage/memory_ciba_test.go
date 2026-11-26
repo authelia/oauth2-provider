@@ -289,6 +289,50 @@ func TestMemoryStoreCIBA(t *testing.T) {
 				requireState(polled.Add(time.Second), 5*time.Second, 0)
 			})
 
+			t.Run("ShouldRecordThePollID", func(t *testing.T) {
+				store := sc.new()
+
+				require.NoError(t, store.CreateCIBASession(ctx, "sig", newCIBATestRequest()))
+
+				stale, err := store.GetCIBASession(ctx, "sig", &oauth2.DefaultSession{})
+				require.NoError(t, err)
+				assert.Equal(t, "", stale.GetPollID())
+
+				polled := time.Now().UTC().Add(time.Minute).Truncate(time.Second)
+
+				write := func(at time.Time, id string) {
+					request := newCIBATestRequest()
+					request.SetLastPolled(at)
+					request.SetPollID(id)
+
+					require.NoError(t, store.UpdateCIBASession(ctx, "sig", request))
+				}
+
+				requirePollID := func(id string) {
+					got, err := store.GetCIBASession(ctx, "sig", &oauth2.DefaultSession{})
+					require.NoError(t, err)
+
+					assert.Equal(t, id, got.GetPollID())
+				}
+
+				write(polled, "first")
+				requirePollID("first")
+
+				write(polled.Add(-time.Second), "earlier")
+				requirePollID("first")
+
+				write(polled, "same-time")
+				requirePollID("same-time")
+
+				stale.SetStatus(oauth2.CIBAStatusApproved)
+
+				require.NoError(t, store.DecideCIBASession(ctx, "sig", stale))
+				requirePollID("same-time")
+
+				write(polled.Add(time.Second), "later")
+				requirePollID("later")
+			})
+
 			t.Run("ShouldKeepTheLatestLastPollWhenWrittenConcurrently", func(t *testing.T) {
 				store := sc.new()
 

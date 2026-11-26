@@ -40,13 +40,16 @@ type Storage interface {
 	// the request, and returns the authentication request. It returns the same errors as GetCIBASession.
 	GetCIBASessionByRequestID(ctx context.Context, requestID string, session oauth2.Session) (request oauth2.BackChannelAuthenticationRequester, err error)
 
-	// UpdateCIBASession writes the polling state of the request, the values of GetLastPolled, GetPollingInterval and
-	// GetSlowDownCount, onto the stored authentication request for the given 'auth_req_id' signature. It must never
-	// overwrite the stored status, failure cause or session, which only DecideCIBASession writes. It must never move
-	// the stored last poll time backwards: when the value of GetLastPolled is earlier than the stored one it writes
-	// none of the polling state and returns no error, and it compares and writes in one atomic operation, as polls of
-	// one request can be recorded out of order and a poll held open only yields to a poll recorded with a later time.
-	// A value equal to the stored one is written. It does nothing when no request is stored.
+	// UpdateCIBASession writes the polling state of the request, the values of GetLastPolled, GetPollID,
+	// GetPollingInterval and GetSlowDownCount, onto the stored authentication request for the given 'auth_req_id'
+	// signature. It must never overwrite the stored status, failure cause or session, which only DecideCIBASession
+	// writes. It must never move the stored last poll time backwards: when the value of GetLastPolled is earlier than
+	// the stored one it writes none of the polling state and returns no error, and it compares and writes in one
+	// atomic operation, as polls of one request can be recorded out of order. A value equal to the stored one is
+	// written, so of two polls recorded with the same time the poll ID of the one written last is stored. The poll ID
+	// must round-trip exactly: a poll held open yields unless GetCIBASession returns the poll ID it recorded, so a
+	// store which does not persist it holds no poll open past its first read. It does nothing when no request is
+	// stored.
 	//
 	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1
 	UpdateCIBASession(ctx context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) (err error)
@@ -54,8 +57,8 @@ type Storage interface {
 	// DecideCIBASession stores the authentication request for the given 'auth_req_id' signature only while the stored
 	// request has the oauth2.CIBAStatusPending status and has not been invalidated with InvalidateCIBASession,
 	// checking and writing it in one atomic operation. It must never overwrite the stored polling state, the values
-	// of GetLastPolled, GetPollingInterval and GetSlowDownCount, which only UpdateCIBASession writes: a poll held open
-	// reads the last poll time to learn that a later poll has taken its place. It returns oauth2.ErrCIBADecided when
+	// of GetLastPolled, GetPollID, GetPollingInterval and GetSlowDownCount, which only UpdateCIBASession writes: a poll
+	// held open reads the poll ID to learn that another poll has taken its place. It returns oauth2.ErrCIBADecided when
 	// the stored request was already decided or invalidated, and oauth2.ErrNotFound when no request is stored.
 	DecideCIBASession(ctx context.Context, signature string, request oauth2.BackChannelAuthenticationRequester) (err error)
 

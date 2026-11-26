@@ -564,6 +564,10 @@ func (c *rfc8693Client) GetAllowOwnRefreshTokenExchange() bool {
 	return true
 }
 
+func (c *rfc8693Client) GetAllowOwnIDTokenExchange() bool {
+	return true
+}
+
 func (c *rfc8693Client) GetAllowTokenExchangeRefreshToken() bool {
 	return true
 }

@@ -32,7 +32,7 @@ func TestRefreshTokenSubjectExchangeOptIn(t *testing.T) {
 		{name: "ShouldRejectARefreshTokenByDefault", requested: consts.TokenTypeRFC8693RefreshToken, refused: true},
 		{name: "ShouldRejectAnIDTokenByDefault", requested: consts.TokenTypeRFC8693IDToken, refused: true},
 		{name: "ShouldRejectAJWTByDefault", requested: grantPartnerType, refused: true},
-		{name: "ShouldRejectAJWTAuthorizationGrantByDefault", requested: consts.TokenTypeRFC8693JWT, refused: true},
+		{name: "ShouldAcceptAJWTAuthorizationGrantByDefault", requested: consts.TokenTypeRFC8693JWT},
 		{name: "ShouldAcceptAnAccessTokenWhenOptedIn", optedIn: true, requested: consts.TokenTypeRFC8693AccessToken},
 		{name: "ShouldAcceptTheDefaultTokenTypeWhenOptedIn", optedIn: true},
 		{name: "ShouldAcceptARefreshTokenWhenOptedIn", optedIn: true, requested: consts.TokenTypeRFC8693RefreshToken},
@@ -65,10 +65,31 @@ func TestRefreshTokenSubjectExchangeOptIn(t *testing.T) {
 					form.Set(consts.FormParameterSubjectToken, "opaque-subject-token")
 				}
 
+				session := newSpecSession("other")
+				request.Session = session
+
 				err := f.refresh.HandleTokenEndpointRequest(t.Context(), request)
 
 				if !tc.refused {
 					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+					if tc.actor {
+						assert.Equal(t, "peter", session.GetActorToken()[consts.ClaimSubject])
+						assert.Equal(t, f.client.GetID(), session.GetActorToken()[consts.ClaimClientIdentifier])
+						assert.Equal(t, "other", session.GetSubject())
+						assert.Nil(t, session.GetSubjectToken())
+						assert.Nil(t, session.GetSubjectRequester())
+
+						return
+					}
+
+					assert.Equal(t, "peter", session.GetSubject())
+					assert.Equal(t, "peter", session.GetSubjectToken()[consts.ClaimSubject])
+					assert.Equal(t, f.client.GetID(), session.GetSubjectToken()[consts.ClaimClientIdentifier])
+					assert.Nil(t, session.GetActorToken())
+
+					require.NotNil(t, session.GetSubjectRequester())
+					assert.Equal(t, f.grant.GetID(), session.GetSubjectRequester().GetID())
 
 					return
 				}
@@ -76,7 +97,8 @@ func TestRefreshTokenSubjectExchangeOptIn(t *testing.T) {
 				// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.2
 				assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 				assert.ErrorContains(t, oauth2.ErrorToDebugRFC6749Error(err), hint)
-				assert.Nil(t, request.GetSession().(*DefaultSession).GetSubjectToken())
+				assert.Nil(t, session.GetSubjectToken())
+				assert.Equal(t, "other", session.GetSubject())
 			})
 		}
 	}

@@ -83,6 +83,7 @@ func (s *DefaultClientRegistrationStrategy) PatchClient(ctx context.Context, cli
 	replacement.TokenExchangeOwnAccessTokenRestrictTargets = registered.TokenExchangeOwnAccessTokenRestrictTargets
 	replacement.TokenExchangeOwnAccessToken = registered.TokenExchangeOwnAccessToken
 	replacement.TokenExchangeOwnRefreshToken = registered.TokenExchangeOwnRefreshToken
+	replacement.TokenExchangeOwnIDToken = registered.TokenExchangeOwnIDToken
 	replacement.TokenExchangeRefreshToken = registered.TokenExchangeRefreshToken
 	replacement.TokenExchangeAuthorizationGrant = registered.TokenExchangeAuthorizationGrant
 	replacement.TokenExchangeRefreshTokenRotationOverride = registered.TokenExchangeRefreshTokenRotationOverride

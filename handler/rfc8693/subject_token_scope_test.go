@@ -28,7 +28,7 @@ func TestIDTokenSubjectTokenScope(t *testing.T) {
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
-	client := store.Clients["my-client"]
+	client := ownIDTokenClient(store.Clients["my-client"])
 
 	handler := &IDTokenTypeHandler{
 		Config:             cfg,
@@ -374,6 +374,8 @@ func TestCustomJWTSubjectTokenJTIIsScopedToTheIssuer(t *testing.T) {
 type testPermissiveScopeClient struct {
 	*oauth2.DefaultClient
 }
+
+func (c *testPermissiveScopeClient) GetAllowOwnIDTokenExchange() bool { return true }
 
 func (c *testPermissiveScopeClient) GetScopeStrategy(_ context.Context) oauth2.ScopeStrategy {
 	return func(_ []string, _ string) bool {

@@ -23,6 +23,16 @@ func ownRefreshTokenClient(client oauth2.Client) oauth2.Client {
 	return &ownRefreshTokenExchangeClient{Client: client}
 }
 
+func ownIDTokenClient(client oauth2.Client) oauth2.Client {
+	return &ownIDTokenExchangeClient{DefaultClient: client.(*oauth2.DefaultClient)}
+}
+
+type ownIDTokenExchangeClient struct {
+	*oauth2.DefaultClient
+}
+
+func (c *ownIDTokenExchangeClient) GetAllowOwnIDTokenExchange() bool { return true }
+
 type ownRefreshTokenExchangeClient struct {
 	oauth2.Client
 }

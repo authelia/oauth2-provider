@@ -447,7 +447,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 	response.SetTokenType(oauth2.RFC8693NAToken)
 	response.SetExpiresIn(time.Duration(claims.GetExpirationTimeSafe().UnixNano() - time.Now().UTC().UnixNano()))
 	response.SetScopes(request.GetGrantedScopes())
-	response.SetExtra(consts.FormParameterIssuedTokenType, jwtType.GetName(ctx))
+	response.SetExtra(consts.FormParameterIssuedTokenType, requestedTokenTypeIdentifier(ctx, request, c.Config))
 
 	return nil
 }
@@ -554,7 +554,7 @@ func (c *CustomJWTTypeHandler) issueAuthorizationGrant(ctx context.Context, requ
 		response.SetScopes(scopes)
 	}
 
-	response.SetExtra(consts.FormParameterIssuedTokenType, jwtType.GetName(ctx))
+	response.SetExtra(consts.FormParameterIssuedTokenType, requestedTokenTypeIdentifier(ctx, request, c.Config))
 
 	return nil
 }

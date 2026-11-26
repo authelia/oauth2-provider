@@ -31,7 +31,8 @@ import (
 // The access token is issued for the request the refresh token was issued for, so that revoking the grant revokes it as
 // RFC 7009 Section 2.1 describes, and the storage rotating that refresh token revokes it as it does any access token of
 // the request. A refresh token issued with it is bound to the scope, audience and resources of the 'subject_token'
-// rather than to those of the access token.
+// rather than to those of the access token, and keeps the session of the 'subject_token' with the RFC 8693 Section 4.1
+// 'act' claim of the exchange.
 //
 // AccessTokenLifespan and RefreshTokenLifespan apply unless the client sets its own lifespans for the token exchange
 // grant. A RefreshTokenLifespan of -1 removes the configured limit, but the refresh token still expires with the
@@ -289,7 +290,13 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 		}
 
 		if refreshSignature != "" {
-			requester := sanitizeRefreshTokenRequester(request, subject)
+			var requester oauth2.Requester
+
+			if requester, err = sanitizeRefreshTokenRequester(request, subject); err != nil {
+				return err
+			}
+
+			oauth2.RecordRefreshTokenMode(requester.GetSession(), oauth2.GetRefreshTokenModeForScopes(c.RefreshTokenScopes, requester.GetGrantedScopes()))
 
 			// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
 			requester.SetRequestedAuthorizationDetails(grant)

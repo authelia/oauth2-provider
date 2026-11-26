@@ -22,6 +22,10 @@ import (
 // with an ID Token as the 'subject_token' cannot request a scope. For the same reason an ID Token is only issued for
 // an ID Token or refresh token 'subject_token'.
 //
+// An ID Token 'subject_token' is only accepted from the client it was issued to, and other than for an Identity
+// Assertion JWT Authorization Grant or a JWT authorization grant only when that client opts in with
+// GetAllowOwnIDTokenExchange, as RFC 8693 Section 2.2.2 refuses a token that is unacceptable based on policy.
+//
 // OpenID Connect defines no 'typ' value for an ID Token, so openid.DefaultIDTokenValidationStrategy only rejects a token
 // whose 'typ' identifies another type. A deployment that signs other JWTs for the client with the ID Token key and issuer
 // MUST positively identify an ID Token with its own openid.TokenValidationStrategy, for example by a claim or a reserved
@@ -92,10 +96,8 @@ func (c *IDTokenTypeHandler) HandleTokenEndpointRequest(ctx context.Context, req
 			return err
 		}
 
-		if !IsIDJAGRequest(ctx, request, c.Config) && !isTxnTokenRequest(ctx, request, c.Config) {
-			if err = validateSubjectTokenScope(request, nil); err != nil {
-				return err
-			}
+		if err = c.validateSubjectPolicy(ctx, request); err != nil {
+			return err
 		}
 
 		if err = c.inherit(ctx, request, unpacked, tokenRoleSubject, prior); err != nil {
@@ -201,6 +203,23 @@ func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.Access
 	}
 
 	return claims, nil
+}
+
+func (c *IDTokenTypeHandler) validateSubjectPolicy(ctx context.Context, request oauth2.AccessRequester) (err error) {
+	if IsIDJAGRequest(ctx, request, c.Config) {
+		return nil
+	}
+
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.2
+	if authorizationGrantType(ctx, request, c.Config) == nil && !allowsOwnIDTokenExchange(request.GetClient()) {
+		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Clients are not allowed to perform a token exchange on their own ID Tokens."))
+	}
+
+	if isTxnTokenRequest(ctx, request, c.Config) {
+		return nil
+	}
+
+	return validateSubjectTokenScope(request, nil)
 }
 
 func (c *IDTokenTypeHandler) inherit(ctx context.Context, request oauth2.AccessRequester, claims map[string]any, role tokenRole, prior tokenBinding) (err error) {

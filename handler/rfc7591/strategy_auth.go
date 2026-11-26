@@ -495,12 +495,12 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientConfiguration(ctx contex
 		return nil, errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithHintf("The provided Client Registration Token is not permitted to manage the client with id '%s'.", id))
 	}
 
-	// The requester ID is set to the presented token's signature so a caller can delete this session later. The
-	// registration branch does not do this: an access token's request ID has meaning of its own.
-	requester.SetID(signature)
-
+	// The requester ID is the presented token's signature so a caller can delete this session later. The registration
+	// branch does not do this: an access token's request ID has meaning of its own. The ID and the session are held
+	// apart from the stored request, which a store may return to every caller.
+	//
 	// The stored policy was checked for 'pattern' rules when the client was registered.
-	return newPolicyRequester(requester, consts.ClientRegistrationPolicyInternalKey, "", true), nil
+	return newPolicyRequester(newDetachedRequester(requester, signature), consts.ClientRegistrationPolicyInternalKey, "", true), nil
 }
 
 // endpointToken extracts the token from a request's Authorization header. Exactly one such header must be present,

@@ -122,7 +122,7 @@ func (v *LocalValidator) ValidateClientRegistrationMetadata(ctx context.Context,
 		return err
 	}
 
-	if err = validateTLSClientAuth(metadata); err != nil {
+	if err = validateClientAuth(metadata); err != nil {
 		return err
 	}
 
@@ -152,6 +152,14 @@ func validateCapabilities(ctx context.Context, config LocalValidatorConfig, meta
 	}
 
 	return nil
+}
+
+func validateClientAuth(metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	if err = validateTLSClientAuth(metadata); err != nil {
+		return err
+	}
+
+	return validateAuthMethodCredentials(metadata)
 }
 
 type tlsClientAuthSubject struct {
@@ -220,6 +228,65 @@ func validateTLSClientAuth(metadata *oauth2.ClientRegistrationMetadata) (err err
 
 	if selfSigned && metadata.JSONWebKeys == nil && metadata.JSONWebKeysURI == "" {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' authentication method requires either the '%s' or '%s' value to be registered.", consts.ClientAuthMethodSelfSignedTLSClientAuth, consts.ClientMetadataJSONWebKeys, consts.ClientMetadataJSONWebKeysURI))
+	}
+
+	return nil
+}
+
+type endpointAuthMethod struct {
+	methodName string
+	method     string
+	algName    string
+	alg        string
+}
+
+// validateAuthMethodCredentials implements RFC 7591 Section 2.1, which has the authorization server ensure a client
+// cannot register itself into an inconsistent state, for the JWT client authentication methods of OpenID Connect Core
+// 1.0 Section 9. A client registering 'private_key_jwt' for any endpoint must register its public keys through a 'jwks'
+// of at least one key or a 'jwks_uri' and must not register an HMAC algorithm to sign the assertion with, and a client
+// registering 'client_secret_jwt' must not register an algorithm which is not an HMAC algorithm. The method and
+// algorithm of each endpoint are resolved as the endpoint resolves them: the revocation and introspection endpoints use
+// the token endpoint method when they have none of their own, and the token endpoint algorithm when they have neither a
+// method nor an algorithm of their own.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc7591#section-2.1
+// See: https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication
+// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+func validateAuthMethodCredentials(metadata *oauth2.ClientRegistrationMetadata) (err error) {
+	token := endpointAuthMethod{consts.ClientMetadataTokenEndpointAuthMethod, metadata.TokenEndpointAuthMethod, consts.ClientMetadataTokenEndpointAuthAlg, metadata.TokenEndpointAuthSigningAlg}
+
+	endpoints := []endpointAuthMethod{token}
+
+	for _, endpoint := range []endpointAuthMethod{
+		{consts.ClientMetadataIntrospectionEndpointAuthMethod, metadata.IntrospectionEndpointAuthMethod, consts.ClientMetadataIntrospectionEndpointAuthAlg, metadata.IntrospectionEndpointAuthSigningAlg},
+		{consts.ClientMetadataRevocationEndpointAuthMethod, metadata.RevocationEndpointAuthMethod, consts.ClientMetadataRevocationEndpointAuthAlg, metadata.RevocationEndpointAuthSigningAlg},
+	} {
+		if endpoint.method == "" {
+			if endpoint.alg == "" {
+				continue
+			}
+
+			endpoint.methodName, endpoint.method = token.methodName, token.method
+		}
+
+		endpoints = append(endpoints, endpoint)
+	}
+
+	for _, endpoint := range endpoints {
+		switch endpoint.method {
+		case consts.ClientAuthMethodPrivateKeyJWT:
+			if (metadata.JSONWebKeys == nil || len(metadata.JSONWebKeys.Keys) == 0) && metadata.JSONWebKeysURI == "" {
+				return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' requires either the '%s' or '%s' value to be registered.", endpoint.methodName, endpoint.method, consts.ClientMetadataJSONWebKeys, consts.ClientMetadataJSONWebKeysURI))
+			}
+
+			if jwt.IsSignedJWTClientSecretAlgStr(endpoint.alg) {
+				return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is a symmetric algorithm which the '%s' value '%s' can not use.", endpoint.algName, endpoint.alg, endpoint.methodName, endpoint.method))
+			}
+		case consts.ClientAuthMethodClientSecretJWT:
+			if endpoint.alg != "" && !jwt.IsSignedJWTClientSecretAlgStr(endpoint.alg) {
+				return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is not a symmetric algorithm which the '%s' value '%s' requires.", endpoint.algName, endpoint.alg, endpoint.methodName, endpoint.method))
+			}
+		}
 	}
 
 	return nil

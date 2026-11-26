@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/x/errorsx"
@@ -59,6 +61,7 @@ func newClientRegistrationToken(ctx context.Context, strategy ClientRegistration
 	session.SetExpiresAt(oauth2.AccessToken, time.Now().UTC().Add(lifespan))
 
 	requester := oauth2.NewRequest()
+	requester.ID = uuid.New().String()
 	requester.Session = session
 
 	// NewRequest supplies a non-nil default client which is kept when the caller supplies none: Requester.GetClient is

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -121,6 +122,60 @@ func TestAuthenticateClientRegistrationOmitsCounterKeyWithoutRequestID(t *testin
 			require.True(t, ok)
 			require.Empty(t, pr.GetID())
 			assert.Empty(t, pr.GetRegistrationCounterKey())
+		})
+	}
+}
+
+func TestAuthenticateClientConfigurationDoesNotChangeTheStoredRequest(t *testing.T) {
+	ctx := context.Background()
+
+	for name, factory := range policyTestStores() {
+		t.Run(name, func(t *testing.T) {
+			config := &oauth2.Config{
+				GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+				RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+				EndpointURLs:                          oauth2.EndpointURLs{Registration: testEndpoint},
+			}
+
+			tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+			store := factory()
+			auth := NewDefaultEndpointAuthStrategy(config, store, tokens, tokens)
+
+			token, err := newClientRegistrationToken(ctx, tokens, store, &oauth2.DefaultClient{ID: testManagedClientID}, &oauth2.DefaultSession{}, ClientConfigurationURL(testEndpoint, testManagedClientID), 0, nil, nil, nil)
+			require.NoError(t, err)
+
+			signature := tokens.ClientRegistrationTokenSignature(ctx, token)
+
+			stored, err := store.GetClientRegistrationTokenSession(ctx, signature, &oauth2.DefaultSession{})
+			require.NoError(t, err)
+
+			id := stored.GetID()
+
+			require.NotEmpty(t, id)
+			require.NotEqual(t, signature, id)
+
+			var wg sync.WaitGroup
+
+			results := make([]oauth2.Requester, 16)
+			errs := make([]error, len(results))
+
+			for i := range results {
+				wg.Go(func() {
+					results[i], errs[i] = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodGet, testEndpoint+"/"+testManagedClientID, token), testManagedClientID)
+				})
+			}
+
+			wg.Wait()
+
+			for i := range results {
+				require.NoError(t, errs[i])
+				assert.Equal(t, signature, results[i].GetID())
+			}
+
+			stored, err = store.GetClientRegistrationTokenSession(ctx, signature, &oauth2.DefaultSession{})
+			require.NoError(t, err)
+
+			assert.Equal(t, id, stored.GetID())
 		})
 	}
 }

@@ -1432,7 +1432,7 @@ func TestResolverBoundsTheFetchDuration(t *testing.T) {
 func TestResolverBoundsTheFetchRatePerDomain(t *testing.T) {
 	env := newResolverEnv(t, func(config *Config) {
 		config.FetchRatePerDomain = 1
-		config.FetchBurstPerDomain = 2
+		config.FetchBurstPerDomain = 4
 	})
 
 	for _, path := range []string{"/missing", "/missing"} {
@@ -1456,7 +1456,7 @@ func TestResolverBoundsTheFetchRatePerDomain(t *testing.T) {
 	assert.Equal(t, int64(2), env.hits.Load())
 
 	env.resolver.mu.Lock()
-	env.resolver.buckets[domain].tokens = 1
+	env.resolver.buckets[domain].tokens = 3
 	env.resolver.mu.Unlock()
 
 	client, err = env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), env.server.URL+"/ok")
@@ -1469,6 +1469,97 @@ func TestResolverBoundsTheFetchRatePerDomain(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), env.hits.Load())
+}
+
+func TestResolverReservesFetchesForStoredDocuments(t *testing.T) {
+	t.Run("ShouldRefreshAStoredDocumentWhenUnknownIdentifiersSpentTheFetchRate", func(t *testing.T) {
+		env := newResolverEnv(t, func(config *Config) {
+			config.FetchRatePerDomain = 0.001
+			config.FetchBurstPerDomain = 4
+		})
+
+		for range 2 {
+			_, err := env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), env.server.URL+"/missing")
+			require.ErrorIs(t, err, oauth2.ErrInvalidClient)
+		}
+
+		_, err := env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), env.server.URL+"/missing")
+
+		require.ErrorIs(t, err, oauth2.ErrTemporarilyUnavailable)
+		assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "limit of 0.001 fetches per second from its domain")
+		assert.Equal(t, int64(2), env.hits.Load())
+
+		for _, path := range []string{"/ok", "/no-cache"} {
+			id := env.server.URL + path
+
+			env.setRecord(t, id, time.Now().Add(-time.Hour), true)
+
+			client, err := env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), id)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{"https://client.example.com/cb"}, client.GetRedirectURIs())
+		}
+
+		assert.Equal(t, int64(4), env.hits.Load())
+
+		id := env.server.URL + "/stale-at-once"
+
+		env.setRecord(t, id, time.Now().Add(-time.Hour), true)
+
+		_, err = env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), id)
+
+		require.ErrorIs(t, err, oauth2.ErrTemporarilyUnavailable)
+		assert.Equal(t, int64(4), env.hits.Load())
+	})
+
+	t.Run("ShouldNotReserveWhenTheBurstIsOne", func(t *testing.T) {
+		env := newResolverEnv(t, func(config *Config) {
+			config.FetchRatePerDomain = 0.001
+			config.FetchBurstPerDomain = 1
+		})
+
+		client, err := env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), env.server.URL+"/ok")
+
+		require.NoError(t, err)
+		assert.Equal(t, env.server.URL+"/ok", client.GetID())
+	})
+
+	t.Run("ShouldRefreshAStoredDocumentWhenUnknownIdentifiersHoldTheConcurrentFetches", func(t *testing.T) {
+		env := newResolverEnv(t, func(config *Config) {
+			config.MaxConcurrentFetches = 8
+			config.MaxConcurrentFetchesPerDomain = 2
+		})
+
+		result := make(chan error, 1)
+
+		go func() {
+			_, err := env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), env.server.URL+"/slow")
+
+			result <- err
+		}()
+
+		<-env.entered
+
+		_, err := env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), env.server.URL+"/missing")
+
+		require.ErrorIs(t, err, oauth2.ErrTemporarilyUnavailable)
+		assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "limit of 1 concurrent fetches from its domain")
+		assert.Equal(t, int64(1), env.hits.Load())
+
+		id := env.server.URL + "/ok"
+
+		env.setRecord(t, id, time.Now().Add(-time.Hour), true)
+
+		client, err := env.resolver.ResolveClientIDMetadataDocumentClient(t.Context(), id)
+
+		require.NoError(t, err)
+		assert.Equal(t, []string{"https://client.example.com/cb"}, client.GetRedirectURIs())
+		assert.Equal(t, int64(2), env.hits.Load())
+
+		close(env.release)
+
+		require.NoError(t, <-result)
+	})
 }
 
 func TestResolverFetchRateBuckets(t *testing.T) {

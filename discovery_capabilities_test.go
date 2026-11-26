@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"authelia.com/provider/jose"
 
@@ -270,6 +271,79 @@ func TestSupportedPromptValues(t *testing.T) {
 	assert.Nil(t, (&oauth2.Config{}).GetAllowedPrompts(context.Background()))
 }
 
+func TestSupportedValuesDoNotShareConfigurationValues(t *testing.T) {
+	testCases := []struct {
+		name     string
+		config   *oauth2.Config
+		get      func(ctx context.Context, config *oauth2.Config) []string
+		expected []string
+	}{
+		{
+			name:   "ShouldOwnThePromptValues",
+			config: &oauth2.Config{AllowedPromptValues: []string{"none", "create"}},
+			get: func(ctx context.Context, config *oauth2.Config) []string {
+				return oauth2.SupportedPromptValues(ctx, config)
+			},
+			expected: []string{"none", "create"},
+		},
+		{
+			name:   "ShouldOwnTheRequestObjectSigningAlgValues",
+			config: &oauth2.Config{RequestObjectSigningAlgValues: []string{"RS256", "none"}},
+			get: func(ctx context.Context, config *oauth2.Config) []string {
+				return oauth2.SupportedRequestObjectSigningAlgValues(ctx, config)
+			},
+			expected: []string{"RS256", "none"},
+		},
+		{
+			name:   "ShouldOwnTheEndpointAuthSigningAlgValues",
+			config: &oauth2.Config{RevocationEndpointAuthSigningAlgValues: []string{"RS256", "ES256"}},
+			get: func(ctx context.Context, config *oauth2.Config) []string {
+				return oauth2.SupportedEndpointAuthSigningAlgValues(ctx, config, oauth2.ClientAuthEndpointRevocation)
+			},
+			expected: []string{"RS256", "ES256"},
+		},
+		{
+			name:   "ShouldOwnTheClientAssertionSigningAlgValues",
+			config: &oauth2.Config{ClientAssertionSigningAlgValues: []string{"RS256", "ES256"}},
+			get: func(ctx context.Context, config *oauth2.Config) []string {
+				return oauth2.SupportedEndpointAuthSigningAlgValues(ctx, config, oauth2.ClientAuthEndpointToken)
+			},
+			expected: []string{"RS256", "ES256"},
+		},
+		{
+			name:   "ShouldOwnTheConfiguredEndpointAuthMethods",
+			config: &oauth2.Config{TokenEndpointAuthMethods: []string{"client_secret_basic", "private_key_jwt"}},
+			get: func(ctx context.Context, config *oauth2.Config) []string {
+				return oauth2.SupportedEndpointAuthMethods(ctx, config, oauth2.ClientAuthEndpointToken)
+			},
+			expected: []string{"client_secret_basic", "private_key_jwt"},
+		},
+		{
+			name:   "ShouldOwnTheClientAuthenticationStrategyMethods",
+			config: &oauth2.Config{ClientAuthenticationStrategy: &fixedMethodsStrategy{methods: []string{"client_secret_basic", "private_key_jwt"}}},
+			get: func(ctx context.Context, config *oauth2.Config) []string {
+				return oauth2.SupportedEndpointAuthMethods(ctx, config, oauth2.ClientAuthEndpointToken)
+			},
+			expected: []string{"client_secret_basic", "private_key_jwt"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			values := tc.get(ctx, tc.config)
+			require.Equal(t, tc.expected, values)
+
+			for i := range values {
+				values[i] = "overwritten"
+			}
+
+			assert.Equal(t, tc.expected, tc.get(ctx, tc.config))
+		})
+	}
+}
+
 func TestInformationalGettersDefaults(t *testing.T) {
 	config := &oauth2.Config{}
 	ctx := context.Background()
@@ -454,4 +528,14 @@ type nilStrategyConfig struct {
 
 func (c *nilStrategyConfig) GetJWTStrategy(_ context.Context) jwt.Strategy {
 	return nil
+}
+
+type fixedMethodsStrategy struct {
+	oauth2.ClientAuthenticationStrategy
+
+	methods []string
+}
+
+func (s *fixedMethodsStrategy) AuthMethodsSupported(_ context.Context) []string {
+	return s.methods
 }

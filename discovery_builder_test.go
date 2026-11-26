@@ -10,6 +10,8 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -989,6 +991,118 @@ func TestOpenIDMetadataNoBackChannelStrategy(t *testing.T) {
 	assert.Contains(t, members, consts.DiscoveryPromptValuesSupported)
 }
 
+func TestDiscoveryMetadataHookDoesNotAlterConfiguration(t *testing.T) {
+	testCases := []struct {
+		name  string
+		build func(provider oauth2.Provider) (metadata *oauth2.OAuth2AuthorizationServerMetadata, err error)
+	}{
+		{
+			name: "ShouldKeepTheConfigurationForTheOAuth2Document",
+			build: func(provider oauth2.Provider) (*oauth2.OAuth2AuthorizationServerMetadata, error) {
+				return provider.NewOAuth2AuthorizationServerMetadata(context.Background())
+			},
+		},
+		{
+			name: "ShouldKeepTheConfigurationForTheOpenIDDocument",
+			build: func(provider oauth2.Provider) (*oauth2.OAuth2AuthorizationServerMetadata, error) {
+				metadata, err := provider.NewOpenIDConnectProviderMetadata(context.Background())
+				if err != nil {
+					return nil, err
+				}
+
+				return &metadata.OAuth2AuthorizationServerMetadata, nil
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
+			config.RequireSignedRequestObject = false
+			config.RFC9470StepUpAuthenticationEnabled = true
+			config.IntrospectionEndpointAuthMethods = []string{consts.ClientAuthMethodClientSecretBasic, consts.ClientAuthMethodPrivateKeyJWT, "Bearer"}
+			config.RequestObjectSigningAlgValues = []string{"RS256", "ES256", "PS256"}
+			config.DPoPAllowedJWSAlgorithms = []string{"RS256", "ES256"}
+			config.ACRValuesSupported = []string{"internal", testDiscoveryACRValue}
+			config.UILocalesSupported = []string{"en-AU", "en-US"}
+			config.DiscoveryMetadataHooks = []oauth2.DiscoveryMetadataHook{discoveryHookFunc(func(_ context.Context, metadata *oauth2.OpenIDConnectProviderMetadata) error {
+				metadata.IntrospectionEndpointAuthMethodsSupported = slices.DeleteFunc(metadata.IntrospectionEndpointAuthMethodsSupported, func(method string) bool { return method == consts.ClientAuthMethodClientSecretBasic })
+				metadata.RequestObjectSigningAlgValuesSupported = slices.DeleteFunc(metadata.RequestObjectSigningAlgValuesSupported, func(alg string) bool { return alg == "RS256" })
+				metadata.DPoPSigningAlgValuesSupported = slices.DeleteFunc(metadata.DPoPSigningAlgValuesSupported, func(alg string) bool { return alg == "RS256" })
+				metadata.ACRValuesSupported = slices.DeleteFunc(metadata.ACRValuesSupported, func(value string) bool { return value == "internal" })
+				metadata.UILocalesSupported = slices.DeleteFunc(metadata.UILocalesSupported, func(locale string) bool { return locale == "en-AU" })
+
+				return nil
+			})}
+
+			provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), gen.MustRSAKey())
+
+			metadata, err := tc.build(provider)
+			require.NoError(t, err)
+
+			assert.Equal(t, []string{consts.ClientAuthMethodPrivateKeyJWT, "Bearer"}, metadata.IntrospectionEndpointAuthMethodsSupported)
+			assert.Equal(t, []string{"ES256", "PS256"}, metadata.RequestObjectSigningAlgValuesSupported)
+			assert.Equal(t, []string{"ES256"}, metadata.DPoPSigningAlgValuesSupported)
+			assert.Equal(t, []string{testDiscoveryACRValue}, metadata.ACRValuesSupported)
+			assert.Equal(t, []string{"en-US"}, metadata.UILocalesSupported)
+
+			assert.Equal(t, []string{consts.ClientAuthMethodClientSecretBasic, consts.ClientAuthMethodPrivateKeyJWT, "Bearer"}, config.GetIntrospectionEndpointAuthMethods(ctx))
+			assert.Equal(t, []string{"RS256", "ES256", "PS256"}, config.GetRequestObjectSigningAlgValues(ctx))
+			assert.Equal(t, []string{"RS256", "ES256"}, config.GetDPoPAllowedJWSAlgorithms(ctx))
+			assert.Equal(t, []string{"internal", testDiscoveryACRValue}, config.GetACRValuesSupported(ctx))
+			assert.Equal(t, []string{"en-AU", "en-US"}, config.GetUILocalesSupported(ctx))
+		})
+	}
+}
+
+func TestDiscoveryMetadataDoesNotShareConfigurationValues(t *testing.T) {
+	testCases := []struct {
+		name  string
+		build func(provider oauth2.Provider) (metadata any, err error)
+	}{
+		{
+			name: "ShouldOwnEveryValueOfTheOAuth2Document",
+			build: func(provider oauth2.Provider) (any, error) {
+				return provider.NewOAuth2AuthorizationServerMetadata(context.Background())
+			},
+		},
+		{
+			name: "ShouldOwnEveryValueOfTheOpenIDDocument",
+			build: func(provider oauth2.Provider) (any, error) {
+				return provider.NewOpenIDConnectProviderMetadata(context.Background())
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			inner := newDiscoveryOpenIDConfig(gen.MustRSAKey())
+			inner.RequireSignedRequestObject = false
+			inner.RFC9470StepUpAuthenticationEnabled = true
+			inner.ClaimTypesSupported = []string{"normal"}
+			inner.ProtectedResources = []string{"https://api.example.com"}
+
+			provider, ok := compose.ComposeAllEnabled(inner, storage.NewMemoryStore(), gen.MustRSAKey()).(*oauth2.Fosite)
+			require.True(t, ok)
+
+			config := &retainedValuesConfig{Config: inner, retained: map[string][]string{}, expected: map[string][]string{}}
+			provider.Config = config
+
+			metadata, err := tc.build(provider)
+			require.NoError(t, err)
+
+			require.NotZero(t, overwriteStringSlices(reflect.ValueOf(metadata)))
+			require.NotEmpty(t, config.retained)
+
+			for name, values := range config.retained {
+				assert.Equal(t, config.expected[name], values, name)
+			}
+		})
+	}
+}
+
 func newDiscoveryAllEnabledConfig() *oauth2.Config {
 	config := &oauth2.Config{
 		Issuer: "https://auth.example.com",
@@ -1112,6 +1226,164 @@ func assertGolden(t *testing.T, path string, metadata any) {
 	require.NoError(t, err)
 
 	assert.JSONEq(t, string(expected), string(actual))
+}
+
+type discoveryHookFunc func(ctx context.Context, metadata *oauth2.OpenIDConnectProviderMetadata) (err error)
+
+func (f discoveryHookFunc) HandleDiscoveryMetadata(ctx context.Context, metadata *oauth2.OpenIDConnectProviderMetadata) (err error) {
+	return f(ctx, metadata)
+}
+
+type retainedValuesConfig struct {
+	*oauth2.Config
+
+	retained map[string][]string
+	expected map[string][]string
+}
+
+func (c *retainedValuesConfig) retain(name string, values []string) []string {
+	if retained, ok := c.retained[name]; ok {
+		return retained
+	}
+
+	c.retained[name] = values
+	c.expected[name] = slices.Clone(values)
+
+	return values
+}
+
+func (c *retainedValuesConfig) GetClientAuthenticationStrategy(ctx context.Context) oauth2.ClientAuthenticationStrategy {
+	return &retainedMethodsStrategy{DefaultClientAuthenticationStrategy: &oauth2.DefaultClientAuthenticationStrategy{Config: c}, config: c}
+}
+
+func (c *retainedValuesConfig) GetScopesSupported(ctx context.Context) []string {
+	return c.retain("scopes", c.Config.GetScopesSupported(ctx))
+}
+
+func (c *retainedValuesConfig) GetRefreshTokenScopes(ctx context.Context) []string {
+	return c.retain("refresh_token_scopes", c.Config.GetRefreshTokenScopes(ctx))
+}
+
+func (c *retainedValuesConfig) GetClaimsSupported(ctx context.Context) []string {
+	return c.retain("claims", c.Config.GetClaimsSupported(ctx))
+}
+
+func (c *retainedValuesConfig) GetUILocalesSupported(ctx context.Context) []string {
+	return c.retain("ui_locales", c.Config.GetUILocalesSupported(ctx))
+}
+
+func (c *retainedValuesConfig) GetClaimsLocalesSupported(ctx context.Context) []string {
+	return c.retain("claims_locales", c.Config.GetClaimsLocalesSupported(ctx))
+}
+
+func (c *retainedValuesConfig) GetACRValuesSupported(ctx context.Context) []string {
+	return c.retain("acr_values", c.Config.GetACRValuesSupported(ctx))
+}
+
+func (c *retainedValuesConfig) GetDisplayValuesSupported(ctx context.Context) []string {
+	return c.retain("display_values", c.Config.GetDisplayValuesSupported(ctx))
+}
+
+func (c *retainedValuesConfig) GetClaimTypesSupported(ctx context.Context) []string {
+	return c.retain("claim_types", c.Config.GetClaimTypesSupported(ctx))
+}
+
+func (c *retainedValuesConfig) GetSubjectTypesSupported(ctx context.Context) []string {
+	return c.retain("subject_types", c.Config.GetSubjectTypesSupported(ctx))
+}
+
+func (c *retainedValuesConfig) GetAllowedPrompts(ctx context.Context) []string {
+	return c.retain("prompts", c.Config.GetAllowedPrompts(ctx))
+}
+
+func (c *retainedValuesConfig) GetProtectedResources(ctx context.Context) []string {
+	return c.retain("protected_resources", c.Config.GetProtectedResources(ctx))
+}
+
+func (c *retainedValuesConfig) GetTokenEndpointAuthMethods(ctx context.Context) []string {
+	return c.retain("token_endpoint_auth_methods", c.Config.GetTokenEndpointAuthMethods(ctx))
+}
+
+func (c *retainedValuesConfig) GetRevocationEndpointAuthMethods(ctx context.Context) []string {
+	return c.retain("revocation_endpoint_auth_methods", c.Config.GetRevocationEndpointAuthMethods(ctx))
+}
+
+func (c *retainedValuesConfig) GetIntrospectionEndpointAuthMethods(ctx context.Context) []string {
+	return c.retain("introspection_endpoint_auth_methods", c.Config.GetIntrospectionEndpointAuthMethods(ctx))
+}
+
+func (c *retainedValuesConfig) GetRevocationEndpointAuthSigningAlgValues(ctx context.Context) []string {
+	return c.retain("revocation_endpoint_auth_signing_alg_values", c.Config.GetRevocationEndpointAuthSigningAlgValues(ctx))
+}
+
+func (c *retainedValuesConfig) GetIntrospectionEndpointAuthSigningAlgValues(ctx context.Context) []string {
+	return c.retain("introspection_endpoint_auth_signing_alg_values", c.Config.GetIntrospectionEndpointAuthSigningAlgValues(ctx))
+}
+
+func (c *retainedValuesConfig) GetClientAssertionSigningAlgValues(ctx context.Context) []string {
+	return c.retain("client_assertion_signing_alg_values", c.Config.GetClientAssertionSigningAlgValues(ctx))
+}
+
+func (c *retainedValuesConfig) GetRequestObjectSigningAlgValues(ctx context.Context) []string {
+	return c.retain("request_object_signing_alg_values", c.Config.GetRequestObjectSigningAlgValues(ctx))
+}
+
+func (c *retainedValuesConfig) GetRequestObjectEncryptionAlgValues(ctx context.Context) []string {
+	return c.retain("request_object_encryption_alg_values", c.Config.GetRequestObjectEncryptionAlgValues(ctx))
+}
+
+func (c *retainedValuesConfig) GetRequestObjectEncryptionEncValues(ctx context.Context) []string {
+	return c.retain("request_object_encryption_enc_values", c.Config.GetRequestObjectEncryptionEncValues(ctx))
+}
+
+func (c *retainedValuesConfig) GetDPoPAllowedJWSAlgorithms(ctx context.Context) []string {
+	return c.retain("dpop_signing_alg_values", c.Config.GetDPoPAllowedJWSAlgorithms(ctx))
+}
+
+func (c *retainedValuesConfig) GetResponseEncryptionAlgValues(ctx context.Context, target oauth2.ResponseEncryptionTarget) []string {
+	return c.retain("response_encryption_alg_values:"+string(target), c.Config.GetResponseEncryptionAlgValues(ctx, target))
+}
+
+func (c *retainedValuesConfig) GetResponseEncryptionEncValues(ctx context.Context, target oauth2.ResponseEncryptionTarget) []string {
+	return c.retain("response_encryption_enc_values:"+string(target), c.Config.GetResponseEncryptionEncValues(ctx, target))
+}
+
+type retainedMethodsStrategy struct {
+	*oauth2.DefaultClientAuthenticationStrategy
+
+	config *retainedValuesConfig
+}
+
+func (s *retainedMethodsStrategy) AuthMethodsSupported(ctx context.Context) []string {
+	return s.config.retain("client_authentication_strategy_methods", s.DefaultClientAuthenticationStrategy.AuthMethodsSupported(ctx))
+}
+
+func overwriteStringSlices(value reflect.Value) (n int) {
+	switch value.Kind() {
+	case reflect.Pointer:
+		if !value.IsNil() {
+			n += overwriteStringSlices(value.Elem())
+		}
+	case reflect.Struct:
+		for i := range value.NumField() {
+			n += overwriteStringSlices(value.Field(i))
+		}
+	case reflect.Slice:
+		if value.Type().Elem().Kind() != reflect.String {
+			return 0
+		}
+
+		for i := range value.Len() {
+			value.Index(i).SetString("overwritten")
+		}
+
+		if value.Len() != 0 {
+			n++
+		}
+	default:
+	}
+
+	return n
 }
 
 type discoveryResolver struct{}

@@ -110,14 +110,14 @@ func (f *Fosite) newOAuth2AuthorizationServerMetadata(ctx context.Context, capab
 		GrantTypesSupported:               capabilities.grantTypes,
 		TokenEndpointAuthMethodsSupported: SupportedTokenEndpointAuthMethods(ctx, config),
 		ServiceDocumentation:              config.GetServiceDocumentation(ctx),
-		UILocalesSupported:                config.GetUILocalesSupported(ctx),
+		UILocalesSupported:                slices.Clone(config.GetUILocalesSupported(ctx)),
 		OPPolicyURI:                       config.GetOPPolicyURI(ctx),
 		OPTOSURI:                          config.GetOPTOSURI(ctx),
 		CodeChallengeMethodsSupported:     SupportedCodeChallengeMethods(ctx, config),
 	}
 
 	if isRFC9470StepUpAuthenticationEnabled(ctx, config) {
-		metadata.ACRValuesSupported = config.GetACRValuesSupported(ctx)
+		metadata.ACRValuesSupported = slices.Clone(config.GetACRValuesSupported(ctx))
 	}
 
 	if len(config.GetAuthorizeEndpointHandlers(ctx)) != 0 {
@@ -166,7 +166,7 @@ func (f *Fosite) newOAuth2AuthorizationServerMetadata(ctx context.Context, capab
 	}
 
 	if metadata.IntrospectionEndpoint != "" {
-		metadata.IntrospectionEndpointAuthMethodsSupported = config.GetIntrospectionEndpointAuthMethods(ctx)
+		metadata.IntrospectionEndpointAuthMethodsSupported = slices.Clone(config.GetIntrospectionEndpointAuthMethods(ctx))
 
 		if metadata.IntrospectionEndpointAuthSigningAlgValuesSupported, err = endpointAuthSigningAlgValues(ctx, config, ClientAuthEndpointIntrospection, consts.DiscoveryIntrospectionEndpointAuthMethodsSupported, consts.DiscoveryIntrospectionEndpointAuthSigningAlgValuesSupported); err != nil {
 			return nil, err
@@ -250,24 +250,24 @@ func (f *Fosite) newOpenIDConnectProviderMetadata(ctx context.Context) (metadata
 	metadata = &OpenIDConnectProviderMetadata{
 		OAuth2AuthorizationServerMetadata:    *base,
 		UserinfoEndpoint:                     urls.UserInfo,
-		SubjectTypesSupported:                subjectTypes,
+		SubjectTypesSupported:                slices.Clone(subjectTypes),
 		IDTokenSigningAlgValuesSupported:     algs,
-		IDTokenEncryptionAlgValuesSupported:  config.GetResponseEncryptionAlgValues(ctx, ResponseEncryptionTargetIDToken),
-		IDTokenEncryptionEncValuesSupported:  config.GetResponseEncryptionEncValues(ctx, ResponseEncryptionTargetIDToken),
+		IDTokenEncryptionAlgValuesSupported:  slices.Clone(config.GetResponseEncryptionAlgValues(ctx, ResponseEncryptionTargetIDToken)),
+		IDTokenEncryptionEncValuesSupported:  slices.Clone(config.GetResponseEncryptionEncValues(ctx, ResponseEncryptionTargetIDToken)),
 		UserinfoSigningAlgValuesSupported:    SupportedUserinfoSignedResponseAlgValues(ctx, config),
-		UserinfoEncryptionAlgValuesSupported: config.GetResponseEncryptionAlgValues(ctx, ResponseEncryptionTargetUserInfo),
-		UserinfoEncryptionEncValuesSupported: config.GetResponseEncryptionEncValues(ctx, ResponseEncryptionTargetUserInfo),
-		DisplayValuesSupported:               config.GetDisplayValuesSupported(ctx),
-		ClaimTypesSupported:                  config.GetClaimTypesSupported(ctx),
+		UserinfoEncryptionAlgValuesSupported: slices.Clone(config.GetResponseEncryptionAlgValues(ctx, ResponseEncryptionTargetUserInfo)),
+		UserinfoEncryptionEncValuesSupported: slices.Clone(config.GetResponseEncryptionEncValues(ctx, ResponseEncryptionTargetUserInfo)),
+		DisplayValuesSupported:               slices.Clone(config.GetDisplayValuesSupported(ctx)),
+		ClaimTypesSupported:                  slices.Clone(config.GetClaimTypesSupported(ctx)),
 		ClaimsSupported:                      supportedClaims(ctx, config, capabilities.openIDConnect),
-		ClaimsLocalesSupported:               config.GetClaimsLocalesSupported(ctx),
+		ClaimsLocalesSupported:               slices.Clone(config.GetClaimsLocalesSupported(ctx)),
 		ClaimsParameterSupported:             isClaimsParameterEnforced(ctx, config),
 		RequestParameterSupported:            true,
 		RequestURIParameterSupported:         new(true),
 		RequireRequestURIRegistration:        true,
 	}
 
-	metadata.ACRValuesSupported = config.GetACRValuesSupported(ctx)
+	metadata.ACRValuesSupported = slices.Clone(config.GetACRValuesSupported(ctx))
 	metadata.OpenIDConnectRPInitiatedLogoutMetadata = rpInitiatedLogoutMetadata(urls)
 	metadata.OpenIDConnectBackChannelLogoutMetadata = f.backChannelLogoutMetadata(ctx)
 	metadata.OpenIDConnectPromptCreateMetadata = f.promptCreateMetadata(ctx)
@@ -508,8 +508,8 @@ func advertisedMutualTLSAliases(aliases, advertised RFC8705MutualTLSEndpointAlia
 func (f *Fosite) rfc9101Metadata(ctx context.Context) *RFC9101JWTSecuredAuthorizationRequestMetadata {
 	return &RFC9101JWTSecuredAuthorizationRequestMetadata{
 		RequestObjectSigningAlgValuesSupported:    SupportedRequestObjectSigningAlgValues(ctx, f.Config),
-		RequestObjectEncryptionAlgValuesSupported: f.Config.GetRequestObjectEncryptionAlgValues(ctx),
-		RequestObjectEncryptionEncValuesSupported: f.Config.GetRequestObjectEncryptionEncValues(ctx),
+		RequestObjectEncryptionAlgValuesSupported: slices.Clone(f.Config.GetRequestObjectEncryptionAlgValues(ctx)),
+		RequestObjectEncryptionEncValuesSupported: slices.Clone(f.Config.GetRequestObjectEncryptionEncValues(ctx)),
 		RequireSignedRequestObject:                f.Config.GetRequireSignedRequestObject(ctx),
 	}
 }
@@ -574,7 +574,7 @@ func (f *Fosite) rfc9449Metadata(ctx context.Context) *RFC9449DPoPMetadata {
 	}
 
 	return &RFC9449DPoPMetadata{
-		DPoPSigningAlgValuesSupported: f.Config.GetDPoPAllowedJWSAlgorithms(ctx),
+		DPoPSigningAlgValuesSupported: slices.Clone(f.Config.GetDPoPAllowedJWSAlgorithms(ctx)),
 	}
 }
 
@@ -586,8 +586,8 @@ func (f *Fosite) rfc9701Metadata(ctx context.Context) *RFC9701JWTIntrospectionRe
 
 	return &RFC9701JWTIntrospectionResponseMetadata{
 		IntrospectionSigningAlgValuesSupported:    SupportedIntrospectionSignedResponseAlgValues(ctx, f.Config),
-		IntrospectionEncryptionAlgValuesSupported: f.Config.GetResponseEncryptionAlgValues(ctx, ResponseEncryptionTargetIntrospection),
-		IntrospectionEncryptionEncValuesSupported: f.Config.GetResponseEncryptionEncValues(ctx, ResponseEncryptionTargetIntrospection),
+		IntrospectionEncryptionAlgValuesSupported: slices.Clone(f.Config.GetResponseEncryptionAlgValues(ctx, ResponseEncryptionTargetIntrospection)),
+		IntrospectionEncryptionEncValuesSupported: slices.Clone(f.Config.GetResponseEncryptionEncValues(ctx, ResponseEncryptionTargetIntrospection)),
 	}
 }
 
@@ -615,8 +615,8 @@ func (f *Fosite) jarmMetadata(ctx context.Context) *OpenIDConnectJARMMetadata {
 
 	return &OpenIDConnectJARMMetadata{
 		AuthorizationSigningAlgValuesSupported:    SupportedAuthorizationSignedResponseAlgValues(ctx, f.Config),
-		AuthorizationEncryptionAlgValuesSupported: f.Config.GetResponseEncryptionAlgValues(ctx, ResponseEncryptionTargetAuthorization),
-		AuthorizationEncryptionEncValuesSupported: f.Config.GetResponseEncryptionEncValues(ctx, ResponseEncryptionTargetAuthorization),
+		AuthorizationEncryptionAlgValuesSupported: slices.Clone(f.Config.GetResponseEncryptionAlgValues(ctx, ResponseEncryptionTargetAuthorization)),
+		AuthorizationEncryptionEncValuesSupported: slices.Clone(f.Config.GetResponseEncryptionEncValues(ctx, ResponseEncryptionTargetAuthorization)),
 	}
 }
 

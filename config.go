@@ -1621,7 +1621,8 @@ type ClientAuthMethodsProvider interface {
 
 // DiscoveryMetadataHook is called last when the OAuth 2.0 Authorization Server Metadata or the OpenID Provider Metadata
 // is built, and may adjust the document before it is signed. The adjusted document must keep the configured 'issuer'
-// and every required member, otherwise building it fails.
+// and every required member, otherwise building it fails. The document holds copies of the configured values, so
+// adjusting it changes what is advertised and never what is enforced.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
 // See: https://datatracker.ietf.org/doc/html/rfc8414#section-3.3

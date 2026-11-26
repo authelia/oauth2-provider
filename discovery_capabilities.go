@@ -70,7 +70,7 @@ func SupportedRFC8693TokenTypes(ctx context.Context, config Configurator) []stri
 // See: https://openid.net/specs/openid-connect-prompt-create-1_0.html#section-4
 func SupportedPromptValues(ctx context.Context, config AllowedPromptsProvider) []string {
 	if prompts := config.GetAllowedPrompts(ctx); len(prompts) != 0 {
-		return prompts
+		return slices.Clone(prompts)
 	}
 
 	return []string{consts.PromptTypeLogin, consts.PromptTypeNone, consts.PromptTypeConsent, consts.PromptTypeSelectAccount}
@@ -165,7 +165,7 @@ func SupportedEndpointAuthMethods(ctx context.Context, config Configurator, endp
 
 	configured := configuredEndpointAuthMethods(ctx, config, endpoint)
 	if len(configured) == 0 {
-		return supported
+		return slices.Clone(supported)
 	}
 
 	return slices.DeleteFunc(slices.Clone(configured), func(method string) bool {
@@ -208,10 +208,10 @@ type EndpointAuthSigningAlgValuesConfig interface {
 // See: https://datatracker.ietf.org/doc/html/rfc8414#section-2
 func SupportedEndpointAuthSigningAlgValues(ctx context.Context, config EndpointAuthSigningAlgValuesConfig, endpoint ClientAuthEndpoint) []string {
 	if algs := configuredEndpointAuthSigningAlgValues(ctx, config, endpoint); len(algs) != 0 {
-		return algs
+		return slices.Clone(algs)
 	}
 
-	return config.GetClientAssertionSigningAlgValues(ctx)
+	return slices.Clone(config.GetClientAssertionSigningAlgValues(ctx))
 }
 
 func configuredEndpointAuthMethods(ctx context.Context, config ClientAuthMethodsProvider, endpoint ClientAuthEndpoint) []string {
@@ -412,7 +412,7 @@ func SupportedRequestObjectSigningAlgValues(ctx context.Context, config Configur
 		return withoutNone(algs)
 	}
 
-	return algs
+	return slices.Clone(algs)
 }
 
 // SupportedIDTokenSignedResponseAlgValues returns the 'id_token_signed_response_alg' values the server can produce:

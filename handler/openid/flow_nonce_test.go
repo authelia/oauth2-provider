@@ -280,6 +280,7 @@ func runNonceDevice(t *testing.T, store *storage.MemoryStore, clientID, nonce st
 	}
 
 	session := NewDefaultSession()
+	session.Claims.Subject = testSubjectPeter
 	session.SetExpiresAt(oauth2.DeviceCode, deviceExpiresAt)
 
 	request := oauth2.NewDeviceAuthorizeRequest()

@@ -6,6 +6,7 @@ package openid
 
 import (
 	"context"
+	"net/url"
 	"testing"
 	"time"
 
@@ -85,6 +86,59 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 			},
 			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. foobar",
 		},
+		{
+			name: "ShouldFailSessionIsNotAnOpenIDConnectSession",
+			setup: func(req *oauth2.DeviceAuthorizeRequest, oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) {
+				req.GrantedScope = []string{consts.ScopeOpenID}
+				req.Client = &oauth2.DefaultClient{
+					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode)},
+				}
+				req.SetDeviceCodeSignature("foobar")
+				req.SetSession(&oauth2.DefaultSession{Subject: testSubjectPeter})
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to validate OpenID Connect 1.0 request because the session is not of type 'openid.Session' which is required.",
+		},
+		{
+			name: "ShouldFailSessionHasNoSubject",
+			setup: func(req *oauth2.DeviceAuthorizeRequest, oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) {
+				req.GrantedScope = []string{consts.ScopeOpenID}
+				req.Client = &oauth2.DefaultClient{
+					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode)},
+				}
+				req.SetDeviceCodeSignature("foobar")
+				req.SetSession(NewDefaultSession())
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to validate OpenID Connect 1.0 request because the session subject is empty.",
+		},
+		{
+			name: "ShouldFailAuthenticationOlderThanMaxAge",
+			setup: func(req *oauth2.DeviceAuthorizeRequest, oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) {
+				req.GrantedScope = []string{consts.ScopeOpenID}
+				req.Client = &oauth2.DefaultClient{
+					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode)},
+				}
+				req.Form = url.Values{consts.FormParameterMaximumAge: {"60"}}
+				req.SetDeviceCodeSignature("foobar")
+				req.GetSession().(*DefaultSession).Claims.AuthTime = jwt.NewNumericDate(time.Now().Add(-time.Hour))
+			},
+			err: "The Authorization Server requires End-User authentication. Failed to validate OpenID Connect request because authentication time does not satisfy max_age time.",
+		},
+		{
+			name: "ShouldFailAuthenticationAfterRequestWithPromptNone",
+			setup: func(req *oauth2.DeviceAuthorizeRequest, oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) {
+				req.GrantedScope = []string{consts.ScopeOpenID}
+				req.Client = &oauth2.DefaultClient{
+					GrantTypes: []string{string(oauth2.GrantTypeDeviceCode)},
+				}
+				req.Form = url.Values{consts.FormParameterPrompt: {consts.PromptTypeNone}}
+				req.SetDeviceCodeSignature("foobar")
+
+				session := req.GetSession().(*DefaultSession)
+				session.RequestedAt = time.Unix(1000000000, 0).UTC()
+				session.Claims.AuthTime = jwt.NewNumericDate(time.Unix(1000000060, 0).UTC())
+			},
+			err: "The Authorization Server requires End-User authentication. Failed to validate OpenID Connect request because prompt was set to 'none' but auth_time ('2001-09-09 01:47:40 +0000 UTC') happened after the authorization request ('2001-09-09 01:46:40 +0000 UTC') was registered, indicating that the user was logged in during this request which is not allowed.",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -120,8 +174,12 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpoin
 					IDTokenStrategy: j,
 				},
 			}
+			session := NewDefaultSession()
+			session.Subject, session.Claims.Subject = testSubjectPeter, testSubjectPeter
+
 			req := oauth2.NewDeviceAuthorizeRequest()
 			req.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+			req.SetSession(session)
 
 			resp := oauth2.NewRFC8628UserAuthorizeResponse()
 

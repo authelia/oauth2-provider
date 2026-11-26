@@ -17,7 +17,9 @@ import (
 // method must be POST as specified by section 3.1 of the RFC. The client is authenticated using the token endpoint
 // authentication method (section 3.1 also requires this), the client must hold the device_code grant type, and the
 // requested scopes, audience, RFC 8707 resource indicators, and RFC 9396 authorization details are validated against
-// the client's registration.
+// the client's registration. Every RFC8628DeviceAuthorizeRequestValidator among the device authorization endpoint
+// binding handlers, device authorization endpoint handlers and user authorization endpoint handlers then checks the
+// request.
 func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Request) (requester DeviceAuthorizeRequester, err error) {
 	request := NewDeviceAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
@@ -73,5 +75,37 @@ func (f *Fosite) NewRFC862DeviceAuthorizeRequest(ctx context.Context, r *http.Re
 		return request, err
 	}
 
+	if err = f.validateRFC8628DeviceAuthorizeRequest(ctx, request); err != nil {
+		return request, err
+	}
+
 	return request, nil
+}
+
+func (f *Fosite) validateRFC8628DeviceAuthorizeRequest(ctx context.Context, request DeviceAuthorizeRequester) (err error) {
+	for _, h := range f.Config.GetRFC8628DeviceAuthorizeEndpointBindingHandlers(ctx) {
+		if v, ok := h.(RFC8628DeviceAuthorizeRequestValidator); ok {
+			if err = v.ValidateRFC8628DeviceAuthorizeRequest(ctx, request); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, h := range f.Config.GetRFC8628DeviceAuthorizeEndpointHandlers(ctx) {
+		if v, ok := h.(RFC8628DeviceAuthorizeRequestValidator); ok {
+			if err = v.ValidateRFC8628DeviceAuthorizeRequest(ctx, request); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, h := range f.Config.GetRFC8628UserAuthorizeEndpointHandlers(ctx) {
+		if v, ok := h.(RFC8628DeviceAuthorizeRequestValidator); ok {
+			if err = v.ValidateRFC8628DeviceAuthorizeRequest(ctx, request); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

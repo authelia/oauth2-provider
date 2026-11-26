@@ -111,15 +111,26 @@ func (v *OpenIDConnectRequestValidator) ValidateClaims(ctx context.Context, requ
 }
 
 // ValidatePrompt ensures the prompt is valid for the OpenID Connect 1.0 Flows.
-//
-// TODO: Refactor time permitting.
-//
-//nolint:gocyclo
 func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, request oauth2.AuthorizeRequester) (session Session, err error) {
 	if err = v.validatePromptParameters(ctx, request); err != nil {
 		return nil, err
 	}
 
+	return v.ValidateSession(ctx, request)
+}
+
+// ValidateSession ensures the End-User authentication recorded on the session of the request meets the request: the
+// session has a subject, an 'auth_time' when the client registered 'require_auth_time', an 'auth_time' within the
+// 'max_age' parameter or the 'default_max_age' of the client, an 'auth_time' the 'prompt' parameter values 'none' and
+// 'login' allow, and the subject of the 'id_token_hint' parameter. It reads nothing specific to the authorization
+// endpoint, so it applies to any request an End-User approves. The parameters are expected to be well-formed.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthError
+// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+//
+//nolint:gocyclo
+func (v *OpenIDConnectRequestValidator) ValidateSession(ctx context.Context, request oauth2.Requester) (session Session, err error) {
 	// Specification Note: prompt is case-sensitive.
 	requiredPrompt := oauth2.RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterPrompt), " "))
 
@@ -174,25 +185,14 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 		}
 	}
 
-	idTokenHint := request.GetRequestForm().Get(consts.FormParameterIDTokenHint)
-	if idTokenHint == "" {
+	if request.GetRequestForm().Get(consts.FormParameterIDTokenHint) == "" {
 		return session, nil
-	}
-
-	var tokenHint *jwt.Token
-
-	tokenHint, err = v.Strategy.Decode(ctx, idTokenHint, jwt.WithIDTokenHintClient(request.GetClient()))
-
-	if ve, ok := errors.AsType[*jwt.ValidationError](err); ok && ve.Has(jwt.ValidationErrorExpired) {
-		// Expired tokens are ok.
-	} else if err != nil {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding ID Token from id_token_hint parameter failed.").WithWrap(err).WithDebugError(err))
 	}
 
 	var subHint string
 
-	if subHint, err = tokenHint.Claims.GetSubject(); subHint == "" || err != nil {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request because provided ID Token from id_token_hint does not have a subject."))
+	if subHint, err = v.getIDTokenHintSubject(ctx, request); err != nil {
+		return nil, err
 	} else if subHint != claims.Subject {
 		return nil, errorsx.WithStack(oauth2.ErrLoginRequired.WithHint("Failed to validate OpenID Connect request because the subject from provided ID Token from id_token_hint does not match the current session's subject."))
 	}
@@ -200,19 +200,29 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 	return session, nil
 }
 
-func (v *OpenIDConnectRequestValidator) validatePromptParameters(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
-	// Specification Note: prompt is case-sensitive.
-	requiredPrompt := oauth2.RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterPrompt), " "))
+func (v *OpenIDConnectRequestValidator) getIDTokenHintSubject(ctx context.Context, request oauth2.Requester) (subject string, err error) {
+	var tokenHint *jwt.Token
 
-	availablePrompts := oauth2.SupportedPromptValues(ctx, v.Config)
+	tokenHint, err = v.Strategy.Decode(ctx, request.GetRequestForm().Get(consts.FormParameterIDTokenHint), jwt.WithIDTokenHintClient(request.GetClient()))
 
-	if !isWhitelisted(requiredPrompt, availablePrompts) {
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'prompt' parameter either contains unknown, unsupported, or prohibited prompt values.").WithDebugf("The requested prompt value '%s' is not permitted, the permitted prompt values are '%s'.", strings.Join(requiredPrompt, " "), strings.Join(availablePrompts, "', '")))
+	if ve, ok := errors.AsType[*jwt.ValidationError](err); ok && ve.Has(jwt.ValidationErrorExpired) {
+		// Expired tokens are ok.
+	} else if err != nil {
+		return "", errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding ID Token from id_token_hint parameter failed.").WithWrap(err).WithDebugError(err))
 	}
 
-	if slices.Contains(requiredPrompt, consts.PromptTypeNone) && len(requiredPrompt) > 1 {
-		// If this parameter contains none with any other value, an error is returned.
-		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
+	if subject, err = tokenHint.Claims.GetSubject(); subject == "" || err != nil {
+		return "", errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request because provided ID Token from id_token_hint does not have a subject."))
+	}
+
+	return subject, nil
+}
+
+func (v *OpenIDConnectRequestValidator) validatePromptParameters(ctx context.Context, request oauth2.AuthorizeRequester) (err error) {
+	var requiredPrompt []string
+
+	if requiredPrompt, err = v.validatePromptValues(ctx, request); err != nil {
+		return err
 	}
 
 	if request.GetClient().IsPublic() {
@@ -231,6 +241,52 @@ func (v *OpenIDConnectRequestValidator) validatePromptParameters(ctx context.Con
 		}
 	}
 
+	return validateMaxAge(request)
+}
+
+func (v *OpenIDConnectRequestValidator) validatePromptValues(ctx context.Context, request oauth2.Requester) (requiredPrompt []string, err error) {
+	// Specification Note: prompt is case-sensitive.
+	requiredPrompt = oauth2.RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterPrompt), " "))
+
+	availablePrompts := oauth2.SupportedPromptValues(ctx, v.Config)
+
+	if !isWhitelisted(requiredPrompt, availablePrompts) {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The 'prompt' parameter either contains unknown, unsupported, or prohibited prompt values.").WithDebugf("The requested prompt value '%s' is not permitted, the permitted prompt values are '%s'.", strings.Join(requiredPrompt, " "), strings.Join(availablePrompts, "', '")))
+	}
+
+	if slices.Contains(requiredPrompt, consts.PromptTypeNone) && len(requiredPrompt) > 1 {
+		// If this parameter contains none with any other value, an error is returned.
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."))
+	}
+
+	return requiredPrompt, nil
+}
+
+// ValidateParameters returns an error when the 'prompt', 'max_age' or 'id_token_hint' parameter of a request which is
+// not made at the authorization endpoint is malformed: an unknown 'prompt' value, the 'prompt' value 'none' with any
+// other value, a 'max_age' which is not a non-negative integer, or an 'id_token_hint' which cannot be decoded as an ID
+// Token of the client or has no subject. It does not read the session.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+func (v *OpenIDConnectRequestValidator) ValidateParameters(ctx context.Context, request oauth2.Requester) (err error) {
+	if _, err = v.validatePromptValues(ctx, request); err != nil {
+		return err
+	}
+
+	if err = validateMaxAge(request); err != nil {
+		return err
+	}
+
+	if request.GetRequestForm().Get(consts.FormParameterIDTokenHint) == "" {
+		return nil
+	}
+
+	_, err = v.getIDTokenHintSubject(ctx, request)
+
+	return err
+}
+
+func validateMaxAge(request oauth2.Requester) (err error) {
 	if _, _, err = oauth2.GetRequestedMaxAge(request); err != nil {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'max_age' must be a non-negative integer.").WithWrap(err).WithDebugError(err))
 	}

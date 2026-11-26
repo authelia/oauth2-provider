@@ -327,6 +327,21 @@ func TestValidatePrompt(t *testing.T) {
 			}),
 		},
 		{
+			name: "ShouldPassHintOnlyExpired",
+			session: &DefaultSession{
+				Subject: "foo",
+				Claims: &jwt.IDTokenClaims{
+					Subject:  "foo",
+					AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Second)),
+				},
+				RequestedAt: time.Now(),
+			},
+			idTokenHint: genIDToken(jwt.IDTokenClaims{
+				Subject:        "foo",
+				ExpirationTime: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+			}),
+		},
+		{
 			name:   "ShouldFailMaxAgeZeroWhenAuthTimeBeforeRequest",
 			maxAge: []string{"0"},
 			err:    "The Authorization Server requires End-User authentication. Failed to validate OpenID Connect request because authentication time does not satisfy max_age time.",

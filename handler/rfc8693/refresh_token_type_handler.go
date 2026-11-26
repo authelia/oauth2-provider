@@ -28,11 +28,13 @@ import (
 // RefreshTokenRotationOverrideClient disables rotation.
 //
 // A refresh token 'subject_token' is only accepted from the client it was issued to, and other than for an Identity
-// Assertion JWT Authorization Grant only when that client opts in with GetAllowOwnRefreshTokenExchange. It may only
-// request the audience and resources it was granted, per RFC 8707 Section 2.2.
+// Assertion JWT Authorization Grant or a JWT authorization grant only when that client opts in with
+// GetAllowOwnRefreshTokenExchange. It may only request the audience and resources it was granted, per RFC 8707 Section
+// 2.2.
 // The issued refresh token is stored for the request the 'subject_token' was issued for, so that revoking the grant
 // revokes it as RFC 7009 Section 2.1 describes, and is bound to the scope, audience and resources of the 'subject_token'
-// rather than to those requested.
+// rather than to those requested. It keeps the session of the 'subject_token' with the RFC 8693 Section 4.1 'act' claim
+// of the exchange.
 //
 // RefreshTokenLifespan applies unless the client sets its own lifespan for the token exchange grant. A value of -1
 // removes the configured limit, but the refresh token still expires with the 'subject_token'.
@@ -459,7 +461,13 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))
 	}
 
-	requester := sanitizeRefreshTokenRequester(request, subject)
+	var requester oauth2.Requester
+
+	if requester, err = sanitizeRefreshTokenRequester(request, subject); err != nil {
+		return err
+	}
+
+	oauth2.RecordRefreshTokenMode(requester.GetSession(), oauth2.GetRefreshTokenModeForScopes(c.RefreshTokenScopes, requester.GetGrantedScopes()))
 
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-6.1
 	if oauth2.IsAuthorizationDetailsEnabled(ctx, c.Config) {

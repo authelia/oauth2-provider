@@ -880,6 +880,7 @@ func (c *txnIssueClient) GetJSONWebKeys() *jose.JSONWebKeySet       { return c.j
 func (c *txnIssueClient) GetJSONWebKeysURI() string                 { return "" }
 func (c *txnIssueClient) GetAllowUnsignedJSONSubjectToken() bool    { return true }
 func (c *txnIssueClient) GetAllowOwnAccessTokenExchange() bool      { return true }
+func (c *txnIssueClient) GetAllowOwnIDTokenExchange() bool          { return true }
 func (c *txnIssueClient) GetAllowTokenExchangeRefreshToken() bool   { return c.refresh }
 func (c *txnIssueClient) GetAllowActorTokenWithoutMayAct() bool     { return c.allowActor }
 func (c *txnIssueClient) GetSupportedSubjectTokenTypes() []string   { return nil }

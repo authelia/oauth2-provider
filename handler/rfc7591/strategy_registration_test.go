@@ -107,6 +107,7 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesServerPolicy(t *te
 	registered.TokenExchangeOwnAccessTokenRestrictTargets = true
 	registered.TokenExchangeOwnAccessToken = true
 	registered.TokenExchangeOwnRefreshToken = true
+	registered.TokenExchangeOwnIDToken = true
 	registered.TokenExchangeRefreshToken = true
 	registered.TokenExchangeAuthorizationGrant = true
 	registered.TokenExchangeRefreshTokenRotationOverride = true
@@ -138,6 +139,7 @@ func TestDefaultClientRegistrationStrategyPatchClientPreservesServerPolicy(t *te
 	assert.True(t, result.TokenExchangeOwnAccessTokenRestrictTargets)
 	assert.True(t, result.TokenExchangeOwnAccessToken)
 	assert.True(t, result.TokenExchangeOwnRefreshToken)
+	assert.True(t, result.TokenExchangeOwnIDToken)
 	assert.True(t, result.TokenExchangeRefreshToken)
 	assert.True(t, result.TokenExchangeAuthorizationGrant)
 	assert.True(t, result.TokenExchangeRefreshTokenRotationOverride)

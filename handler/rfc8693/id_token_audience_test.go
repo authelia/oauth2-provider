@@ -27,7 +27,7 @@ func TestIDTokenSubjectTokenIsBoundToTheRequestingClient(t *testing.T) {
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
-	requesting := store.Clients["my-client"]
+	requesting := ownIDTokenClient(store.Clients["my-client"])
 	other := store.Clients["custom-lifespan-client"]
 
 	handler := &IDTokenTypeHandler{
@@ -94,7 +94,7 @@ func TestIDTokenTypeHandlerRejectsOtherJWTTypes(t *testing.T) {
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
-	client := store.Clients["my-client"]
+	client := ownIDTokenClient(store.Clients["my-client"])
 
 	handler := &IDTokenTypeHandler{
 		Config:             cfg,

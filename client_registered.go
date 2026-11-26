@@ -96,6 +96,10 @@ type DefaultRegisteredClient struct {
 	// rfc8693.OwnRefreshTokenExchangeClient. It has no registration metadata, so a client cannot grant it to itself.
 	TokenExchangeOwnRefreshToken bool `json:"token_exchange_own_refresh_token"`
 
+	// TokenExchangeOwnIDToken permits this client to exchange an ID Token issued to itself, see
+	// rfc8693.OwnIDTokenExchangeClient. It has no registration metadata, so a client cannot grant it to itself.
+	TokenExchangeOwnIDToken bool `json:"token_exchange_own_id_token"`
+
 	// TokenExchangeRefreshToken permits a token exchange to issue a refresh token to this client. It has no registration
 	// metadata, so a client cannot grant it to itself.
 	TokenExchangeRefreshToken bool `json:"token_exchange_refresh_token"`
@@ -789,6 +793,11 @@ func (c *DefaultRegisteredClient) GetAllowOwnAccessTokenExchange() (allow bool) 
 // GetAllowOwnRefreshTokenExchange reports whether this client may exchange a refresh token issued to itself.
 func (c *DefaultRegisteredClient) GetAllowOwnRefreshTokenExchange() (allow bool) {
 	return c.TokenExchangeOwnRefreshToken
+}
+
+// GetAllowOwnIDTokenExchange reports whether this client may exchange an ID Token issued to itself.
+func (c *DefaultRegisteredClient) GetAllowOwnIDTokenExchange() (allow bool) {
+	return c.TokenExchangeOwnIDToken
 }
 
 // GetAllowTokenExchangeRefreshToken reports whether a token exchange may issue a refresh token to this client.

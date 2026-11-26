@@ -149,7 +149,7 @@ func runIDTokenBindingExchange(t *testing.T, subject, actor any) (session *Defau
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
-	client := store.Clients["my-client"]
+	client := ownIDTokenClient(store.Clients["my-client"])
 
 	handler := &IDTokenTypeHandler{
 		Config:             config,

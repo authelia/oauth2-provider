@@ -27,6 +27,8 @@ import (
 // See: https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.1
 // See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
 type JWTType struct {
+	// Name describes the type. The identifier of the type is the key it is configured with, which RFC 8693 Section
+	// 2.2.1 requires as the 'issued_token_type' of an issued JWT.
 	Name string `json:"name"`
 
 	Issue    *JWTIssueConfig      `json:"issue"`

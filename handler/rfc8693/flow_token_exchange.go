@@ -676,7 +676,8 @@ func errExchangeTokenValidation(err error) error {
 // establish, so its client must explicitly permit the requesting client as described by ActorTokenExchangeClient.
 //
 // A client may not exchange an access token issued to itself as a subject token, except for a JWT authorization grant
-// or when it opts in with GetAllowOwnAccessTokenExchange. It may also opt in with
+// or when it opts in with GetAllowOwnAccessTokenExchange, and likewise a refresh token unless it opts in with
+// GetAllowOwnRefreshTokenExchange. It may also opt in with
 // GetRestrictOwnAccessTokenExchangeTargets to only request the audience and resources that access token was granted.
 // A client may only request scopes the subject token was granted. Neither rule applies to an actor token, which
 // identifies the acting party rather than the authority being exchanged: that party is normally the requesting client
@@ -709,7 +710,7 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 		grant := authorizationGrantType(ctx, request, config) != nil
 
 		switch {
-		case refresh && !allowsOwnRefreshTokenExchange(client):
+		case refresh && !grant && !allowsOwnRefreshTokenExchange(client):
 			return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Clients are not allowed to perform a token exchange on their own refresh tokens."))
 		case !refresh && !grant && !allowsOwnAccessTokenExchange(client):
 			return errors.WithStack(oauth2.ErrInvalidRequest.WithHint("Clients are not allowed to perform a token exchange on their own access tokens."))
@@ -797,6 +798,12 @@ func allowsOwnRefreshTokenExchange(client oauth2.Client) bool {
 	c, ok := client.(OwnRefreshTokenExchangeClient)
 
 	return ok && c.GetAllowOwnRefreshTokenExchange()
+}
+
+func allowsOwnIDTokenExchange(client oauth2.Client) bool {
+	c, ok := client.(OwnIDTokenExchangeClient)
+
+	return ok && c.GetAllowOwnIDTokenExchange()
 }
 
 func allowsRefreshTokenIssuance(client oauth2.Client) bool {
@@ -1417,21 +1424,99 @@ func linkSubjectRefreshTokenGrant(request oauth2.AccessRequester) (grant oauth2.
 	return grant, nil
 }
 
-func sanitizeRefreshTokenRequester(request oauth2.AccessRequester, grant oauth2.Requester) oauth2.Requester {
-	if restorer, ok := request.(oauth2.RefreshTokenAccessRequester); ok && grant != nil {
-		return restorer.SanitizeRestoreRefreshTokenOriginalRequester(grant)
-	}
-
+func sanitizeRefreshTokenRequester(request oauth2.AccessRequester, grant oauth2.Requester) (requester oauth2.Requester, err error) {
 	if grant == nil {
-		return request.Sanitize([]string{})
+		return request.Sanitize([]string{}), nil
 	}
 
-	requester := grant.Sanitize([]string{})
+	if restorer, ok := request.(oauth2.RefreshTokenAccessRequester); ok {
+		requester = restorer.SanitizeRestoreRefreshTokenOriginalRequester(grant)
+	} else {
+		requester = grant.Sanitize([]string{})
 
-	requester.SetSession(request.GetSession())
-	requester.SetRequestedAt(request.GetRequestedAt())
+		requester.SetRequestedAt(request.GetRequestedAt())
 
-	return requester
+		form := requester.GetRequestForm()
+
+		clear(form)
+		maps.Copy(form, request.Sanitize([]string{}).GetRequestForm())
+	}
+
+	var session oauth2.Session
+
+	if session, err = refreshTokenSession(request.GetSession(), grant.GetSession()); err != nil {
+		return nil, err
+	}
+
+	requester.SetSession(session)
+
+	return requester, nil
+}
+
+// See: https://datatracker.ietf.org/doc/html/rfc6749#section-6
+// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+func refreshTokenSession(exchange, grant oauth2.Session) (session oauth2.Session, err error) {
+	if grant == nil {
+		return exchange, nil
+	}
+
+	if session = grant.Clone(); session == nil {
+		return exchange, nil
+	}
+
+	var act map[string]any
+
+	if delegated, ok := exchange.(Session); ok {
+		if act, err = buildActClaim(delegated); err != nil {
+			return nil, err
+		}
+	}
+
+	if act != nil {
+		target, ok := session.(Session)
+		if !ok {
+			return exchange, nil
+		}
+
+		target.SetClaimActor(act)
+	}
+
+	if bounded, ok := exchange.(oauth2.ExpiryDeadlineSession); ok && !bounded.GetExpiryDeadline().IsZero() {
+		target, ok := session.(oauth2.ExpiryDeadlineSetterSession)
+		if !ok {
+			return exchange, nil
+		}
+
+		target.SetExpiryDeadline(bounded.GetExpiryDeadline())
+	}
+
+	binding := bindingOf(exchange)
+
+	if binding.jkt != "" {
+		target, ok := session.(oauth2.DPoPBoundSession)
+		if !ok {
+			return exchange, nil
+		}
+
+		target.SetDPoPJWKThumbprint(binding.jkt)
+	}
+
+	if binding.x5t != "" {
+		target, ok := session.(oauth2.MTLSBoundSession)
+		if !ok {
+			return exchange, nil
+		}
+
+		target.SetClientCertificateSHA256Thumbprint(binding.x5t)
+	}
+
+	session.SetExpiresAt(oauth2.RefreshToken, exchange.GetExpiresAt(oauth2.RefreshToken))
+
+	if expires := exchange.GetExpiresAt(oauth2.AccessToken); !expires.IsZero() {
+		session.SetExpiresAt(oauth2.AccessToken, expires)
+	}
+
+	return session, nil
 }
 
 func subjectTokenExpiry(request oauth2.Requester) time.Time {

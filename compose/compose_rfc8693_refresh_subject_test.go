@@ -296,6 +296,36 @@ func TestRFC8693RefreshTokenSubjectKeepsTheAuthenticationOfTheGrant(t *testing.T
 	}
 }
 
+func TestRFC8693RefreshTokenSubjectKeepsTheSessionOfTheGrant(t *testing.T) {
+	for _, sc := range refreshSubjectStores() {
+		for _, requested := range []string{consts.TokenTypeRFC8693AccessToken, consts.TokenTypeRFC8693RefreshToken} {
+			t.Run(refreshSubjectName(sc.name, true, requested), func(t *testing.T) {
+				f := newRefreshSubjectFixture(t, sc.newStore, true)
+
+				response, err := f.token(f.exchange(f.subject, requested, "openid offline_access read"))
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				refresh := response.GetAccessToken()
+				if requested == consts.TokenTypeRFC8693AccessToken {
+					refresh = refreshSubjectString(response.GetExtra(consts.AccessResponseRefreshToken))
+				}
+
+				// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+				assert.Equal(t, "peter@example.com", f.refreshToken(t, refresh).GetSession().GetUsername())
+
+				actual, err := f.token(f.refresh(refresh))
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				session, ok := f.accessToken(t, actual.GetAccessToken()).GetSession().(*rfc8693.DefaultSession)
+				require.True(t, ok)
+
+				assert.Equal(t, "peter@example.com", session.GetUsername())
+				assert.Equal(t, "acme", session.IDTokenClaims().Extra["tenant"])
+			})
+		}
+	}
+}
+
 const (
 	refreshSubjectClientID      = "refresh-subject-client"
 	refreshSubjectClientSecret  = "foobarfoobarfoobarfoobarfoobar12"
@@ -419,10 +449,12 @@ func newRefreshSubjectFixture(t *testing.T, newStore func() (refreshSubjectStore
 
 	session := rfc8693.NewDefaultSession()
 	session.SetSubject("peter")
+	session.Username = "peter@example.com"
 	session.SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(time.Hour))
 
 	claims := session.IDTokenClaims()
 	claims.Subject = "peter"
+	claims.Extra = map[string]any{"tenant": "acme"}
 	claims.AuthTime = jwt.NewNumericDate(time.Unix(1790000000, 0))
 	claims.AuthenticationContextClassReference = "gold"
 	claims.AuthenticationMethodsReferences = []string{"mfa"}

@@ -27,7 +27,7 @@ func TestExchangedTokenSubject(t *testing.T) {
 
 	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
 
-	client := store.Clients["my-client"]
+	client := ownIDTokenClient(store.Clients["my-client"])
 
 	idTokenHandler := &IDTokenTypeHandler{
 		Config:             cfg,

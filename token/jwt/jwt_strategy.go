@@ -184,8 +184,9 @@ func (j *DefaultStrategy) IssuerSigningJWK(ctx context.Context, kid, alg string)
 	return j.issuerStrictJWK(ctx, kid, alg, JSONWebTokenUseSignature)
 }
 
-// Encode handles encoding JWT's. A client whose signing algorithm is 'none' and which has an encryption algorithm
-// receives a JWE whose plaintext is the JSON claims set, which is not signed.
+// Encode handles encoding JWT's. A client whose signing algorithm is 'none' is refused, unless WithAllowUnsignedEncrypted
+// is given and the client has an encryption algorithm, in which case it receives a JWE whose plaintext is the JSON
+// claims set, which is not signed.
 //
 //nolint:gocyclo
 func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...StrategyOpt) (tokenString string, signature string, err error) {
@@ -224,9 +225,15 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 		kid, alg = o.client.GetSigningKeyID(), o.client.GetSigningAlg()
 
 		switch {
-		case alg == JSONWebTokenAlgNone && !IsNoneAlg(o.client.GetEncryptionAlg()):
+		case alg == JSONWebTokenAlgNone:
 			// See: https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
-			break
+			if !o.allowUnsignedEncrypted {
+				return "", "", errorsx.WithStack(fmt.Errorf("failed to sign the JWT using the client configuration: the signing algorithm '%s' is not permitted", JSONWebTokenAlgNone))
+			}
+
+			if IsNoneAlg(o.client.GetEncryptionAlg()) {
+				return "", "", errorsx.WithStack(fmt.Errorf("failed to sign the JWT using the client configuration: the signing algorithm '%s' is only permitted when the JWT is encrypted", JSONWebTokenAlgNone))
+			}
 		case len(kid) == 0 && IsSignedJWTClientSecretAlgStr(alg):
 			if keySig, err = NewClientSecretJWKFromClient(ctx, o.client, kid, alg, "", JSONWebTokenUseSignature); err != nil {
 				return "", "", errorsx.WithStack(fmt.Errorf("failed to sign the JWT using the client secret: %w", err))

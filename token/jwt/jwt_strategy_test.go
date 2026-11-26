@@ -844,6 +844,80 @@ func TestDefaultStrategy_Errors(t *testing.T) {
 	})
 }
 
+func TestDefaultStrategy_EncodeAlgNone(t *testing.T) {
+	strategy := &DefaultStrategy{
+		Config: &testConfig{},
+		Issuer: NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{testKeySigECDSA}}),
+	}
+
+	jwks := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{testKeyPublicEncECDSA}}
+	claims := MapClaims{"sub": "john"}
+
+	testCases := []struct {
+		name   string
+		client *testClient
+		opts   []StrategyOpt
+		err    string
+	}{
+		{
+			name:   "ShouldFailEncryptedWithoutOption",
+			client: &testClient{id: "client-id", alg: JSONWebTokenAlgNone, encAlg: string(jose.ECDH_ES_A128KW), enc: string(jose.A128GCM), jwks: jwks},
+			err:    "the signing algorithm 'none' is not permitted",
+		},
+		{
+			name:   "ShouldFailEncryptedByKeyIDWithoutOption",
+			client: &testClient{id: "client-id", alg: JSONWebTokenAlgNone, encKID: testKeyPublicEncECDSA.KeyID, jwks: jwks},
+			err:    "the signing algorithm 'none' is not permitted",
+		},
+		{
+			name:   "ShouldFailNotEncryptedWithoutOption",
+			client: &testClient{id: "client-id", alg: JSONWebTokenAlgNone},
+			err:    "the signing algorithm 'none' is not permitted",
+		},
+		{
+			name:   "ShouldFailNotEncryptedWithOption",
+			client: &testClient{id: "client-id", alg: JSONWebTokenAlgNone},
+			opts:   []StrategyOpt{WithAllowUnsignedEncrypted()},
+			err:    "the signing algorithm 'none' is only permitted when the JWT is encrypted",
+		},
+		{
+			name:   "ShouldFailEncryptedByKeyIDWithoutAlgorithmWithOption",
+			client: &testClient{id: "client-id", alg: JSONWebTokenAlgNone, encKID: testKeyPublicEncECDSA.KeyID, jwks: jwks},
+			opts:   []StrategyOpt{WithAllowUnsignedEncrypted()},
+			err:    "the signing algorithm 'none' is only permitted when the JWT is encrypted",
+		},
+		{
+			name:   "ShouldEncryptWithOption",
+			client: &testClient{id: "client-id", alg: JSONWebTokenAlgNone, encAlg: string(jose.ECDH_ES_A128KW), enc: string(jose.A128GCM), jwks: jwks},
+			opts:   []StrategyOpt{WithAllowUnsignedEncrypted()},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			token, signature, err := strategy.Encode(t.Context(), claims, append([]StrategyOpt{WithClient(tc.client)}, tc.opts...)...)
+
+			if tc.err != "" {
+				assert.ErrorContains(t, err, tc.err)
+				assert.Empty(t, token)
+				assert.Empty(t, signature)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			jwe, err := jose.ParseEncryptedCompact(token, []jose.KeyAlgorithm{jose.ECDH_ES_A128KW}, []jose.ContentEncryption{jose.A128GCM})
+			require.NoError(t, err)
+
+			raw, err := jwe.Decrypt(&testKeyEncECDSA)
+			require.NoError(t, err)
+
+			assert.JSONEq(t, `{"sub":"john"}`, string(raw))
+		})
+	}
+}
+
 func TestEncodeNestedCompactEncrypted(t *testing.T) {
 	claims := MapClaims{
 		"iss": "example.com",

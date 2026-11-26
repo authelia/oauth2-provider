@@ -293,6 +293,7 @@ func TestLocalValidatorCapabilities(t *testing.T) {
 			},
 			metadata: func(metadata *oauth2.ClientRegistrationMetadata) {
 				metadata.IntrospectionEndpointAuthMethod = consts.ClientAuthMethodPrivateKeyJWT
+				metadata.JSONWebKeysURI = "https://client.example.com/jwks.json"
 			},
 		},
 		{

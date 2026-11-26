@@ -1077,6 +1077,129 @@ func TestLocalValidatorPublicClientAlgorithms(t *testing.T) {
 	}
 }
 
+func TestLocalValidatorAuthMethodCredentials(t *testing.T) {
+	const (
+		private = consts.ClientAuthMethodPrivateKeyJWT
+		secret  = consts.ClientAuthMethodClientSecretJWT
+		jwksURI = "https://client.example.com/jwks.json"
+		prefix  = "The value of one of the client metadata fields is invalid and the server has rejected this request. "
+	)
+
+	testCases := []struct {
+		name     string
+		metadata oauth2.ClientRegistrationMetadata
+		expected string
+	}{
+		{name: "ShouldAcceptPrivateKeyJWTWithJWKSURI", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, JSONWebKeysURI: jwksURI}},
+		{name: "ShouldAcceptPrivateKeyJWTWithJWKS", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, JSONWebKeys: &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: rsaPublicKeyOfSize(2048)}}}, TokenEndpointAuthSigningAlg: "RS256"}},
+		{name: "ShouldAcceptClientSecretJWT", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: secret}},
+		{name: "ShouldAcceptClientSecretJWTWithASymmetricAlgorithm", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: secret, TokenEndpointAuthSigningAlg: "HS512"}},
+		{name: "ShouldAcceptASymmetricAlgorithmWithoutAnAssertionMethod", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: consts.ClientAuthMethodClientSecretBasic, TokenEndpointAuthSigningAlg: "HS256"}},
+		{name: "ShouldAcceptAnOmittedMethod", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthSigningAlg: "RS256"}},
+		{name: "ShouldAcceptPrivateKeyJWTAtOneEndpointAndClientSecretJWTAtAnother", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, TokenEndpointAuthSigningAlg: "RS256", JSONWebKeysURI: jwksURI, RevocationEndpointAuthMethod: secret, RevocationEndpointAuthSigningAlg: "HS256"}},
+		{name: "ShouldNotApplyTheTokenEndpointAlgorithmToAnEndpointWithItsOwnMethod", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: secret, TokenEndpointAuthSigningAlg: "HS256", IntrospectionEndpointAuthMethod: private, JSONWebKeysURI: jwksURI}},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithoutKeys",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private},
+			expected: "The 'token_endpoint_auth_method' value 'private_key_jwt' requires either the 'jwks' or 'jwks_uri' value to be registered.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithAnEmptyJWKS",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, JSONWebKeys: &jose.JSONWebKeySet{}},
+			expected: "The 'token_endpoint_auth_method' value 'private_key_jwt' requires either the 'jwks' or 'jwks_uri' value to be registered.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithAnEmptyJWKSAtTheRevocationEndpoint",
+			metadata: oauth2.ClientRegistrationMetadata{RevocationEndpointAuthMethod: private, JSONWebKeys: &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{}}},
+			expected: "The 'revocation_endpoint_auth_method' value 'private_key_jwt' requires either the 'jwks' or 'jwks_uri' value to be registered.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithoutKeysAtTheIntrospectionEndpoint",
+			metadata: oauth2.ClientRegistrationMetadata{IntrospectionEndpointAuthMethod: private},
+			expected: "The 'introspection_endpoint_auth_method' value 'private_key_jwt' requires either the 'jwks' or 'jwks_uri' value to be registered.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithoutKeysAtTheRevocationEndpoint",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: consts.ClientAuthMethodClientSecretPost, RevocationEndpointAuthMethod: private},
+			expected: "The 'revocation_endpoint_auth_method' value 'private_key_jwt' requires either the 'jwks' or 'jwks_uri' value to be registered.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithASymmetricAlgorithm",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, TokenEndpointAuthSigningAlg: "HS256", JSONWebKeysURI: jwksURI},
+			expected: "The 'token_endpoint_auth_signing_alg' value 'HS256' is a symmetric algorithm which the 'token_endpoint_auth_method' value 'private_key_jwt' can not use.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithASymmetricAlgorithmAtTheIntrospectionEndpoint",
+			metadata: oauth2.ClientRegistrationMetadata{IntrospectionEndpointAuthMethod: private, IntrospectionEndpointAuthSigningAlg: "HS384", JSONWebKeysURI: jwksURI},
+			expected: "The 'introspection_endpoint_auth_signing_alg' value 'HS384' is a symmetric algorithm which the 'introspection_endpoint_auth_method' value 'private_key_jwt' can not use.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithASymmetricAlgorithmAtTheRevocationEndpoint",
+			metadata: oauth2.ClientRegistrationMetadata{RevocationEndpointAuthMethod: private, RevocationEndpointAuthSigningAlg: "HS512", JSONWebKeysURI: jwksURI},
+			expected: "The 'revocation_endpoint_auth_signing_alg' value 'HS512' is a symmetric algorithm which the 'revocation_endpoint_auth_method' value 'private_key_jwt' can not use.",
+		},
+		{
+			name:     "ShouldRejectASymmetricAlgorithmForTheInheritedPrivateKeyJWTMethod",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, JSONWebKeysURI: jwksURI, RevocationEndpointAuthSigningAlg: "HS256"},
+			expected: "The 'revocation_endpoint_auth_signing_alg' value 'HS256' is a symmetric algorithm which the 'token_endpoint_auth_method' value 'private_key_jwt' can not use.",
+		},
+		{
+			name:     "ShouldRejectClientSecretJWTWithAnAsymmetricAlgorithm",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: secret, TokenEndpointAuthSigningAlg: "RS256"},
+			expected: "The 'token_endpoint_auth_signing_alg' value 'RS256' is not a symmetric algorithm which the 'token_endpoint_auth_method' value 'client_secret_jwt' requires.",
+		},
+		{
+			name:     "ShouldRejectClientSecretJWTWithAnAsymmetricAlgorithmAtTheIntrospectionEndpoint",
+			metadata: oauth2.ClientRegistrationMetadata{IntrospectionEndpointAuthMethod: secret, IntrospectionEndpointAuthSigningAlg: "ES256"},
+			expected: "The 'introspection_endpoint_auth_signing_alg' value 'ES256' is not a symmetric algorithm which the 'introspection_endpoint_auth_method' value 'client_secret_jwt' requires.",
+		},
+		{
+			name:     "ShouldRejectAnAsymmetricAlgorithmForTheInheritedClientSecretJWTMethod",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: secret, RevocationEndpointAuthSigningAlg: "PS256", JSONWebKeysURI: jwksURI},
+			expected: "The 'revocation_endpoint_auth_signing_alg' value 'PS256' is not a symmetric algorithm which the 'token_endpoint_auth_method' value 'client_secret_jwt' requires.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateAuthMethodCredentials(&tc.metadata)
+
+			if tc.expected == "" {
+				require.NoError(t, err)
+
+				return
+			}
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), prefix+tc.expected)
+		})
+	}
+}
+
+func TestLocalValidatorRejectsAnAuthMethodWithoutItsCredentials(t *testing.T) {
+	config := withTestCapabilities(&oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy, AudienceStrategy: oauth2.DefaultAudienceStrategy})
+
+	testCases := []struct {
+		name      string
+		validator *LocalValidator
+	}{
+		{"ShouldRejectARegistration", NewLocalValidator(config)},
+		{"ShouldRejectAMetadataDocument", NewLocalMetadataDocumentValidator(config)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.validator.ValidateClientRegistrationMetadata(context.Background(), nil, &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:            []string{"https://example.com/cb"},
+				TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
+			})
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidClientMetadata)
+			assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'token_endpoint_auth_method' value 'private_key_jwt' requires either the 'jwks' or 'jwks_uri' value to be registered.")
+		})
+	}
+}
+
 const (
 	pairwiseSectorIdentifierURI = "https://example.com/sector.json"
 	pairwiseHostlessRedirectURI = "com.example.app:/cb"

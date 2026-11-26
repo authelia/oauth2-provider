@@ -46,6 +46,39 @@ func (r *policyRequester) GetRegistrationPolicyPatternsPermitted() (permitted bo
 	return r.patterns
 }
 
+type detachedRequester struct {
+	oauth2.Requester
+
+	id      string
+	session oauth2.Session
+}
+
+func (r *detachedRequester) GetID() (id string) {
+	return r.id
+}
+
+func (r *detachedRequester) SetID(id string) {
+	r.id = id
+}
+
+func (r *detachedRequester) GetSession() (session oauth2.Session) {
+	return r.session
+}
+
+func (r *detachedRequester) SetSession(session oauth2.Session) {
+	r.session = session
+}
+
+func newDetachedRequester(requester oauth2.Requester, id string) (detached *detachedRequester) {
+	detached = &detachedRequester{Requester: requester, id: id}
+
+	if session := requester.GetSession(); session != nil {
+		detached.session = session.Clone()
+	}
+
+	return detached
+}
+
 func newPolicyRequester(requester oauth2.Requester, name, key string, patterns bool) (wrapped *policyRequester) {
 	wrapped = &policyRequester{Requester: requester, key: key, patterns: patterns}
 

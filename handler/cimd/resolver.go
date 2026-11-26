@@ -46,7 +46,7 @@ const (
 	DefaultMaxConcurrentFetches = 16
 
 	// DefaultMaxConcurrentFetchesPerDomain is the default number of Client ID Metadata Document fetches in progress at
-	// once from one registrable domain.
+	// once from one registrable domain. Half of them, rounded down, are only for a document which is stored.
 	DefaultMaxConcurrentFetchesPerDomain = 4
 
 	// DefaultFetchTimeout is the default time a Client ID Metadata Document fetch may take.
@@ -57,7 +57,8 @@ const (
 	DefaultFetchRatePerDomain = 10
 
 	// DefaultFetchBurstPerDomain is the default number of Client ID Metadata Document fetches which may be started at
-	// once from one registrable domain before DefaultFetchRatePerDomain applies.
+	// once from one registrable domain before DefaultFetchRatePerDomain applies. Half of them, rounded down, are only
+	// for a document which is stored.
 	DefaultFetchBurstPerDomain = 20
 
 	// DefaultMaxDocumentsPerDomain is the default number of Client ID Metadata Documents stored for one registrable
@@ -177,13 +178,18 @@ type Config struct {
 
 	// MaxConcurrentFetchesPerDomain bounds the document fetches in progress at once from one registrable domain and
 	// its subdomains, so that one domain can not occupy every fetch. An IPv4 address is its own domain, and an IPv6
-	// address belongs to the domain of its /48 prefix. Defaults to 4 and is never more than MaxConcurrentFetches.
+	// address belongs to the domain of its /48 prefix. Defaults to 4 and is never more than MaxConcurrentFetches. Half
+	// of them, rounded down, are reserved for a Client Identifier URL with a stored document, so that requests for
+	// Client Identifier URLs without one can not occupy every fetch of the domain.
 	MaxConcurrentFetchesPerDomain int
 
 	// FetchRatePerDomain and FetchBurstPerDomain bound how often a document fetch is started from one registrable
 	// domain, as defined for MaxConcurrentFetchesPerDomain: up to FetchBurstPerDomain at once, then FetchRatePerDomain
 	// per second. A resolution which would start a fetch beyond the rate fails without one. A failed fetch is never
-	// cached. They default to DefaultFetchRatePerDomain and DefaultFetchBurstPerDomain.
+	// cached. They default to DefaultFetchRatePerDomain and DefaultFetchBurstPerDomain. Half of FetchBurstPerDomain,
+	// rounded down, is reserved for a Client Identifier URL with a stored document: a fetch for one without a stored
+	// document is only started while more than that remains, so such requests can not spend what the documents the
+	// domain is known to serve are fetched again with.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.2
 	FetchRatePerDomain  float64
@@ -457,15 +463,17 @@ func (r *Resolver) refresh(ctx context.Context, id string, stale bool) (record *
 
 	call, ok := r.inflight[id]
 	if !ok {
-		if r.domains[domain] >= r.config.MaxConcurrentFetchesPerDomain && r.config.MaxConcurrentFetchesPerDomain < cap(r.fetches) {
+		concurrent, reserved := r.fetchLimits(stale)
+
+		if r.domains[domain] >= concurrent && concurrent < cap(r.fetches) {
 			r.mu.Unlock()
 
-			return nil, errTransient(nil, "The Client ID Metadata Document '%s' was not fetched as the limit of %d concurrent fetches from its domain is reached.", id, r.config.MaxConcurrentFetchesPerDomain)
+			return nil, errTransient(nil, "The Client ID Metadata Document '%s' was not fetched as the limit of %d concurrent fetches from its domain is reached.", id, concurrent)
 		}
 
 		bucket := r.bucket(domain, time.Now())
 
-		if bucket.tokens < 1 {
+		if bucket.tokens < float64(1+reserved) {
 			r.mu.Unlock()
 
 			return nil, errTransient(nil, "The Client ID Metadata Document '%s' was not fetched as the limit of %g fetches per second from its domain is reached.", id, r.config.FetchRatePerDomain)
@@ -532,6 +540,14 @@ func (r *Resolver) refresh(ctx context.Context, id string, stale bool) (record *
 	case <-ctx.Done():
 		return nil, errTransient(ctx.Err(), "The request ended before the Client ID Metadata Document '%s' was fetched.", id)
 	}
+}
+
+func (r *Resolver) fetchLimits(stored bool) (concurrent, reserved int) {
+	if stored {
+		return r.config.MaxConcurrentFetchesPerDomain, 0
+	}
+
+	return r.config.MaxConcurrentFetchesPerDomain - r.config.MaxConcurrentFetchesPerDomain/2, r.config.FetchBurstPerDomain / 2
 }
 
 //nolint:gocyclo

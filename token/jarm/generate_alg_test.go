@@ -139,6 +139,68 @@ func TestGenerateSignedResponseAlgValues(t *testing.T) {
 	}
 }
 
+func TestGenerateSigningAlgorithmNone(t *testing.T) {
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	encKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	keys := []jose.JSONWebKey{
+		{Key: rsaKey, KeyID: "rsa", Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature},
+	}
+
+	jwks := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+		{Key: encKey.Public(), KeyID: "enc", Algorithm: string(jose.ECDH_ES_A128KW), Use: consts.JSONWebTokenUseEncryption},
+	}}
+
+	testCases := []struct {
+		name      string
+		permitted []string
+		alg       string
+		encrypted bool
+		plain     bool
+	}{
+		{name: "ShouldRefuseNone", alg: consts.JSONWebTokenAlgNone},
+		{name: "ShouldRefuseNoneWhenEncrypted", alg: consts.JSONWebTokenAlgNone, encrypted: true},
+		{name: "ShouldRefuseNoneForAClientWhichIsNotAJARMClient", alg: consts.JSONWebTokenAlgNone, plain: true},
+		{name: "ShouldRefuseNoneWithPermittedAlgorithms", permitted: []string{string(jose.RS256)}, alg: consts.JSONWebTokenAlgNone},
+		{name: "ShouldRefuseNoneWithPermittedAlgorithmsWhenEncrypted", permitted: []string{string(jose.RS256)}, alg: consts.JSONWebTokenAlgNone, encrypted: true},
+		{name: "ShouldRefuseNoneWhenPermitted", permitted: []string{consts.JSONWebTokenAlgNone}, alg: consts.JSONWebTokenAlgNone},
+		{name: "ShouldRefuseNoneWhenPermittedAndEncrypted", permitted: []string{consts.JSONWebTokenAlgNone}, alg: consts.JSONWebTokenAlgNone, encrypted: true},
+		{name: "ShouldRefuseNoneAsTheDefaultPermittedAlgorithm", permitted: []string{consts.JSONWebTokenAlgNone}},
+		{name: "ShouldRefuseNoneAsTheDefaultPermittedAlgorithmWhenEncrypted", permitted: []string{consts.JSONWebTokenAlgNone}, encrypted: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &permittedAlgConfigurator{
+				realStrategyConfigurator: realStrategyConfigurator{
+					stubConfigurator: stubConfigurator{issuer: "https://issuer.example.com", lifespan: time.Hour},
+					signer:           &jwt.DefaultStrategy{Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: keys})},
+				},
+				permitted: tc.permitted,
+			}
+
+			var client Client = &registeredJARMClient{alg: tc.alg}
+
+			if tc.encrypted {
+				client = &encryptedJARMClient{registeredJARMClient: registeredJARMClient{alg: tc.alg}, jwks: jwks}
+			}
+
+			if tc.plain {
+				client = &plainJARMClient{Client: client}
+			}
+
+			token, signature, err := Generate(context.Background(), config, client, nil, url.Values{"code": {"abc"}})
+
+			assert.ErrorContains(t, err, "the algorithm 'none' is not allowed")
+			assert.Empty(t, token)
+			assert.Empty(t, signature)
+		})
+	}
+}
+
 func TestSignedResponseAlgClientClientSecretExpiresAt(t *testing.T) {
 	expires := time.Now().Add(-time.Hour)
 
@@ -199,3 +261,21 @@ func (c *registeredJARMClient) GetAuthorizationEncryptedResponseKeyID() string {
 func (c *registeredJARMClient) GetAuthorizationEncryptedResponseAlg() string { return "" }
 
 func (c *registeredJARMClient) GetAuthorizationEncryptedResponseEnc() string { return "" }
+
+type encryptedJARMClient struct {
+	registeredJARMClient
+
+	jwks *jose.JSONWebKeySet
+}
+
+func (c *encryptedJARMClient) GetAuthorizationEncryptedResponseAlg() string {
+	return string(jose.ECDH_ES_A128KW)
+}
+
+func (c *encryptedJARMClient) GetAuthorizationEncryptedResponseEnc() string {
+	return string(jose.A128GCM)
+}
+
+func (c *encryptedJARMClient) GetJSONWebKeys() *jose.JSONWebKeySet { return c.jwks }
+
+func (c *encryptedJARMClient) GetJSONWebKeysURI() string { return "" }

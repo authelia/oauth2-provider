@@ -24,10 +24,11 @@ type StrategyOpts struct {
 	jwsKeyFunc KeyFuncJWS
 	jweKeyFunc KeyFuncJWE
 
-	allowUnverified    bool
-	idTokenHint        bool
-	issuerSigningAlg   string
-	issuerSigningKeyID string
+	allowUnverified        bool
+	allowUnsignedEncrypted bool
+	idTokenHint            bool
+	issuerSigningAlg       string
+	issuerSigningKeyID     string
 }
 
 type (
@@ -44,6 +45,19 @@ type (
 func WithAllowUnverified() StrategyOpt {
 	return func(opts *StrategyOpts) (err error) {
 		opts.allowUnverified = true
+
+		return nil
+	}
+}
+
+// WithAllowUnsignedEncrypted permits Encode to produce a JWE whose plaintext is the JSON claims set, which is not
+// signed, for a client whose signing algorithm is 'none' and which has an encryption algorithm. It is only for the
+// UserInfo Response.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
+func WithAllowUnsignedEncrypted() StrategyOpt {
+	return func(opts *StrategyOpts) (err error) {
+		opts.allowUnsignedEncrypted = true
 
 		return nil
 	}

@@ -139,7 +139,7 @@ func (f *Fosite) encodeUserinfoJWT(ctx context.Context, client Client, values ma
 
 	var token string
 
-	if token, _, err = strategy.Encode(ctx, jwt.MapClaims(values), jwt.WithUserInfoClient(&userinfoUnsignedClient{UserInfoClient: client.(jwt.UserInfoClient)})); err != nil {
+	if token, _, err = strategy.Encode(ctx, jwt.MapClaims(values), jwt.WithUserInfoClient(&userinfoUnsignedClient{UserInfoClient: client.(jwt.UserInfoClient)}), jwt.WithAllowUnsignedEncrypted()); err != nil {
 		return nil, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugf("The UserInfo JWT could not be generated with error %+v.", err))
 	}
 

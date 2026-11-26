@@ -531,6 +531,61 @@ func TestGenerateJWTDefaultsTheSigningAlgorithm(t *testing.T) {
 	assert.NoError(t, strategy.ValidateAccessToken(t.Context(), r, token))
 }
 
+// RFC 9068 Section 2.1: JWT access tokens MUST be signed.
+func TestGenerateJWTRefusesSigningAlgorithmNone(t *testing.T) {
+	jwks := &jose.JSONWebKeySet{
+		Keys: []jose.JSONWebKey{
+			{Key: gen.MustES256Key().Public(), KeyID: "enc", Use: consts.JSONWebTokenUseEncryption, Algorithm: string(jose.ECDH_ES_A128KW)},
+		},
+	}
+
+	testCases := []struct {
+		name   string
+		client *oauth2.DefaultRegisteredClient
+	}{
+		{
+			name: "ShouldRefuseNone",
+			client: &oauth2.DefaultRegisteredClient{
+				DefaultClient:                &oauth2.DefaultClient{ID: "client-abc"},
+				AccessTokenSignedResponseAlg: consts.JSONWebTokenAlgNone,
+			},
+		},
+		{
+			name: "ShouldRefuseNoneWhenEncrypted",
+			client: &oauth2.DefaultRegisteredClient{
+				DefaultClient:                   &oauth2.DefaultClient{ID: "client-abc"},
+				JSONWebKeys:                     jwks,
+				AccessTokenSignedResponseAlg:    consts.JSONWebTokenAlgNone,
+				AccessTokenEncryptedResponseAlg: string(jose.ECDH_ES_A128KW),
+				AccessTokenEncryptedResponseEnc: string(jose.A128GCM),
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{
+				EnforceJWTProfileAccessTokens: true,
+				GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+			}
+
+			strategy := NewCoreStrategy(config, "authelia_%s_", &jwt.DefaultStrategy{
+				Config: config,
+				Issuer: jwt.NewDefaultIssuerRS256Unverified(rsaKey),
+			})
+
+			r := jwtValidCase(oauth2.AccessToken)
+			r.Client = tc.client
+
+			token, signature, err := strategy.GenerateAccessToken(t.Context(), r)
+
+			assert.ErrorContains(t, err, "the signing algorithm 'none' is not permitted")
+			assert.Empty(t, token)
+			assert.Empty(t, signature)
+		})
+	}
+}
+
 func anyInt64ToTime(in any) time.Time {
 	return time.Unix(in.(int64), 0)
 }

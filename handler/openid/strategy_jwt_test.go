@@ -17,9 +17,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/clone/clonetest"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
@@ -1017,6 +1020,61 @@ func TestDefaultStrategy_GenerateIDTokenConfirmation(t *testing.T) {
 
 		assert.NotContains(t, string(payloadOf(t, token)), `"cnf"`)
 	})
+}
+
+func TestDefaultStrategy_GenerateIDTokenRefusesSigningAlgorithmNone(t *testing.T) {
+	jwks := &jose.JSONWebKeySet{
+		Keys: []jose.JSONWebKey{
+			{Key: gen.MustES256Key().Public(), KeyID: "enc", Use: consts.JSONWebTokenUseEncryption, Algorithm: string(jose.ECDH_ES_A128KW)},
+		},
+	}
+
+	testCases := []struct {
+		name   string
+		client *oauth2.DefaultRegisteredClient
+	}{
+		{
+			name: "ShouldRefuseNone",
+			client: &oauth2.DefaultRegisteredClient{
+				DefaultClient:            &oauth2.DefaultClient{ID: "client"},
+				IDTokenSignedResponseAlg: consts.JSONWebTokenAlgNone,
+			},
+		},
+		{
+			name: "ShouldRefuseNoneWhenEncrypted",
+			client: &oauth2.DefaultRegisteredClient{
+				DefaultClient:               &oauth2.DefaultClient{ID: "client"},
+				JSONWebKeys:                 jwks,
+				IDTokenSignedResponseAlg:    consts.JSONWebTokenAlgNone,
+				IDTokenEncryptedResponseAlg: string(jose.ECDH_ES_A128KW),
+				IDTokenEncryptedResponseEnc: string(jose.A128GCM),
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy, _ := newTestIDTokenStrategy(t)
+
+			session := NewDefaultSession()
+			session.Claims.Subject = "peter"
+
+			request := oauth2.NewAccessRequest(session)
+			request.Client = tc.client
+			request.GrantTypes = oauth2.Arguments{consts.GrantTypeAuthorizationCode}
+			request.GrantedScope = oauth2.Arguments{consts.ScopeOpenID}
+
+			token, err := strategy.GenerateIDToken(t.Context(), time.Hour, request)
+
+			assert.ErrorContains(t, err, "the signing algorithm 'none' is not permitted")
+			assert.Empty(t, token)
+
+			token, err = strategy.GenerateBackChannelLogoutToken(t.Context(), tc.client, time.Minute, "peter", "sid", []string{"client"}, nil)
+
+			assert.ErrorContains(t, err, "the signing algorithm 'none' is not permitted")
+			assert.Empty(t, token)
+		})
+	}
 }
 
 func headerTypeOf(t *testing.T, token string) string {

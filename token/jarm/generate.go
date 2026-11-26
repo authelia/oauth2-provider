@@ -30,7 +30,9 @@ func EncodeParameters(token, _ string, tErr error) (parameters url.Values, err e
 
 // Generate generates the token and signature for a JARM response. The issuer is always the configured issuer, and
 // the session argument is not used. Per JARM Section 2.1 the numeric 'expires_in' parameter is encoded as a JSON number
-// and all other parameters as JSON strings.
+// and all other parameters as JSON strings. Per JARM Section 3 the signing algorithm 'none' is refused.
+//
+// See: https://openid.net/specs/oauth-v2-jarm.html#section-3
 //
 //nolint:gocyclo
 func Generate(ctx context.Context, config Configurator, client Client, _ any, parameters url.Values) (token, signature string, err error) {
@@ -39,6 +41,10 @@ func Generate(ctx context.Context, config Configurator, client Client, _ any, pa
 	var signer any = client
 
 	alg := client.GetAuthorizationSignedResponseAlg()
+
+	if alg == jwt.JSONWebTokenAlgNone {
+		return "", "", errSigningAlgNone(client)
+	}
 
 	if provider, ok := config.(SignedResponseAlgValuesProvider); ok {
 		if permitted := provider.GetAuthorizationSignedResponseAlgValues(ctx); len(permitted) != 0 {
@@ -51,6 +57,10 @@ func Generate(ctx context.Context, config Configurator, client Client, _ any, pa
 			case alg == "":
 				if alg = SignedResponseAlgDefault(ctx, config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx), permitted); alg == "" {
 					return "", "", fmt.Errorf("the JARM response for client '%s' must be signed with one of the permitted algorithms '%s', but the first is empty", client.GetID(), strings.Join(permitted, "', '"))
+				}
+
+				if alg == jwt.JSONWebTokenAlgNone {
+					return "", "", errSigningAlgNone(client)
 				}
 
 				signer = &signedResponseAlgClient{JARMClient: c, alg: alg}
@@ -102,6 +112,10 @@ func Generate(ctx context.Context, config Configurator, client Client, _ any, pa
 	}
 
 	return strategy.Encode(ctx, claims.ToMapClaims(), jwt.WithHeaders(&jwt.Headers{Extra: headers}), jwt.WithJARMClient(signer))
+}
+
+func errSigningAlgNone(client Client) error {
+	return fmt.Errorf("the JARM response for client '%s' would be signed with the 'alg' '%s', but the algorithm '%s' is not allowed", client.GetID(), jwt.JSONWebTokenAlgNone, jwt.JSONWebTokenAlgNone)
 }
 
 type signedResponseAlgClient struct {

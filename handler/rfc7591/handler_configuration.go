@@ -8,9 +8,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/randx"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -119,6 +121,11 @@ func setRegistrationTimes(client oauth2.Client, responder oauth2.ClientConfigura
 // access token is minted before the old one's session is deleted, so a failed mint leaves the client holding a working
 // token.
 //
+// A client with no client secret whose 'token_endpoint_auth_method' is replaced by one other than 'none' is issued a
+// client secret as at registration, expiring after GetRFC7591ClientSecretLifespan from the update when that is set.
+//
+// See: https://www.rfc-editor.org/rfc/rfc7592#section-2.2
+//
 //nolint:gocyclo
 func (h *ClientConfigurationHandler) update(ctx context.Context, id string, client oauth2.Client, requester oauth2.ClientConfigurationRequester, responder oauth2.ClientConfigurationResponder) (err error) {
 	strategy := h.Config.GetRFC7591ClientRegistrationStrategy(ctx)
@@ -208,10 +215,28 @@ func (h *ClientConfigurationHandler) update(ctx context.Context, id string, clie
 		return err
 	}
 
+	var secret oauth2.ClientSecret
+
+	if metadata.TokenEndpointAuthMethod != consts.ClientAuthMethodNone && client.GetClientSecret() == nil {
+		var secretSeq []rune
+
+		if secretSeq, err = randx.RuneSequence(h.Config.GetTokenEntropy(ctx), randx.AlphaNum); err != nil {
+			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+		}
+
+		secret = oauth2.NewPlainTextClientSecret(string(secretSeq))
+	}
+
 	var patched oauth2.Client
 
-	if patched, err = strategy.PatchClient(ctx, client, nil, metadata); err != nil {
+	if patched, err = strategy.PatchClient(ctx, client, secret, metadata); err != nil {
 		return err
+	}
+
+	if lifespan := h.Config.GetRFC7591ClientSecretLifespan(ctx); lifespan > 0 && secret != nil {
+		if registered, ok := patched.(*oauth2.DefaultRegisteredClient); ok {
+			registered.ClientSecretExpiresAt = time.Now().UTC().Add(lifespan)
+		}
 	}
 
 	// The response metadata is built before anything is persisted, so a failure leaves the client and its tokens as they

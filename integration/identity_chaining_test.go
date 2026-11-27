@@ -390,7 +390,7 @@ func newChainingEnvironment(t *testing.T, newStore func() (hoauth2.CoreStorage, 
 
 		responder, err := bProvider.NewIntrospectionRequest(ctx, req, newChainingSession())
 		if err != nil {
-			bProvider.WriteIntrospectionError(ctx, rw, err)
+			bProvider.WriteIntrospectionError(ctx, rw, req, err)
 
 			return
 		}

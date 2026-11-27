@@ -75,6 +75,7 @@ func TestExchangedTokenLifetime(t *testing.T) {
 			t.Run("ShouldNotExpireTheAccessTokenAfterTheDeadlineRecordedFromTheSubjectToken", func(t *testing.T) {
 				store := sc.newStore()
 				config, coreStrategy := newBindingExchangeConfig()
+				config.DisableRefreshTokenRotation = true
 
 				expires := time.Now().UTC().Add(20 * time.Minute).Truncate(time.Second)
 
@@ -114,28 +115,16 @@ func TestExchangedTokenLifetime(t *testing.T) {
 				assert.WithinDuration(t, expires, request.GetSession().GetExpiresAt(oauth2.RefreshToken), time.Second)
 			})
 
-			t.Run("ShouldKeepTheSubjectTokenDeadlineWhenTheExchangedRefreshTokenIsRefreshed", func(t *testing.T) {
+			t.Run("ShouldKeepTheSubjectTokenDeadlineOnlyWhenTheSubjectRefreshTokenIsNotRotated", func(t *testing.T) {
 				testCases := []struct {
 					name      string
 					requested string
-					refresh   func(response *oauth2.AccessResponse) string
+					unrotated bool
 				}{
-					{
-						name:      "AccessTokenType",
-						requested: "",
-						refresh: func(response *oauth2.AccessResponse) string {
-							token, _ := response.GetExtra(consts.FormParameterRefreshToken).(string)
-
-							return token
-						},
-					},
-					{
-						name:      "RefreshTokenType",
-						requested: consts.TokenTypeRFC8693RefreshToken,
-						refresh: func(response *oauth2.AccessResponse) string {
-							return response.GetAccessToken()
-						},
-					},
+					{name: "ShouldNotCapARotatedAccessTokenType", requested: ""},
+					{name: "ShouldNotCapARotatedRefreshTokenType", requested: consts.TokenTypeRFC8693RefreshToken},
+					{name: "ShouldCapAnUnrotatedAccessTokenType", requested: "", unrotated: true},
+					{name: "ShouldCapAnUnrotatedRefreshTokenType", requested: consts.TokenTypeRFC8693RefreshToken, unrotated: true},
 				}
 
 				for _, tc := range testCases {
@@ -143,6 +132,9 @@ func TestExchangedTokenLifetime(t *testing.T) {
 						store := sc.newStore()
 						config, coreStrategy := newBindingExchangeConfig()
 						config.RefreshTokenScopes = []string{}
+						config.AccessTokenLifespan = time.Hour
+						config.RefreshTokenLifespan = 24 * time.Hour
+						config.DisableRefreshTokenRotation = tc.unrotated
 
 						expires := time.Now().UTC().Add(20 * time.Minute).Truncate(time.Second)
 
@@ -161,13 +153,30 @@ func TestExchangedTokenLifetime(t *testing.T) {
 
 						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(issuer.PopulateTokenEndpointResponse(t.Context(), request, response)))
 
-						token := tc.refresh(response)
+						token := response.GetAccessToken()
+						if tc.requested == "" {
+							token, _ = response.GetExtra(consts.FormParameterRefreshToken).(string)
+						}
+
 						require.NotEmpty(t, token)
+
+						config.DisableRefreshTokenRotation = false
 
 						refreshed := redeemLifetimeRefreshToken(t, config, coreStrategy, store, token)
 
-						assert.False(t, refreshed.GetSession().GetExpiresAt(oauth2.AccessToken).After(expires))
-						assert.False(t, refreshed.GetSession().GetExpiresAt(oauth2.RefreshToken).After(expires))
+						deadline := refreshed.GetSession().(oauth2.ExpiryDeadlineSession).GetExpiryDeadline()
+
+						if tc.unrotated {
+							assert.WithinDuration(t, expires, deadline, time.Second)
+							assert.False(t, refreshed.GetSession().GetExpiresAt(oauth2.AccessToken).After(expires))
+							assert.False(t, refreshed.GetSession().GetExpiresAt(oauth2.RefreshToken).After(expires))
+
+							return
+						}
+
+						assert.True(t, deadline.IsZero())
+						assert.True(t, refreshed.GetSession().GetExpiresAt(oauth2.AccessToken).After(expires))
+						assert.True(t, refreshed.GetSession().GetExpiresAt(oauth2.RefreshToken).After(expires))
 					})
 				}
 			})

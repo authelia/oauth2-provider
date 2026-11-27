@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -81,21 +82,27 @@ func (c *CoreValidator) IntrospectToken(ctx context.Context, token string, token
 
 // preferDefiniteIntrospectionError chooses which of two introspection failures IntrospectToken should return when
 // neither path succeeded. A rejection of a token one path recognized is preferred, as it holds whatever the other path
-// reports. Otherwise an oauth2.ErrServerError is preferred, as the path that failed could have been the one to accept
+// reports. Otherwise a failure of the server is preferred, as the path that failed could have been the one to accept
 // the token, followed by primary.
 func preferDefiniteIntrospectionError(primary, secondary error) error {
 	switch {
-	case !isUnrecognizedIntrospectionError(primary) && !errors.Is(primary, oauth2.ErrServerError):
+	case !isUnrecognizedIntrospectionError(primary) && !isIntrospectionServerFailure(primary):
 		return primary
-	case !isUnrecognizedIntrospectionError(secondary) && !errors.Is(secondary, oauth2.ErrServerError):
+	case !isUnrecognizedIntrospectionError(secondary) && !isIntrospectionServerFailure(secondary):
 		return secondary
-	case errors.Is(primary, oauth2.ErrServerError):
+	case isIntrospectionServerFailure(primary):
 		return primary
-	case errors.Is(secondary, oauth2.ErrServerError):
+	case isIntrospectionServerFailure(secondary):
 		return secondary
 	default:
 		return primary
 	}
+}
+
+func isIntrospectionServerFailure(err error) bool {
+	rfc, ok := oauth2.AsRFC6749Error(err)
+
+	return ok && rfc.CodeField >= http.StatusInternalServerError
 }
 
 func isUnrecognizedIntrospectionError(err error) bool {
@@ -103,20 +110,24 @@ func isUnrecognizedIntrospectionError(err error) bool {
 }
 
 // IntrospectionStorageError classifies an error from looking up a token session other than oauth2.ErrNotFound. An
-// oauth2.RFC6749Error is the store's statement about the token, such as oauth2.ErrInactiveToken for a revoked token, and
-// is reported as oauth2.ErrRequestUnauthorized unless it is oauth2.ErrServerError. Any other error is a failure of the
-// store, which says nothing about the token and is reported as oauth2.ErrServerError rather than as an inactive token.
+// oauth2.RFC6749Error with a status below 500 is the store's statement about the token, such as oauth2.ErrInactiveToken
+// for a revoked token, and is reported as oauth2.ErrRequestUnauthorized. One with a 5xx status, such as
+// oauth2.ErrTemporarilyUnavailable, is a failure of the store and is returned as it is. Any other error is a failure of
+// the store too, and is reported as oauth2.ErrServerError. A failure of the store says nothing about the token, so it is
+// never reported as an inactive token.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.3
 func IntrospectionStorageError(err error) *oauth2.RFC6749Error {
-	_, pointer := errors.AsType[*oauth2.RFC6749Error](err)
-	_, value := errors.AsType[oauth2.RFC6749Error](err)
+	rfc, ok := oauth2.AsRFC6749Error(err)
 
-	if (pointer || value) && !errors.Is(err, oauth2.ErrServerError) {
+	switch {
+	case !ok, rfc.ErrorField == oauth2.ErrUnknownRequest.ErrorField && rfc.CodeField >= http.StatusInternalServerError:
+		return oauth2.ErrServerError.WithWrap(err).WithDebugError(err)
+	case rfc.CodeField >= http.StatusInternalServerError:
+		return rfc
+	default:
 		return oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebugError(err)
 	}
-
-	return oauth2.ErrServerError.WithWrap(err).WithDebugError(err)
 }
 
 func matchScopes(ss oauth2.ScopeStrategy, granted, scopes []string) error {

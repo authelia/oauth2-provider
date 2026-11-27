@@ -57,6 +57,8 @@ func RFC8693AccessTokenTypeFactory(config oauth2.Configurator, storage any, stra
 		RefreshTokenLifespan: config.GetRefreshTokenLifespan(ctx),
 		RefreshTokenScopes:   config.GetRefreshTokenScopes(ctx),
 		ScopeStrategy:        config.GetScopeStrategy(ctx),
+		AudienceStrategy:     config.GetAudienceStrategy(ctx),
+		ResourceStrategy:     config.GetResourceStrategy(ctx),
 		CoreStrategy:         strategy.(hoauth2.CoreStrategy),
 		Storage:              storage.(rfc8693.Storage),
 
@@ -77,6 +79,8 @@ func RFC8693RefreshTokenTypeFactory(config oauth2.Configurator, storage any, str
 		RefreshTokenLifespan:   config.GetRefreshTokenLifespan(ctx),
 		RefreshTokenScopes:     config.GetRefreshTokenScopes(ctx),
 		ScopeStrategy:          config.GetScopeStrategy(ctx),
+		AudienceStrategy:       config.GetAudienceStrategy(ctx),
+		ResourceStrategy:       config.GetResourceStrategy(ctx),
 		CoreStrategy:           strategy.(hoauth2.CoreStrategy),
 		Storage:                storage.(rfc8693.Storage),
 		TokenRevocationStorage: storage.(hoauth2.TokenRevocationStorage),

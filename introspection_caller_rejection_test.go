@@ -42,16 +42,25 @@ func TestWriteIntrospectionErrorClassification(t *testing.T) {
 		{name: "ShouldAnswerInactiveForErrTokenSignatureMismatch", err: errorsx.WithStack(ErrTokenSignatureMismatch), code: http.StatusOK, contains: `{"active":false}`},
 		{name: "ShouldAnswerInactiveForErrInvalidTokenFormat", err: errorsx.WithStack(ErrInvalidTokenFormat), code: http.StatusOK, contains: `{"active":false}`},
 		{name: "ShouldAnswerInactiveForErrUnknownRequest", err: errorsx.WithStack(ErrUnknownRequest), code: http.StatusOK, contains: `{"active":false}`},
-		{name: "ShouldAnswerInactiveForErrInvalidGrant", err: errorsx.WithStack(ErrInvalidGrant), code: http.StatusOK, contains: `{"active":false}`},
-		{name: "ShouldAnswerInactiveForErrAccessDenied", err: errorsx.WithStack(ErrAccessDenied), code: http.StatusOK, contains: `{"active":false}`},
+		{name: "ShouldReportErrInvalidGrant", err: errorsx.WithStack(ErrInvalidGrant), code: http.StatusBadRequest, contains: `"error":"invalid_grant"`},
+		{name: "ShouldReportErrAccessDenied", err: errorsx.WithStack(ErrAccessDenied), code: http.StatusForbidden, contains: `"error":"access_denied"`},
+		{name: "ShouldReportErrAccessDeniedWrappingAnInactiveToken", err: errorsx.WithStack(ErrAccessDenied.WithWrap(ErrInactiveToken)), code: http.StatusForbidden, contains: `"error":"access_denied"`},
+		{name: "ShouldReportErrInvalidScope", err: errorsx.WithStack(ErrInvalidScope), code: http.StatusBadRequest, contains: `"error":"invalid_scope"`},
+		{name: "ShouldReportAPlainErrorAsAServerError", err: errors.New("the store failed"), code: http.StatusInternalServerError, contains: `"error":"server_error"`},
+		{name: "ShouldReportAnUnrecognizableErrorAsAServerError", err: ErrorToRFC6749Error(errors.New("the store failed")), code: http.StatusInternalServerError, contains: `"error":"server_error"`},
+		{name: "ShouldReportAnEmptyErrorAsAServerError", err: &RFC6749Error{}, code: http.StatusInternalServerError, contains: `"error":"server_error"`},
 		{name: "ShouldAnswerInactiveForErrInactiveTokenWrappingTemporarilyUnavailable", err: errorsx.WithStack(ErrInactiveToken.WithWrap(ErrTemporarilyUnavailable)), code: http.StatusOK, contains: `{"active":false}`},
+		{name: "ShouldAnswerInactiveForAValueErrInactiveToken", err: *ErrInactiveToken, code: http.StatusOK, contains: `{"active":false}`},
+		{name: "ShouldAnswerInactiveForAWrappedValueErrInactiveToken", err: errorsx.WithStack(*ErrInactiveToken), code: http.StatusOK, contains: `{"active":false}`},
+		{name: "ShouldReportAValueTemporarilyUnavailable", err: *ErrTemporarilyUnavailable, code: http.StatusServiceUnavailable, contains: `"error":"temporarily_unavailable"`},
+		{name: "ShouldReportAValueErrAccessDeniedWrappingAnInactiveToken", err: *ErrAccessDenied.WithWrap(ErrInactiveToken), code: http.StatusForbidden, contains: `"error":"access_denied"`},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			rw := httptest.NewRecorder()
 
-			(&Fosite{Config: &Config{}}).WriteIntrospectionError(context.Background(), rw, tc.err)
+			(&Fosite{Config: &Config{}}).WriteIntrospectionError(context.Background(), rw, nil, tc.err)
 
 			assert.Equal(t, tc.code, rw.Code)
 			assert.Contains(t, rw.Body.String(), tc.contains)
@@ -107,8 +116,8 @@ func TestIntrospectionBearerCallerRejection(t *testing.T) {
 		{name: "ShouldChallengeAnUnknownCredentialInTheHeader", credential: "unknown", code: http.StatusUnauthorized, challenge: failed, contains: `"error":"invalid_token"`},
 		{name: "ShouldChallengeAnUnknownCredentialInTheFormBody", credential: "unknown", transmission: "body", code: http.StatusUnauthorized, challenge: failed, contains: `"error":"invalid_token"`},
 		{name: "ShouldChallengeAnExpiredCredentialInTheFormBody", credential: "expired", transmission: "body", code: http.StatusUnauthorized, challenge: failed, contains: `"error":"invalid_token"`},
-		// RFC 6750 Section 3.1: a request lacking any authentication information carries no error information.
-		{name: "ShouldChallengeWithoutErrorWhenNoCredentialIsPresented", transmission: "none", disabled: true, code: http.StatusUnauthorized, challenge: `Bearer`, contains: `"error":"invalid_token"`},
+		// RFC 6750 Section 3.1.
+		{name: "ShouldChallengeWithoutErrorWhenNoCredentialIsPresented", transmission: "none", disabled: true, code: http.StatusUnauthorized, challenge: `Bearer`},
 		{name: "ShouldReportAnUnavailableClientStore", credential: "caller", lookup: errorsx.WithStack(ErrTemporarilyUnavailable), code: http.StatusServiceUnavailable, contains: `"error":"temporarily_unavailable"`},
 		{name: "ShouldReportAnUnavailableClientStoreForAFormBodyCredential", credential: "caller", transmission: "body", lookup: errorsx.WithStack(ErrTemporarilyUnavailable), code: http.StatusServiceUnavailable, contains: `"error":"temporarily_unavailable"`},
 		{name: "ShouldReportAClientStoreServerError", credential: "caller", lookup: errorsx.WithStack(ErrServerError), code: http.StatusInternalServerError, contains: `"error":"server_error"`},
@@ -188,14 +197,20 @@ func TestIntrospectionBearerCallerRejection(t *testing.T) {
 
 					responder, err := provider.NewIntrospectionRequest(ctx, r, &DefaultSession{})
 					if err != nil {
-						provider.WriteIntrospectionError(context.WithValue(ctx, RequestContextKey, r), rw, err)
+						provider.WriteIntrospectionError(ctx, rw, r, err)
 					} else {
 						provider.WriteIntrospectionResponse(ctx, rw, responder)
 					}
 
 					assert.Equal(t, tc.code, rw.Code)
 					assert.Equal(t, tc.challenge, rw.Header().Get(consts.HeaderWWWAuthenticate))
-					assert.Contains(t, rw.Body.String(), tc.contains)
+
+					if tc.contains == "" {
+						assert.Empty(t, rw.Body.Bytes())
+						assert.Empty(t, rw.Header().Get(consts.HeaderContentType))
+					} else {
+						assert.Contains(t, rw.Body.String(), tc.contains)
+					}
 
 					if tc.code != http.StatusOK {
 						assert.NotContains(t, rw.Body.String(), `"active"`)
@@ -247,7 +262,7 @@ func TestIntrospectionBearerCallerIntrospectorFailure(t *testing.T) {
 				_, err := provider.NewIntrospectionRequest(context.Background(), r, &DefaultSession{})
 				require.Error(t, err)
 
-				provider.WriteIntrospectionError(context.Background(), rw, err)
+				provider.WriteIntrospectionError(context.Background(), rw, nil, err)
 
 				assert.Equal(t, tc.code, rw.Code)
 				assert.Contains(t, rw.Body.String(), tc.contains)
@@ -290,7 +305,7 @@ func TestIntrospectionClientAuthenticationFailure(t *testing.T) {
 			_, err := provider.NewIntrospectionRequest(context.Background(), r, &DefaultSession{})
 			require.Error(t, err)
 
-			provider.WriteIntrospectionError(context.Background(), rw, err)
+			provider.WriteIntrospectionError(context.Background(), rw, nil, err)
 
 			assert.Equal(t, tc.code, rw.Code)
 			assert.Equal(t, tc.challenge, rw.Header().Get(consts.HeaderWWWAuthenticate))
@@ -319,7 +334,7 @@ func TestIntrospectionClientAuthenticationMultipleMethods(t *testing.T) {
 	_, err := provider.NewIntrospectionRequest(context.Background(), r, &DefaultSession{})
 	require.Error(t, err)
 
-	provider.WriteIntrospectionError(context.Background(), rw, err)
+	provider.WriteIntrospectionError(context.Background(), rw, nil, err)
 
 	// RFC 6749 Section 5.2: a request which "utilizes more than one mechanism for authenticating the client" is invalid_request.
 	assert.Equal(t, http.StatusBadRequest, rw.Code)
@@ -337,4 +352,124 @@ func (s *failingClientAuthenticationStrategy) AuthMethodsSupported(_ context.Con
 
 func (s *failingClientAuthenticationStrategy) AuthenticateClient(_ context.Context, _ *http.Request, _ url.Values, _ EndpointClientAuthStrategy) (client Client, method string, err error) {
 	return nil, "", s.err
+}
+
+// The method checked against the introspection endpoint's permitted methods is the one which carried the credential.
+//
+// See: https://www.rfc-editor.org/rfc/rfc6750#section-2
+// See: https://www.rfc-editor.org/rfc/rfc9449#section-7.1
+func TestIntrospectionEndpointAuthMethodsFollowTheCredentialTransport(t *testing.T) {
+	const (
+		endpoint = "https://as.example.com/introspect"
+		failed   = `Bearer error="invalid_token", error_description="The access token provided is expired, revoked, malformed, or invalid for other reasons."`
+	)
+
+	stores := []struct {
+		name string
+		new  func() (introspectionCallerTestStore, *storage.MemoryStore)
+	}{
+		{"MemoryStore", func() (introspectionCallerTestStore, *storage.MemoryStore) {
+			s := storage.NewMemoryStore()
+
+			return s, s
+		}},
+		{"HydratingMemoryStore", func() (introspectionCallerTestStore, *storage.MemoryStore) {
+			s := storage.NewHydratingMemoryStore()
+
+			return s, s.MemoryStore
+		}},
+	}
+
+	testCases := []struct {
+		name      string
+		methods   []string
+		header    string
+		body      bool
+		code      int
+		challenge string
+		contains  string
+	}{
+		{name: "ShouldAnswerAFormBodyCredentialBesideADisabledDPoPSchemeWhenBearerIsPermitted", methods: []string{consts.AuthSchemeBearer}, header: "DPoP some-token", body: true, code: http.StatusOK, contains: `"active":true`},
+		{name: "ShouldChallengeAFormBodyCredentialBesideADisabledDPoPSchemeWhenOnlyDPoPIsPermitted", methods: []string{consts.AuthSchemeDPoP}, header: "DPoP some-token", body: true, code: http.StatusUnauthorized, challenge: failed, contains: `"error":"invalid_token"`},
+		{name: "ShouldAnswerAFormBodyCredentialWhenBearerIsPermitted", methods: []string{consts.AuthSchemeBearer}, body: true, code: http.StatusOK, contains: `"active":true`},
+		{name: "ShouldChallengeAFormBodyCredentialWhenOnlyDPoPIsPermitted", methods: []string{consts.AuthSchemeDPoP}, body: true, code: http.StatusUnauthorized, challenge: failed, contains: `"error":"invalid_token"`},
+		{name: "ShouldAnswerABearerSchemeCredentialWhenBearerIsPermitted", methods: []string{consts.AuthSchemeBearer}, header: "Bearer caller", code: http.StatusOK, contains: `"active":true`},
+		{name: "ShouldChallengeABearerSchemeCredentialWhenOnlyDPoPIsPermitted", methods: []string{consts.AuthSchemeDPoP}, header: "Bearer caller", code: http.StatusUnauthorized, challenge: failed, contains: `"error":"invalid_token"`},
+	}
+
+	for _, sc := range stores {
+		t.Run(sc.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					ctx := context.Background()
+
+					store, memory := sc.new()
+
+					config := &Config{
+						GlobalSecret:                     []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+						AccessTokenLifespan:              time.Hour,
+						IntrospectionEndpointAuthMethods: tc.methods,
+					}
+
+					strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+
+					config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{
+						&hoauth2.CoreValidator{CoreStrategy: strategy, CoreStorage: store, Config: config},
+					}
+
+					provider := &Fosite{Store: memory, Config: config}
+
+					client := &DefaultClient{ID: "rs"}
+					memory.Clients[client.ID] = client
+
+					access := func(id string) string {
+						r := NewRequest()
+						r.ID = id
+						r.Client = client
+						r.GrantedAudience = Arguments{endpoint}
+						r.GrantedScope = Arguments{"authelia:oauth2:token_introspection"}
+						r.Session = &DefaultSession{Subject: "user", ExpiresAt: map[TokenType]time.Time{AccessToken: time.Now().Add(time.Hour)}}
+
+						token, signature, err := strategy.GenerateAccessToken(ctx, r)
+						require.NoError(t, err)
+						require.NoError(t, store.CreateAccessTokenSession(ctx, signature, r))
+
+						return token
+					}
+
+					caller, introspected := access("caller"), access("introspected")
+
+					form := url.Values{consts.FormParameterToken: {introspected}}
+
+					if tc.body {
+						form.Set(consts.FormParameterAccessToken, caller)
+					}
+
+					r := httptest.NewRequest(http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+					r.Header.Set(consts.HeaderContentType, "application/x-www-form-urlencoded")
+
+					if tc.header != "" {
+						r.Header.Set(consts.HeaderAuthorization, strings.Replace(tc.header, "caller", caller, 1))
+					}
+
+					rw := httptest.NewRecorder()
+
+					responder, err := provider.NewIntrospectionRequest(ctx, r, &DefaultSession{})
+					if err != nil {
+						provider.WriteIntrospectionError(ctx, rw, r, err)
+					} else {
+						provider.WriteIntrospectionResponse(ctx, rw, responder)
+					}
+
+					assert.Equal(t, tc.code, rw.Code)
+					assert.Equal(t, tc.challenge, rw.Header().Get(consts.HeaderWWWAuthenticate))
+					assert.Contains(t, rw.Body.String(), tc.contains)
+
+					if tc.code != http.StatusOK {
+						assert.NotContains(t, rw.Body.String(), `"active"`)
+					}
+				})
+			}
+		})
+	}
 }

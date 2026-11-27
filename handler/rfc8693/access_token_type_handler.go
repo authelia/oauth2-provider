@@ -27,7 +27,8 @@ import (
 // disables rotation.
 //
 // A refresh token 'subject_token' is only accepted from a client which opts in with GetAllowOwnRefreshTokenExchange,
-// and may only request the audience and resources it was granted, per RFC 8707 Section 2.2.
+// and may only request the audience and resources it was granted, per RFC 8707 Section 2.2. A request which names
+// neither is issued for the audience and resources the refresh token was granted.
 // The access token is issued for the request the refresh token was issued for, so that revoking the grant revokes it as
 // RFC 7009 Section 2.1 describes, and the storage rotating that refresh token revokes it as it does any access token of
 // the request. A refresh token issued with it is bound to the scope, audience and resources of the 'subject_token'
@@ -40,9 +41,13 @@ import (
 //
 // When RFC 9396 authorization details are enabled, the access token carries the details granted to an access token or
 // refresh token 'subject_token', of the types the client may request, as oauth2.AssignAuthorizationDetails assigns
-// them for any 'authorization_details' parameter. TokenExchangeGrantHandler assigns them before it consumes the 'jti' of
-// any token, so it must be registered with this handler. A refresh token issued with it keeps every such granted
-// detail. The details of an 'actor_token' are never carried.
+// them for any 'authorization_details' parameter. TokenExchangeGrantHandler assigns them, so it must be registered with
+// this handler. A refresh token issued with it keeps every such granted detail. The details of an 'actor_token' are
+// never carried.
+//
+// TokenExchangeGrantHandler does not consume the 'jti' of a single-use 'subject_token' or 'actor_token'. This handler
+// marks it used in the transaction that stores the issued tokens, and any other token type handler which issues a
+// token MUST call ConsumeTokenJTIs once every check that can refuse the request has passed.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.1
 // See: https://www.rfc-editor.org/rfc/rfc9396#section-6
@@ -57,6 +62,12 @@ type AccessTokenTypeHandler struct {
 	RefreshTokenScopes []string
 
 	ScopeStrategy oauth2.ScopeStrategy
+
+	// AudienceStrategy and ResourceStrategy match the targets of an exchange against the client and the subject token.
+	// They must be the same as those of the TokenExchangeGrantHandler, which this handler cannot see, or a target the
+	// request omits is checked under a different policy than one it names. The Config ones apply when nil.
+	AudienceStrategy oauth2.AudienceStrategy
+	ResourceStrategy oauth2.ResourceStrategy
 
 	hoauth2.CoreStrategy
 
@@ -199,7 +210,7 @@ func (c *AccessTokenTypeHandler) validate(ctx context.Context, request oauth2.Ac
 		return nil, nil, errExchangeTokenValidation(err)
 	}
 
-	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.Storage, c.GetScopeStrategy(ctx, client), original, role, false); err != nil {
+	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.Storage, c.GetScopeStrategy(ctx, client), audienceStrategy(ctx, c.Config, c.AudienceStrategy, client), resourceStrategy(ctx, c.Config, c.ResourceStrategy, client), original, role, false); err != nil {
 		return nil, nil, err
 	}
 
@@ -234,7 +245,7 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 		return err
 	}
 
-	var jtis []tokenJTI
+	var jtis []oauth2.TokenExchangeCustomJWT
 
 	if jtis, err = presentedTokenJTIs(ctx, c.Config, c.Storage, request); err != nil {
 		return err
@@ -259,7 +270,7 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 
 	atLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.AccessToken, c.AccessTokenLifespan)
 
-	request.GetSession().SetExpiresAt(oauth2.AccessToken, capToSubjectTokenExpiry(request, time.Now().UTC().Add(atLifespan)))
+	request.GetSession().SetExpiresAt(oauth2.AccessToken, capToSubjectTokenExpiry(ctx, c.Config, request, time.Now().UTC().Add(atLifespan)))
 
 	var token, signature string
 
@@ -282,8 +293,8 @@ func (c *AccessTokenTypeHandler) issue(ctx context.Context, request oauth2.Acces
 
 		var refresh, refreshSignature string
 
-		recordSubjectTokenDeadline(request)
-		request.GetSession().SetExpiresAt(oauth2.RefreshToken, refreshTokenExpiry(request, oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.RefreshToken, c.RefreshTokenLifespan)))
+		recordSubjectTokenDeadline(ctx, c.Config, request, subject, rotate)
+		request.GetSession().SetExpiresAt(oauth2.RefreshToken, refreshTokenExpiry(ctx, c.Config, request, oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.RefreshToken, c.RefreshTokenLifespan)))
 
 		if refresh, refreshSignature, err = c.GenerateRefreshToken(ctx, request); err != nil {
 			return errors.WithStack(oauth2.ErrServerError.WithDebugError(err))

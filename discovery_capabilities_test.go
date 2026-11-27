@@ -482,9 +482,9 @@ func TestSupportedSignedResponseAlgValues(t *testing.T) {
 		{
 			name:     "Userinfo",
 			get:      oauth2.SupportedUserinfoSignedResponseAlgValues,
-			keyed:    []string{"ES256", "HS256", "HS384", "HS512", "none"},
-			keyless:  []string{"HS256", "HS384", "HS512", "none"},
-			strategy: []string{"none"},
+			keyed:    []string{"ES256", "HS256", "HS384", "HS512"},
+			keyless:  []string{"HS256", "HS384", "HS512"},
+			strategy: nil,
 		},
 		{
 			name:     "Authorization",

@@ -43,7 +43,9 @@ func (s *DefaultClientRegistrationStrategy) NewClient(ctx context.Context, id st
 // full replacement semantics of RFC 7592 Section 2.2: client metadata absent from the update is removed, not
 // merged. Registration bookkeeping and locally administered server policy, which have no ClientRegistrationMetadata
 // source, are preserved. Public is not preserved: apply derives it from TokenEndpointAuthMethod on every call. A nil
-// secret leaves the existing client secret untouched.
+// secret leaves the existing client secret untouched, unless the 'token_endpoint_auth_method' of the metadata is
+// 'none': the client secret, the rotated client secrets and the client secret expiry are then removed, as a public
+// client has no client secret.
 //
 // The patched client is a new value and client is never written to, as a oauth2.ClientStorage implementation may
 // return a pointer into its own state from GetClient.
@@ -88,11 +90,17 @@ func (s *DefaultClientRegistrationStrategy) PatchClient(ctx context.Context, cli
 	replacement.TokenExchangeAuthorizationGrant = registered.TokenExchangeAuthorizationGrant
 	replacement.TokenExchangeRefreshTokenRotationOverride = registered.TokenExchangeRefreshTokenRotationOverride
 	replacement.TokenExchangeRefreshTokenRotation = registered.TokenExchangeRefreshTokenRotation
+	replacement.TokenExchangeSubjectTokenExpiryCapOverride = registered.TokenExchangeSubjectTokenExpiryCapOverride
+	replacement.TokenExchangeSubjectTokenExpiryCap = registered.TokenExchangeSubjectTokenExpiryCap
 
-	if secret == nil {
-		replacement.ClientSecret = registered.ClientSecret
-	} else {
+	switch {
+	case secret != nil:
 		replacement.ClientSecret = secret
+	case replacement.Public:
+		replacement.RotatedClientSecrets = nil
+		replacement.ClientSecretExpiresAt = time.Time{}
+	default:
+		replacement.ClientSecret = registered.ClientSecret
 	}
 
 	return replacement, nil

@@ -657,6 +657,14 @@ type Config struct {
 	// Exchange may record. The default is 8 when not positive.
 	RFC8693MaxActorChainDepth int
 
+	// RFC8693DisableSubjectTokenExpiryCap permits a token issued by a token exchange to expire after the
+	// 'subject_token'. By default the expiry of every issued token is capped at the expiry of the 'subject_token', which
+	// RFC 8693 Section 2.1 permits. A client may decide this for itself with the
+	// rfc8693.SubjectTokenExpiryCapOverrideClient interface.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
+	RFC8693DisableSubjectTokenExpiryCap bool
+
 	DefaultRequestedTokenType string
 
 	// IDJAGLifespan is the lifespan of an issued Identity Assertion JWT Authorization Grant. Defaults to 5 minutes when
@@ -1826,6 +1834,12 @@ func (c *Config) GetRFC8693MaxActorChainDepth(ctx context.Context) int {
 	return c.RFC8693MaxActorChainDepth
 }
 
+// GetRFC8693DisableSubjectTokenExpiryCap returns whether a token issued by a token exchange may expire after the
+// 'subject_token'.
+func (c *Config) GetRFC8693DisableSubjectTokenExpiryCap(_ context.Context) (disable bool) {
+	return c.RFC8693DisableSubjectTokenExpiryCap
+}
+
 // GetDefaultRFC8693RequestedTokenType returns the token type identifier used as the 'requested_token_type' when the RFC
 // 8693 Token Exchange request does not specify one.
 func (c *Config) GetDefaultRFC8693RequestedTokenType(ctx context.Context) string {
@@ -2631,6 +2645,7 @@ var (
 	_ PushedAuthorizeRequestHandlersProvider                   = (*Config)(nil)
 	_ PushedAuthorizeRequestConfigProvider                     = (*Config)(nil)
 	_ RFC8693ConfigProvider                                    = (*Config)(nil)
+	_ RFC8693SubjectTokenExpiryCapProvider                     = (*Config)(nil)
 	_ IDJAGConfigProvider                                      = (*Config)(nil)
 	_ RFC8628DeviceAuthorizeConfigProvider                     = (*Config)(nil)
 	_ RFC8628SlowDownLimitProvider                             = (*Config)(nil)

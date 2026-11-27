@@ -6,10 +6,16 @@ package rfc7591
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rsa"
 	"net"
 	"net/url"
 	"slices"
 	"strings"
+
+	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
@@ -169,8 +175,8 @@ type tlsClientAuthSubject struct {
 
 // validateTLSClientAuth implements RFC 8705 Section 2.1.2: a client registering the 'tls_client_auth' method for any
 // endpoint MUST register exactly one of the five certificate subject values, and Section 2.2.2: a client registering
-// the 'self_signed_tls_client_auth' method MUST register its certificates through 'jwks' or 'jwks_uri'. Rejecting
-// this at registration is what stops a client being created that can never authenticate; the same "exactly one"
+// the 'self_signed_tls_client_auth' method MUST register its certificates through a 'jwks' of at least one key or a
+// 'jwks_uri'. Rejecting this at registration is what stops a client being created that can never authenticate; the same "exactly one"
 // requirement is enforced again when the certificate is matched at the endpoint.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8705#section-2.1.2
@@ -226,7 +232,7 @@ func validateTLSClientAuth(metadata *oauth2.ClientRegistrationMetadata) (err err
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' must be a valid IP address.", consts.ClientMetadataTLSClientAuthSANIP, metadata.TLSClientAuthSANIP))
 	}
 
-	if selfSigned && metadata.JSONWebKeys == nil && metadata.JSONWebKeysURI == "" {
+	if selfSigned && !hasJSONWebKeys(metadata) {
 		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' authentication method requires either the '%s' or '%s' value to be registered.", consts.ClientAuthMethodSelfSignedTLSClientAuth, consts.ClientMetadataJSONWebKeys, consts.ClientMetadataJSONWebKeysURI))
 	}
 
@@ -249,7 +255,16 @@ type endpointAuthMethod struct {
 // the token endpoint method when they have none of their own, and the token endpoint algorithm when they have neither a
 // method nor an algorithm of their own.
 //
+// A 'jwks' registered for 'private_key_jwt' must have a key which can verify the assertion: one of a key type the
+// algorithm of the endpoint signs with, or of any asymmetric signature algorithm when the endpoint has none, whose
+// 'use' is absent or 'sig', whose 'alg' is absent or that algorithm, and whose 'key_ops' is absent or has 'verify',
+// per RFC 7517 Sections 4.2 to 4.4. The keys of a 'jwks_uri' are not fetched.
+//
+// A client whose 'token_endpoint_auth_method' is 'none' is issued no client secret, so it must not register
+// 'client_secret_basic', 'client_secret_post' or 'client_secret_jwt' for another endpoint.
+//
 // See: https://datatracker.ietf.org/doc/html/rfc7591#section-2.1
+// See: https://www.rfc-editor.org/rfc/rfc7517#section-4.2
 // See: https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication
 // See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 func validateAuthMethodCredentials(metadata *oauth2.ClientRegistrationMetadata) (err error) {
@@ -273,23 +288,101 @@ func validateAuthMethodCredentials(metadata *oauth2.ClientRegistrationMetadata) 
 	}
 
 	for _, endpoint := range endpoints {
-		switch endpoint.method {
-		case consts.ClientAuthMethodPrivateKeyJWT:
-			if (metadata.JSONWebKeys == nil || len(metadata.JSONWebKeys.Keys) == 0) && metadata.JSONWebKeysURI == "" {
-				return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' requires either the '%s' or '%s' value to be registered.", endpoint.methodName, endpoint.method, consts.ClientMetadataJSONWebKeys, consts.ClientMetadataJSONWebKeysURI))
-			}
-
-			if jwt.IsSignedJWTClientSecretAlgStr(endpoint.alg) {
-				return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is a symmetric algorithm which the '%s' value '%s' can not use.", endpoint.algName, endpoint.alg, endpoint.methodName, endpoint.method))
-			}
-		case consts.ClientAuthMethodClientSecretJWT:
-			if endpoint.alg != "" && !jwt.IsSignedJWTClientSecretAlgStr(endpoint.alg) {
-				return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is not a symmetric algorithm which the '%s' value '%s' requires.", endpoint.algName, endpoint.alg, endpoint.methodName, endpoint.method))
-			}
+		if err = validateEndpointAuthMethodCredentials(metadata, token, endpoint); err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+func validateEndpointAuthMethodCredentials(metadata *oauth2.ClientRegistrationMetadata, token, endpoint endpointAuthMethod) (err error) {
+	switch endpoint.method {
+	case consts.ClientAuthMethodClientSecretBasic, consts.ClientAuthMethodClientSecretPost, consts.ClientAuthMethodClientSecretJWT:
+		if token.method == consts.ClientAuthMethodNone {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' requires a client secret which is not issued when the '%s' value is '%s'.", endpoint.methodName, endpoint.method, token.methodName, token.method))
+		}
+	}
+
+	switch endpoint.method {
+	case consts.ClientAuthMethodPrivateKeyJWT:
+		if !hasJSONWebKeys(metadata) {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' requires either the '%s' or '%s' value to be registered.", endpoint.methodName, endpoint.method, consts.ClientMetadataJSONWebKeys, consts.ClientMetadataJSONWebKeysURI))
+		}
+
+		if jwt.IsSignedJWTClientSecretAlgStr(endpoint.alg) {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is a symmetric algorithm which the '%s' value '%s' can not use.", endpoint.algName, endpoint.alg, endpoint.methodName, endpoint.method))
+		}
+
+		if metadata.JSONWebKeys == nil || slices.ContainsFunc(metadata.JSONWebKeys.Keys, func(key jose.JSONWebKey) bool {
+			return isSignatureVerificationKey(key, endpoint.alg)
+		}) {
+			return nil
+		}
+
+		if endpoint.alg == "" {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' requires the '%s' value to have a key which can verify a signature.", endpoint.methodName, endpoint.method, consts.ClientMetadataJSONWebKeys))
+		}
+
+		return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' requires the '%s' value to have a key which can verify a signature of the '%s' value '%s'.", endpoint.methodName, endpoint.method, consts.ClientMetadataJSONWebKeys, endpoint.algName, endpoint.alg))
+	case consts.ClientAuthMethodClientSecretJWT:
+		if endpoint.alg != "" && !jwt.IsSignedJWTClientSecretAlgStr(endpoint.alg) {
+			return errorsx.WithStack(oauth2.ErrInvalidClientMetadata.WithHintf("The '%s' value '%s' is not a symmetric algorithm which the '%s' value '%s' requires.", endpoint.algName, endpoint.alg, endpoint.methodName, endpoint.method))
+		}
+	}
+
+	return nil
+}
+
+func hasJSONWebKeys(metadata *oauth2.ClientRegistrationMetadata) (has bool) {
+	return (metadata.JSONWebKeys != nil && len(metadata.JSONWebKeys.Keys) != 0) || metadata.JSONWebKeysURI != ""
+}
+
+func isSignatureVerificationKey(key jose.JSONWebKey, alg string) (usable bool) {
+	if key.Use != "" && key.Use != consts.JSONWebTokenUseSignature {
+		return false
+	}
+
+	if key.KeyOps != nil && !slices.Contains(key.KeyOps, "verify") {
+		return false
+	}
+
+	switch {
+	case alg == "":
+		alg = key.Algorithm
+	case key.Algorithm != "" && key.Algorithm != alg:
+		return false
+	}
+
+	return isSignatureAlgorithmKey(key, jose.SignatureAlgorithm(alg))
+}
+
+func isSignatureAlgorithmKey(key jose.JSONWebKey, alg jose.SignatureAlgorithm) (usable bool) {
+	switch public := key.Public().Key.(type) {
+	case *rsa.PublicKey:
+		switch alg {
+		case "", jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512:
+			return true
+		}
+	case *ecdsa.PublicKey:
+		switch alg {
+		case "":
+			return public.Curve == elliptic.P256() || public.Curve == elliptic.P384() || public.Curve == elliptic.P521()
+		case jose.ES256:
+			return public.Curve == elliptic.P256()
+		case jose.ES384:
+			return public.Curve == elliptic.P384()
+		case jose.ES512:
+			return public.Curve == elliptic.P521()
+		}
+	case ed25519.PublicKey:
+		switch alg {
+		case "", jose.EdDSA, jose.Ed25519:
+			return true
+		}
+	}
+
+	return false
 }
 
 // validateRedirectURIs implements RFC 6749 Section 3.1.2: every redirect URI must parse, be absolute, and carry no

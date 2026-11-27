@@ -301,14 +301,14 @@ func configurationEndpointHandler(provider oauth2.Provider) http.HandlerFunc {
 
 		requester, err := provider.NewRFC7592ClientConfigurationRequest(ctx, r)
 		if err != nil {
-			provider.WriteRFC7592ClientConfigurationError(ctx, rw, requester, err)
+			provider.WriteRFC7592ClientConfigurationError(ctx, rw, r, requester, err)
 
 			return
 		}
 
 		responder, err := provider.NewRFC7592ClientConfigurationResponse(ctx, requester)
 		if err != nil {
-			provider.WriteRFC7592ClientConfigurationError(ctx, rw, requester, err)
+			provider.WriteRFC7592ClientConfigurationError(ctx, rw, r, requester, err)
 
 			return
 		}
@@ -323,14 +323,14 @@ func registrationEndpointHandler(provider oauth2.Provider) http.HandlerFunc {
 
 		requester, err := provider.NewRFC7591ClientRegistrationRequest(ctx, r)
 		if err != nil {
-			provider.WriteRFC7591ClientRegistrationError(ctx, rw, requester, err)
+			provider.WriteRFC7591ClientRegistrationError(ctx, rw, r, requester, err)
 
 			return
 		}
 
 		responder, err := provider.NewRFC7591ClientRegistrationResponse(ctx, requester)
 		if err != nil {
-			provider.WriteRFC7591ClientRegistrationError(ctx, rw, requester, err)
+			provider.WriteRFC7591ClientRegistrationError(ctx, rw, r, requester, err)
 
 			return
 		}

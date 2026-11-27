@@ -33,8 +33,9 @@ type ClaimValidationOptions struct {
 }
 
 // ValidateSecurityEventReceiver validates SecurityEventTokenClaims as the Receiver of the SET. A 'sub_id' format this
-// package does not define is accepted at any depth (SSF 1.0 Figure 13), an additional Complex Subject member name
-// counts as a member (SSF 1.0 §3.3), and the deprecated RISC sessions-revoked event type is accepted (RISC 1.0 §2.11).
+// package does not define is accepted at any depth (SSF 1.0 Figure 13), an additional Complex Subject member whose
+// value is an object with a format counts as a member (SSF 1.0 §3.3), duplicate identifiers of an Aliases subject are
+// accepted (RFC 9493 §3.2.8), and the deprecated RISC sessions-revoked event type is accepted (RISC 1.0 §2.11).
 // Nothing else changes, and other claim types ignore the option.
 func ValidateSecurityEventReceiver() ClaimValidationOption {
 	return func(opts *ClaimValidationOptions) {

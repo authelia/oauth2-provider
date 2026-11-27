@@ -22,15 +22,22 @@ import (
 )
 
 // WriteIntrospectionError writes the introspection error response. An inactive token is not an error and is answered
-// with an introspection response whose 'active' member is false.
+// with an introspection response whose 'active' member is false. Only an error describing the condition of the
+// introspected token is answered that way: ErrInactiveToken, ErrTokenSignatureMismatch, ErrInvalidTokenFormat,
+// ErrNotFound and ErrUnknownRequest. Any other error is answered with the error, and an error that is not an
+// RFC6749Error with ErrServerError.
 //
 // The outermost RFC6749Error of err decides the response, not the errors it wraps. A rejection of the caller is answered
 // with the error, and for a bearer credential with the RFC 6750 Section 3 'WWW-Authenticate' challenge, even when the
 // cause is an inactive credential. An error with a 5xx status, such as ErrTemporarilyUnavailable, or a 429 status
 // describes the server or the caller and never the introspected token, so it is answered with the error as well.
 //
+// r is the request being answered and may be nil. A request which included no access token is answered with HTTP 401
+// and the challenge alone, without a body (RFC 6750 Section 3.1). Without r the challenge omits the RFC 9728 Section
+// 5.1 'resource_metadata' parameter and the body is written.
+//
 // See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.3
-func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWriter, err error) {
+func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) {
 	if err == nil {
 		return
 	}
@@ -44,30 +51,18 @@ func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWr
 		return
 	}
 
-	// A failure of the server says nothing about the token, so it must not be reported as an inactive token.
-	if errors.Is(err, ErrServerError) {
-		f.writeErrorJSON(ctx, rw, nil, err)
-
-		return
-	}
-
 	// RFC 7662 Section 2.3: the outermost error decides the response. An error which rejects the caller remains an
 	// error whatever it wraps, as its cause describes the credential of the caller and not the introspected token.
 	outer := outermostRFC6749Error(err)
 
-	if errors.Is(outer, ErrInvalidRequest) || errors.Is(outer, ErrInvalidClient) || errors.Is(outer, ErrRequestUnauthorized) || outer.CodeField >= http.StatusInternalServerError || outer.CodeField == http.StatusTooManyRequests {
-		f.writeErrorJSON(ctx, rw, nil, err)
+	switch {
+	case IsBearerCredentialError(outer):
+		rfc, bare := f.writeBearerAuthorizationChallenge(ctx, rw, r, err)
+		if bare {
+			writeBareAuthorizationChallenge(rw)
 
-		return
-	}
-
-	// A rejected bearer credential additionally warrants a challenge naming the schemes this endpoint accepts.
-	if IsBearerCredentialError(outer) {
-		// The request is present when the caller writes the error from the context NewIntrospectionRequest derived,
-		// and absent otherwise. WriteBearerAuthorizationChallenge accepts either.
-		r := RequestFromContext(ctx)
-
-		rfc := f.WriteBearerAuthorizationChallenge(ctx, rw, r, err)
+			return
+		}
 
 		// RFC 7662 Section 2.3: a bearer credential that "does not contain sufficient privileges or is otherwise
 		// invalid for this request" is answered with HTTP 401. That is more specific than RFC 6750 Section 3.1's
@@ -78,24 +73,34 @@ func (f *Fosite) WriteIntrospectionError(ctx context.Context, rw http.ResponseWr
 		}
 
 		f.writeErrorJSONRFC(ctx, rw, rfc)
-
-		return
+	case isIntrospectionTokenConditionError(outer):
+		rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
+		rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+		rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
+		_ = json.NewEncoder(rw).Encode(struct {
+			Active bool `json:"active"`
+		}{Active: false})
+	case outer.ErrorField == "" || outer.ErrorField == errUnknownErrorName:
+		f.writeErrorJSON(ctx, rw, nil, errors.WithStack(ErrServerError.WithWrap(err).WithDebugError(err)))
+	default:
+		f.writeErrorJSON(ctx, rw, nil, err)
 	}
-
-	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
-	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
-	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
-	_ = json.NewEncoder(rw).Encode(struct {
-		Active bool `json:"active"`
-	}{Active: false})
 }
 
-func outermostRFC6749Error(err error) (outer *RFC6749Error) {
-	if !errors.As(err, &outer) {
-		return &RFC6749Error{}
+func isIntrospectionTokenConditionError(outer *RFC6749Error) bool {
+	return errors.Is(outer, ErrInactiveToken) ||
+		errors.Is(outer, ErrTokenSignatureMismatch) ||
+		errors.Is(outer, ErrInvalidTokenFormat) ||
+		errors.Is(outer, ErrNotFound) ||
+		errors.Is(outer, ErrUnknownRequest)
+}
+
+func outermostRFC6749Error(err error) *RFC6749Error {
+	if outer, ok := AsRFC6749Error(err); ok {
+		return outer.WithWrap(nil)
 	}
 
-	return outer.WithWrap(nil)
+	return &RFC6749Error{}
 }
 
 // WriteIntrospectionResponse writes the introspection response.
@@ -221,7 +226,7 @@ func (f *Fosite) WriteIntrospectionResponse(ctx context.Context, rw http.Respons
 	// See: https://www.rfc-editor.org/rfc/rfc9396#section-9.2
 	details, err := DiscloseAuthorizationDetails(ctx, f.Config, r.GetAccessRequester(), AuthorizationDetailsRecipient{Client: caller})
 	if err != nil {
-		f.WriteIntrospectionError(ctx, rw, err)
+		f.WriteIntrospectionError(ctx, rw, nil, err)
 
 		return
 	}
@@ -273,7 +278,7 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 		}
 
 		if jti, err = uuid.NewRandom(); err != nil {
-			f.WriteIntrospectionError(ctx, rw, errors.WithStack(ErrServerError.WithHint("Failed to lookup required information to perform this request.").WithDebugf("The JTI could not be generated for the Introspection JWT response type with error %+v.", err)))
+			f.WriteIntrospectionError(ctx, rw, nil, errors.WithStack(ErrServerError.WithHint("Failed to lookup required information to perform this request.").WithDebugf("The JTI could not be generated for the Introspection JWT response type with error %+v.", err)))
 
 			return
 		}
@@ -292,7 +297,7 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 		strategy := f.Config.GetIntrospectionJWTResponseStrategy(ctx)
 
 		if strategy == nil {
-			f.WriteIntrospectionError(ctx, rw, errors.WithStack(ErrServerError.WithHint("Failed to generate the response.").WithDebug("The Introspection JWT could not be generated as the server is misconfigured. The Introspection jwt.Strategy was not configured.")))
+			f.WriteIntrospectionError(ctx, rw, nil, errors.WithStack(ErrServerError.WithHint("Failed to generate the response.").WithDebug("The Introspection JWT could not be generated as the server is misconfigured. The Introspection jwt.Strategy was not configured.")))
 
 			return
 		}
@@ -304,7 +309,7 @@ func (f *Fosite) writeIntrospectionResponse(ctx context.Context, rw http.Respons
 		}
 
 		if token, _, err = strategy.Encode(ctx, claims, jwt.WithHeaders(header), jwt.WithIntrospectionClient(signer)); err != nil {
-			f.WriteIntrospectionError(ctx, rw, errors.WithStack(ErrServerError.WithHint("Failed to generate the response.").WithDebugf("The Introspection JWT itself could not be generated with error %+v.", err)))
+			f.WriteIntrospectionError(ctx, rw, nil, errors.WithStack(ErrServerError.WithHint("Failed to generate the response.").WithDebugf("The Introspection JWT itself could not be generated with error %+v.", err)))
 
 			return
 		}
@@ -347,6 +352,10 @@ type introspectionSignedResponseAlgClient struct {
 
 func (c *introspectionSignedResponseAlgClient) GetIntrospectionSignedResponseAlg() string {
 	return c.alg
+}
+
+func (c *introspectionSignedResponseAlgClient) IsClientIDMetadataDocumentClient() (is bool) {
+	return jwt.IsClientIDMetadataDocumentClient(c.IntrospectionClient)
 }
 
 func (c *introspectionSignedResponseAlgClient) GetClientSecretExpiresAt() (expires time.Time) {

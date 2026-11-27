@@ -485,20 +485,17 @@ func (s *SubjectIdentifier) validateAliases(receiver bool) (err error) {
 			return fmt.Errorf("%w: 'identifiers' member %d is invalid: %w", ErrInvalidSubjectIdentifier, i, err)
 		}
 
-		var data []byte
-
-		// A received identifier is told apart by its Additional members too, and they are never sent.
+		// RFC 9493 §3.2.8: the identifiers SHOULD NOT have exact duplicates, so a received duplicate is not refused.
 		if receiver {
-			data, err = s.Identifiers[i].identity()
-		} else {
-			data, err = json.Marshal(s.Identifiers[i])
+			continue
 		}
 
-		if err != nil {
+		var data []byte
+
+		if data, err = json.Marshal(s.Identifiers[i]); err != nil {
 			return fmt.Errorf("%w: 'identifiers' member %d is invalid: %w", ErrInvalidSubjectIdentifier, i, err)
 		}
 
-		// RFC 9493 §3.2.8: no exact duplicates.
 		if _, ok := seen[string(data)]; ok {
 			return fmt.Errorf("%w: 'identifiers' member %d is a duplicate", ErrInvalidSubjectIdentifier, i)
 		}
@@ -509,33 +506,19 @@ func (s *SubjectIdentifier) validateAliases(receiver bool) (err error) {
 	return nil
 }
 
-// identity returns the JSON of the members of the format and the Additional members, with the members sorted by
-// name, so two identifiers with the same members have the same identity.
-func (s *SubjectIdentifier) identity() (data []byte, err error) {
-	if data, err = json.Marshal(s); err != nil || len(s.Additional) == 0 {
-		return data, err
-	}
-
-	var members map[string]any
-
-	if err = json.Unmarshal(data, &members); err != nil {
-		return nil, err
-	}
-
-	for name, value := range s.Additional {
-		members[name] = value
-	}
-
-	return json.Marshal(members)
-}
-
 // validateComplex requires at least one member, each a valid subject identifier (SSF 1.0 §3.3). For a receiver an
-// additional member name counts as a member.
+// additional member counts as a member when its value is an object with a format.
 func (s *SubjectIdentifier) validateComplex(receiver bool) (err error) {
 	var present int
 
 	if receiver {
-		present = len(s.Additional)
+		for _, value := range s.Additional {
+			if member, ok := value.(map[string]any); ok {
+				if format, ok := member[subjectIdentifierMemberFormat].(string); ok && format != "" {
+					present++
+				}
+			}
+		}
 	}
 
 	for _, member := range s.complexMembers() {

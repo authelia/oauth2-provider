@@ -955,7 +955,7 @@ func TestOpenIDMetadataComposeWithoutJWTStrategy(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"HS256", "HS384", "HS512", "RS256"}, metadata.IDTokenSigningAlgValuesSupported)
-	assert.Equal(t, []string{"HS256", "HS384", "HS512", "none"}, metadata.UserinfoSigningAlgValuesSupported)
+	assert.Equal(t, []string{"HS256", "HS384", "HS512"}, metadata.UserinfoSigningAlgValuesSupported)
 }
 
 func TestOpenIDMetadataClaimsParameterRequiresEnforcement(t *testing.T) {

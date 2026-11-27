@@ -171,10 +171,11 @@ func TestLocalValidatorCapabilities(t *testing.T) {
 			err: "The 'id_token_signed_response_alg' value 'HS256' is not supported by this authorization server.",
 		},
 		{
-			name: "ShouldAcceptUserinfoAlgNone",
+			name: "ShouldRejectUserinfoAlgNone",
 			metadata: func(metadata *oauth2.ClientRegistrationMetadata) {
 				metadata.UserinfoSignedResponseAlg = consts.JSONWebTokenAlgNone
 			},
+			err: "The 'userinfo_signed_response_alg' value 'none' is not supported by this authorization server.",
 		},
 		{
 			name: "ShouldAcceptUserinfoClientSecretAlgWithoutKeys",

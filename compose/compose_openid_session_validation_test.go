@@ -217,6 +217,191 @@ func TestOpenIDConnectDeviceAuthorizeRequestValidation(t *testing.T) {
 	}
 }
 
+func TestOpenIDConnectDeviceAuthorizeUserAgentParameters(t *testing.T) {
+	stale := time.Now().UTC().Add(-time.Hour)
+
+	injected := url.Values{
+		consts.FormParameterMaximumAge:                                {"99999999"},
+		consts.FormParameterAuthenticationContextClassReferenceValues: {"1"},
+		consts.FormParameterPrompt:                                    {consts.PromptTypeNone},
+		consts.FormParameterNonce:                                     {"abc"},
+		consts.FormParameterClaims:                                    {`{"id_token":{"acr":{"essential":true}}}`},
+		consts.FormParameterScope:                                     {"openid offline_access"},
+	}
+
+	for _, st := range sessionValidationTestStores {
+		t.Run(st.name, func(t *testing.T) {
+			setup := func(t *testing.T, client sessionValidationTestClient, parameters url.Values) (provider oauth2.Provider, grant sessionValidationTestDeviceGrant) {
+				t.Helper()
+
+				store, memory := st.new()
+
+				client.DefaultClient = newDeviceOrderTestClient().(*oauth2.DefaultClient)
+				memory.Clients[deviceOrderTestClientID] = &client
+
+				provider = newSessionValidationTestProvider(store, nil)
+
+				return provider, newSessionValidationTestDeviceGrant(t, provider, parameters)
+			}
+
+			// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+			t.Run("ShouldNotOverrideDefaultMaxAge", func(t *testing.T) {
+				provider, grant := setup(t, sessionValidationTestClient{maxAge: 60, hasMaxAge: true}, nil)
+
+				err := grant.approveWith(t, provider, injected, newSessionValidationTestSession(deviceOrderTestSubject, &stale))
+
+				assert.Equal(t, "login_required", deviceOrderTestErrorCode(err))
+			})
+
+			t.Run("ShouldNotOverrideTheMaxAgeOfTheDeviceAuthorizationRequest", func(t *testing.T) {
+				provider, grant := setup(t, sessionValidationTestClient{}, url.Values{consts.FormParameterMaximumAge: {"60"}})
+
+				err := grant.approveWith(t, provider, injected, newSessionValidationTestSession(deviceOrderTestSubject, &stale))
+
+				assert.Equal(t, "login_required", deviceOrderTestErrorCode(err))
+			})
+
+			t.Run("ShouldKeepOnlyTheUserCodeOfTheUserAgent", func(t *testing.T) {
+				provider, grant := setup(t, sessionValidationTestClient{}, url.Values{consts.FormParameterNonce: {deviceOrderTestNonce}})
+
+				form := url.Values{consts.FormParameterUserCode: {grant.userCode}}
+
+				for key, values := range injected {
+					form[key] = values
+				}
+
+				r := newDeviceOrderTestRequest(form)
+
+				request, err := provider.NewRFC8628UserAuthorizeRequest(context.Background(), r, newSessionValidationTestSession(deviceOrderTestSubject, nil))
+
+				require.NoError(t, err)
+
+				actual := request.GetRequestForm()
+
+				assert.Equal(t, grant.userCode, actual.Get(consts.FormParameterUserCode))
+				assert.Equal(t, deviceOrderTestNonce, actual.Get(consts.FormParameterNonce))
+				assert.Equal(t, consts.ScopeOpenID, actual.Get(consts.FormParameterScope))
+				assert.NotContains(t, actual, consts.FormParameterMaximumAge)
+				assert.NotContains(t, actual, consts.FormParameterAuthenticationContextClassReferenceValues)
+				assert.NotContains(t, actual, consts.FormParameterPrompt)
+				assert.NotContains(t, actual, consts.FormParameterClaims)
+				assert.Equal(t, "99999999", r.Form.Get(consts.FormParameterMaximumAge))
+				assert.Equal(t, "abc", r.Form.Get(consts.FormParameterNonce))
+			})
+
+			t.Run("ShouldIssueAnIDTokenWhenTheUserAgentSendsMalformedParameters", func(t *testing.T) {
+				provider, grant := setup(t, sessionValidationTestClient{}, nil)
+
+				now := time.Now().UTC()
+
+				malformed := url.Values{consts.FormParameterMaximumAge: {"abc"}, consts.FormParameterNonce: {"abc"}, consts.FormParameterPrompt: {"unknown"}}
+
+				require.NoError(t, grant.approveWith(t, provider, malformed, newSessionValidationTestSession(deviceOrderTestSubject, &now)))
+
+				response, err := grant.poll(t, provider)
+
+				require.NoError(t, err)
+				assert.NotEmpty(t, response.GetExtra(consts.AccessResponseIDToken))
+			})
+		})
+	}
+}
+
+func TestOpenIDConnectDeviceAuthorizeSessionRequestedAt(t *testing.T) {
+	testCases := []struct {
+		name     string
+		form     url.Values
+		rat      time.Duration
+		zero     bool
+		authTime time.Duration
+		code     string
+	}{
+		{
+			name:     "ShouldRefusePromptLoginWithAStaleAuthenticationWhenTheSessionHasNoRequestedAt",
+			form:     url.Values{consts.FormParameterPrompt: {consts.PromptTypeLogin}},
+			zero:     true,
+			authTime: -time.Hour,
+			code:     "login_required",
+		},
+		{
+			name:     "ShouldRefuseMaxAgeWithAStaleAuthenticationWhenTheSessionHasNoRequestedAt",
+			form:     url.Values{consts.FormParameterMaximumAge: {"60"}},
+			zero:     true,
+			authTime: -time.Hour,
+			code:     "login_required",
+		},
+		{
+			name:     "ShouldPassPromptLoginWhenAuthenticatedAfterTheRequestAndBeforeTheApproval",
+			form:     url.Values{consts.FormParameterPrompt: {consts.PromptTypeLogin}},
+			rat:      time.Minute,
+			authTime: time.Second,
+		},
+		{
+			name:     "ShouldPassPromptLoginWhenAuthenticatedAfterTheRequestAndTheSessionHasNoRequestedAt",
+			form:     url.Values{consts.FormParameterPrompt: {consts.PromptTypeLogin}},
+			zero:     true,
+			authTime: time.Second,
+		},
+		{
+			name:     "ShouldRefusePromptNoneWhenAuthenticatedAfterTheRequest",
+			form:     url.Values{consts.FormParameterPrompt: {consts.PromptTypeNone}},
+			rat:      time.Minute,
+			authTime: 2 * time.Second,
+			code:     "login_required",
+		},
+		{
+			name:     "ShouldRefuseMaxAgeMeasuredFromTheRequest",
+			form:     url.Values{consts.FormParameterMaximumAge: {"60"}},
+			rat:      -time.Hour,
+			authTime: -30 * time.Minute,
+			code:     "login_required",
+		},
+	}
+
+	for _, st := range sessionValidationTestStores {
+		t.Run(st.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					store, memory := st.new()
+
+					memory.Clients[deviceOrderTestClientID] = newDeviceOrderTestClient()
+
+					provider := newSessionValidationTestProvider(store, nil)
+
+					grant := newSessionValidationTestDeviceGrant(t, provider, tc.form)
+
+					now := time.Now().UTC()
+
+					authTime := now.Add(tc.authTime)
+
+					session := newSessionValidationTestSession(deviceOrderTestSubject, &authTime)
+
+					session.RequestedAt = now.Add(tc.rat)
+
+					if tc.zero {
+						session.RequestedAt = time.Time{}
+					}
+
+					err := grant.approveWith(t, provider, nil, session)
+
+					assert.Equal(t, tc.code, deviceOrderTestErrorCode(err))
+
+					if tc.code != "" {
+						assert.Empty(t, memory.IDSessions)
+
+						return
+					}
+
+					response, err := grant.poll(t, provider)
+
+					require.NoError(t, err)
+					assert.NotEmpty(t, response.GetExtra(consts.AccessResponseIDToken))
+				})
+			}
+		})
+	}
+}
+
 func TestOpenIDConnectCIBASessionValidation(t *testing.T) {
 	stale, missing := time.Now().UTC().Add(-time.Hour), time.Time{}
 
@@ -466,9 +651,21 @@ func newSessionValidationTestDeviceIDToken(t *testing.T, provider oauth2.Provide
 func (g sessionValidationTestDeviceGrant) approve(t *testing.T, provider oauth2.Provider, subject string, authTime *time.Time) (err error) {
 	t.Helper()
 
+	return g.approveWith(t, provider, nil, newSessionValidationTestSession(subject, authTime))
+}
+
+func (g sessionValidationTestDeviceGrant) approveWith(t *testing.T, provider oauth2.Provider, parameters url.Values, session *openid.DefaultSession) (err error) {
+	t.Helper()
+
 	ctx := context.Background()
 
-	request, err := provider.NewRFC8628UserAuthorizeRequest(ctx, newDeviceOrderTestRequest(url.Values{consts.FormParameterUserCode: {g.userCode}}), newSessionValidationTestSession(subject, nil))
+	form := url.Values{consts.FormParameterUserCode: {g.userCode}}
+
+	for key, values := range parameters {
+		form[key] = values
+	}
+
+	request, err := provider.NewRFC8628UserAuthorizeRequest(ctx, newDeviceOrderTestRequest(form), newSessionValidationTestSession(session.GetSubject(), nil))
 
 	require.NoError(t, err)
 
@@ -478,7 +675,7 @@ func (g sessionValidationTestDeviceGrant) approve(t *testing.T, provider oauth2.
 
 	request.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
 
-	_, err = provider.NewRFC8628UserAuthorizeResponse(ctx, request, newSessionValidationTestSession(subject, authTime))
+	_, err = provider.NewRFC8628UserAuthorizeResponse(ctx, request, session)
 
 	return err
 }

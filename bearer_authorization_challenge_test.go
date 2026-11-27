@@ -175,6 +175,13 @@ func TestWriteBearerAuthorizationChallengeTokenTransmission(t *testing.T) {
 		{name: "ShouldOmitErrorForAnIgnoredURIQueryToken", method: http.MethodGet, target: "?access_token=abc", expected: `Bearer`},
 		{name: "ShouldOmitErrorForAFormBodyTokenTheEndpointDidNotParse", method: http.MethodPost, body: "access_token=abc", unparsed: true, expected: `Bearer`},
 		{name: "ShouldOmitErrorForAURIQueryTokenTheEndpointDidNotParse", method: http.MethodGet, target: "?access_token=abc", query: true, unparsed: true, expected: `Bearer`},
+		{name: "ShouldOmitErrorForABasicHeader", method: http.MethodGet, header: "Basic cnM6c2VjcmV0", expected: `Bearer`},
+		{name: "ShouldOmitErrorForANegotiateHeader", method: http.MethodGet, header: "Negotiate abc", expected: `Bearer`},
+		{name: "ShouldOmitErrorForABasicHeaderWhenDPoPEnabled", method: http.MethodGet, header: "Basic cnM6c2VjcmV0", dpop: true, expected: `Bearer, DPoP algs="ES256 RS256"`},
+		{name: "ShouldOmitErrorForADPoPHeaderWhenDPoPDisabled", method: http.MethodGet, header: "DPoP abc", expected: `Bearer`},
+		{name: "ShouldOmitErrorForABearerHeaderWithoutAToken", method: http.MethodGet, header: "Bearer", expected: `Bearer`},
+		{name: "ShouldOmitErrorForABearerHeaderWithAnEmptyToken", method: http.MethodGet, header: "Bearer  ", expected: `Bearer`},
+		{name: "ShouldOmitErrorForADPoPHeaderWithAnEmptyToken", method: http.MethodGet, header: "DPoP ", dpop: true, expected: `Bearer, DPoP algs="ES256 RS256"`},
 		{name: "ShouldOmitErrorWithoutATokenWhenDPoPEnabled", method: http.MethodPost, body: "token=abc", dpop: true, expected: `Bearer, DPoP algs="ES256 RS256"`},
 		// RFC 6750 Section 3: a request which included an access token and failed authentication carries the error.
 		{name: "ShouldCarryErrorForAHeaderToken", method: http.MethodGet, header: "Bearer abc", expected: `Bearer ` + failed},
@@ -328,11 +335,17 @@ func TestBearerAuthorizationChallenge(t *testing.T) {
 			expected: `Bearer, DPoP algs="ES256"`,
 		},
 		{
-			name:     "ShouldAnswerOtherSchemesOnBearer",
+			name:     "ShouldIgnoreOtherSchemes",
 			dpop:     true,
 			err:      ErrInvalidToken.WithDescription("x"),
-			schemes:  []string{"Basic"},
-			expected: `Bearer error="invalid_token", error_description="x", DPoP algs="ES256"`,
+			schemes:  []string{"Basic", "Negotiate"},
+			expected: `Bearer, DPoP algs="ES256"`,
+		},
+		{
+			name:     "ShouldIgnoreTheDPoPSchemeWhenDPoPDisabled",
+			err:      ErrInvalidToken.WithDescription("x"),
+			schemes:  []string{"DPoP"},
+			expected: `Bearer`,
 		},
 	}
 

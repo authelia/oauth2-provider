@@ -410,7 +410,7 @@ func (c *TxnTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRe
 		expires time.Time
 	)
 
-	if draft, expires, err = draftTxnTokenClaims(request, session, name, domain); err != nil {
+	if draft, expires, err = draftTxnTokenClaims(ctx, c.Config, request, session, name, domain); err != nil {
 		return err
 	}
 
@@ -476,7 +476,7 @@ func (c *TxnTokenTypeHandler) validateIssuable(ctx context.Context, name string,
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-9.2
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11#section-13.4
-func draftTxnTokenClaims(request oauth2.AccessRequester, session Session, name string, domain *TxnTokenTrustDomain) (claims map[string]any, expires time.Time, err error) {
+func draftTxnTokenClaims(ctx context.Context, config any, request oauth2.AccessRequester, session Session, name string, domain *TxnTokenTrustDomain) (claims map[string]any, expires time.Time, err error) {
 	subject := request.GetSession().GetSubject()
 	if subject == "" {
 		return nil, time.Time{}, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' does not identify a subject.", consts.FormParameterSubjectToken))
@@ -488,7 +488,7 @@ func draftTxnTokenClaims(request oauth2.AccessRequester, session Session, name s
 	}
 
 	now := time.Now().UTC()
-	expires = capToSubjectTokenExpiry(request, now.Add(domain.expiry()))
+	expires = capToSubjectTokenExpiry(ctx, config, request, now.Add(domain.expiry()))
 
 	if expires.Unix() <= now.Unix() {
 		return nil, time.Time{}, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' expires too soon to issue a Transaction Token.", consts.FormParameterSubjectToken))

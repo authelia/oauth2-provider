@@ -63,7 +63,7 @@ func TestRefreshTokenRequiresTheRefreshTokenGrant(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, store.CreateRefreshTokenSession(t.Context(), signature, "", original.Sanitize(nil)))
 
-			requester := ownRefreshTokenClient(&oauth2.DefaultClient{ID: owner.ID, GrantTypes: tc.grantTypes, Scopes: owner.Scopes})
+			requester := ownRefreshTokenClient(&oauth2.DefaultClient{ID: owner.ID, GrantTypes: tc.grantTypes, Scopes: owner.Scopes, Audience: fixtureAudience})
 
 			form := url.Values{
 				consts.FormParameterSubjectTokenType: {consts.TokenTypeRFC8693RefreshToken},

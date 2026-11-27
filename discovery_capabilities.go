@@ -430,12 +430,12 @@ func SupportedIDTokenSignedResponseAlgValues(ctx context.Context, config Configu
 }
 
 // SupportedUserinfoSignedResponseAlgValues returns the 'userinfo_signed_response_alg' values the server can produce:
-// the JWTStrategy algorithms plus the client secret HMAC algorithms and 'none', or only 'none' when there is no
-// JWTStrategy.
+// the JWTStrategy algorithms plus the client secret HMAC algorithms, or none when there is no JWTStrategy. The value
+// 'none' is never included.
 //
 // See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
 func SupportedUserinfoSignedResponseAlgValues(ctx context.Context, config Configurator) []string {
-	return strategySignedResponseAlgValues(ctx, config.GetJWTStrategy(ctx), true)
+	return strategySignedResponseAlgValues(ctx, config.GetJWTStrategy(ctx))
 }
 
 // SupportedAuthorizationSignedResponseAlgValues returns the 'authorization_signed_response_alg' values the server can
@@ -444,7 +444,7 @@ func SupportedUserinfoSignedResponseAlgValues(ctx context.Context, config Config
 //
 // See: https://openid.net/specs/oauth-v2-jarm.html#section-4
 func SupportedAuthorizationSignedResponseAlgValues(ctx context.Context, config Configurator) []string {
-	algs := strategySignedResponseAlgValues(ctx, config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx), false)
+	algs := strategySignedResponseAlgValues(ctx, config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx))
 
 	if provider, ok := config.(SignedResponseAlgValuesProvider); ok {
 		return restrictedAlgValues(algs, provider.GetAuthorizationSignedResponseAlgValues(ctx))
@@ -461,7 +461,7 @@ func SupportedAuthorizationSignedResponseAlgValues(ctx context.Context, config C
 // See: https://datatracker.ietf.org/doc/html/rfc9701#section-5
 // See: https://datatracker.ietf.org/doc/html/rfc9701#section-7
 func SupportedIntrospectionSignedResponseAlgValues(ctx context.Context, config Configurator) []string {
-	algs := strategySignedResponseAlgValues(ctx, config.GetIntrospectionJWTResponseStrategy(ctx), false)
+	algs := strategySignedResponseAlgValues(ctx, config.GetIntrospectionJWTResponseStrategy(ctx))
 
 	if provider, ok := config.(SignedResponseAlgValuesProvider); ok {
 		return restrictedAlgValues(algs, provider.GetIntrospectionSignedResponseAlgValues(ctx))
@@ -483,18 +483,14 @@ func restrictedAlgValues(algs, permitted []string) []string {
 //
 // See: https://datatracker.ietf.org/doc/html/rfc9068#section-2.1
 func SupportedAccessTokenSignedResponseAlgValues(ctx context.Context, config Configurator) []string {
-	return strategySignedResponseAlgValues(ctx, config.GetJWTStrategy(ctx), false)
+	return strategySignedResponseAlgValues(ctx, config.GetJWTStrategy(ctx))
 }
 
-func strategySignedResponseAlgValues(ctx context.Context, strategy jwt.Strategy, none bool) []string {
+func strategySignedResponseAlgValues(ctx context.Context, strategy jwt.Strategy) []string {
 	var algs []string
 
 	if strategy != nil {
 		algs = clientSecretSigningAlgValues(strategy.SigningAlgValues(ctx))
-	}
-
-	if none {
-		algs = append(algs, consts.JSONWebTokenAlgNone)
 	}
 
 	return sortedUnique(algs)

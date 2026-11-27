@@ -295,26 +295,13 @@ func TestReceiverHandlePush(t *testing.T) {
 		}
 	})
 
-	t.Run("ShouldAnswer503WhenTheSETIsIssuedAheadOfTheClockSkew", func(t *testing.T) {
+	t.Run("ShouldAcceptASETIssuedAheadOfTheClock", func(t *testing.T) {
 		p := newTestPush(t)
 
 		claims := p.x.claims()
-		claims["iat"] = p.x.now.Add(DefaultClockSkew + time.Minute).Unix()
+		claims["iat"] = p.x.now.Add(time.Hour).Unix()
 
-		token := p.x.set().sign(t, claims)
-
-		rw, err := p.do(t, p.request(strings.NewReader(token)))
-
-		// RFC 8935 Section 2: the failure is recoverable, so the Transmitter delivers the SET again.
-		require.ErrorIs(t, err, ErrIssuedAtAhead)
-		assert.Equal(t, http.StatusServiceUnavailable, rw.Code)
-		assert.Empty(t, rw.Body.Bytes())
-		assert.Empty(t, p.handler.events)
-		assert.Empty(t, p.store.marks)
-
-		p.x.now = p.x.now.Add(time.Minute)
-
-		rw, err = p.do(t, p.request(strings.NewReader(token)))
+		rw, err := p.do(t, p.request(strings.NewReader(p.x.set().sign(t, claims))))
 
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusAccepted, rw.Code)

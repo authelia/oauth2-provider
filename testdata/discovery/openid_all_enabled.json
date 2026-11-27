@@ -200,7 +200,7 @@
     "A192GCM",
     "A256GCM"
   ],
-  "userinfo_signing_alg_values_supported": ["ES256", "HS256", "HS384", "HS512", "none"],
+  "userinfo_signing_alg_values_supported": ["ES256", "HS256", "HS384", "HS512"],
   "userinfo_encryption_alg_values_supported": [
     "RSA-OAEP",
     "RSA-OAEP-256",

@@ -1410,10 +1410,36 @@ func (s *MemoryStore) DeletePARSession(ctx context.Context, requestURI string) (
 	return nil
 }
 
-// SetTokenExchangeCustomJWT marks the issuer's 'jti' as used until exp, returning oauth2.ErrJTIKnown when it is
-// already marked. The 'jti' is scoped to the issuer per RFC 7519 Section 4.1.7, see JTIMarker.
-func (s *MemoryStore) SetTokenExchangeCustomJWT(_ context.Context, issuer, jti string, exp time.Time) error {
-	return s.setJTI(s.TokenExchangeJTIs, &s.tokenExchangeJTIsPruneAt, JTIMarker{Issuer: issuer, JTI: jti}, exp)
+// SetTokenExchangeCustomJWTs marks the 'jti' of every token as used until its expiry, or marks none and returns
+// oauth2.ErrJTIKnown when any is already marked or is given twice. The 'jti' is scoped to the issuer per RFC 7519
+// Section 4.1.7, see JTIMarker.
+func (s *MemoryStore) SetTokenExchangeCustomJWTs(_ context.Context, tokens []oauth2.TokenExchangeCustomJWT) error {
+	s.jtisMutex.Lock()
+	defer s.jtisMutex.Unlock()
+
+	now := time.Now()
+
+	pruneExpired(s.TokenExchangeJTIs, &s.tokenExchangeJTIsPruneAt, now)
+
+	markers := make(map[JTIMarker]time.Time, len(tokens))
+
+	for _, token := range tokens {
+		marker := JTIMarker{Issuer: token.Issuer, JTI: token.JTI}
+
+		if _, exists := markers[marker]; exists {
+			return oauth2.ErrJTIKnown
+		}
+
+		if exp, exists := s.TokenExchangeJTIs[marker]; exists && !exp.Before(now) {
+			return oauth2.ErrJTIKnown
+		}
+
+		markers[marker] = token.ExpiresAt
+	}
+
+	maps.Copy(s.TokenExchangeJTIs, markers)
+
+	return nil
 }
 
 // GetSubjectForTokenExchange computes the session subject from the 'sub' claim and is used for token types where there

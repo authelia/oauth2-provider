@@ -21,18 +21,6 @@ import (
 )
 
 const (
-	// DefaultClockSkew is how far in the future the 'iat' of a SET may be when Config.ClockSkew is zero. A negative
-	// Config.ClockSkew permits none. A SET issued further ahead is left for a redelivery or refused, by
-	// IssuedAtRedeliveryWindow.
-	DefaultClockSkew = 10 * time.Second
-
-	// IssuedAtRedeliveryWindow is how far past Config.ClockSkew the 'iat' of a SET may be for the SET to be left for
-	// the Transmitter to deliver again, with ErrIssuedAtAhead, in place of being refused. A SET issued further ahead
-	// is refused, as it is not one a redelivery soon makes acceptable.
-	//
-	// See: https://www.rfc-editor.org/rfc/rfc8935#section-2
-	IssuedAtRedeliveryWindow = 5 * time.Minute
-
 	// DefaultTokenRetention is how long the 'jti' of a received SET is remembered when Config.TokenRetention is not
 	// positive, and the oldest 'iat' accepted when Config.MaxTokenAge is zero and Config.TokenRetention is not
 	// positive.
@@ -164,7 +152,7 @@ func (r *Receiver) validate(ctx context.Context, record *StreamRecord, token str
 		return reject(errSetClaims)
 	}
 
-	now, skew := r.time(), r.clockSkew()
+	now := r.time()
 
 	var faults uint32
 
@@ -173,7 +161,6 @@ func (r *Receiver) validate(ctx context.Context, record *StreamRecord, token str
 	if err = claims.Valid(
 		jwt.ValidateIssuer(record.Issuer),
 		jwt.ValidateAudienceAny(record.Audience...),
-		jwt.ValidateClockSkew(skew+IssuedAtRedeliveryWindow),
 		jwt.ValidateTimeFunc(func() time.Time { return now }),
 		jwt.ValidateSecurityEventReceiver(),
 	); err != nil {
@@ -184,6 +171,12 @@ func (r *Receiver) validate(ctx context.Context, record *StreamRecord, token str
 		}
 
 		faults = fault.Errors
+	}
+
+	// RFC 8417 Section 2.2: the 'iat' is the time the SET was issued, and no specification has a Receiver refuse one
+	// which is ahead of its clock.
+	if claims.IssuedAt != nil && claims.IssuedAt.Unix() > now.Unix() {
+		faults &^= jwt.ValidationErrorIssuedAt
 	}
 
 	// A record without an audience has no value an 'aud' could match.
@@ -201,8 +194,7 @@ func (r *Receiver) validate(ctx context.Context, record *StreamRecord, token str
 		return reject(errSetClaims)
 	}
 
-	// A SET older than the time its 'jti' is remembered for could be replayed, so it is refused. The clock skew does
-	// not extend the age.
+	// A SET older than the time its 'jti' is remembered for could be replayed, so it is refused.
 	if age, ok := r.maxTokenAge(); ok && now.Sub(claims.GetIssuedAtSafe()) > age {
 		return reject(errSetTooOld)
 	}
@@ -225,12 +217,6 @@ func (r *Receiver) validate(ctx context.Context, record *StreamRecord, token str
 		if event.Event, err = jwt.DecodeSecurityEvent(uri, event.Payload); err != nil {
 			return reject(errSetEvent)
 		}
-	}
-
-	// RFC 8935 Section 2, RFC 8936 Section 2.3: a SET with no other fault which is issued ahead of the clock is not
-	// reported, so it is delivered again.
-	if claims.GetIssuedAtSafe().Unix() > now.Unix()+int64(skew/time.Second) {
-		return event, nil, ErrIssuedAtAhead
 	}
 
 	return event, nil, nil
@@ -447,17 +433,6 @@ func (r *Receiver) signingAlgs() (algs []jose.SignatureAlgorithm) {
 	}
 
 	return jwt.ToAsymmetricSignatureAlgorithms(r.Config.SigningAlgs)
-}
-
-func (r *Receiver) clockSkew() (skew time.Duration) {
-	switch {
-	case r.Config.ClockSkew == 0:
-		return DefaultClockSkew
-	case r.Config.ClockSkew < 0:
-		return 0
-	default:
-		return r.Config.ClockSkew
-	}
 }
 
 func (r *Receiver) tokenRetention() (retention time.Duration) {

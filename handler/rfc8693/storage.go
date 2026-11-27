@@ -6,7 +6,6 @@ package rfc8693
 
 import (
 	"context"
-	"time"
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
@@ -14,11 +13,13 @@ import (
 
 // CustomJWTStorage records the custom JWTs consumed by a token exchange, for a *JWTType whose Validate sets ValidateJTI.
 type CustomJWTStorage interface {
-	// SetTokenExchangeCustomJWT marks a JTI as known for the issuer until the given expiry time. It should atomically
-	// check if the JTI already exists for the issuer and MUST return an error matching oauth2.ErrJTIKnown if found. Any
-	// other error is answered as a server error rather than a replay. A JTI is only unique among the JWTs produced by one
-	// issuer per RFC 7519 Section 4.1.7, so the JTI must be scoped to the issuer.
-	SetTokenExchangeCustomJWT(ctx context.Context, issuer, jti string, exp time.Time) (err error)
+	// SetTokenExchangeCustomJWTs marks the JTI of every token as known for its issuer until its expiry time, or marks
+	// none. It MUST atomically check every token, and if the JTI of any is already known for its issuer, or the same
+	// issuer and JTI is given twice, it MUST mark none and return an error matching oauth2.ErrJTIKnown, so that a
+	// request refused per RFC 8693 Section 2.2.2 consumes neither the 'subject_token' nor the 'actor_token' of RFC 8693
+	// Section 2.1. Any other error is answered as a server error rather than a replay. A JTI is only unique among the
+	// JWTs produced by one issuer per RFC 7519 Section 4.1.7, so the JTI must be scoped to the issuer.
+	SetTokenExchangeCustomJWTs(ctx context.Context, tokens []oauth2.TokenExchangeCustomJWT) (err error)
 }
 
 // IDJAGRelationshipStorage resolves the 'audience' of an ID-JAG request, as idjag.IssueStorage does. When the Storage

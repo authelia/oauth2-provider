@@ -817,6 +817,144 @@ func TestClientConfigurationHandlerReportsRegistrationTimes(t *testing.T) {
 	}
 }
 
+func TestClientConfigurationHandlerUpdateIssuesAndClearsTheClientSecret(t *testing.T) {
+	ctx := context.Background()
+
+	register := func(t *testing.T, registrar *ClientRegistrationHandler, method string) map[string]any {
+		t.Helper()
+
+		requester := oauth2.NewClientRegistrationRequest()
+		requester.Metadata = &oauth2.ClientRegistrationMetadata{
+			RedirectURIs:            []string{"https://example.com/cb"},
+			TokenEndpointAuthMethod: method,
+		}
+
+		responder := oauth2.NewClientRegistrationResponse()
+
+		require.NoError(t, registrar.HandleRFC7591ClientRegistrationEndpointRequest(ctx, requester, responder))
+
+		return responder.ToMap()
+	}
+
+	update := func(t *testing.T, handler *ClientConfigurationHandler, id, method string) map[string]any {
+		t.Helper()
+
+		requester := oauth2.NewClientConfigurationRequest()
+		requester.Method = http.MethodPut
+		requester.ClientID = id
+		requester.Metadata = &oauth2.ClientRegistrationMetadata{
+			RedirectURIs:            []string{"https://example.com/cb"},
+			TokenEndpointAuthMethod: method,
+		}
+
+		responder := oauth2.NewClientRegistrationResponse()
+
+		require.NoError(t, handler.HandleRFC7592ClientConfigurationEndpointRequest(ctx, requester, responder))
+
+		return responder.ToMap()
+	}
+
+	stored := func(t *testing.T, store *storage.MemoryStore, id string) *oauth2.DefaultRegisteredClient {
+		t.Helper()
+
+		client, err := store.GetClient(ctx, id)
+		require.NoError(t, err)
+
+		registered, ok := client.(*oauth2.DefaultRegisteredClient)
+		require.True(t, ok, "got %T", client)
+
+		return registered
+	}
+
+	for _, method := range []string{consts.ClientAuthMethodClientSecretBasic, consts.ClientAuthMethodClientSecretPost, consts.ClientAuthMethodClientSecretJWT, ""} {
+		t.Run("ShouldIssueASecretOnAChangeFromNoneTo/"+method, func(t *testing.T) {
+			handler, registrar, _, store := newConfigurationHandler(t)
+
+			created := register(t, registrar, consts.ClientAuthMethodNone)
+			id := created["client_id"].(string)
+
+			require.NotContains(t, created, "client_secret")
+			require.Nil(t, stored(t, store, id).GetClientSecret())
+
+			values := update(t, handler, id, method)
+
+			secret, ok := values["client_secret"].(string)
+			require.True(t, ok)
+			require.NotEmpty(t, secret)
+			assert.Equal(t, int64(0), values["client_secret_expires_at"])
+
+			client := stored(t, store, id)
+
+			assert.False(t, client.IsPublic())
+			require.NotNil(t, client.GetClientSecret())
+			assert.NoError(t, client.GetClientSecret().Compare(ctx, []byte(secret)))
+		})
+	}
+
+	t.Run("ShouldExpireAnIssuedSecretByTheConfiguredLifespan", func(t *testing.T) {
+		handler, registrar, config, store := newConfigurationHandler(t)
+
+		config.RFC7591ClientSecretLifespan = time.Hour
+
+		id := register(t, registrar, consts.ClientAuthMethodNone)["client_id"].(string)
+
+		before := time.Now().UTC().Truncate(time.Second)
+
+		values := update(t, handler, id, consts.ClientAuthMethodClientSecretBasic)
+
+		client := stored(t, store, id)
+
+		assert.Equal(t, client.ClientSecretExpiresAt.Unix(), values["client_secret_expires_at"])
+		assert.False(t, client.ClientSecretExpiresAt.Before(before.Add(time.Hour)))
+		assert.False(t, client.ClientSecretExpiresAt.After(time.Now().UTC().Add(time.Hour)))
+	})
+
+	t.Run("ShouldKeepTheSecretOnAChangeBetweenSecretMethods", func(t *testing.T) {
+		handler, registrar, config, store := newConfigurationHandler(t)
+
+		config.RFC7591ClientSecretLifespan = time.Hour
+
+		created := register(t, registrar, consts.ClientAuthMethodClientSecretBasic)
+		id := created["client_id"].(string)
+
+		values := update(t, handler, id, consts.ClientAuthMethodClientSecretPost)
+
+		assert.Equal(t, created["client_secret"], values["client_secret"])
+		assert.Equal(t, created["client_secret_expires_at"], values["client_secret_expires_at"])
+		assert.NoError(t, stored(t, store, id).GetClientSecret().Compare(ctx, []byte(created["client_secret"].(string))))
+	})
+
+	t.Run("ShouldClearTheSecretOnAChangeToNone", func(t *testing.T) {
+		handler, registrar, config, store := newConfigurationHandler(t)
+
+		config.RFC7591ClientSecretLifespan = time.Hour
+
+		created := register(t, registrar, consts.ClientAuthMethodClientSecretBasic)
+		id := created["client_id"].(string)
+
+		require.NotEmpty(t, created["client_secret"])
+
+		values := update(t, handler, id, consts.ClientAuthMethodNone)
+
+		assert.NotContains(t, values, "client_secret")
+		assert.NotContains(t, values, "client_secret_expires_at")
+
+		client := stored(t, store, id)
+
+		assert.True(t, client.IsPublic())
+		assert.Nil(t, client.GetClientSecret())
+		assert.Empty(t, client.RotatedClientSecrets)
+		assert.True(t, client.ClientSecretExpiresAt.IsZero())
+
+		t.Run("ShouldIssueANewSecretOnAChangeBack", func(t *testing.T) {
+			values = update(t, handler, id, consts.ClientAuthMethodClientSecretBasic)
+
+			require.NotEmpty(t, values["client_secret"])
+			assert.NotEqual(t, created["client_secret"], values["client_secret"])
+		})
+	})
+}
+
 func TestClientConfigurationHandlerUpdateChangesNothingWhenTheResponseFails(t *testing.T) {
 	testCases := []struct {
 		name      string

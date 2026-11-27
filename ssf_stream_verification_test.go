@@ -411,7 +411,8 @@ func TestSSFVerification(t *testing.T) {
 		h.provider.WriteSSFError(context.Background(), rw, r, err)
 
 		assert.Equal(t, http.StatusUnauthorized, rw.Code)
-		assert.Contains(t, rw.Body.String(), ErrInvalidToken.ErrorField)
+		assert.Equal(t, consts.AuthSchemeBearer, rw.Header().Get(consts.HeaderWWWAuthenticate))
+		assert.Empty(t, rw.Body.Bytes())
 		assert.Equal(t, 0, rec.calls)
 	})
 

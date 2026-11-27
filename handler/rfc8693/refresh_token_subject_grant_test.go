@@ -216,7 +216,7 @@ func TestRefreshTokenSubjectExchangeIsLinkedToTheGrant(t *testing.T) {
 
 					assert.Equal(t, f.grant.GetID(), issued.GetID())
 					assert.Equal(t, oauth2.Arguments{"read"}, issued.GetGrantedScopes())
-					assert.Empty(t, issued.GetGrantedAudience())
+					assert.Equal(t, f.grant.GetGrantedAudience(), issued.GetGrantedAudience())
 				}
 
 				if tc.issue {
@@ -318,6 +318,8 @@ func newRefreshSubjectGrantFixture(t *testing.T, store rfc8693ExchangeStore, iss
 		DefaultClient: &oauth2.DefaultClient{
 			ID:         "requester",
 			GrantTypes: []string{consts.GrantTypeOAuthTokenExchange, consts.GrantTypeRefreshToken},
+			Audience:   []string{"https://api.example.com"},
+			Resource:   []string{"https://resource.example.com"},
 		},
 		TokenExchangeRefreshToken: issue, TokenExchangeOwnRefreshToken: true,
 	}

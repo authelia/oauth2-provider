@@ -128,6 +128,10 @@ func (c *signedResponseAlgClient) GetAuthorizationSignedResponseAlg() string {
 	return c.alg
 }
 
+func (c *signedResponseAlgClient) IsClientIDMetadataDocumentClient() (is bool) {
+	return jwt.IsClientIDMetadataDocumentClient(c.JARMClient)
+}
+
 func (c *signedResponseAlgClient) GetClientSecretExpiresAt() (expires time.Time) {
 	if client, ok := c.JARMClient.(jwt.ExpiringClientSecretClient); ok {
 		return client.GetClientSecretExpiresAt()

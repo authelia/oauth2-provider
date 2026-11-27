@@ -471,16 +471,19 @@ func TestTxnTokenExpiry(t *testing.T) {
 	for name, store := range txnIssueStores() {
 		t.Run(name, func(t *testing.T) {
 			testCases := []struct {
-				name    string
-				expiry  time.Duration
-				subject time.Duration
-				present func(t *testing.T, f *txnIssueFixture, expires time.Time) (subjectType, token string)
-				want    time.Duration
+				name       string
+				expiry     time.Duration
+				subject    time.Duration
+				disableCap bool
+				present    func(t *testing.T, f *txnIssueFixture, expires time.Time) (subjectType, token string)
+				want       time.Duration
 			}{
 				{name: "ShouldDefaultToFiveMinutes", subject: time.Hour, want: 5 * time.Minute},
 				{name: "ShouldHonorTheExpiry", expiry: time.Minute, subject: time.Hour, want: time.Minute},
 				{name: "ShouldCapToASubjectTokenExpiringSooner", expiry: time.Hour, subject: 2 * time.Minute, want: 2 * time.Minute},
 				{name: "ShouldCapTheDefaultToASubjectTokenExpiringSooner", subject: 2 * time.Minute, want: 2 * time.Minute},
+				// §6: the lifetime MAY exceed the expiration time of the presented token, subject to policy.
+				{name: "ShouldNotCapWhenTheCapIsDisabled", expiry: 10 * time.Minute, subject: 2 * time.Minute, disableCap: true, want: 10 * time.Minute},
 				{
 					name: "ShouldCapToAnIDToken", expiry: time.Hour, subject: 2 * time.Minute, want: 2 * time.Minute,
 					present: func(t *testing.T, f *txnIssueFixture, expires time.Time) (string, string) {
@@ -508,6 +511,7 @@ func TestTxnTokenExpiry(t *testing.T) {
 				t.Run(tc.name, func(t *testing.T) {
 					f := newTxnIssueFixture(t, store)
 					f.txnDomain.Expiry = tc.expiry
+					f.cfg.RFC8693DisableSubjectTokenExpiryCap = tc.disableCap
 					f.scopes.scopes = []string{"trade.stocks"}
 
 					expires := time.Now().Add(tc.subject)

@@ -49,11 +49,13 @@ const (
 	// ContentTypeApplicationJSON is the application/json content type with a UTF-8 charset.
 	ContentTypeApplicationJSON = "application/json; charset=utf-8"
 
-	// ContentTypeApplicationTokenIntrospectionJWT is the application/token-introspection+jwt content type from RFC 9701 with a UTF-8 charset.
-	ContentTypeApplicationTokenIntrospectionJWT = "application/token-introspection+jwt; charset=utf-8"
+	// ContentTypeApplicationTokenIntrospectionJWT is the application/token-introspection+jwt content type from
+	// RFC 9701 Section 10.3.1, which registers no parameters.
+	ContentTypeApplicationTokenIntrospectionJWT = "application/token-introspection+jwt"
 
-	// ContentTypeApplicationJWT is the application/jwt content type from RFC 7519.
-	ContentTypeApplicationJWT = "application/jwt; charset=utf-8"
+	// ContentTypeApplicationJWT is the application/jwt content type from RFC 7519 Section 10.3.1, which registers no
+	// parameters.
+	ContentTypeApplicationJWT = "application/jwt"
 
 	// ContentTypeTextHTML is the text/html content type with a UTF-8 charset.
 	ContentTypeTextHTML = "text/html; charset=utf-8"

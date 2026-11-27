@@ -220,12 +220,6 @@ func TestReceiverValidate(t *testing.T) {
 		assert.Equal(t, []jose.SignatureAlgorithm{jose.ES256}, receiver.signingAlgs())
 	})
 
-	t.Run("ShouldDefaultClockSkew", func(t *testing.T) {
-		assert.Equal(t, DefaultClockSkew, (&Receiver{}).clockSkew())
-		assert.Equal(t, time.Duration(0), (&Receiver{Config: Config{ClockSkew: -1}}).clockSkew())
-		assert.Equal(t, time.Minute, (&Receiver{Config: Config{ClockSkew: time.Minute}}).clockSkew())
-	})
-
 	// One case per SET error of the failure table, by its 'err' value.
 	rejections := []struct {
 		name     string
@@ -333,15 +327,6 @@ func TestReceiverValidate(t *testing.T) {
 			func(t *testing.T, x *testTransmitter) string {
 				claims := x.claims()
 				claims["events"] = map[string]any{jwt.SecurityEventTypeCAEPCredentialChange: map[string]any{"change_type": "explode"}}
-
-				return x.set().sign(t, claims)
-			},
-		},
-		{
-			"ShouldRejectIssuedAtAheadOfTheRedeliveryWindow", errSetClaims,
-			func(t *testing.T, x *testTransmitter) string {
-				claims := x.claims()
-				claims["iat"] = x.now.Add(DefaultClockSkew + IssuedAtRedeliveryWindow + time.Second).Unix()
 
 				return x.set().sign(t, claims)
 			},
@@ -649,59 +634,36 @@ func TestReceiverValidate(t *testing.T) {
 		assert.Equal(t, []string{"https://unrelated.example.com", testAudience}, event.Claims.Audience)
 	})
 
-	t.Run("ShouldAcceptIssuedAtWithinClockSkew", func(t *testing.T) {
-		x := newTestTransmitter(t)
-
-		claims := x.claims()
-		claims["iat"] = x.now.Add(DefaultClockSkew).Unix()
-
-		_, serr, err := x.receiver.validate(t.Context(), x.record, x.set().sign(t, claims))
-		require.NoError(t, err)
-		require.Nil(t, serr)
-	})
-
-	t.Run("ShouldNotReportIssuedAtAheadOfTheClockSkew", func(t *testing.T) {
-		for _, ahead := range []time.Duration{DefaultClockSkew + time.Second, DefaultClockSkew + IssuedAtRedeliveryWindow} {
+	t.Run("ShouldAcceptIssuedAtAheadOfTheClock", func(t *testing.T) {
+		for _, ahead := range []time.Duration{time.Second, time.Minute, time.Hour, 365 * 24 * time.Hour} {
 			x := newTestTransmitter(t)
 
 			claims := x.claims()
 			claims["iat"] = x.now.Add(ahead).Unix()
 
-			token := x.set().sign(t, claims)
-
-			event, serr, err := x.receiver.validate(t.Context(), x.record, token)
-			require.ErrorIs(t, err, ErrIssuedAtAhead)
-			assert.Nil(t, serr)
-			require.NotNil(t, event)
-			assert.Equal(t, testJTI, event.Claims.JTI)
-
-			// The SET is accepted on a redelivery once the clock has caught up.
-			x.now = x.now.Add(ahead - DefaultClockSkew)
-
-			event, serr, err = x.receiver.validate(t.Context(), x.record, token)
+			event, serr, err := x.receiver.validate(t.Context(), x.record, x.set().sign(t, claims))
 			require.NoError(t, err)
 			require.Nil(t, serr)
+			require.NotNil(t, event)
 			assert.Equal(t, testJTI, event.Claims.JTI)
 		}
 	})
 
-	t.Run("ShouldNotReportIssuedAtAheadWithoutClockSkew", func(t *testing.T) {
-		x := newTestTransmitter(t)
+	t.Run("ShouldRejectWithoutIssuedAt", func(t *testing.T) {
+		for _, mutate := range []func(claims map[string]any){
+			func(claims map[string]any) { delete(claims, "iat") },
+			func(claims map[string]any) { claims["iat"] = 0 },
+		} {
+			x := newTestTransmitter(t)
 
-		x.receiver.Config.ClockSkew = -1
+			claims := x.claims()
+			mutate(claims)
 
-		claims := x.claims()
-		claims["iat"] = x.now.Add(time.Second).Unix()
-
-		_, serr, err := x.receiver.validate(t.Context(), x.record, x.set().sign(t, claims))
-		require.ErrorIs(t, err, ErrIssuedAtAhead)
-		assert.Nil(t, serr)
-
-		claims["iat"] = x.now.Add(IssuedAtRedeliveryWindow + time.Second).Unix()
-
-		_, serr, err = x.receiver.validate(t.Context(), x.record, x.set().sign(t, claims))
-		require.NoError(t, err)
-		assert.Equal(t, errSetClaims, serr)
+			event, serr, err := x.receiver.validate(t.Context(), x.record, x.set().sign(t, claims))
+			require.NoError(t, err)
+			assert.Equal(t, errSetClaims, serr)
+			assert.Nil(t, event)
+		}
 	})
 
 	t.Run("ShouldReportOtherFaultOfSETIssuedAhead", func(t *testing.T) {
@@ -723,7 +685,7 @@ func TestReceiverValidate(t *testing.T) {
 				x := newTestTransmitter(t)
 
 				claims := x.claims()
-				claims["iat"] = x.now.Add(DefaultClockSkew + time.Minute).Unix()
+				claims["iat"] = x.now.Add(time.Hour).Unix()
 
 				tc.mutate(claims)
 
@@ -1000,7 +962,6 @@ func TestReceiverDeduplicate(t *testing.T) {
 			{"ShouldAcceptAtConfiguredRetention", time.Hour, 0, time.Hour, false},
 			{"ShouldRejectOlderThanMaxAge", 0, time.Minute, time.Minute + time.Second, true},
 			{"ShouldAcceptAtMaxAge", 0, time.Minute, time.Minute, false},
-			{"ShouldNotExtendMaxAgeByClockSkew", 0, time.Minute, time.Minute + DefaultClockSkew, true},
 		}
 
 		for _, tc := range testCases {

@@ -118,6 +118,18 @@ type DefaultRegisteredClient struct {
 	// itself.
 	TokenExchangeRefreshTokenRotation bool `json:"token_exchange_refresh_token_rotation"`
 
+	// TokenExchangeSubjectTokenExpiryCapOverride makes TokenExchangeSubjectTokenExpiryCap decide whether the tokens a
+	// token exchange issues to this client are capped at the expiry of the 'subject_token', in place of the
+	// RFC8693SubjectTokenExpiryCapProvider option. It has no registration metadata, so a client cannot set it itself.
+	TokenExchangeSubjectTokenExpiryCapOverride bool `json:"token_exchange_subject_token_expiry_cap_override"`
+
+	// TokenExchangeSubjectTokenExpiryCap is whether the tokens a token exchange issues to this client are capped at the
+	// expiry of the 'subject_token' when TokenExchangeSubjectTokenExpiryCapOverride is set. It has no registration
+	// metadata, so a client cannot set it itself.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
+	TokenExchangeSubjectTokenExpiryCap bool `json:"token_exchange_subject_token_expiry_cap"`
+
 	// AuthorizationGrantProfilesSupported is the advisory list of authorization grant profiles the client implements.
 	AuthorizationGrantProfilesSupported []string `json:"authorization_grant_profiles_supported"`
 
@@ -821,6 +833,18 @@ func (c *DefaultRegisteredClient) GetOverrideTokenExchangeRefreshTokenRotation()
 // 'subject_token' when GetOverrideTokenExchangeRefreshTokenRotation is true.
 func (c *DefaultRegisteredClient) GetTokenExchangeRefreshTokenRotation() (rotate bool) {
 	return c.TokenExchangeRefreshTokenRotation
+}
+
+// GetOverrideTokenExchangeSubjectTokenExpiryCap reports whether GetTokenExchangeSubjectTokenExpiryCap decides if the
+// tokens a token exchange issues to this client are capped at the expiry of the 'subject_token'.
+func (c *DefaultRegisteredClient) GetOverrideTokenExchangeSubjectTokenExpiryCap() (override bool) {
+	return c.TokenExchangeSubjectTokenExpiryCapOverride
+}
+
+// GetTokenExchangeSubjectTokenExpiryCap reports whether the tokens a token exchange issues to this client are capped at
+// the expiry of the 'subject_token' when GetOverrideTokenExchangeSubjectTokenExpiryCap is true.
+func (c *DefaultRegisteredClient) GetTokenExchangeSubjectTokenExpiryCap() (capped bool) {
+	return c.TokenExchangeSubjectTokenExpiryCap
 }
 
 var (

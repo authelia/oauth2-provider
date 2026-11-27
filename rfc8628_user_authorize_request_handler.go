@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
+	"slices"
 
 	"authelia.com/provider/oauth2/i18n"
 	"authelia.com/provider/oauth2/internal/reflection"
@@ -16,7 +18,8 @@ import (
 
 // NewRFC8628UserAuthorizeRequest parses the user-facing device authorization request and dispatches it to each
 // configured RFC8628UserAuthorizeEndpointHandler. The returned DeviceAuthorizeRequester reflects the user's
-// authorization decision (approval, denial, or pending) as recorded by the handlers. The session must not be nil; it is
+// authorization decision (approval, denial, or pending) as recorded by the handlers. The handlers read a copy of the
+// form of r, which is left as parsed. The session must not be nil; it is
 // the session the stored device authorization request is hydrated into. Unless RFC8628UserCodeSubjectBindingProvider
 // disables it, the session must carry the subject of the authenticated End-User presenting the user code, which is
 // read before the stored session replaces it and is the subject an undecided user code is bound to. An error for a
@@ -30,7 +33,11 @@ func (f *Fosite) NewRFC8628UserAuthorizeRequest(ctx context.Context, r *http.Req
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
 
-	request.Form = r.Form
+	request.Form = make(url.Values, len(r.Form))
+
+	for key, values := range r.Form {
+		request.Form[key] = slices.Clone(values)
+	}
 
 	if reflection.IsNil(session) {
 		return nil, errors.New("Session must not be nil")

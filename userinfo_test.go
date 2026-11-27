@@ -60,9 +60,17 @@ func TestNewUserinfoRequest(t *testing.T) {
 		{name: "ShouldAcceptFormBodyToken", method: http.MethodPost, header: "-", body: url.Values{consts.FormParameterAccessToken: {userinfoToken}}, granted: []string{consts.ScopeOpenID}},
 		{name: "ShouldAcceptResourceUserinfoEndpoint", method: http.MethodGet, granted: []string{consts.ScopeOpenID}, resource: []string{userinfoURL}},
 		{name: "ShouldAcceptResourceIssuer", method: http.MethodGet, granted: []string{consts.ScopeOpenID}, resource: []string{userinfoIssuer}},
-		{name: "ShouldRejectMethod", method: http.MethodPut, noToken: true, code: http.StatusBadRequest, errCode: "invalid_request"},
-		{name: "ShouldRejectMissingToken", method: http.MethodGet, header: "-", noToken: true, code: http.StatusUnauthorized, errCode: "invalid_token", challenge: `Bearer`},
-		{name: "ShouldRejectDPoPSchemeWhenDisabled", method: http.MethodGet, header: "DPoP " + userinfoToken, noToken: true, code: http.StatusUnauthorized, errCode: "invalid_token"},
+		// RFC 9110 Section 15.5.6.
+		{name: "ShouldRejectPUT", method: http.MethodPut, noToken: true, code: http.StatusMethodNotAllowed, errCode: "invalid_request"},
+		{name: "ShouldRejectDELETE", method: http.MethodDelete, noToken: true, code: http.StatusMethodNotAllowed, errCode: "invalid_request"},
+		{name: "ShouldRejectPATCH", method: http.MethodPatch, noToken: true, code: http.StatusMethodNotAllowed, errCode: "invalid_request"},
+		// RFC 6750 Section 3.1.
+		{name: "ShouldRejectMissingToken", method: http.MethodGet, header: "-", noToken: true, code: http.StatusUnauthorized, challenge: `Bearer`},
+		{name: "ShouldRejectDPoPSchemeWhenDisabled", method: http.MethodGet, header: "DPoP " + userinfoToken, noToken: true, code: http.StatusUnauthorized, challenge: `Bearer`},
+		{name: "ShouldRejectBasicScheme", method: http.MethodGet, header: "Basic cnM6c2VjcmV0", noToken: true, code: http.StatusUnauthorized, challenge: `Bearer`},
+		{name: "ShouldRejectNegotiateScheme", method: http.MethodGet, header: "Negotiate abc", noToken: true, code: http.StatusUnauthorized, challenge: `Bearer`},
+		{name: "ShouldRejectBearerSchemeWithoutAToken", method: http.MethodGet, header: "Bearer", noToken: true, code: http.StatusUnauthorized, challenge: `Bearer`},
+		{name: "ShouldRejectEmptyBearerToken", method: http.MethodGet, header: "Bearer ", noToken: true, code: http.StatusUnauthorized, challenge: `Bearer`},
 		{name: "ShouldRejectTokenInHeaderAndBody", method: http.MethodPost, body: url.Values{consts.FormParameterAccessToken: {userinfoToken}}, noToken: true, code: http.StatusBadRequest, errCode: "invalid_request"},
 		{name: "ShouldRejectUnknownToken", method: http.MethodGet, introErr: ErrTokenExpired, code: http.StatusUnauthorized, errCode: "invalid_token", challenge: `Bearer error="invalid_token"`},
 		{name: "ShouldRejectUnknownFormBodyToken", method: http.MethodPost, header: "-", body: url.Values{consts.FormParameterAccessToken: {userinfoToken}}, introErr: ErrTokenExpired, code: http.StatusUnauthorized, errCode: "invalid_token", challenge: `Bearer error="invalid_token"`},
@@ -149,8 +157,17 @@ func TestNewUserinfoRequest(t *testing.T) {
 			provider.WriteUserinfoError(context.Background(), rw, requester, err)
 
 			assert.Equal(t, tc.code, rw.Code)
-			assert.Equal(t, consts.ContentTypeApplicationJSON, rw.Header().Get(consts.HeaderContentType))
 			assert.Equal(t, consts.CacheControlNoStore, rw.Header().Get(consts.HeaderCacheControl))
+
+			if tc.errCode == "" {
+				assert.Equal(t, tc.challenge, rw.Header().Get(consts.HeaderWWWAuthenticate))
+				assert.Empty(t, rw.Header().Get(consts.HeaderContentType))
+				assert.Empty(t, rw.Body.Bytes())
+
+				return
+			}
+
+			assert.Equal(t, consts.ContentTypeApplicationJSON, rw.Header().Get(consts.HeaderContentType))
 
 			var body map[string]any
 
@@ -168,8 +185,10 @@ func TestNewUserinfoRequest(t *testing.T) {
 				assert.Contains(t, rw.Header().Get(consts.HeaderWWWAuthenticate), `scope="openid"`)
 			}
 
-			if tc.challenge == "Bearer" {
-				assert.Equal(t, "Bearer", rw.Header().Get(consts.HeaderWWWAuthenticate))
+			if tc.code == http.StatusMethodNotAllowed {
+				assert.Equal(t, "GET, POST", rw.Header().Get(consts.HeaderAllow))
+			} else {
+				assert.Empty(t, rw.Header().Get(consts.HeaderAllow))
 			}
 		})
 	}
@@ -214,11 +233,45 @@ func TestWriteUserinfoResponse(t *testing.T) {
 			contentType: consts.ContentTypeApplicationJSON,
 		},
 		{
+			name: "ShouldWriteJSONWhenSigningAlgNoneAndOnlyAnEncryptionKeyIDIsRegistered",
+			client: func(c *DefaultRegisteredClient) {
+				c.UserinfoSignedResponseAlg = consts.JSONWebTokenAlgNone
+				c.UserinfoEncryptedResponseKeyID = "enc"
+				c.JSONWebKeys = userinfoEncryptionJWKS(encryptionKey)
+			},
+			claims:      claims,
+			code:        http.StatusOK,
+			contentType: consts.ContentTypeApplicationJSON,
+			verify: func(t *testing.T, body string) {
+				var values map[string]any
+
+				require.NoError(t, json.Unmarshal([]byte(body), &values))
+				assert.Equal(t, "pairwise-sub", values["sub"])
+			},
+		},
+		{
+			name: "ShouldWriteEncryptedOnlyJWTWhenSigningAlgNone",
+			client: func(c *DefaultRegisteredClient) {
+				c.UserinfoSignedResponseAlg = consts.JSONWebTokenAlgNone
+				c.UserinfoEncryptedResponseAlg = string(jose.RSA_OAEP_256)
+				c.JSONWebKeys = userinfoEncryptionJWKS(encryptionKey)
+			},
+			claims:      claims,
+			code:        http.StatusOK,
+			contentType: "application/jwt",
+			verify: func(t *testing.T, body string) {
+				var values map[string]any
+
+				require.NoError(t, json.Unmarshal(decryptUserinfoJWE(t, body, encryptionKey), &values))
+				assertUserinfoJWTClaims(t, values)
+			},
+		},
+		{
 			name:        "ShouldWriteSignedJWT",
 			client:      func(c *DefaultRegisteredClient) { c.UserinfoSignedResponseAlg = string(jose.RS256) },
 			claims:      claims,
 			code:        http.StatusOK,
-			contentType: consts.ContentTypeApplicationJWT,
+			contentType: "application/jwt",
 			verify: func(t *testing.T, body string) {
 				assertUserinfoJWTClaims(t, verifyUserinfoJWS(t, body, signingKey))
 			},
@@ -232,7 +285,7 @@ func TestWriteUserinfoResponse(t *testing.T) {
 			},
 			claims:      claims,
 			code:        http.StatusOK,
-			contentType: consts.ContentTypeApplicationJWT,
+			contentType: "application/jwt",
 			verify: func(t *testing.T, body string) {
 				plaintext := decryptUserinfoJWE(t, body, encryptionKey)
 
@@ -247,12 +300,36 @@ func TestWriteUserinfoResponse(t *testing.T) {
 			},
 			claims:      claims,
 			code:        http.StatusOK,
-			contentType: consts.ContentTypeApplicationJWT,
+			contentType: "application/jwt",
 			verify: func(t *testing.T, body string) {
 				var values map[string]any
 
 				require.NoError(t, json.Unmarshal(decryptUserinfoJWE(t, body, encryptionKey), &values))
 				assertUserinfoJWTClaims(t, values)
+			},
+		},
+		{
+			name: "ShouldWriteJSONWhenOnlyAnEncryptionKeyIDIsRegistered",
+			client: func(c *DefaultRegisteredClient) {
+				c.UserinfoEncryptedResponseKeyID = "enc"
+				c.JSONWebKeys = userinfoEncryptionJWKS(encryptionKey)
+			},
+			claims:      claims,
+			code:        http.StatusOK,
+			contentType: consts.ContentTypeApplicationJSON,
+		},
+		{
+			name: "ShouldWriteSignedJWTWhenOnlyAnEncryptionKeyIDIsRegistered",
+			client: func(c *DefaultRegisteredClient) {
+				c.UserinfoSignedResponseAlg = string(jose.RS256)
+				c.UserinfoEncryptedResponseKeyID = "enc"
+				c.JSONWebKeys = userinfoEncryptionJWKS(encryptionKey)
+			},
+			claims:      claims,
+			code:        http.StatusOK,
+			contentType: "application/jwt",
+			verify: func(t *testing.T, body string) {
+				assertUserinfoJWTClaims(t, verifyUserinfoJWS(t, body, signingKey))
 			},
 		},
 		{
@@ -264,7 +341,7 @@ func TestWriteUserinfoResponse(t *testing.T) {
 			},
 			claims:      claims,
 			code:        http.StatusOK,
-			contentType: consts.ContentTypeApplicationJWT,
+			contentType: "application/jwt",
 			verify: func(t *testing.T, body string) {
 				jws, err := jose.ParseSignedCompact(body, []jose.SignatureAlgorithm{jose.HS256})
 				require.NoError(t, err)
@@ -334,6 +411,64 @@ func TestWriteUserinfoResponse(t *testing.T) {
 
 			if tc.verify != nil {
 				tc.verify(t, rw.Body.String())
+			}
+		})
+	}
+}
+
+func TestWriteUserinfoResponseShouldFetchTheJWKSOfADocumentClientWithTheDocumentFetcher(t *testing.T) {
+	signingKey := gen.MustRSAKey()
+	encryptionKey := gen.MustRSAKey()
+
+	testCases := []struct {
+		name     string
+		alg      string
+		document bool
+	}{
+		{name: "ShouldUseTheDocumentFetcherWhenEncryptedOnly", document: true},
+		{name: "ShouldUseTheDocumentFetcherWhenSignedAndEncrypted", alg: string(jose.RS256), document: true},
+		{name: "ShouldUseTheOrdinaryFetcherForARegisteredClient"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider, registered := newUserinfoProvider(nil, signingKey)
+
+			ordinary := &userinfoJWKSFetcher{jwks: userinfoEncryptionJWKS(encryptionKey)}
+			document := &userinfoJWKSFetcher{jwks: userinfoEncryptionJWKS(encryptionKey)}
+
+			config := provider.Config.(*Config)
+			config.JWKSFetcherStrategy = ordinary
+			config.ClientIDMetadataDocumentJWKSFetcherStrategy = document
+
+			registered.UserinfoSignedResponseAlg = tc.alg
+			registered.UserinfoEncryptedResponseAlg = string(jose.RSA_OAEP_256)
+			registered.JSONWebKeysURI = "https://client.example.com/jwks.json"
+
+			var client Client = registered
+
+			if tc.document {
+				client = &userinfoDocumentClient{DefaultRegisteredClient: registered}
+			}
+
+			requester := &UserinfoRequest{
+				AccessRequester: &AccessRequest{Request: Request{Client: client, Session: &DefaultSession{}}},
+				Client:          client,
+			}
+
+			rw := httptest.NewRecorder()
+			provider.WriteUserinfoResponse(context.Background(), rw, requester, &UserinfoClaims{Subject: "pairwise-sub"})
+
+			require.Equal(t, http.StatusOK, rw.Code)
+
+			decryptUserinfoJWE(t, rw.Body.String(), encryptionKey)
+
+			if tc.document {
+				assert.Equal(t, []string{registered.JSONWebKeysURI}, document.locations)
+				assert.Empty(t, ordinary.locations)
+			} else {
+				assert.Equal(t, []string{registered.JSONWebKeysURI}, ordinary.locations)
+				assert.Empty(t, document.locations)
 			}
 		})
 	}
@@ -439,6 +574,23 @@ type userinfoFailingClientStore struct {
 
 func (s *userinfoFailingClientStore) GetClient(_ context.Context, _ string) (Client, error) {
 	return nil, s.err
+}
+
+type userinfoDocumentClient struct {
+	*DefaultRegisteredClient
+}
+
+func (c *userinfoDocumentClient) IsClientIDMetadataDocumentClient() bool { return true }
+
+type userinfoJWKSFetcher struct {
+	jwks      *jose.JSONWebKeySet
+	locations []string
+}
+
+func (f *userinfoJWKSFetcher) Resolve(_ context.Context, location string, _ bool) (*jose.JSONWebKeySet, error) {
+	f.locations = append(f.locations, location)
+
+	return f.jwks, nil
 }
 
 func newUserinfoProvider(introspector TokenIntrospector, key *rsa.PrivateKey) (provider *Fosite, registered *DefaultRegisteredClient) {

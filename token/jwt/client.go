@@ -104,7 +104,8 @@ type Client interface {
 	GetSigningKeyID() (kid string)
 	// GetSigningAlg returns the JWS 'alg' registered for signing the JWT.
 	GetSigningAlg() (alg string)
-	// GetEncryptionKeyID returns the 'kid' of the key registered for encrypting the JWT, if any.
+	// GetEncryptionKeyID returns the 'kid' of the key registered for encrypting the JWT, if any. It is ignored when
+	// GetEncryptionAlg returns no algorithm, as no encryption is performed.
 	GetEncryptionKeyID() (kid string)
 	// GetEncryptionAlg returns the JWE 'alg' registered for encrypting the JWT, if any.
 	GetEncryptionAlg() (alg string)

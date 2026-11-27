@@ -62,8 +62,11 @@ type ActorTokenExchangeClient interface {
 type OwnAccessTokenExchangeTargetClient interface {
 	// GetRestrictOwnAccessTokenExchangeTargets reports whether the exchange of an access token issued to the client is
 	// limited to the audience and resources that access token was granted. RFC 8693 Section 2.1 leaves this to policy.
+	// A limited exchange which names neither an audience nor a resource is issued for those the access token was
+	// granted, per RFC 8707 Section 2.2.
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
+	// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
 	GetRestrictOwnAccessTokenExchangeTargets() (restrict bool)
 }
 
@@ -139,6 +142,22 @@ type RefreshTokenRotationOverrideClient interface {
 	// GetTokenExchangeRefreshTokenRotation reports whether the token exchange rotates the client's refresh token
 	// 'subject_token' when GetOverrideTokenExchangeRefreshTokenRotation returns true.
 	GetTokenExchangeRefreshTokenRotation() (rotate bool)
+}
+
+// SubjectTokenExpiryCapOverrideClient is an optional client interface. The expiry of every token a token exchange
+// issues is capped at the expiry of the 'subject_token', which RFC 8693 Section 2.1 permits, unless
+// oauth2.RFC8693SubjectTokenExpiryCapProvider disables the cap, and this interface lets a client decide that for itself
+// instead.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
+type SubjectTokenExpiryCapOverrideClient interface {
+	// GetOverrideTokenExchangeSubjectTokenExpiryCap reports whether GetTokenExchangeSubjectTokenExpiryCap decides if
+	// the tokens a token exchange issues to the client are capped at the expiry of the 'subject_token'.
+	GetOverrideTokenExchangeSubjectTokenExpiryCap() (override bool)
+
+	// GetTokenExchangeSubjectTokenExpiryCap reports whether the tokens a token exchange issues to the client are capped
+	// at the expiry of the 'subject_token' when GetOverrideTokenExchangeSubjectTokenExpiryCap returns true.
+	GetTokenExchangeSubjectTokenExpiryCap() (capped bool)
 }
 
 // AuthorizationGrantIssuanceClient is an optional client interface. A client which does not implement it is not issued

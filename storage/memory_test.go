@@ -653,10 +653,10 @@ func TestMemoryStoreScopesJTIs(t *testing.T) {
 		{
 			name: "ShouldScopeTokenExchangeJTIsToTheIssuer",
 			check: func(t *testing.T, s *MemoryStore) {
-				require.NoError(t, s.SetTokenExchangeCustomJWT(t.Context(), "https://a.example.com", "jti", exp))
+				require.NoError(t, s.SetTokenExchangeCustomJWTs(t.Context(), []oauth2.TokenExchangeCustomJWT{{Issuer: "https://a.example.com", JTI: "jti", ExpiresAt: exp}}))
 
-				assert.NoError(t, s.SetTokenExchangeCustomJWT(t.Context(), "https://b.example.com", "jti", exp))
-				assert.ErrorIs(t, s.SetTokenExchangeCustomJWT(t.Context(), "https://a.example.com", "jti", exp), oauth2.ErrJTIKnown)
+				assert.NoError(t, s.SetTokenExchangeCustomJWTs(t.Context(), []oauth2.TokenExchangeCustomJWT{{Issuer: "https://b.example.com", JTI: "jti", ExpiresAt: exp}}))
+				assert.ErrorIs(t, s.SetTokenExchangeCustomJWTs(t.Context(), []oauth2.TokenExchangeCustomJWT{{Issuer: "https://a.example.com", JTI: "jti", ExpiresAt: exp}}), oauth2.ErrJTIKnown)
 			},
 		},
 		{
@@ -669,7 +669,7 @@ func TestMemoryStoreScopesJTIs(t *testing.T) {
 				assert.False(t, used)
 
 				assert.NoError(t, s.MarkRFC7523JWTUsedForTime(t.Context(), "https://a.example.com", "jti", exp))
-				assert.NoError(t, s.SetTokenExchangeCustomJWT(t.Context(), "https://a.example.com", "jti", exp))
+				assert.NoError(t, s.SetTokenExchangeCustomJWTs(t.Context(), []oauth2.TokenExchangeCustomJWT{{Issuer: "https://a.example.com", JTI: "jti", ExpiresAt: exp}}))
 			},
 		},
 		{
@@ -686,6 +686,87 @@ func TestMemoryStoreScopesJTIs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.check(t, NewMemoryStore())
+		})
+	}
+}
+
+func TestMemoryStoreSetTokenExchangeCustomJWTsMarksAllOrNone(t *testing.T) {
+	const iss = "https://a.example.com"
+
+	exp := time.Now().Add(time.Minute)
+
+	token := func(issuer, jti string) oauth2.TokenExchangeCustomJWT {
+		return oauth2.TokenExchangeCustomJWT{Issuer: issuer, JTI: jti, ExpiresAt: exp}
+	}
+
+	testCases := []struct {
+		name     string
+		known    []oauth2.TokenExchangeCustomJWT
+		tokens   []oauth2.TokenExchangeCustomJWT
+		err      error
+		expected []JTIMarker
+	}{
+		{
+			name:     "ShouldMarkEveryToken",
+			tokens:   []oauth2.TokenExchangeCustomJWT{token(iss, "actor"), token(iss, "subject")},
+			expected: []JTIMarker{{Issuer: iss, JTI: "actor"}, {Issuer: iss, JTI: "subject"}},
+		},
+		{
+			name:     "ShouldMarkTheSameJTIOfTwoIssuers",
+			tokens:   []oauth2.TokenExchangeCustomJWT{token(iss, "jti"), token("https://b.example.com", "jti")},
+			expected: []JTIMarker{{Issuer: iss, JTI: "jti"}, {Issuer: "https://b.example.com", JTI: "jti"}},
+		},
+		{
+			name: "ShouldMarkNothingForNoTokens",
+		},
+		{
+			name:     "ShouldMarkNoneWhenTheLastIsKnown",
+			known:    []oauth2.TokenExchangeCustomJWT{token(iss, "subject")},
+			tokens:   []oauth2.TokenExchangeCustomJWT{token(iss, "actor"), token(iss, "subject")},
+			err:      oauth2.ErrJTIKnown,
+			expected: []JTIMarker{{Issuer: iss, JTI: "subject"}},
+		},
+		{
+			name:     "ShouldMarkNoneWhenTheFirstIsKnown",
+			known:    []oauth2.TokenExchangeCustomJWT{token(iss, "actor")},
+			tokens:   []oauth2.TokenExchangeCustomJWT{token(iss, "actor"), token(iss, "subject")},
+			err:      oauth2.ErrJTIKnown,
+			expected: []JTIMarker{{Issuer: iss, JTI: "actor"}},
+		},
+		{
+			name:   "ShouldMarkNoneWhenATokenIsGivenTwice",
+			tokens: []oauth2.TokenExchangeCustomJWT{token(iss, "other"), token(iss, "jti"), token(iss, "jti")},
+			err:    oauth2.ErrJTIKnown,
+		},
+		{
+			name:     "ShouldMarkAnExpiredKnownToken",
+			known:    []oauth2.TokenExchangeCustomJWT{{Issuer: iss, JTI: "subject", ExpiresAt: time.Now().Add(-time.Minute)}},
+			tokens:   []oauth2.TokenExchangeCustomJWT{token(iss, "actor"), token(iss, "subject")},
+			expected: []JTIMarker{{Issuer: iss, JTI: "actor"}, {Issuer: iss, JTI: "subject"}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewMemoryStore()
+
+			for _, known := range tc.known {
+				s.TokenExchangeJTIs[JTIMarker{Issuer: known.Issuer, JTI: known.JTI}] = known.ExpiresAt
+			}
+
+			err := s.SetTokenExchangeCustomJWTs(t.Context(), tc.tokens)
+
+			if tc.err == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.err)
+			}
+
+			assert.Len(t, s.TokenExchangeJTIs, len(tc.expected))
+
+			for _, marker := range tc.expected {
+				assert.Contains(t, s.TokenExchangeJTIs, marker)
+			}
 		})
 	}
 }
@@ -828,7 +909,7 @@ func TestMemoryStorePrunesExpiredEntriesAtAnInterval(t *testing.T) {
 		{
 			name: "ShouldPruneTokenExchangeJTIs",
 			insert: func(t *testing.T, s *MemoryStore, key string, exp time.Time) {
-				require.NoError(t, s.SetTokenExchangeCustomJWT(t.Context(), iss, key, exp))
+				require.NoError(t, s.SetTokenExchangeCustomJWTs(t.Context(), []oauth2.TokenExchangeCustomJWT{{Issuer: iss, JTI: key, ExpiresAt: exp}}))
 			},
 			contain: func(s *MemoryStore, key string) bool {
 				_, ok := s.TokenExchangeJTIs[JTIMarker{Issuer: iss, JTI: key}]

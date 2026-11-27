@@ -855,13 +855,17 @@ func (f *Fosite) writeSSFResponse(ctx context.Context, rw http.ResponseWriter, r
 	_, _ = rw.Write(data)
 }
 
-func (f *Fosite) prepareSSFError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error, allow string) (rfc *RFC6749Error) {
+func (f *Fosite) prepareSSFError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error, allow string) (rfc *RFC6749Error, bare bool) {
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
 	if IsBearerCredentialError(err) {
-		rfc = f.WriteBearerAuthorizationChallenge(ctx, rw, r, err)
+		if rfc, bare = f.writeBearerAuthorizationChallenge(ctx, rw, r, err); bare {
+			writeBareAuthorizationChallenge(rw)
+
+			return rfc, true
+		}
 	} else {
 		rfc = ErrorToRFC6749Error(err)
 	}
@@ -882,16 +886,22 @@ func (f *Fosite) prepareSSFError(ctx context.Context, rw http.ResponseWriter, r 
 		rfc = rfc.WithLocalizer(catalog, i18n.GetLangFromRequest(catalog, r))
 	}
 
-	return rfc
+	return rfc, false
 }
 
 // WriteSSFError writes an SSF endpoint error with 'Cache-Control: no-store'. A rejected bearer credential is answered
-// with the RFC 6750 and RFC 9449 challenge.
+// with the RFC 6750 and RFC 9449 challenge. A request which included no access token is answered with HTTP 401 and the
+// challenge alone, without a body or error information (RFC 6750 Section 3.1).
 //
 // See: https://www.rfc-editor.org/rfc/rfc6750#section-3
 // See: https://www.rfc-editor.org/rfc/rfc9449#section-7.1
 func (f *Fosite) WriteSSFError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) {
-	rfc := f.prepareSSFError(ctx, rw, r, err, ssfStreamAllowedMethods).WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx))
+	rfc, bare := f.prepareSSFError(ctx, rw, r, err, ssfStreamAllowedMethods)
+	if bare {
+		return
+	}
+
+	rfc = rfc.WithLegacyFormat(f.Config.GetUseLegacyErrorFormat(ctx))
 
 	data, merr := json.Marshal(rfc)
 	if merr != nil {

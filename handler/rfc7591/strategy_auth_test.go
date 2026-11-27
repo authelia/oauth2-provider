@@ -126,6 +126,80 @@ func TestAuthenticateClientRegistrationOmitsCounterKeyWithoutRequestID(t *testin
 	}
 }
 
+func TestAuthenticateClientRegistrationDoesNotChangeTheStoredSession(t *testing.T) {
+	ctx := context.Background()
+
+	expiry := func() map[oauth2.TokenType]time.Time {
+		return map[oauth2.TokenType]time.Time{oauth2.AccessToken: time.Now().UTC().Add(time.Hour)}
+	}
+
+	sessions := map[string]func() oauth2.Session{
+		"DefaultSession": func() oauth2.Session { return &oauth2.DefaultSession{ExpiresAt: expiry()} },
+		"JWTSession":     func() oauth2.Session { return &hoauth2.JWTSession{ExpiresAt: expiry()} },
+	}
+
+	for storeName, factory := range policyTestStores() {
+		for sessionName, newSession := range sessions {
+			t.Run(storeName+"/"+sessionName, func(t *testing.T) {
+				config := &oauth2.Config{
+					GlobalSecret:                          []byte("super-duper-secret-that-is-at-least-32-bytes"),
+					RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b"),
+					EndpointURLs:                          oauth2.EndpointURLs{Registration: testEndpoint},
+				}
+
+				tokens := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+				store := factory()
+				auth := NewDefaultEndpointAuthStrategy(config, store, tokens, tokens)
+
+				request := oauth2.NewRequest()
+				request.Client = &oauth2.DefaultClient{ID: testOnboardingClientID}
+				request.Session = newSession()
+				request.GrantScope("authelia:oauth2:dynamic-client-registration")
+				request.GrantAudience(testEndpoint)
+
+				token, signature, err := tokens.GenerateAccessToken(ctx, request)
+				require.NoError(t, err)
+				require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+
+				var wg sync.WaitGroup
+
+				results := make([]oauth2.Requester, 16)
+				errs := make([]error, len(results))
+
+				for i := range results {
+					wg.Go(func() {
+						results[i], errs[i] = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
+					})
+				}
+
+				wg.Wait()
+
+				for i := range results {
+					require.NoError(t, errs[i])
+					assert.Equal(t, request.GetID(), results[i].GetID())
+
+					_, ok := results[i].(RegistrationPolicyRequester).GetRegistrationPolicyClaim()
+					assert.False(t, ok)
+				}
+
+				stored, err := store.GetAccessTokenSession(ctx, signature, newSession())
+				require.NoError(t, err)
+
+				for _, session := range []oauth2.Session{request.Session, stored.GetSession()} {
+					switch actual := session.(type) {
+					case *oauth2.DefaultSession:
+						assert.Nil(t, actual.Extra)
+					case *hoauth2.JWTSession:
+						assert.Nil(t, actual.JWTClaims)
+					default:
+						require.Failf(t, "unexpected session", "%T", session)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestAuthenticateClientConfigurationDoesNotChangeTheStoredRequest(t *testing.T) {
 	ctx := context.Background()
 

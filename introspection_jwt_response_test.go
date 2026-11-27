@@ -98,7 +98,7 @@ func TestIntrospectionJWTResponseNegotiation(t *testing.T) {
 
 			responder, err := provider.NewIntrospectionRequest(ctx, r, &DefaultSession{})
 			if err != nil {
-				provider.WriteIntrospectionError(ctx, recorder, err)
+				provider.WriteIntrospectionError(ctx, recorder, nil, err)
 			} else {
 				provider.WriteIntrospectionResponse(ctx, recorder, responder)
 			}
@@ -172,7 +172,7 @@ func TestIntrospectionStrategyServerError(t *testing.T) {
 			_, err := provider.NewIntrospectionRequest(ctx, r, &DefaultSession{})
 			require.Error(t, err)
 
-			provider.WriteIntrospectionError(ctx, recorder, err)
+			provider.WriteIntrospectionError(ctx, recorder, nil, err)
 
 			assert.Equal(t, tc.code, recorder.Code)
 			assert.Contains(t, recorder.Body.String(), tc.contains)
@@ -183,7 +183,7 @@ func TestIntrospectionStrategyServerError(t *testing.T) {
 func TestIntrospectionServerErrorIsNotReportedAsInactive(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
-	(&Fosite{Config: &Config{}}).WriteIntrospectionError(context.Background(), recorder, ErrServerError.WithHint("Failed to generate the response."))
+	(&Fosite{Config: &Config{}}).WriteIntrospectionError(context.Background(), recorder, nil, ErrServerError.WithHint("Failed to generate the response."))
 
 	assert.Equal(t, http.StatusInternalServerError, recorder.Code)
 	assert.NotContains(t, recorder.Body.String(), `"active"`)
@@ -386,7 +386,7 @@ func TestIntrospectionJWTResponseEncoding(t *testing.T) {
 			recorder := httptest.NewRecorder()
 
 			if responder, err := provider.NewIntrospectionRequest(ctx, r, &DefaultSession{}); err != nil {
-				provider.WriteIntrospectionError(ctx, recorder, err)
+				provider.WriteIntrospectionError(ctx, recorder, nil, err)
 			} else {
 				provider.WriteIntrospectionResponse(ctx, recorder, responder)
 			}

@@ -43,6 +43,7 @@ func TestDefaultRegisteredClientImplementsClient(t *testing.T) {
 		assert.False(t, registered.GetAllowTokenExchangeRefreshToken(), "issuing a refresh token stays opt-in")
 		assert.False(t, registered.GetAllowTokenExchangeAuthorizationGrant(), "issuing a JWT authorization grant stays opt-in")
 		assert.False(t, registered.GetOverrideTokenExchangeRefreshTokenRotation(), "rotation follows the refresh token options unless overridden")
+		assert.False(t, registered.GetOverrideTokenExchangeSubjectTokenExpiryCap(), "the subject token expiry cap follows the configuration unless overridden")
 	})
 
 	t.Run("ShouldRestrictWhenSet", func(t *testing.T) {

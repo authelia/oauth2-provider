@@ -366,6 +366,85 @@ func TestCustomJWTPresentedInBothRolesIsMarkedOnce(t *testing.T) {
 	assert.Contains(t, f.store.TokenExchangeJTIs, storage.JTIMarker{Issuer: "https://as.example.com", JTI: jti})
 }
 
+func TestReplayedSingleUseTokenDoesNotConsumeTheOtherToken(t *testing.T) {
+	testCases := []struct {
+		name string
+		form func(fresh, replayed string) url.Values
+	}{
+		{
+			name: "ShouldNotMarkTheActorTokenWhenTheSubjectTokenIsReplayed",
+			form: func(fresh, replayed string) url.Values {
+				return url.Values{
+					consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+					consts.FormParameterSubjectToken:     {replayed},
+					consts.FormParameterActorTokenType:   {"urn:spec:jwt"},
+					consts.FormParameterActorToken:       {fresh},
+				}
+			},
+		},
+		{
+			name: "ShouldNotMarkTheSubjectTokenWhenTheActorTokenIsReplayed",
+			form: func(fresh, replayed string) url.Values {
+				return url.Values{
+					consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+					consts.FormParameterSubjectToken:     {fresh},
+					consts.FormParameterActorTokenType:   {"urn:spec:jwt"},
+					consts.FormParameterActorToken:       {replayed},
+				}
+			},
+		},
+	}
+
+	for _, store := range customJWTConsumeStores() {
+		for _, tc := range testCases {
+			t.Run(store.name+"/"+tc.name, func(t *testing.T) {
+				exchange, memory := store.newStore()
+				f := newCustomJWTConsumeFixtureWithStore(t, exchange, memory, true)
+
+				freshJTI, replayedJTI := uuid.New().String(), uuid.New().String()
+				fresh, replayed := f.token(t, freshJTI), f.token(t, replayedJTI)
+
+				first := f.request(url.Values{
+					consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+					consts.FormParameterSubjectToken:     {replayed},
+				})
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.handle(t, first)))
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.populate(t, first, oauth2.NewAccessResponse())))
+
+				// RFC 8693 Section 2.2.2.
+				request := f.request(tc.form(fresh, replayed))
+				response := oauth2.NewAccessResponse()
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.handle(t, request)))
+
+				err := f.populate(t, request, response)
+
+				require.ErrorIs(t, err, oauth2.ErrInvalidRequest)
+				assert.EqualError(t, oauth2.ErrorToDebugRFC6749Error(err), "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Claim 'jti' from the token must be used only once.")
+				assert.Empty(t, response.GetAccessToken())
+				assert.Len(t, f.store.TokenExchangeJTIs, 1)
+				assert.NotContains(t, f.store.TokenExchangeJTIs, storage.JTIMarker{Issuer: "https://as.example.com", JTI: freshJTI})
+
+				retry := f.request(url.Values{
+					consts.FormParameterSubjectTokenType: {"urn:spec:jwt"},
+					consts.FormParameterSubjectToken:     {f.token(t, uuid.New().String())},
+					consts.FormParameterActorTokenType:   {"urn:spec:jwt"},
+					consts.FormParameterActorToken:       {fresh},
+				})
+				response = oauth2.NewAccessResponse()
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.handle(t, retry)))
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.populate(t, retry, response)))
+
+				assert.NotEmpty(t, response.GetAccessToken())
+				assert.Len(t, f.store.TokenExchangeJTIs, 3)
+				assert.Contains(t, f.store.TokenExchangeJTIs, storage.JTIMarker{Issuer: "https://as.example.com", JTI: freshJTI})
+			})
+		}
+	}
+}
+
 func TestCustomJWTIsMarkedInTheTransactionThatIssues(t *testing.T) {
 	testCases := []struct {
 		name      string

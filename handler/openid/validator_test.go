@@ -549,6 +549,101 @@ func TestValidatePrompt(t *testing.T) {
 	}
 }
 
+func TestValidateSession(t *testing.T) {
+	v := NewOpenIDConnectRequestValidator(nil, validateClaimsPromptsOnlyConfig{})
+
+	now := time.Now().UTC()
+
+	testCases := []struct {
+		name     string
+		form     url.Values
+		rat      time.Time
+		authTime time.Time
+		code     string
+	}{
+		{
+			name:     "ShouldRefuseAMalformedMaxAge",
+			form:     url.Values{consts.FormParameterMaximumAge: {"abc"}},
+			rat:      now,
+			authTime: now,
+			code:     "invalid_request",
+		},
+		{
+			name:     "ShouldRefuseANegativeMaxAge",
+			form:     url.Values{consts.FormParameterMaximumAge: {"-1"}},
+			rat:      now,
+			authTime: now,
+			code:     "invalid_request",
+		},
+		{
+			name:     "ShouldRefuseARepeatedMaxAge",
+			form:     url.Values{consts.FormParameterMaximumAge: {"60", "600"}},
+			rat:      now,
+			authTime: now,
+			code:     "invalid_request",
+		},
+		{
+			name:     "ShouldRefusePromptLoginWithoutARequestedAtAndAStaleAuthentication",
+			form:     url.Values{consts.FormParameterPrompt: {consts.PromptTypeLogin}},
+			authTime: now.Add(-time.Hour),
+			code:     "server_error",
+		},
+		{
+			name:     "ShouldRefusePromptLoginWithoutARequestedAt",
+			form:     url.Values{consts.FormParameterPrompt: {consts.PromptTypeLogin}},
+			authTime: now,
+			code:     "server_error",
+		},
+		{
+			name:     "ShouldRefusePromptNoneWithoutARequestedAt",
+			form:     url.Values{consts.FormParameterPrompt: {consts.PromptTypeNone}},
+			authTime: now.Add(-time.Hour),
+			code:     "server_error",
+		},
+		{
+			name:     "ShouldRefuseMaxAgeWithoutARequestedAt",
+			form:     url.Values{consts.FormParameterMaximumAge: {"60"}},
+			authTime: now,
+			code:     "server_error",
+		},
+		{
+			name:     "ShouldPassWithoutARequestedAtWhenNothingIsMeasuredFromIt",
+			form:     url.Values{consts.FormParameterPrompt: {consts.PromptTypeConsent}},
+			authTime: now.Add(-time.Hour),
+		},
+		{
+			name:     "ShouldPassPromptLoginWhenAuthenticatedAfterTheRequest",
+			form:     url.Values{consts.FormParameterPrompt: {consts.PromptTypeLogin}},
+			rat:      now.Add(-time.Minute),
+			authTime: now,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			session, err := v.ValidateSession(t.Context(), &oauth2.Request{
+				Client: &oauth2.DefaultClient{ID: "foo"},
+				Form:   tc.form,
+				Session: &DefaultSession{
+					Subject:     "foo",
+					Claims:      &jwt.IDTokenClaims{Subject: "foo", AuthTime: jwt.NewNumericDate(tc.authTime)},
+					RequestedAt: tc.rat,
+				},
+			})
+
+			if tc.code == "" {
+				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				assert.NotNil(t, session)
+
+				return
+			}
+
+			assert.Equal(t, tc.code, oauth2.ErrorToRFC6749Error(err).ErrorField)
+			assert.Nil(t, session)
+		})
+	}
+}
+
 func TestValidatePromptDefaultsWithoutConfiguredPrompts(t *testing.T) {
 	v := NewOpenIDConnectRequestValidator(nil, validateClaimsPromptsOnlyConfig{})
 

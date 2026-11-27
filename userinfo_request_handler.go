@@ -18,6 +18,8 @@ import (
 // presented and the current registration of the client it was issued to. The caller produces the claims and writes
 // them with WriteUserinfoResponse, or writes the error with WriteUserinfoError. The returned requester is never nil.
 //
+// A request using a method other than GET or POST is answered with HTTP 405 and an 'Allow' header naming both.
+//
 // The Access Token is read as described by RFC 6750 Section 2, or using the DPoP scheme when DPoP is enabled. It is
 // always resolved from storage, never by stateless introspection, so a revoked token is rejected. It must be an Access
 // Token granted the 'openid' scope, any DPoP or mutual TLS binding it carries must be satisfied, and when it was
@@ -29,6 +31,7 @@ import (
 // See: https://openid.net/specs/openid-connect-core-1_0.html#UserInfoRequest
 // See: https://www.rfc-editor.org/rfc/rfc6750#section-2
 // See: https://www.rfc-editor.org/rfc/rfc9449#section-7
+// See: https://www.rfc-editor.org/rfc/rfc9110#section-15.5.6
 func (f *Fosite) NewUserinfoRequest(ctx context.Context, r *http.Request, session Session) (requester UserinfoRequester, err error) {
 	request := &UserinfoRequest{
 		Lang:    i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r),
@@ -42,7 +45,8 @@ func (f *Fosite) NewUserinfoRequest(ctx context.Context, r *http.Request, sessio
 	case http.MethodGet, http.MethodPost:
 		break
 	default:
-		return request, errorsx.WithStack(ErrInvalidRequest.WithHintf("HTTP method is '%s', expected 'GET' or 'POST'.", r.Method))
+		// See: https://www.rfc-editor.org/rfc/rfc9110#section-15.5.6
+		return request, errorsx.WithStack(ErrInvalidRequest.WithHintf("HTTP method is '%s', expected 'GET' or 'POST'.", r.Method).WithCode(http.StatusMethodNotAllowed).withAllow(http.MethodGet, http.MethodPost))
 	}
 
 	if err = r.ParseForm(); err != nil {
@@ -51,7 +55,7 @@ func (f *Fosite) NewUserinfoRequest(ctx context.Context, r *http.Request, sessio
 
 	var token string
 
-	if token, err = f.userinfoCredentialFromRequest(ctx, r); err != nil {
+	if token, _, err = f.accessTokenCredentialFromRequest(ctx, r); err != nil {
 		return request, err
 	}
 
@@ -133,16 +137,6 @@ func requestServerFailure(err error) (failure error, ok bool) {
 	default:
 		return nil, false
 	}
-}
-
-// userinfoCredentialFromRequest returns the Access Token presented. A token presented using the DPoP scheme while DPoP
-// is disabled is treated as absent.
-func (f *Fosite) userinfoCredentialFromRequest(ctx context.Context, r *http.Request) (token string, err error) {
-	if scheme, _, _ := strings.Cut(r.Header.Get(consts.HeaderAuthorization), " "); strings.EqualFold(scheme, DPoPAccessToken) && !f.Config.GetDPoPEnabled(ctx) {
-		return "", nil
-	}
-
-	return introspectionCredentialFromRequest(r, f.Config.GetAccessTokenURIQueryParameterEnabled(ctx))
 }
 
 // validateUserinfoResource rejects an Access Token whose granted RFC 8707 resource indicators do not include the

@@ -232,11 +232,13 @@ func TestAuthorizationGrantDefaultLifetime(t *testing.T) {
 		expected       int64
 		capped         bool
 		expiresIn      bool
+		disableCap     bool
 	}{
 		{name: "ShouldDefaultToFiveMinutes", subjectExpires: 2 * time.Hour, expected: 300, expiresIn: true},
 		{name: "ShouldPreferTheConfiguredExpiry", expiry: 2 * time.Minute, subjectExpires: 2 * time.Hour, expected: 120},
 		{name: "ShouldPreferTheClientLifespan", client: 90 * time.Second, subjectExpires: 2 * time.Hour, expected: 90},
 		{name: "ShouldStillCapAtTheSubjectToken", subjectExpires: time.Minute, expected: 60, capped: true},
+		{name: "ShouldNotCapAtTheSubjectTokenWhenTheCapIsDisabled", subjectExpires: time.Minute, expected: 300, disableCap: true},
 	}
 
 	for _, tc := range testCases {
@@ -245,6 +247,7 @@ func TestAuthorizationGrantDefaultLifetime(t *testing.T) {
 				jwtType.Issue.Expiry = tc.expiry
 			})
 			f.cfg.AccessTokenLifespan = time.Hour
+			f.cfg.RFC8693DisableSubjectTokenExpiryCap = tc.disableCap
 
 			if tc.client > 0 {
 				f.requester = &lifespanClient{

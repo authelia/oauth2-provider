@@ -268,12 +268,16 @@ func (f *Fosite) WriteSSFPollResponse(ctx context.Context, rw http.ResponseWrite
 // WriteSSFPollError writes a poll endpoint error with 'Cache-Control: no-store'. The body carries the 'err' and
 // 'description' members of RFC 8936 Section 2.6. A status of 401 gives 'authentication_failed', 403 'access_denied' and
 // every other status 'invalid_request', which is a registered code. A rejected bearer credential is answered with the
-// RFC 6750 and RFC 9449 challenge.
+// RFC 6750 and RFC 9449 challenge. A request which included no access token is answered with HTTP 401 and the challenge
+// alone, without a body or error information (RFC 6750 Section 3.1).
 //
 // See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.5.1
 // See: https://www.rfc-editor.org/rfc/rfc8936.html#section-2.6
 func (f *Fosite) WriteSSFPollError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) {
-	rfc := f.prepareSSFError(ctx, rw, r, err, ssfPollAllowedMethods)
+	rfc, bare := f.prepareSSFError(ctx, rw, r, err, ssfPollAllowedMethods)
+	if bare {
+		return
+	}
 
 	code := ssfPollErrInvalidRequest
 

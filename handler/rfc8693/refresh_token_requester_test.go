@@ -18,6 +18,7 @@ import (
 
 func TestSanitizeRefreshTokenRequester(t *testing.T) {
 	details := oauth2.AuthorizationDetails{{Type: "payment", Actions: []string{"initiate", "status"}}}
+	claims := &oauth2.ClaimsRequest{IDToken: map[string]*oauth2.ClaimRequest{"email": {Essential: true}}}
 
 	grant := oauth2.NewAccessRequest(&DefaultSession{DefaultSession: &openid.DefaultSession{Username: "peter"}})
 	grant.SetID("grant")
@@ -27,6 +28,7 @@ func TestSanitizeRefreshTokenRequester(t *testing.T) {
 	grant.SetRequestedResource(oauth2.Arguments{"https://rs.example.com"})
 	grant.SetRequestedAuthorizationDetails(details)
 	grant.SetGrantedAuthorizationDetails(details)
+	grant.SetClaims(claims)
 
 	for _, scope := range grant.GetRequestedScopes() {
 		grant.GrantScope(scope)
@@ -83,6 +85,7 @@ func TestSanitizeRefreshTokenRequester(t *testing.T) {
 			assert.ElementsMatch(t, grant.GetGrantedResource(), requester.GetGrantedResource())
 			assert.Equal(t, details, requester.GetRequestedAuthorizationDetails())
 			assert.Equal(t, details, requester.GetGrantedAuthorizationDetails())
+			assert.Equal(t, claims, requester.(oauth2.ClaimsRequester).GetClaims())
 		})
 	}
 }

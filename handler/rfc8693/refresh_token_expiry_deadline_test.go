@@ -41,6 +41,7 @@ func TestRefreshTokenSubjectPastTheExpiryDeadline(t *testing.T) {
 				strategy := &hoauth2.HMACCoreStrategy{Enigma: &hmac.HMACStrategy{Config: cfg}, Config: cfg}
 
 				client := store.GetClients()["my-client"]
+				registerFixtureAudience(t, client)
 
 				issued := newIssuedRequest(client, "alice", nil, oauth2.RefreshToken)
 				issued.GetSession().SetExpiresAt(oauth2.RefreshToken, time.Now().UTC().Add(tc.expires))

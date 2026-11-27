@@ -140,17 +140,6 @@ var (
 	// See: https://www.rfc-editor.org/rfc/rfc8935#section-2
 	ErrSigningKeyNotRefreshed = errors.New("ssfreceiver: the signing keys of the transmitter could not be fetched again yet")
 
-	// ErrIssuedAtAhead is returned when the 'iat' of a SET is ahead of the clock of the Receiver by more than
-	// Config.ClockSkew and by no more than IssuedAtRedeliveryWindow more, and the SET has no other fault. No
-	// specification makes such a SET invalid, and the difference of the clocks is recoverable, so it is not a fault of
-	// the SET: a push is answered with a 503 and a polled SET is not acknowledged, so the Transmitter delivers it
-	// again.
-	//
-	// See: https://www.rfc-editor.org/rfc/rfc8935#section-2
-	// See: https://www.rfc-editor.org/rfc/rfc8936#section-2.3
-	// See: https://www.rfc-editor.org/rfc/rfc8417#section-5.3
-	ErrIssuedAtAhead = errors.New("ssfreceiver: the security event token was issued ahead of the clock of the receiver")
-
 	// ErrSubjectUnknown is returned by a SubjectResolver for a subject which identifies no principal of the
 	// application. The SET is acknowledged, and the Transmitter is never told.
 	//

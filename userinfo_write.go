@@ -19,7 +19,9 @@ import (
 )
 
 // WriteUserinfoError writes an error response for the UserInfo endpoint. A rejected Access Token is answered with the
-// RFC 6750 Section 3 'WWW-Authenticate' challenge, and every error with a JSON body. requester may be nil.
+// RFC 6750 Section 3 'WWW-Authenticate' challenge and a JSON body. A request which included no Access Token is answered
+// with HTTP 401 and the challenge alone, without a body or error information (RFC 6750 Section 3.1). Every other error
+// is answered with a JSON body. requester may be nil.
 //
 // See: https://openid.net/specs/openid-connect-core-1_0.html#UserInfoError
 // See: https://www.rfc-editor.org/rfc/rfc6750#section-3
@@ -41,7 +43,13 @@ func (f *Fosite) WriteUserinfoError(ctx context.Context, rw http.ResponseWriter,
 	}
 
 	if IsBearerCredentialError(rfc) {
-		rfc = f.WriteBearerAuthorizationChallenge(ctx, rw, r, rfc)
+		var bare bool
+
+		if rfc, bare = f.writeBearerAuthorizationChallenge(ctx, rw, r, rfc); bare {
+			writeBareAuthorizationChallenge(rw)
+
+			return
+		}
 	}
 
 	f.writeErrorJSONRFC(ctx, rw, rfc)
@@ -160,6 +168,10 @@ func (c *userinfoUnsignedClient) GetUserinfoSignedResponseAlg() (alg string) {
 	}
 
 	return alg
+}
+
+func (c *userinfoUnsignedClient) IsClientIDMetadataDocumentClient() (is bool) {
+	return jwt.IsClientIDMetadataDocumentClient(c.UserInfoClient)
 }
 
 func (c *userinfoUnsignedClient) GetClientSecretExpiresAt() (expires time.Time) {

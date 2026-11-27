@@ -94,6 +94,7 @@ func TestIssueHandlerPopulate(t *testing.T) {
 		resources    oauth2.Arguments
 		expectCNF    bool
 		expectExpCap bool
+		disableCap   bool
 	}{
 		{name: "ShouldIssueTheClaimSet", subjectExp: time.Now().Add(time.Hour), resources: oauth2.Arguments{redeemResource}},
 		{name: "ShouldIssueResourceArray", subjectExp: time.Now().Add(time.Hour), resources: oauth2.Arguments{redeemResource, issueFiles}},
@@ -101,11 +102,13 @@ func TestIssueHandlerPopulate(t *testing.T) {
 		{name: "ShouldBindWhenDPoPEnabled", dpop: true, jkt: redeemJKT, subjectExp: time.Now().Add(time.Hour), resources: oauth2.Arguments{redeemResource}, expectCNF: true},
 		{name: "ShouldNotBindWhenDPoPDisabled", jkt: redeemJKT, subjectExp: time.Now().Add(time.Hour), resources: oauth2.Arguments{redeemResource}},
 		{name: "ShouldCapToSubjectTokenExpiry", subjectExp: time.Now().Add(time.Minute), resources: oauth2.Arguments{redeemResource}, expectExpCap: true},
+		{name: "ShouldNotCapToSubjectTokenExpiryWhenTheCapIsDisabled", subjectExp: time.Now().Add(time.Minute), resources: oauth2.Arguments{redeemResource}, disableCap: true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			handler, cfg, key := newIssueFixture(t, tc.dpop)
+			cfg.RFC8693DisableSubjectTokenExpiryCap = tc.disableCap
 
 			authTime := time.Now().Add(-time.Minute).Unix()
 

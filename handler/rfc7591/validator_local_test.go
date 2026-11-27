@@ -6,6 +6,10 @@ package rfc7591
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/rsa"
 	"math/big"
 	"testing"
@@ -427,6 +431,14 @@ func TestLocalValidator(t *testing.T) {
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'id_token_signed_response_alg' value must not be 'none'.",
 		},
 		{
+			name: "ShouldRejectNoneUserinfoSignedResponseAlg",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				RedirectURIs:              []string{"https://example.com/cb"},
+				UserinfoSignedResponseAlg: "none",
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'userinfo_signed_response_alg' value 'none' is not supported by this authorization server.",
+		},
+		{
 			name: "ShouldRejectNoneTokenEndpointAuthSigningAlg",
 			metadata: &oauth2.ClientRegistrationMetadata{
 				RedirectURIs:                []string{"https://example.com/cb"},
@@ -562,6 +574,15 @@ func TestLocalValidator(t *testing.T) {
 			metadata: &oauth2.ClientRegistrationMetadata{
 				GrantTypes:              []string{"client_credentials"},
 				TokenEndpointAuthMethod: "self_signed_tls_client_auth",
+			},
+			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'self_signed_tls_client_auth' authentication method requires either the 'jwks' or 'jwks_uri' value to be registered.",
+		},
+		{
+			name: "ShouldRejectSelfSignedTLSClientAuthWithAnEmptyJSONWebKeys",
+			metadata: &oauth2.ClientRegistrationMetadata{
+				GrantTypes:              []string{"client_credentials"},
+				TokenEndpointAuthMethod: "self_signed_tls_client_auth",
+				JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{}},
 			},
 			expected: "The value of one of the client metadata fields is invalid and the server has rejected this request. The 'self_signed_tls_client_auth' authentication method requires either the 'jwks' or 'jwks_uri' value to be registered.",
 		},
@@ -1085,11 +1106,100 @@ func TestLocalValidatorAuthMethodCredentials(t *testing.T) {
 		prefix  = "The value of one of the client metadata fields is invalid and the server has rejected this request. "
 	)
 
+	const (
+		basic = consts.ClientAuthMethodClientSecretBasic
+		post  = consts.ClientAuthMethodClientSecretPost
+		none  = consts.ClientAuthMethodNone
+	)
+
+	ec256, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	ed, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	keys := func(keys ...jose.JSONWebKey) *jose.JSONWebKeySet {
+		return &jose.JSONWebKeySet{Keys: keys}
+	}
+
+	rsaKey := jose.JSONWebKey{Key: rsaPublicKeyOfSize(2048)}
+	ecKey := jose.JSONWebKey{Key: &ec256.PublicKey}
+	edKey := jose.JSONWebKey{Key: ed}
+
 	testCases := []struct {
 		name     string
 		metadata oauth2.ClientRegistrationMetadata
 		expected string
 	}{
+		{name: "ShouldAcceptNoneWithoutAnotherMethod", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none}},
+		{name: "ShouldAcceptNoneWithNoneAtTheOtherEndpoints", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, IntrospectionEndpointAuthMethod: none, RevocationEndpointAuthMethod: none}},
+		{name: "ShouldAcceptNoneWithPrivateKeyJWTAtTheRevocationEndpoint", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, RevocationEndpointAuthMethod: private, JSONWebKeysURI: jwksURI}},
+		{name: "ShouldAcceptASecretMethodAtTheIntrospectionEndpointWithAnOmittedTokenMethod", metadata: oauth2.ClientRegistrationMetadata{IntrospectionEndpointAuthMethod: post}},
+		{
+			name:     "ShouldRejectNoneWithClientSecretBasicAtTheIntrospectionEndpoint",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, IntrospectionEndpointAuthMethod: basic},
+			expected: "The 'introspection_endpoint_auth_method' value 'client_secret_basic' requires a client secret which is not issued when the 'token_endpoint_auth_method' value is 'none'.",
+		},
+		{
+			name:     "ShouldRejectNoneWithClientSecretPostAtTheRevocationEndpoint",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, RevocationEndpointAuthMethod: post},
+			expected: "The 'revocation_endpoint_auth_method' value 'client_secret_post' requires a client secret which is not issued when the 'token_endpoint_auth_method' value is 'none'.",
+		},
+		{
+			name:     "ShouldRejectNoneWithClientSecretJWTAtTheIntrospectionEndpoint",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: none, IntrospectionEndpointAuthMethod: secret, IntrospectionEndpointAuthSigningAlg: "HS256"},
+			expected: "The 'introspection_endpoint_auth_method' value 'client_secret_jwt' requires a client secret which is not issued when the 'token_endpoint_auth_method' value is 'none'.",
+		},
+		{name: "ShouldAcceptPrivateKeyJWTWithAKeyOfAnyAsymmetricAlgorithmWithoutARegisteredAlgorithm", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, JSONWebKeys: keys(edKey)}},
+		{name: "ShouldAcceptPrivateKeyJWTWithOneUsableKeyAmongOthers", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, TokenEndpointAuthSigningAlg: "ES256", JSONWebKeys: keys(rsaKey, jose.JSONWebKey{Key: &ec256.PublicKey, Use: "enc"}, ecKey)}},
+		{name: "ShouldAcceptPrivateKeyJWTWithALabeledKey", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, TokenEndpointAuthSigningAlg: "PS256", JSONWebKeys: keys(jose.JSONWebKey{Key: rsaPublicKeyOfSize(2048), Use: "sig", Algorithm: "PS256", KeyOps: []string{"verify"}})}},
+		{name: "ShouldAcceptPrivateKeyJWTWithAnEd25519KeyForEdDSA", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, TokenEndpointAuthSigningAlg: "EdDSA", JSONWebKeys: keys(edKey)}},
+		{name: "ShouldAcceptAnEndpointWithItsOwnAlgorithmAndAKeyForEach", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, TokenEndpointAuthSigningAlg: "RS256", RevocationEndpointAuthSigningAlg: "ES256", JSONWebKeys: keys(rsaKey, ecKey)}},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithAKeyOfAnotherKeyType",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, TokenEndpointAuthSigningAlg: "RS256", JSONWebKeys: keys(ecKey)},
+			expected: "The 'token_endpoint_auth_method' value 'private_key_jwt' requires the 'jwks' value to have a key which can verify a signature of the 'token_endpoint_auth_signing_alg' value 'RS256'.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithAKeyOfAnotherCurve",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, TokenEndpointAuthSigningAlg: "ES384", JSONWebKeys: keys(ecKey)},
+			expected: "The 'token_endpoint_auth_method' value 'private_key_jwt' requires the 'jwks' value to have a key which can verify a signature of the 'token_endpoint_auth_signing_alg' value 'ES384'.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithAKeyOfAnotherAlgorithm",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, TokenEndpointAuthSigningAlg: "RS256", JSONWebKeys: keys(jose.JSONWebKey{Key: rsaPublicKeyOfSize(2048), Algorithm: "PS256"})},
+			expected: "The 'token_endpoint_auth_method' value 'private_key_jwt' requires the 'jwks' value to have a key which can verify a signature of the 'token_endpoint_auth_signing_alg' value 'RS256'.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithOnlyAnEncryptionKey",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, TokenEndpointAuthSigningAlg: "RS256", JSONWebKeys: keys(jose.JSONWebKey{Key: rsaPublicKeyOfSize(2048), Use: "enc"})},
+			expected: "The 'token_endpoint_auth_method' value 'private_key_jwt' requires the 'jwks' value to have a key which can verify a signature of the 'token_endpoint_auth_signing_alg' value 'RS256'.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithOnlyAnEncryptionKeyWithoutARegisteredAlgorithm",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, JSONWebKeys: keys(jose.JSONWebKey{Key: rsaPublicKeyOfSize(2048), Use: "enc"})},
+			expected: "The 'token_endpoint_auth_method' value 'private_key_jwt' requires the 'jwks' value to have a key which can verify a signature.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithAKeyOfAnEncryptionAlgorithmWithoutARegisteredAlgorithm",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, JSONWebKeys: keys(jose.JSONWebKey{Key: rsaPublicKeyOfSize(2048), Algorithm: "RSA-OAEP"})},
+			expected: "The 'token_endpoint_auth_method' value 'private_key_jwt' requires the 'jwks' value to have a key which can verify a signature.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithAKeyWhichDoesNotPermitVerify",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, TokenEndpointAuthSigningAlg: "RS256", JSONWebKeys: keys(jose.JSONWebKey{Key: rsaPublicKeyOfSize(2048), KeyOps: []string{"encrypt", "wrapKey"}})},
+			expected: "The 'token_endpoint_auth_method' value 'private_key_jwt' requires the 'jwks' value to have a key which can verify a signature of the 'token_endpoint_auth_signing_alg' value 'RS256'.",
+		},
+		{
+			name:     "ShouldRejectPrivateKeyJWTWithoutAKeyForTheIntrospectionEndpointAlgorithm",
+			metadata: oauth2.ClientRegistrationMetadata{IntrospectionEndpointAuthMethod: private, IntrospectionEndpointAuthSigningAlg: "ES256", JSONWebKeys: keys(rsaKey)},
+			expected: "The 'introspection_endpoint_auth_method' value 'private_key_jwt' requires the 'jwks' value to have a key which can verify a signature of the 'introspection_endpoint_auth_signing_alg' value 'ES256'.",
+		},
+		{
+			name:     "ShouldRejectTheInheritedPrivateKeyJWTMethodWithoutAKeyForTheRevocationEndpointAlgorithm",
+			metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, TokenEndpointAuthSigningAlg: "RS256", RevocationEndpointAuthSigningAlg: "ES256", JSONWebKeys: keys(rsaKey)},
+			expected: "The 'token_endpoint_auth_method' value 'private_key_jwt' requires the 'jwks' value to have a key which can verify a signature of the 'revocation_endpoint_auth_signing_alg' value 'ES256'.",
+		},
 		{name: "ShouldAcceptPrivateKeyJWTWithJWKSURI", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, JSONWebKeysURI: jwksURI}},
 		{name: "ShouldAcceptPrivateKeyJWTWithJWKS", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: private, JSONWebKeys: &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: rsaPublicKeyOfSize(2048)}}}, TokenEndpointAuthSigningAlg: "RS256"}},
 		{name: "ShouldAcceptClientSecretJWT", metadata: oauth2.ClientRegistrationMetadata{TokenEndpointAuthMethod: secret}},
@@ -1162,7 +1272,7 @@ func TestLocalValidatorAuthMethodCredentials(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateAuthMethodCredentials(&tc.metadata)
+			err = validateAuthMethodCredentials(&tc.metadata)
 
 			if tc.expected == "" {
 				require.NoError(t, err)

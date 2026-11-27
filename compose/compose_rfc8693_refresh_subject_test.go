@@ -72,10 +72,11 @@ func TestRFC8693RefreshTokenSubjectRequiresOptIn(t *testing.T) {
 
 func TestRFC8693RefreshTokenSubjectIsRestrictedToItsGrant(t *testing.T) {
 	testCases := []struct {
-		name     string
-		audience []string
-		resource []string
-		expected error
+		name      string
+		audience  []string
+		resource  []string
+		defaulted bool
+		expected  error
 	}{
 		{name: "ShouldRejectAnAudienceOutsideTheGrant", audience: []string{refreshSubjectOtherAudience}, expected: oauth2.ErrInvalidTarget},
 		{name: "ShouldRejectAResourceOutsideTheGrant", resource: []string{refreshSubjectOtherResource}, expected: oauth2.ErrInvalidTarget},
@@ -84,7 +85,7 @@ func TestRFC8693RefreshTokenSubjectIsRestrictedToItsGrant(t *testing.T) {
 		{name: "ShouldAcceptTheGrantedAudience", audience: []string{refreshSubjectAudience}},
 		{name: "ShouldAcceptTheGrantedResource", resource: []string{refreshSubjectResource}},
 		{name: "ShouldAcceptTheGrantedAudienceAndResource", audience: []string{refreshSubjectAudience}, resource: []string{refreshSubjectResource}},
-		{name: "ShouldAcceptNoTarget"},
+		{name: "ShouldDefaultNoTargetToTheGrant", defaulted: true},
 	}
 
 	for _, sc := range refreshSubjectStores() {
@@ -120,9 +121,16 @@ func TestRFC8693RefreshTokenSubjectIsRestrictedToItsGrant(t *testing.T) {
 						if requested == consts.TokenTypeRFC8693AccessToken {
 							issued := f.accessToken(t, response.GetAccessToken())
 
+							audience, resource := tc.audience, tc.resource
+
+							// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
+							if tc.defaulted {
+								audience, resource = f.grant.GetGrantedAudience(), f.grant.GetGrantedResource()
+							}
+
 							assert.Equal(t, f.grant.GetID(), issued.GetID())
-							assert.ElementsMatch(t, tc.audience, issued.GetGrantedAudience())
-							assert.ElementsMatch(t, tc.resource, issued.GetGrantedResource())
+							assert.ElementsMatch(t, audience, issued.GetGrantedAudience())
+							assert.ElementsMatch(t, resource, issued.GetGrantedResource())
 						}
 
 						refresh := response.GetAccessToken()
@@ -335,6 +343,85 @@ const (
 	refreshSubjectOtherResource = "https://resource.example.com/other"
 )
 
+func TestRFC8693RefreshTokenSubjectExpiryDeadline(t *testing.T) {
+	testCases := []struct {
+		name      string
+		unrotated bool
+		deadline  time.Duration
+		expected  time.Duration
+	}{
+		{name: "ShouldNotRecordTheSubjectTokenExpiryWhenRotated"},
+		{name: "ShouldRecordTheSubjectTokenExpiryWhenNotRotated", unrotated: true, expected: 10 * time.Minute},
+		{name: "ShouldKeepTheDeadlineOfTheGrantWhenRotated", deadline: 30 * time.Minute, expected: 30 * time.Minute},
+		{name: "ShouldKeepTheEarlierSubjectTokenExpiryWhenNotRotated", unrotated: true, deadline: 30 * time.Minute, expected: 10 * time.Minute},
+	}
+
+	for _, sc := range refreshSubjectStores() {
+		for _, requested := range []string{consts.TokenTypeRFC8693AccessToken, consts.TokenTypeRFC8693RefreshToken} {
+			for _, tc := range testCases {
+				t.Run(refreshSubjectName(sc.name, true, requested)+"/"+tc.name, func(t *testing.T) {
+					f := newRefreshSubjectFixture(t, sc.newStore, true)
+
+					f.client.TokenExchangeRefreshTokenRotationOverride = true
+					f.client.TokenExchangeRefreshTokenRotation = !tc.unrotated
+
+					now := time.Now().UTC().Truncate(time.Second)
+					expires := now.Add(10 * time.Minute)
+
+					var deadline time.Time
+
+					if tc.deadline != 0 {
+						deadline = now.Add(tc.deadline)
+					}
+
+					check := func(response oauth2.AccessResponder, token string) {
+						stored := f.refreshToken(t, token).GetSession().(oauth2.ExpiryDeadlineSession).GetExpiryDeadline()
+
+						if tc.expected == 0 {
+							assert.True(t, stored.IsZero())
+							assert.Nil(t, response.GetExtra(consts.AccessResponseAuthorizationExpiresIn))
+
+							return
+						}
+
+						assert.WithinDuration(t, now.Add(tc.expected), stored, time.Second)
+						assert.InDelta(t, tc.expected.Seconds(), response.GetExtra(consts.AccessResponseAuthorizationExpiresIn), 5)
+					}
+
+					// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
+					response, err := f.token(f.exchange(f.issue(t, expires, deadline), requested, "openid offline_access read"))
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+					refresh := response.GetAccessToken()
+					if requested == consts.TokenTypeRFC8693AccessToken {
+						refresh = refreshSubjectString(response.GetExtra(consts.AccessResponseRefreshToken))
+					}
+
+					require.NotEmpty(t, refresh)
+
+					check(response, refresh)
+					assert.InDelta(t, (10 * time.Minute).Seconds(), response.GetExtra(consts.AccessResponseRefreshTokenTimeout), 5)
+
+					refreshed, err := f.token(f.refresh(refresh))
+					require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+					refresh = refreshSubjectString(refreshed.GetExtra(consts.AccessResponseRefreshToken))
+					require.NotEmpty(t, refresh)
+
+					check(refreshed, refresh)
+
+					timeout := time.Hour
+					if tc.expected != 0 {
+						timeout = tc.expected
+					}
+
+					assert.InDelta(t, timeout.Seconds(), refreshed.GetExtra(consts.AccessResponseRefreshTokenTimeout), 5)
+				})
+			}
+		}
+	}
+}
+
 type refreshSubjectStore interface {
 	hoauth2.TokenRevocationStorage
 }
@@ -490,6 +577,24 @@ func newRefreshSubjectFixture(t *testing.T, newStore func() (refreshSubjectStore
 		grant:    grant,
 		subject:  token,
 	}
+}
+
+func (f *refreshSubjectFixture) issue(t *testing.T, expires, deadline time.Time) (token string) {
+	t.Helper()
+
+	session := f.grant.GetSession().Clone().(*rfc8693.DefaultSession)
+	session.SetExpiresAt(oauth2.RefreshToken, expires)
+	session.SetExpiryDeadline(deadline)
+
+	grant := &oauth2.AccessRequest{GrantTypes: f.grant.GrantTypes, Request: f.grant.Request}
+	grant.ID = "bounded-grant-id"
+	grant.Session = session
+
+	token, signature, err := f.strategy.GenerateRefreshToken(t.Context(), grant)
+	require.NoError(t, err)
+	require.NoError(t, f.store.CreateRefreshTokenSession(t.Context(), signature, "", grant.Sanitize(nil)))
+
+	return token
 }
 
 func (f *refreshSubjectFixture) exchange(subject, requested, scope string) url.Values {

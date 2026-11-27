@@ -37,9 +37,13 @@ func (f *Fosite) WriteRFC7591ClientRegistrationResponse(ctx context.Context, rw 
 
 // WriteRFC7591ClientRegistrationError writes a client registration endpoint error response.
 //
+// r is the request being answered and may be nil. A request which included no access token is answered with HTTP 401
+// and the 'WWW-Authenticate' challenge alone, without a body (RFC 6750 Section 3.1). Without r the challenge omits the
+// RFC 9728 Section 5.1 'resource_metadata' parameter and the body is written.
+//
 // See: https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.2
-func (f *Fosite) WriteRFC7591ClientRegistrationError(ctx context.Context, rw http.ResponseWriter, requester ClientRegistrationRequester, err error) {
-	f.writeClientRegistrationError(ctx, rw, requester, err, false)
+func (f *Fosite) WriteRFC7591ClientRegistrationError(ctx context.Context, rw http.ResponseWriter, r *http.Request, requester ClientRegistrationRequester, err error) {
+	f.writeClientRegistrationError(ctx, rw, r, requester, err, false)
 }
 
 func (f *Fosite) writeClientRegistrationResponse(ctx context.Context, rw http.ResponseWriter, responder ClientRegistrationResponder) {
@@ -72,13 +76,14 @@ func (f *Fosite) writeClientRegistrationResponse(ctx context.Context, rw http.Re
 }
 
 // writeClientRegistrationError writes an error response shared by the RFC 7591 client registration endpoint and the
-// RFC 7592 client configuration endpoint. requester may be nil.
+// RFC 7592 client configuration endpoint. r and requester may be nil.
 //
 // When configuration is true an ErrInvalidRequest is written as 405 (RFC 7592 Section 3, unsupported method) and a
 // 401 carries the Bearer challenge alone, as a registration access token can never be DPoP bound. Otherwise the
 // challenge is the one WriteBearerAuthorizationChallenge composes. Either carries the RFC 9728 Section 5.1
-// 'resource_metadata' parameter only when ctx carries the request under RequestContextKey.
-func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.ResponseWriter, requester Requester, err error, configuration bool) {
+// 'resource_metadata' parameter only when r is not nil. When r included no token the 401 carries the challenge alone,
+// without a body (RFC 6750 Section 3.1).
+func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.ResponseWriter, r *http.Request, requester Requester, err error, configuration bool) {
 	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
@@ -93,21 +98,29 @@ func (f *Fosite) writeClientRegistrationError(ctx context.Context, rw http.Respo
 		rw.Header().Set(consts.HeaderAllow, clientConfigurationAllowedMethods)
 	}
 
-	// The request is present when the caller writes the error from a context carrying it under RequestContextKey,
-	// and absent otherwise.
-	r := RequestFromContext(ctx)
-
 	switch {
 	case configuration:
 		// RFC 7592 Section 3: a missing or invalid registration access token is reported with a 401 status and a
 		// 'WWW-Authenticate' header, as for any other bearer token protected resource (RFC 6750 Section 3).
 		if rfc.CodeField == http.StatusUnauthorized {
 			rw.Header().Set(consts.HeaderWWWAuthenticate, f.clientConfigurationChallenge(ctx, r))
+
+			if r != nil && len(presentedSchemes(authorizationHeaderSchemes(r), false)) == 0 {
+				writeBareAuthorizationChallenge(rw)
+
+				return
+			}
 		}
 	case IsBearerCredentialError(err):
+		var bare bool
+
 		// Without the request the challenge is composed for an unestablished scheme, which RFC 9449 Section 7.2
 		// Figure 19 covers.
-		rfc = f.WriteBearerAuthorizationChallenge(ctx, rw, r, rfc)
+		if rfc, bare = f.writeBearerAuthorizationChallenge(ctx, rw, r, rfc); bare {
+			writeBareAuthorizationChallenge(rw)
+
+			return
+		}
 	}
 
 	data, merr := json.Marshal(rfc)

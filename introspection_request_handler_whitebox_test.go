@@ -23,28 +23,33 @@ func TestIntrospectionCredentialFromRequest(t *testing.T) {
 	)
 
 	testCases := []struct {
-		name     string
-		target   string
-		header   string
-		body     string
-		query    bool
-		expected string
-		err      string
+		name         string
+		target       string
+		header       string
+		body         string
+		query        bool
+		dpopDisabled bool
+		expected     string
+		method       string
+		err          string
 	}{
 		{
 			name:     "ShouldReturnTheDPoPSchemeToken",
 			header:   "DPoP some-token",
 			expected: "some-token",
+			method:   consts.AuthSchemeDPoP,
 		},
 		{
 			name:     "ShouldMatchTheDPoPSchemeWithoutRegardToCase",
 			header:   "dpop some-token",
 			expected: "some-token",
+			method:   consts.AuthSchemeDPoP,
 		},
 		{
 			name:     "ShouldTrimRepeatedSpacesAfterTheDPoPScheme",
 			header:   "DPoP   some-token",
 			expected: "some-token",
+			method:   consts.AuthSchemeDPoP,
 		},
 		{
 			name:     "ShouldReturnNothingForTheDPoPSchemeWithoutAToken",
@@ -55,17 +60,20 @@ func TestIntrospectionCredentialFromRequest(t *testing.T) {
 			name:     "ShouldReturnTheBearerSchemeToken",
 			header:   "Bearer some-token",
 			expected: "some-token",
+			method:   consts.AuthSchemeBearer,
 		},
 		{
 			name:     "ShouldReturnTheFormBodyToken",
 			body:     "access_token=some-token",
 			expected: "some-token",
+			method:   consts.AuthSchemeBearer,
 		},
 		{
 			name:     "ShouldReturnTheFormBodyTokenAlongsideABasicHeader",
 			header:   "Basic abc",
 			body:     "access_token=some-token",
 			expected: "some-token",
+			method:   consts.AuthSchemeBearer,
 		},
 		{
 			name:     "ShouldIgnoreTheQueryParameterToken",
@@ -86,6 +94,7 @@ func TestIntrospectionCredentialFromRequest(t *testing.T) {
 			body:     "token=other-token",
 			query:    true,
 			expected: "some-token",
+			method:   consts.AuthSchemeBearer,
 		},
 		{
 			name: "ShouldRejectARepeatedFormBodyToken",
@@ -130,6 +139,34 @@ func TestIntrospectionCredentialFromRequest(t *testing.T) {
 			query:  true,
 			err:    errMultiple,
 		},
+		{
+			name:         "ShouldReturnTheFormBodyTokenWhenTheDPoPSchemeIsDisabled",
+			header:       "DPoP some-token",
+			body:         "access_token=form-token",
+			dpopDisabled: true,
+			expected:     "form-token",
+			method:       consts.AuthSchemeBearer,
+		},
+		{
+			name:     "ShouldReturnTheFormBodyTokenAlongsideTheDPoPSchemeWithoutAToken",
+			header:   "DPoP",
+			body:     "access_token=form-token",
+			expected: "form-token",
+			method:   consts.AuthSchemeBearer,
+		},
+		{
+			name:         "ShouldReturnNothingForTheDPoPSchemeWhenDisabled",
+			header:       "DPoP some-token",
+			dpopDisabled: true,
+			expected:     "",
+		},
+		{
+			name:         "ShouldRejectARepeatedParameterWhenTheDPoPSchemeIsDisabled",
+			header:       "DPoP some-token",
+			body:         "access_token=a&access_token=b",
+			dpopDisabled: true,
+			err:          errRepeated,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -143,13 +180,14 @@ func TestIntrospectionCredentialFromRequest(t *testing.T) {
 
 			require.NoError(t, r.ParseForm())
 
-			token, err := introspectionCredentialFromRequest(r, tc.query)
+			token, method, err := introspectionCredentialFromRequest(r, tc.query, !tc.dpopDisabled)
 
 			if tc.err != "" {
 				assert.EqualError(t, ErrorToDebugRFC6749Error(err), tc.err)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tc.expected, token)
+				assert.Equal(t, tc.method, method)
 			}
 		})
 	}

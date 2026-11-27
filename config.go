@@ -1054,6 +1054,19 @@ type RFC8628UserAuthorizeEndpointHandlersProvider interface {
 	GetRFC8628UserAuthorizeEndpointHandlers(ctx context.Context) (handlers RFC8628UserAuthorizeEndpointHandlers)
 }
 
+// RFC8693SubjectTokenExpiryCapProvider is an optional configuration provider for RFC 8693 Token Exchange. A
+// configuration which does not implement it caps the expiry of every token a token exchange issues at the expiry of
+// the 'subject_token', which RFC 8693 Section 2.1 permits by letting the expiration of the input token influence that
+// of the output token.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
+type RFC8693SubjectTokenExpiryCapProvider interface {
+	// GetRFC8693DisableSubjectTokenExpiryCap returns true if a token issued by a token exchange may expire after the
+	// 'subject_token', in which case it expires as its lifespan and the expiry deadline of the grant decide. A client
+	// which implements rfc8693.SubjectTokenExpiryCapOverrideClient decides this for itself.
+	GetRFC8693DisableSubjectTokenExpiryCap(ctx context.Context) (disable bool)
+}
+
 // RFC8693ConfigProvider is the configuration provider for RFC8693 Token Exchange.
 type RFC8693ConfigProvider interface {
 	// GetRFC8693TokenTypes returns the supported token types for Token Exchange keyed by their token type identifier

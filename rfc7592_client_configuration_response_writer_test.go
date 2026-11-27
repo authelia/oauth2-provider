@@ -88,7 +88,7 @@ func TestFositeWriteRFC7592ClientConfigurationError(t *testing.T) {
 			provider := &Fosite{Config: new(Config)}
 			rw := httptest.NewRecorder()
 
-			provider.WriteRFC7592ClientConfigurationError(context.Background(), rw, NewClientConfigurationRequest(), tc.err)
+			provider.WriteRFC7592ClientConfigurationError(context.Background(), rw, nil, NewClientConfigurationRequest(), tc.err)
 
 			assert.Equal(t, tc.code, rw.Code)
 			assert.Equal(t, tc.wwwAuth, rw.Header().Get(consts.HeaderWWWAuthenticate))

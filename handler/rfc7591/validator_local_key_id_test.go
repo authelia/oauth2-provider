@@ -130,7 +130,7 @@ func TestLocalValidatorSigningKeyIDs(t *testing.T) {
 				metadata.UserinfoSignedResponseAlg = consts.JSONWebTokenAlgNone
 				metadata.UserinfoSignedResponseKeyID = "es256"
 			},
-			err: "The 'userinfo_signed_response_kid' value 'es256' requires a signed response, but the 'userinfo_signed_response_alg' value is omitted or 'none'.",
+			err: "The 'userinfo_signed_response_alg' value 'none' is not supported by this authorization server.",
 		},
 		{
 			name: "ShouldRejectUserinfoKeyIDUnknown",

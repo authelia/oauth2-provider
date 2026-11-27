@@ -998,7 +998,7 @@ func chainIntrospectRecorded(t *testing.T, provider oauth2.Provider, token strin
 
 	responder, err := provider.NewIntrospectionRequest(ctx, r, &oauth2.DefaultSession{})
 	if err != nil {
-		provider.WriteIntrospectionError(ctx, rw, err)
+		provider.WriteIntrospectionError(ctx, rw, nil, err)
 	} else {
 		provider.WriteIntrospectionResponse(ctx, rw, responder)
 	}
@@ -1027,7 +1027,7 @@ func chainIntrospect(t *testing.T, provider oauth2.Provider, token string) (body
 
 	responder, err := provider.NewIntrospectionRequest(ctx, r, &oauth2.DefaultSession{})
 	if err != nil {
-		provider.WriteIntrospectionError(ctx, rw, err)
+		provider.WriteIntrospectionError(ctx, rw, nil, err)
 	} else {
 		provider.WriteIntrospectionResponse(ctx, rw, responder)
 	}
@@ -1146,7 +1146,7 @@ func chainIntrospectAsWithCert(t *testing.T, provider oauth2.Provider, subject, 
 
 	responder, err := provider.NewIntrospectionRequest(ctx, r, &oauth2.DefaultSession{})
 	if err != nil {
-		provider.WriteIntrospectionError(ctx, rw, err)
+		provider.WriteIntrospectionError(ctx, rw, nil, err)
 	} else {
 		provider.WriteIntrospectionResponse(ctx, rw, responder)
 	}

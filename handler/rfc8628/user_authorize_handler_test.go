@@ -351,6 +351,65 @@ func TestUserAuthorizeHandlerConcurrentDecisionsKeepTheFirst(t *testing.T) {
 	}
 }
 
+// RFC 8628 Section 3.3: the user agent contributes only the user code.
+func TestUserAuthorizeHandlerKeepsOnlyTheUserCodeOfTheUserAgent(t *testing.T) {
+	testCases := []struct {
+		name     string
+		newStore func() Storage
+	}{
+		{name: "ShouldKeepOnlyTheUserCodeWithMemoryStore", newStore: func() Storage { return storage.NewMemoryStore() }},
+		{name: "ShouldKeepOnlyTheUserCodeWithHydratingMemoryStore", newStore: func() Storage { return storage.NewHydratingMemoryStore() }},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{RFC8628CodeLifespan: time.Minute * 10}
+			strategy := hoauth2.NewHMACCoreStrategy(&oauth2.Config{
+				GlobalSecret:        []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar"),
+				RFC8628CodeLifespan: time.Minute * 10,
+			}, "authelia_%s_")
+
+			store := tc.newStore()
+			handler := &UserAuthorizeHandler{Storage: store, Strategy: strategy, Config: config}
+
+			_, deviceSignature, err := strategy.GenerateRFC8628DeviceCode(t.Context())
+			require.NoError(t, err)
+
+			code, userSignature, err := strategy.GenerateRFC8628UserCode(t.Context())
+			require.NoError(t, err)
+
+			stored := oauth2.NewDeviceAuthorizeRequest()
+			stored.Client = &oauth2.DefaultClient{ID: "device-client", GrantTypes: oauth2.Arguments{string(oauth2.GrantTypeDeviceCode)}}
+			stored.Form = url.Values{"client_id": {"device-client"}, "scope": {"openid"}, "prompt": {"login"}}
+			stored.SetSession(openid.NewDefaultSession())
+			stored.GetSession().SetExpiresAt(oauth2.UserCode, time.Now().UTC().Add(time.Minute).Truncate(jwt.TimePrecision))
+			stored.SetDeviceCodeSignature(deviceSignature)
+			stored.SetUserCodeSignature(userSignature)
+			stored.SetStatus(oauth2.DeviceAuthorizeStatusNew)
+
+			require.NoError(t, store.CreateDeviceCodeSession(t.Context(), deviceSignature, stored))
+
+			session := openid.NewDefaultSession()
+			session.SetSubject("user")
+
+			request := oauth2.NewDeviceAuthorizeRequest()
+			request.SetSession(session)
+			request.Form = url.Values{
+				"user_code":  {code},
+				"prompt":     {"none"},
+				"max_age":    {"99999999"},
+				"acr_values": {"1"},
+				"nonce":      {"abc"},
+				"claims":     {"{}"},
+			}
+
+			require.NoError(t, handler.HandleRFC8628UserAuthorizeEndpointRequest(t.Context(), request))
+
+			assert.Equal(t, url.Values{"user_code": {code}, "client_id": {"device-client"}, "scope": {"openid"}, "prompt": {"login"}}, request.GetRequestForm())
+		})
+	}
+}
+
 func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_HandleRFC8628UserAuthorizeEndpointRequest(t *testing.T) {
 	type fields struct {
 		Storage  Storage

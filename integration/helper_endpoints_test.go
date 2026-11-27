@@ -40,7 +40,7 @@ func tokenIntrospectionHandler(t *testing.T, oauth2 oauth2.Provider, session oau
 		ar, err := oauth2.NewIntrospectionRequest(ctx, req, session)
 		if err != nil {
 			t.Logf("Introspection request failed because: %+v", err)
-			oauth2.WriteIntrospectionError(req.Context(), rw, err)
+			oauth2.WriteIntrospectionError(req.Context(), rw, req, err)
 
 			return
 		}

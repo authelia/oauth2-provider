@@ -55,6 +55,12 @@ type RefreshTokenTypeHandler struct {
 
 	ScopeStrategy oauth2.ScopeStrategy
 
+	// AudienceStrategy and ResourceStrategy match the targets of an exchange against the client and the subject token.
+	// They must be the same as those of the TokenExchangeGrantHandler, which this handler cannot see, or a target the
+	// request omits is checked under a different policy than one it names. The Config ones apply when nil.
+	AudienceStrategy oauth2.AudienceStrategy
+	ResourceStrategy oauth2.ResourceStrategy
+
 	hoauth2.CoreStrategy
 
 	Storage
@@ -199,7 +205,7 @@ func (c *RefreshTokenTypeHandler) validate(ctx context.Context, request oauth2.A
 		return nil, nil, errExchangeTokenLookup(err)
 	}
 
-	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.Storage, c.GetScopeStrategy(ctx, client), or, role, true); err != nil {
+	if err = validateExchangeTokenPolicy(ctx, request, c.Config, c.Storage, c.GetScopeStrategy(ctx, client), audienceStrategy(ctx, c.Config, c.AudienceStrategy, client), resourceStrategy(ctx, c.Config, c.ResourceStrategy, client), or, role, true); err != nil {
 		return nil, nil, err
 	}
 
@@ -306,7 +312,7 @@ func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, reques
 
 	client := request.GetClient()
 
-	audience := oauth2.GetAudienceStrategy(ctx, c.Config, client)
+	audience := audienceStrategy(ctx, c.Config, c.AudienceStrategy, client)
 
 	// This server is a recognized target, so an audience the client may not use is denied (Section 4.3.4.3).
 	if err = audience(client.GetAudience(), audiences); err != nil {
@@ -317,7 +323,7 @@ func (c *RefreshTokenTypeHandler) validateIDJAGGrant(ctx context.Context, reques
 		return errors.WithStack(oauth2.ErrAccessDenied.WithHint("The refresh token is not authorized for the requested audience.").WithWrap(err).WithDebugError(err))
 	}
 
-	resource := oauth2.GetResourceStrategy(ctx, c.Config, client)
+	resource := resourceStrategy(ctx, c.Config, c.ResourceStrategy, client)
 
 	if err = resource(client.GetResource(), request.GetRequestedResource()); err != nil {
 		return errors.WithStack(err)
@@ -433,7 +439,7 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		return err
 	}
 
-	var jtis []tokenJTI
+	var jtis []oauth2.TokenExchangeCustomJWT
 
 	if jtis, err = presentedTokenJTIs(ctx, c.Config, c.Storage, request); err != nil {
 		return err
@@ -449,11 +455,11 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		}
 	}
 
-	recordSubjectTokenDeadline(request)
+	recordSubjectTokenDeadline(ctx, c.Config, request, subject, rotate)
 	oauth2.RecordRefreshTokenMode(request.GetSession(), mode)
 
 	rtLifespan := oauth2.GetEffectiveLifespan(request.GetClient(), oauth2.GrantTypeTokenExchange, oauth2.RefreshToken, c.RefreshTokenLifespan)
-	request.GetSession().SetExpiresAt(oauth2.RefreshToken, refreshTokenExpiry(request, rtLifespan))
+	request.GetSession().SetExpiresAt(oauth2.RefreshToken, refreshTokenExpiry(ctx, c.Config, request, rtLifespan))
 
 	var token, signature string
 
@@ -514,7 +520,8 @@ func (c *RefreshTokenTypeHandler) issue(ctx context.Context, request oauth2.Acce
 		response.SetExpiresIn(c.GetExpiresIn(request, oauth2.RefreshToken, rtLifespan, time.Now().UTC()))
 	}
 
-	response.SetScopes(request.GetGrantedScopes())
+	// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.1
+	response.SetScopes(requester.GetGrantedScopes())
 	response.SetExtra(consts.FormParameterIssuedTokenType, consts.TokenTypeRFC8693RefreshToken)
 
 	return nil

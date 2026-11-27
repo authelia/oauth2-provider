@@ -554,6 +554,7 @@ type (
 		useLegacyFormat bool
 		exposeDebug     bool
 		challenge       string
+		allow           string
 
 		// Fields for globalization.
 		hintIDField string
@@ -563,13 +564,42 @@ type (
 	}
 )
 
-// ErrorToRFC6749Error returns the *RFC6749Error wrapped by err if one is present, otherwise it returns a synthetic
-// RFC6749Error with the 'unknown_error' code and a 500 status, preserving the original err as the cause and debug
-// message.
-func ErrorToRFC6749Error(err error) *RFC6749Error {
-	var e *RFC6749Error
+// AsRFC6749Error returns the first RFC6749Error in the chain of err, whether it is held as a pointer or a value. A value
+// is returned as a pointer to a copy.
+func AsRFC6749Error(err error) (rfc *RFC6749Error, ok bool) {
+	if custom, isCustom := err.(interface{ As(target any) bool }); isCustom { //nolint:errorlint
+		if custom.As(&rfc) && rfc != nil {
+			return rfc, true
+		}
+	}
 
-	if stderr.As(err, &e) {
+	switch e := err.(type) { //nolint:errorlint
+	case nil:
+		return nil, false
+	case *RFC6749Error:
+		return e, e != nil
+	case RFC6749Error:
+		return &e, true
+	case interface{ Unwrap() []error }:
+		for _, wrapped := range e.Unwrap() {
+			if rfc, ok = AsRFC6749Error(wrapped); ok {
+				return rfc, true
+			}
+		}
+
+		return nil, false
+	case interface{ Unwrap() error }:
+		return AsRFC6749Error(e.Unwrap())
+	default:
+		return nil, false
+	}
+}
+
+// ErrorToRFC6749Error returns the first RFC6749Error in the chain of err, as AsRFC6749Error does, otherwise it returns
+// a synthetic RFC6749Error with the 'unknown_error' code and a 500 status, preserving the original err as the cause and
+// debug message.
+func ErrorToRFC6749Error(err error) *RFC6749Error {
+	if e, ok := AsRFC6749Error(err); ok {
 		return e
 	}
 
@@ -788,6 +818,13 @@ func (e *RFC6749Error) WithDescription(description string) *RFC6749Error {
 func (e *RFC6749Error) WithCode(code int) *RFC6749Error {
 	err := *e
 	err.CodeField = code
+
+	return &err
+}
+
+func (e *RFC6749Error) withAllow(methods ...string) *RFC6749Error {
+	err := *e
+	err.allow = strings.Join(methods, ", ")
 
 	return &err
 }

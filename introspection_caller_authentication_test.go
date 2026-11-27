@@ -138,7 +138,7 @@ func TestIntrospectionCallerAuthenticationFailureIsNotAnInactiveToken(t *testing
 
 					responder, err := provider.NewIntrospectionRequest(ctx, r, &DefaultSession{})
 					if err != nil {
-						provider.WriteIntrospectionError(ctx, rw, err)
+						provider.WriteIntrospectionError(ctx, rw, nil, err)
 					} else {
 						provider.WriteIntrospectionResponse(ctx, rw, responder)
 					}

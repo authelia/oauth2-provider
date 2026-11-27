@@ -87,13 +87,6 @@ type Config struct {
 	// and EdDSA. The 'none' and HMAC algorithms are never allowed.
 	SigningAlgs []string
 
-	// ClockSkew is how far in the future the 'iat' claim may be. DefaultClockSkew is used when zero, and a negative
-	// value permits none. It is not capped, unlike the 60 seconds of the clock skew of the authorization server, and
-	// a larger value only widens how far ahead of the clock of the Receiver a Transmitter may date a SET. A SET
-	// issued up to IssuedAtRedeliveryWindow further ahead is not refused: it fails with ErrIssuedAtAhead, so the
-	// Transmitter delivers it again.
-	ClockSkew time.Duration
-
 	// MetadataTTL is how long Transmitter Configuration Metadata is cached.
 	MetadataTTL time.Duration
 

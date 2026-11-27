@@ -381,7 +381,7 @@ func TestNewIntrospectionRequestInvalidClientCredentials(t *testing.T) {
 
 	rw := httptest.NewRecorder()
 
-	f.WriteIntrospectionError(t.Context(), rw, err)
+	f.WriteIntrospectionError(t.Context(), rw, nil, err)
 
 	// RFC 7662 Section 2.3, RFC 6749 Section 5.2.
 	assert.Equal(t, http.StatusUnauthorized, rw.Code)
@@ -592,7 +592,7 @@ func TestNewIntrospectionRequestAllowedAudiences(t *testing.T) {
 
 			rw := httptest.NewRecorder()
 
-			f.WriteIntrospectionError(t.Context(), rw, err)
+			f.WriteIntrospectionError(t.Context(), rw, nil, err)
 
 			assert.Equal(t, tc.code, rw.Code)
 			assert.NotEmpty(t, rw.Header().Get(consts.HeaderWWWAuthenticate))
@@ -808,4 +808,25 @@ func grantCredential(_ context.Context, _ string, _ TokenUse, requester AccessRe
 	requester.GrantAudience(introspectionCredentialURL)
 
 	return TokenUse(""), nil
+}
+
+func TestIntrospectionUsesTheFormCredentialWhenTheDPoPSchemeIsDisabled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	validator := mock.NewMockTokenIntrospector(ctrl)
+	config := &Config{RFC7591ClientRegistrationGlobalSecret: []byte("a-completely-different-secret-at-least-32b")}
+	f := compose.ComposeAllEnabled(config, storage.NewExampleStore(), nil).(*Fosite)
+	config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
+
+	validator.EXPECT().IntrospectToken(gomock.Any(), "form-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
+	validator.EXPECT().IntrospectToken(gomock.Any(), "introspect-token", gomock.Any(), gomock.Any(), gomock.Any()).Return(AccessToken, nil)
+
+	r := httptest.NewRequest(http.MethodPost, introspectionCredentialURL, strings.NewReader("token=introspect-token&access_token=form-token"))
+	r.Header.Set(consts.HeaderContentType, "application/x-www-form-urlencoded")
+	r.Header.Set(consts.HeaderAuthorization, "DPoP some-token")
+
+	_, err := f.NewIntrospectionRequest(t.Context(), r, &DefaultSession{})
+
+	require.NoError(t, err)
 }

@@ -144,11 +144,11 @@ func TestWriteIntrospectionError(t *testing.T) {
 			},
 		},
 		{
-			name:     "ShouldWriteInactiveForGenericError",
+			name:     "ShouldWriteServerErrorForGenericError",
 			err:      errors.New("some other error"),
 			expected: "some other error",
-			code:     http.StatusOK,
-			body:     "{\"active\":false}\n",
+			code:     http.StatusInternalServerError,
+			body:     `{"error":"server_error","error_description":"The authorization server encountered an unexpected condition that prevented it from fulfilling the request."}`,
 			headers: http.Header{
 				consts.HeaderContentType:  []string{consts.ContentTypeApplicationJSON},
 				consts.HeaderCacheControl: []string{consts.CacheControlNoStore},
@@ -174,7 +174,7 @@ func TestWriteIntrospectionError(t *testing.T) {
 			provider := &Fosite{Config: new(Config)}
 			rw := httptest.NewRecorder()
 
-			provider.WriteIntrospectionError(context.Background(), rw, tc.err)
+			provider.WriteIntrospectionError(context.Background(), rw, nil, tc.err)
 
 			if tc.err == nil {
 				assert.Equal(t, http.StatusOK, rw.Code)
@@ -1085,7 +1085,7 @@ func TestWriteIntrospectionResponseJWTKeysOffTheCaller(t *testing.T) {
 		rw := httptest.NewRecorder()
 		provider.WriteIntrospectionResponse(context.Background(), rw, ires)
 
-		assert.Equal(t, consts.ContentTypeApplicationTokenIntrospectionJWT, rw.Header().Get(consts.HeaderContentType),
+		assert.Equal(t, "application/token-introspection+jwt", rw.Header().Get(consts.HeaderContentType),
 			"the resource server registered 'introspection_signed_response_alg' so it must receive a JWT")
 		assert.Equal(t, []string{"resource-server"}, strategy.claims[consts.ClaimAudience])
 	})

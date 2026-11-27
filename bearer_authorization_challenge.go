@@ -19,8 +19,10 @@ import (
 // for an endpoint acting as an OAuth 2.0 protected resource, and returns the error with its status corrected for that
 // context. The caller writes the response body.
 //
-// The schemes passed to BearerAuthorizationChallenge are those of the 'Authorization' header values of r. An access
-// token sent in the form-encoded body (RFC 6750 Section 2.2), or in the URI query (RFC 6750 Section 2.3) when
+// The schemes passed to BearerAuthorizationChallenge are those of the 'Authorization' header values of r which carry
+// a credential. A header value of another scheme such as Basic, of the DPoP scheme while DPoP is disabled, or without a
+// token is not an access token, so a request with nothing else carries a challenge without error information (RFC 6750
+// Section 3.1). An access token sent in the form-encoded body (RFC 6750 Section 2.2), or in the URI query (RFC 6750 Section 2.3) when
 // GetAccessTokenURIQueryParameterEnabled permits it, is a credential of the Bearer scheme, so a request which included
 // an access token by any method carries the error information and only a request with none carries a challenge without
 // it (RFC 6750 Section 3 and Section 3.1). The 'access_token' parameter is read from the form the endpoint parsed and r
@@ -39,6 +41,12 @@ import (
 // https://www.rfc-editor.org/rfc/rfc9449#section-7.2, https://www.rfc-editor.org/rfc/rfc9470#section-3, and
 // https://datatracker.ietf.org/doc/html/rfc9728#section-5.1
 func (f *Fosite) WriteBearerAuthorizationChallenge(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) (rfc *RFC6749Error) {
+	rfc, _ = f.writeBearerAuthorizationChallenge(ctx, rw, r, err)
+
+	return rfc
+}
+
+func (f *Fosite) writeBearerAuthorizationChallenge(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error) (rfc *RFC6749Error, bare bool) {
 	rfc = ErrorToRFC6749Error(err)
 
 	switch rfc.ErrorField {
@@ -51,12 +59,9 @@ func (f *Fosite) WriteBearerAuthorizationChallenge(ctx context.Context, rw http.
 	if r == nil {
 		schemes = []string{consts.AuthSchemeBearer, consts.AuthSchemeDPoP}
 	} else {
-		for _, value := range r.Header.Values(consts.HeaderAuthorization) {
-			scheme, _, _ := strings.Cut(value, " ")
-			schemes = append(schemes, scheme)
-		}
+		schemes = presentedSchemes(authorizationHeaderSchemes(r), f.Config.GetDPoPEnabled(ctx))
 
-		if len(presentedSchemes(schemes)) == 0 && hasAccessTokenParameter(r, f.Config.GetAccessTokenURIQueryParameterEnabled(ctx)) {
+		if len(schemes) == 0 && hasAccessTokenParameter(r, f.Config.GetAccessTokenURIQueryParameterEnabled(ctx)) {
 			schemes = append(schemes, consts.AuthSchemeBearer)
 		}
 	}
@@ -79,7 +84,24 @@ func (f *Fosite) WriteBearerAuthorizationChallenge(ctx context.Context, rw http.
 		}
 	}
 
-	return rfc
+	return rfc, len(schemes) == 0 && rfc.CodeField == http.StatusUnauthorized && rfc.ErrorField != errUseDPoPNonceName
+}
+
+func authorizationHeaderSchemes(r *http.Request) (schemes []string) {
+	for _, value := range r.Header.Values(consts.HeaderAuthorization) {
+		if scheme, token, _ := strings.Cut(value, " "); strings.TrimLeft(token, " ") != "" {
+			schemes = append(schemes, scheme)
+		}
+	}
+
+	return schemes
+}
+
+func writeBareAuthorizationChallenge(rw http.ResponseWriter) {
+	rw.Header().Del(consts.HeaderContentType)
+	rw.Header().Set(consts.HeaderCacheControl, consts.CacheControlNoStore)
+	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
+	rw.WriteHeader(http.StatusUnauthorized)
 }
 
 // BearerAuthorizationChallengeConfigProvider is the configuration BearerAuthorizationChallenge composes the DPoP
@@ -94,9 +116,8 @@ type BearerAuthorizationChallengeConfigProvider interface {
 
 // ProtectedResourceMetadataURLProvider is optionally implemented by the Configurator to locate the protected resource
 // metadata carried in the 'resource_metadata' parameter of the 'WWW-Authenticate' challenge. The URL should be derived
-// from the configured resource identifiers, not from request headers such as Host. The introspection, RFC 7591 client
-// registration and RFC 7592 client configuration error writers take no request, so they only carry the parameter when
-// the context they are given carries the request under RequestContextKey.
+// from the configured resource identifiers, not from request headers such as Host. The error writers only carry the
+// parameter when they are given the request being answered.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc9728#section-5.1
 type ProtectedResourceMetadataURLProvider interface {
@@ -109,15 +130,15 @@ type ProtectedResourceMetadataURLProvider interface {
 // protected resource rejecting a request with err. It neither sets headers nor corrects the status of err, so it suits
 // callers that do not write a net/http response; see WriteBearerAuthorizationChallenge for one that does.
 //
-// schemes are the authentication schemes of the credentials the request presented, compared case-insensitively with
-// empty values ignored. An access token sent in the form-encoded body or the URI query (RFC 6750 Section 2.2 and
+// schemes are the authentication schemes of the credentials the request presented, compared case-insensitively. Only
+// Bearer, and DPoP when DPoP is enabled, present an access token; any other value is ignored. An access token sent in the form-encoded body or the URI query (RFC 6750 Section 2.2 and
 // Section 2.3) is presented using the Bearer scheme. The value follows RFC 9449 Section 7.2:
 //
 //   - No scheme means the request carried no authentication information, and the challenges carry no error
 //     parameters at all (Figure 17), which RFC 6750 Section 3.1 also requires. The nonce challenge is the sole
 //     exception, because a client bootstrapping a nonce needs the code to know what to retry.
 //   - One scheme means the scheme used is established, and only the corresponding challenge carries the error
-//     information (Figure 18 for Bearer, Figure 16 for DPoP). Any scheme other than DPoP is answered on Bearer.
+//     information (Figure 18 for Bearer, Figure 16 for DPoP).
 //   - More than one scheme means it cannot be established, and both challenges carry it (Figure 19).
 //   - The 'algs' parameter is always offered on the DPoP challenge (SHOULD, Section 7.1).
 //   - A 'scope' parameter is offered on an insufficient_scope challenge (MAY, RFC 6750 Section 3.1).
@@ -141,7 +162,7 @@ func BearerAuthorizationChallenge(ctx context.Context, config BearerAuthorizatio
 func BearerAuthorizationChallengeWithResourceMetadata(ctx context.Context, config BearerAuthorizationChallengeConfigProvider, realm, resourceMetadata string, err error, schemes ...string) (value string) {
 	rfc := ErrorToRFC6749Error(err)
 
-	presented := presentedSchemes(schemes)
+	presented := presentedSchemes(schemes, config.GetDPoPEnabled(ctx))
 
 	var realmParam string
 
@@ -203,9 +224,13 @@ func hasAccessTokenParameter(r *http.Request, query bool) (has bool) {
 	return r.PostForm.Get(consts.FormParameterAccessToken) != ""
 }
 
-func presentedSchemes(schemes []string) (presented []string) {
+func presentedSchemes(schemes []string, dpop bool) (presented []string) {
 	for _, scheme := range schemes {
-		if scheme != "" && !slices.ContainsFunc(presented, func(s string) bool { return strings.EqualFold(s, scheme) }) {
+		if !strings.EqualFold(scheme, BearerAccessToken) && (!dpop || !strings.EqualFold(scheme, DPoPAccessToken)) {
+			continue
+		}
+
+		if !slices.ContainsFunc(presented, func(s string) bool { return strings.EqualFold(s, scheme) }) {
 			if presented = append(presented, scheme); len(presented) == 2 {
 				break
 			}

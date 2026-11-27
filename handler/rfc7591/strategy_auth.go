@@ -183,7 +183,7 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context
 		key = "session:" + id
 	}
 
-	return newPolicyRequester(requester, s.Config.GetRFC7591ClientRegistrationPolicyClaim(ctx), key, true), nil
+	return newPolicyRequester(newDetachedRequester(requester, requester.GetID()), s.Config.GetRFC7591ClientRegistrationPolicyClaim(ctx), key, true), nil
 }
 
 // authenticateClientRegistrationJWT authenticates a client registration request (RFC 7591) presenting a JWT access

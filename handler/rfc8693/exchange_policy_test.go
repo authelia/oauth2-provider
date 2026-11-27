@@ -97,11 +97,11 @@ func TestExchangePolicy(t *testing.T) {
 				config.RFC8693TokenTypes[consts.TokenTypeRFC8693RefreshToken] = &DefaultTokenType{Name: consts.TokenTypeRFC8693RefreshToken}
 				config.RFC8693TokenTypes[consts.TokenTypeRFC8693IDToken] = &DefaultTokenType{Name: consts.TokenTypeRFC8693IDToken}
 
-				var requester oauth2.Client = &oauth2.DefaultClient{ID: requesterID, GrantTypes: grants}
+				var requester oauth2.Client = &oauth2.DefaultClient{ID: requesterID, GrantTypes: grants, Audience: fixtureAudience}
 
 				if tc.ownAccess || tc.ownRefresh {
 					requester = &oauth2.DefaultRegisteredClient{
-						DefaultClient:                &oauth2.DefaultClient{ID: requesterID, GrantTypes: grants},
+						DefaultClient:                &oauth2.DefaultClient{ID: requesterID, GrantTypes: grants, Audience: fixtureAudience},
 						TokenExchangeOwnAccessToken:  tc.ownAccess,
 						TokenExchangeOwnRefreshToken: tc.ownRefresh,
 					}
@@ -188,7 +188,7 @@ func TestOwnAccessTokenExchangeTarget(t *testing.T) {
 				config, strategy := newBindingExchangeConfig()
 
 				client := &oauth2.DefaultRegisteredClient{
-					DefaultClient:               &oauth2.DefaultClient{ID: "requester", GrantTypes: []string{consts.GrantTypeOAuthTokenExchange}},
+					DefaultClient:               &oauth2.DefaultClient{ID: "requester", GrantTypes: []string{consts.GrantTypeOAuthTokenExchange}, Audience: []string{audience}, Resource: []string{resource}},
 					TokenExchangeOwnAccessToken: true,
 
 					TokenExchangeOwnAccessTokenRestrictTargets: tc.restrict,

@@ -91,7 +91,15 @@ func TestIntrospectionCallerAuthorization(t *testing.T) {
 
 			switch {
 			case tc.unauthorized:
-				assert.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+				assert.ErrorIs(t, err, oauth2.ErrAccessDenied)
+
+				rw := httptest.NewRecorder()
+				provider.WriteIntrospectionError(context.Background(), rw, nil, err)
+
+				assert.Equal(t, http.StatusForbidden, rw.Code)
+				assert.Empty(t, rw.Header().Get(consts.HeaderWWWAuthenticate))
+				assert.Contains(t, rw.Body.String(), `"error":"access_denied"`)
+				assert.NotContains(t, rw.Body.String(), `"active"`)
 			case tc.active:
 				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
 				assert.True(t, responder.IsActive())
@@ -100,7 +108,7 @@ func TestIntrospectionCallerAuthorization(t *testing.T) {
 				assert.False(t, responder.IsActive())
 
 				rw := httptest.NewRecorder()
-				provider.WriteIntrospectionError(context.Background(), rw, err)
+				provider.WriteIntrospectionError(context.Background(), rw, nil, err)
 
 				assert.Equal(t, http.StatusOK, rw.Code)
 				assert.JSONEq(t, `{"active":false}`, rw.Body.String())

@@ -41,6 +41,9 @@ func TestIntrospectionStorageFailure(t *testing.T) {
 		{name: "ShouldReportAStoreFailureOnTheRefreshTokenPath", access: ErrNotFound, refresh: outage, token: "authelia_rt_token.signature", code: http.StatusInternalServerError, contains: "server_error", excludes: `"active"`},
 		{name: "ShouldReportAStoreServerError", access: ErrServerError, refresh: ErrNotFound, code: http.StatusInternalServerError, contains: "server_error", excludes: `"active"`},
 		{name: "ShouldReportAStoreFailureForABearerCredential", access: outage, refresh: outage, bearer: true, code: http.StatusInternalServerError, contains: "server_error", excludes: "invalid_token"},
+		{name: "ShouldReportAnUnavailableStoreOnTheAccessTokenPath", access: ErrTemporarilyUnavailable, refresh: ErrNotFound, code: http.StatusServiceUnavailable, contains: "temporarily_unavailable", excludes: `"active"`},
+		{name: "ShouldReportAnUnavailableStoreOnTheRefreshTokenPath", access: ErrNotFound, refresh: ErrTemporarilyUnavailable, token: "authelia_rt_token.signature", code: http.StatusServiceUnavailable, contains: "temporarily_unavailable", excludes: `"active"`},
+		{name: "ShouldReportAnUnavailableStoreForABearerCredential", access: ErrTemporarilyUnavailable, refresh: ErrNotFound, bearer: true, code: http.StatusServiceUnavailable, contains: "temporarily_unavailable", excludes: "invalid_token"},
 		{name: "ShouldAnswerAnUnknownTokenAsInactive", access: ErrNotFound, refresh: ErrNotFound, code: http.StatusOK, contains: `"active":false`},
 		{name: "ShouldAnswerARevokedRefreshTokenAsInactive", access: ErrNotFound, refresh: ErrInactiveToken, token: "authelia_rt_token.signature", code: http.StatusOK, contains: `"active":false`},
 		{name: "ShouldAnswerAnUnknownBearerCredentialAsUnauthorized", access: ErrNotFound, refresh: ErrNotFound, bearer: true, code: http.StatusUnauthorized, contains: "invalid_token"},
@@ -81,7 +84,7 @@ func TestIntrospectionStorageFailure(t *testing.T) {
 			_, err := provider.NewIntrospectionRequest(ctx, r, &DefaultSession{})
 			require.Error(t, err)
 
-			provider.WriteIntrospectionError(ctx, recorder, err)
+			provider.WriteIntrospectionError(ctx, recorder, nil, err)
 
 			assert.Equal(t, tc.code, recorder.Code)
 			assert.Contains(t, recorder.Body.String(), tc.contains)

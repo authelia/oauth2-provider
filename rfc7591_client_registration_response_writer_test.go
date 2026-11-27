@@ -59,7 +59,7 @@ func TestWriteRFC7591ClientRegistrationErrorChallenge(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			rw := httptest.NewRecorder()
 
-			newProvider().WriteRFC7591ClientRegistrationError(ctx, rw, nil, tc.err)
+			newProvider().WriteRFC7591ClientRegistrationError(ctx, rw, nil, nil, tc.err)
 
 			assert.Equal(t, tc.expectedCode, rw.Code)
 			assert.Equal(t, tc.expectedAuth, rw.Header().Get(consts.HeaderWWWAuthenticate))
@@ -73,7 +73,7 @@ func TestWriteRFC7591ClientRegistrationErrorChallenge(t *testing.T) {
 
 		rw := httptest.NewRecorder()
 
-		newProvider().WriteRFC7591ClientRegistrationError(ctx, rw, nil, errorsx.WithStack(rfc))
+		newProvider().WriteRFC7591ClientRegistrationError(ctx, rw, nil, nil, errorsx.WithStack(rfc))
 
 		assert.Equal(t, http.StatusForbidden, rw.Code)
 		assert.Contains(t, rw.Header().Get(consts.HeaderWWWAuthenticate), `error="insufficient_scope"`)
@@ -85,7 +85,7 @@ func TestWriteRFC7591ClientRegistrationErrorChallenge(t *testing.T) {
 
 		rw := httptest.NewRecorder()
 
-		newProvider().WriteRFC7591ClientRegistrationError(ctx, rw, nil, errorsx.WithStack(rfc))
+		newProvider().WriteRFC7591ClientRegistrationError(ctx, rw, nil, nil, errorsx.WithStack(rfc))
 
 		assert.Equal(t, http.StatusUnauthorized, rw.Code)
 		assert.Equal(t, `Bearer error="insufficient_user_authentication", error_description="x", acr_values="gold silver", max_age="5", DPoP error="insufficient_user_authentication", error_description="x", acr_values="gold silver", max_age="5", algs="ES256"`, rw.Header().Get(consts.HeaderWWWAuthenticate))
@@ -96,7 +96,7 @@ func TestWriteRFC7591ClientRegistrationErrorChallenge(t *testing.T) {
 	t.Run("ShouldLeaveAMalformedRequestAlone", func(t *testing.T) {
 		rw := httptest.NewRecorder()
 
-		newProvider().WriteRFC7591ClientRegistrationError(ctx, rw, nil, errorsx.WithStack(ErrInvalidRequest))
+		newProvider().WriteRFC7591ClientRegistrationError(ctx, rw, nil, nil, errorsx.WithStack(ErrInvalidRequest))
 
 		assert.Equal(t, http.StatusBadRequest, rw.Code)
 		assert.Empty(t, rw.Header().Get(consts.HeaderWWWAuthenticate))
@@ -108,7 +108,7 @@ func TestWriteRFC7592ClientConfigurationErrorKeepsTheBareBearerChallenge(t *test
 
 	rw := httptest.NewRecorder()
 
-	(&Fosite{Config: config}).WriteRFC7592ClientConfigurationError(context.Background(), rw, nil, errorsx.WithStack(ErrRequestUnauthorized))
+	(&Fosite{Config: config}).WriteRFC7592ClientConfigurationError(context.Background(), rw, nil, nil, errorsx.WithStack(ErrRequestUnauthorized))
 
 	require.Equal(t, http.StatusUnauthorized, rw.Code)
 	assert.Equal(t, consts.AuthSchemeBearer, rw.Header().Get(consts.HeaderWWWAuthenticate))
@@ -154,18 +154,16 @@ func TestWriteRFC7591ClientRegistrationErrorResourceMetadata(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &Config{DPoPEnabled: true, DPoPAllowedJWSAlgorithms: []string{"ES256"}, ProtectedResourceMetadataURL: tc.provider}
 
-			ctx := context.Background()
+			var r *http.Request
 
 			if tc.request {
-				r := httptest.NewRequest(http.MethodPost, "https://auth.example.com/register", nil)
+				r = httptest.NewRequest(http.MethodPost, "https://auth.example.com/register", nil)
 				r.Header.Set(consts.HeaderAuthorization, "Bearer abc")
-
-				ctx = context.WithValue(ctx, RequestContextKey, r)
 			}
 
 			rw := httptest.NewRecorder()
 
-			(&Fosite{Config: config}).WriteRFC7591ClientRegistrationError(ctx, rw, nil, errorsx.WithStack(ErrInvalidToken.WithDescription("x")))
+			(&Fosite{Config: config}).WriteRFC7591ClientRegistrationError(context.Background(), rw, r, nil, errorsx.WithStack(ErrInvalidToken.WithDescription("x")))
 
 			require.Equal(t, http.StatusUnauthorized, rw.Code)
 			assert.Equal(t, tc.expected, rw.Header().Get(consts.HeaderWWWAuthenticate))
@@ -237,15 +235,15 @@ func TestWriteRFC7592ClientConfigurationErrorResourceMetadata(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &Config{DPoPEnabled: true, DPoPAllowedJWSAlgorithms: []string{"ES256"}, ProtectedResourceMetadataURL: tc.provider}
 
-			ctx := context.Background()
+			var r *http.Request
 
 			if tc.request {
-				ctx = context.WithValue(ctx, RequestContextKey, httptest.NewRequest(http.MethodGet, "https://auth.example.com/register/abc", nil))
+				r = httptest.NewRequest(http.MethodGet, "https://auth.example.com/register/abc", nil)
 			}
 
 			rw := httptest.NewRecorder()
 
-			(&Fosite{Config: config}).WriteRFC7592ClientConfigurationError(ctx, rw, nil, errorsx.WithStack(tc.err))
+			(&Fosite{Config: config}).WriteRFC7592ClientConfigurationError(context.Background(), rw, r, nil, errorsx.WithStack(tc.err))
 
 			require.Equal(t, tc.code, rw.Code)
 			assert.Equal(t, tc.expected, rw.Header().Get(consts.HeaderWWWAuthenticate))

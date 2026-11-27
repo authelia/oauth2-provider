@@ -90,6 +90,7 @@ func TestSpec_2_1_SubjectToken_RefreshTokenOfTheRequestingClientRequiresOptIn(t 
 			cfg, store, strategy := newExchangeFixture(t)
 
 			client := store.Clients["my-client"]
+			registerFixtureAudience(t, client)
 
 			requester := client
 			if tc.optedIn {
@@ -514,10 +515,22 @@ func newIssuedRequest(client oauth2.Client, subject string, scopes []string, key
 	return request
 }
 
+var fixtureAudience = []string{"my-client", "requester", "chaining-client", "exchange-client", "exchange-refresh-client"}
+
 func grantFixtureAudience(request *oauth2.AccessRequest) {
-	for _, audience := range []string{"my-client", "requester", "chaining-client", "exchange-client", "exchange-refresh-client"} {
+	for _, audience := range fixtureAudience {
 		request.GrantAudience(audience)
 	}
+}
+
+// registerFixtureAudience permits the client the audiences grantFixtureAudience grants.
+func registerFixtureAudience(t *testing.T, client oauth2.Client) {
+	t.Helper()
+
+	c, ok := client.(*oauth2.DefaultClient)
+	require.True(t, ok)
+
+	c.Audience = append(c.Audience, fixtureAudience...)
 }
 
 func newUnaddressedRequest(client oauth2.Client, subject string, scopes []string, key oauth2.TokenType) *oauth2.AccessRequest {

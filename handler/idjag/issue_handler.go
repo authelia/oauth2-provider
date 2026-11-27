@@ -189,7 +189,9 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 	}
 
 	now := time.Now().UTC()
-	expires := rfc8693.CapToSubjectTokenExpiry(request, now.Add(h.Config.GetIDJAGLifespan(ctx))).Truncate(jwt.TimePrecision)
+	policy, _ := h.Config.(oauth2.RFC8693SubjectTokenExpiryCapProvider)
+
+	expires := rfc8693.CapIssuedTokenExpiry(ctx, policy, request, now.Add(h.Config.GetIDJAGLifespan(ctx))).Truncate(jwt.TimePrecision)
 
 	if expires.Sub(now) < time.Second {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("The subject token expires too soon to issue an Identity Assertion JWT Authorization Grant."))

@@ -123,7 +123,9 @@ func (v *OpenIDConnectRequestValidator) ValidatePrompt(ctx context.Context, requ
 // session has a subject, an 'auth_time' when the client registered 'require_auth_time', an 'auth_time' within the
 // 'max_age' parameter or the 'default_max_age' of the client, an 'auth_time' the 'prompt' parameter values 'none' and
 // 'login' allow, and the subject of the 'id_token_hint' parameter. It reads nothing specific to the authorization
-// endpoint, so it applies to any request an End-User approves. The parameters are expected to be well-formed.
+// endpoint, so it applies to any request an End-User approves. A 'max_age' which is not a non-negative integer is
+// refused with oauth2.ErrInvalidRequest. The 'max_age' and the 'prompt' values 'none' and 'login' are measured from the
+// requested at time of the session, and a session without one is refused with oauth2.ErrServerError.
 //
 // See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
 // See: https://openid.net/specs/openid-connect-core-1_0.html#AuthError
@@ -134,7 +136,10 @@ func (v *OpenIDConnectRequestValidator) ValidateSession(ctx context.Context, req
 	// Specification Note: prompt is case-sensitive.
 	requiredPrompt := oauth2.RemoveEmpty(strings.Split(request.GetRequestForm().Get(consts.FormParameterPrompt), " "))
 
-	maxAge, hasMaxAge, _ := oauth2.GetRequestedMaxAge(request)
+	maxAge, hasMaxAge, err := oauth2.GetRequestedMaxAge(request)
+	if err != nil {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Parameter 'max_age' must be a non-negative integer.").WithWrap(err).WithDebugError(err))
+	}
 
 	session, ok := request.GetSession().(Session)
 	if !ok {
@@ -174,12 +179,20 @@ func (v *OpenIDConnectRequestValidator) ValidateSession(ctx context.Context, req
 			return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because because auth_time is missing from session."))
 		}
 
+		if rat.IsZero() {
+			return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because requested at value is required when prompt is set to 'none'."))
+		}
+
 		if !claims.GetAuthTimeSafe().Equal(rat) && claims.GetAuthTimeSafe().After(rat) {
 			return nil, errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'none' but auth_time ('%s') happened after the authorization request ('%s') was registered, indicating that the user was logged in during this request which is not allowed.", claims.GetAuthTimeSafe(), rat))
 		}
 	}
 
 	if slices.Contains(requiredPrompt, consts.PromptTypeLogin) {
+		if rat.IsZero() {
+			return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to validate OpenID Connect request because requested at value is required when prompt is set to 'login'."))
+		}
+
 		if claims.GetAuthTimeSafe().Before(rat) {
 			return nil, errorsx.WithStack(oauth2.ErrLoginRequired.WithHintf("Failed to validate OpenID Connect request because prompt was set to 'login' but auth_time ('%s') happened before the authorization request ('%s') was registered, indicating that the user was not re-authenticated which is forbidden.", claims.GetAuthTimeSafe(), rat))
 		}

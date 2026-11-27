@@ -217,7 +217,7 @@ func TestSSFPoll(t *testing.T) {
 		{"OtherClientStream", "b", http.MethodPost, "application/json", `{}`, id, http.StatusNotFound, "invalid_request", ""},
 		{"UnknownStream", "b", http.MethodPost, "application/json", `{}`, "nope", http.StatusNotFound, "invalid_request", ""},
 		{"ReadScopeOnly", "a-ro", http.MethodPost, "application/json", `{}`, id, http.StatusForbidden, "access_denied", ""},
-		{"NoCredential", "", http.MethodPost, "application/json", `{}`, id, http.StatusUnauthorized, "authentication_failed", ""},
+		{"NoCredential", "", http.MethodPost, "application/json", `{}`, id, http.StatusUnauthorized, "", ""},
 		{"MethodGet", "a", http.MethodGet, "", ``, id, http.StatusMethodNotAllowed, "invalid_request", http.MethodPost},
 		{"MethodPut", "a", http.MethodPut, "application/json", `{}`, id, http.StatusMethodNotAllowed, "invalid_request", http.MethodPost},
 	}
@@ -228,6 +228,15 @@ func TestSSFPoll(t *testing.T) {
 
 			assert.Equal(t, tc.status, rw.Code, rw.Body.String())
 			assert.Equal(t, "no-store", rw.Header().Get("Cache-Control"))
+
+			// RFC 6750 Section 3.1.
+			if tc.err == "" {
+				assert.Equal(t, "Bearer", rw.Header().Get("WWW-Authenticate"))
+				assert.Empty(t, rw.Header().Get("Content-Type"))
+				assert.Empty(t, rw.Body.Bytes())
+
+				return
+			}
 
 			var got map[string]string
 

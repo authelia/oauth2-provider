@@ -62,7 +62,9 @@ func (d *UserAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx 
 // interactions Device Authorization Response as defined in RFC8638 Section 3.5. A user code which is not accepted is
 // answered with 'invalid_grant' wrapping oauth2.ErrUserCodeUnknown, oauth2.ErrUserCodeExpired,
 // oauth2.ErrUserCodeDecided or oauth2.ErrUserCodeClaimed. Unless disabled, an undecided user code is bound to the
-// subject of the session of the first request presenting it, and refused when any other subject presents it.
+// subject of the session of the first request presenting it, and refused when any other subject presents it. The user
+// agent contributes only the 'user_code' to the request: every other parameter it sent is removed from the form of the
+// request, which is then the form of the stored device authorization request and the 'user_code'.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
 // See: https://www.rfc-editor.org/rfc/rfc8628#section-5.1
@@ -113,6 +115,17 @@ func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx con
 		return errUserCode(oauth2.ErrUserCodeDecided)
 	case err != nil:
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	}
+
+	// The parameters of the authorization request are those the client sent in the device authorization request.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8628#section-3.3
+	form := request.GetRequestForm()
+
+	for key := range form {
+		if key != consts.FormParameterUserCode {
+			delete(form, key)
+		}
 	}
 
 	request.Merge(storedReq)

@@ -52,7 +52,8 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 
 	// FAPI 2.0 Message Signing Section 6.2: only a resource server may call the introspection endpoint.
 	if f.enforcesIntrospectionPermission(ctx) && !isIntrospectionPermitted(client) {
-		rfc := ErrRequestUnauthorized
+		// RFC 9110 Section 15.5.4: a caller whose valid client credentials are insufficient is answered with 403.
+		rfc := ErrAccessDenied
 
 		// RFC 7662 Section 2.3: a bearer token which "does not contain sufficient privileges" is answered as described
 		// in RFC 6750 Section 3.
@@ -193,7 +194,8 @@ func isZeroQuality(value string) bool {
 // handleNewIntrospectionRequestClientAuthentication authenticates the caller, by the bearer credential in the
 // Authorization header when one is present and by client authentication otherwise. Client authentication is never
 // attempted once a credential is found, and a request presenting none is rejected when
-// GetIntrospectionEndpointClientAuthDisabled is set.
+// GetIntrospectionEndpointClientAuthDisabled is set. A token presented using the DPoP scheme while DPoP is disabled is
+// not a credential.
 //
 // The binding, scope and audience checks of ValidateBearerAuthorization apply to the credential in the Authorization
 // header only, never to the token being introspected.
@@ -203,22 +205,20 @@ func isZeroQuality(value string) bool {
 //
 //nolint:gocyclo
 func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.Context, r *http.Request, session Session, token string) (client Client, bearer bool, err error) {
-	var clientToken string
+	var clientToken, method string
 
-	if clientToken, err = introspectionCredentialFromRequest(r, f.Config.GetAccessTokenURIQueryParameterEnabled(ctx)); err != nil {
+	if clientToken, method, err = f.accessTokenCredentialFromRequest(ctx, r); err != nil {
 		return nil, false, err
 	}
 
 	if clientToken != "" {
 		if types := f.Config.GetIntrospectionEndpointAuthMethods(ctx); len(types) != 0 {
-			tokenType := consts.AuthSchemeBearer
-			if scheme, _, _ := strings.Cut(r.Header.Get(consts.HeaderAuthorization), " "); strings.EqualFold(scheme, DPoPAccessToken) {
-				tokenType = DPoPAccessToken
-			}
-
+			// RFC 7662 Section 2.3: a bearer token which is "otherwise invalid for this request" is answered as
+			// described in RFC 6750 Section 3.
+			//
 			// See: https://www.rfc-editor.org/rfc/rfc8414#section-2
-			if !slices.Contains(types, tokenType) {
-				return nil, true, errorsx.WithStack(ErrInvalidClient.WithHint(fmt.Sprintf("The introspection endpoint does not permit authentication using the access token type '%s'.", tokenType)))
+			if !slices.Contains(types, method) {
+				return nil, true, errorsx.WithStack(ErrInvalidToken.WithHint(fmt.Sprintf("The introspection endpoint does not permit authentication using the access token type '%s'.", method)))
 			}
 		}
 
@@ -302,34 +302,53 @@ func (f *Fosite) introspectionClientAuthenticationError(ctx context.Context, r *
 	return withClientAuthenticationChallenge(r, errorsx.WithStack(ErrInvalidClient.WithHint("The request either did not include a known client authentication method, or contained invalid authentication details.").WithWrap(err).WithDebugError(err)), f.Config.GetClientAuthenticationRealm(ctx))
 }
 
+func (f *Fosite) accessTokenCredentialFromRequest(ctx context.Context, r *http.Request) (token, method string, err error) {
+	return introspectionCredentialFromRequest(r, f.Config.GetAccessTokenURIQueryParameterEnabled(ctx), f.Config.GetDPoPEnabled(ctx))
+}
+
 // introspectionCredentialFromRequest extracts the access token presented to authenticate a request to the introspection
-// endpoint, accepting the RFC 9449 DPoP scheme in addition to the schemes AccessTokenFromRequest understands. The proof
-// is checked by ValidateBearerAuthorization.
-func introspectionCredentialFromRequest(r *http.Request, query bool) (token string, err error) {
+// endpoint, accepting the RFC 9449 DPoP scheme in addition to the schemes AccessTokenFromRequest understands when dpop
+// is set. Otherwise a DPoP scheme header is not a token transport, and is treated as any other unrecognized scheme. The
+// proof is checked by ValidateBearerAuthorization.
+//
+// The method is the authentication scheme which carried the token: DPoP for the DPoP scheme, and Bearer for the Bearer
+// scheme and the 'access_token' parameter. It is empty when no token was presented.
+//
+// See: https://www.rfc-editor.org/rfc/rfc6750#section-2
+// See: https://www.rfc-editor.org/rfc/rfc9449#section-7.1
+func introspectionCredentialFromRequest(r *http.Request, query, dpop bool) (token, method string, err error) {
 	var scheme, value string
 
 	// See: https://www.rfc-editor.org/rfc/rfc6749#section-3.1
 	if len(r.Form[consts.FormParameterAccessToken]) > 1 {
-		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("The 'access_token' parameter was included more than once."))
+		return "", "", errorsx.WithStack(ErrInvalidRequest.WithHint("The 'access_token' parameter was included more than once."))
 	}
 
 	if scheme, value, err = AuthorizationCredentialFromRequest(r); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// RFC 6750 Section 2 and Section 3.1: a token in both the header and the 'access_token' parameter is
 	// 'invalid_request'. A 'Basic' header is client authentication rather than a token transport, so it may accompany
 	// the parameter. The parameter is read off r.Form, which carries the URI query alongside the form body, so a token in
 	// the URI query is rejected alongside one in the header even when it would otherwise be ignored.
-	if len(value) != 0 && (strings.EqualFold(scheme, BearerAccessToken) || strings.EqualFold(scheme, DPoPAccessToken)) && r.Form.Get(consts.FormParameterAccessToken) != "" {
-		return "", errorsx.WithStack(ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
+	if len(value) != 0 && (strings.EqualFold(scheme, BearerAccessToken) || dpop && strings.EqualFold(scheme, DPoPAccessToken)) && r.Form.Get(consts.FormParameterAccessToken) != "" {
+		return "", "", errorsx.WithStack(ErrInvalidRequest.WithHint("Multiple methods used to include access token."))
 	}
 
-	if strings.EqualFold(scheme, DPoPAccessToken) {
-		return value, nil
+	if dpop && strings.EqualFold(scheme, DPoPAccessToken) {
+		if value == "" {
+			return "", "", nil
+		}
+
+		return value, consts.AuthSchemeDPoP, nil
 	}
 
-	return AccessTokenFromRequest(r, WithAccessTokenURIQueryParameter(query)), nil
+	if token = AccessTokenFromRequest(r, WithAccessTokenURIQueryParameter(query)); token == "" {
+		return "", "", nil
+	}
+
+	return token, consts.AuthSchemeBearer, nil
 }
 
 // IntrospectionResponse is the result of introspecting a token.

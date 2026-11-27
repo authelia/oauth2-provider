@@ -6,6 +6,8 @@ package oauth2
 
 import (
 	"encoding/json"
+	stderr "errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
@@ -731,6 +733,14 @@ func TestErrorToRFC6749Error(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldReturnRFC6749ErrorFromAValue",
+			err:  *ErrInvalidRequest,
+			expected: func(t *testing.T, actual *RFC6749Error) {
+				assert.Equal(t, ErrInvalidRequest.ErrorField, actual.ErrorField)
+				assert.Equal(t, http.StatusBadRequest, actual.CodeField)
+			},
+		},
+		{
 			name: "ShouldReturnGenericRFC6749ErrorForUnknownError",
 			err:  errors.New("plain"),
 			expected: func(t *testing.T, actual *RFC6749Error) {
@@ -746,6 +756,39 @@ func TestErrorToRFC6749Error(t *testing.T) {
 			actual := ErrorToRFC6749Error(tc.err)
 			require.NotNil(t, actual)
 			tc.expected(t, actual)
+		})
+	}
+}
+
+func TestAsRFC6749Error(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		expected string
+		ok       bool
+	}{
+		{name: "ShouldReturnNothingForNil", err: nil},
+		{name: "ShouldReturnNothingForAPlainError", err: errors.New("plain")},
+		{name: "ShouldReturnAPointer", err: ErrInvalidRequest, expected: ErrInvalidRequest.ErrorField, ok: true},
+		{name: "ShouldReturnAValue", err: *ErrInvalidRequest, expected: ErrInvalidRequest.ErrorField, ok: true},
+		{name: "ShouldReturnAWrappedValue", err: fmt.Errorf("wrapped: %w", error(*ErrInvalidRequest)), expected: ErrInvalidRequest.ErrorField, ok: true},
+		{name: "ShouldReturnTheOuterValueOverAnInnerPointer", err: *ErrServerError.WithWrap(ErrInactiveToken), expected: ErrServerError.ErrorField, ok: true},
+		{name: "ShouldReturnTheOuterPointerOverAnInnerValue", err: ErrAccessDenied.WithWrap(*ErrInactiveToken), expected: ErrAccessDenied.ErrorField, ok: true},
+		{name: "ShouldReturnTheFirstOfJoinedErrors", err: stderr.Join(errors.New("plain"), *ErrInvalidScope, ErrInvalidGrant), expected: ErrInvalidScope.ErrorField, ok: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, ok := AsRFC6749Error(tc.err)
+
+			assert.Equal(t, tc.ok, ok)
+
+			if tc.ok {
+				require.NotNil(t, actual)
+				assert.Equal(t, tc.expected, actual.ErrorField)
+			} else {
+				assert.Nil(t, actual)
+			}
 		})
 	}
 }

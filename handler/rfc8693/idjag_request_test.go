@@ -465,6 +465,8 @@ func TestIDJAGRequestOtherRequestedTypesUnchanged(t *testing.T) {
 	handler := newRefreshTokenTypeHandler(cfg, store, strategy)
 
 	client := store.Clients[idjagClientID]
+	registerFixtureAudience(t, client)
+
 	refreshToken := createExchangeRefreshToken(t, strategy, store, client, idjagSubject, "openid")
 
 	request := newExchangeRequest(t, ownRefreshTokenClient(client), newSpecSession(idjagSubject), url.Values{

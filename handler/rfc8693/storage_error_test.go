@@ -10,7 +10,6 @@ import (
 	"errors"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -134,6 +133,71 @@ func TestCustomJWTMarkError(t *testing.T) {
 			assert.Empty(t, response.GetAccessToken())
 			assert.Empty(t, f.store.AccessTokens)
 		})
+	}
+}
+
+func TestExchangeWithoutJTIValidationSkipsTheJTIStore(t *testing.T) {
+	testCases := []struct {
+		name      string
+		requested string
+		rotate    bool
+	}{
+		{name: "ShouldIssueAnAccessTokenWithARefreshToken", requested: consts.TokenTypeRFC8693AccessToken},
+		{name: "ShouldIssueAnAccessTokenRotatingTheSubjectRefreshToken", requested: consts.TokenTypeRFC8693AccessToken, rotate: true},
+		{name: "ShouldIssueARefreshTokenRotatingTheSubjectRefreshToken", requested: consts.TokenTypeRFC8693RefreshToken, rotate: true},
+	}
+
+	for _, sc := range bindingExchangeStores() {
+		for _, tc := range testCases {
+			t.Run(sc.name+"/"+tc.name, func(t *testing.T) {
+				f := newRefreshSubjectGrantFixture(t, sc.newStore(), true)
+				f.client.TokenExchangeRefreshTokenRotationOverride = true
+				f.client.TokenExchangeRefreshTokenRotation = tc.rotate
+
+				// No presented token type sets ValidateJTI, so there is no 'jti' to mark.
+				failing := &failingJTIStore{Storage: f.store, err: errors.New("connection refused")}
+
+				f.access.Storage = failing
+				f.refresh.Storage = failing
+
+				subject := f.mint(t)
+
+				request := f.request(t, subject, tc.requested)
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(f.refresh.HandleTokenEndpointRequest(t.Context(), request)))
+
+				var handler oauth2.TokenEndpointHandler = f.access
+				if tc.requested == consts.TokenTypeRFC8693RefreshToken {
+					handler = f.refresh
+				}
+
+				response := oauth2.NewAccessResponse()
+
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.PopulateTokenEndpointResponse(t.Context(), request, response)))
+
+				refresh := response.GetAccessToken()
+
+				if tc.requested == consts.TokenTypeRFC8693AccessToken {
+					_, err := f.store.GetAccessTokenSession(t.Context(), f.strategy.AccessTokenSignature(t.Context(), response.GetAccessToken()), NewDefaultSession())
+					require.NoError(t, err)
+
+					refresh, _ = response.GetExtra(consts.FormParameterRefreshToken).(string)
+				}
+
+				require.NotEmpty(t, refresh)
+
+				_, err := f.store.GetRefreshTokenSession(t.Context(), f.strategy.RefreshTokenSignature(t.Context(), refresh), NewDefaultSession())
+				require.NoError(t, err)
+
+				_, err = f.store.GetRefreshTokenSession(t.Context(), f.strategy.RefreshTokenSignature(t.Context(), subject), NewDefaultSession())
+
+				if tc.rotate {
+					assert.ErrorIs(t, err, oauth2.ErrInactiveToken)
+				} else {
+					assert.NoError(t, err)
+				}
+			})
+		}
 	}
 }
 
@@ -270,6 +334,6 @@ type failingJTIStore struct {
 	err error
 }
 
-func (s *failingJTIStore) SetTokenExchangeCustomJWT(_ context.Context, _, _ string, _ time.Time) error {
+func (s *failingJTIStore) SetTokenExchangeCustomJWTs(_ context.Context, _ []oauth2.TokenExchangeCustomJWT) error {
 	return s.err
 }

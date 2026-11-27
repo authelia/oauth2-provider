@@ -384,9 +384,9 @@ func TestAuthorizeSSFRequestHeaderOnly(t *testing.T) {
 				require.Error(t, err)
 				h.provider.WriteSSFError(context.Background(), rw, r, err)
 				assert.Equal(t, tc.code, rw.Code)
-				assert.Contains(t, rw.Body.String(), "invalid_token")
-				assert.NotEmpty(t, rw.Header().Get(consts.HeaderWWWAuthenticate))
-				assert.NotContains(t, rw.Header().Get(consts.HeaderWWWAuthenticate), "DPoP")
+				assert.Empty(t, rw.Body.Bytes())
+				assert.Empty(t, rw.Header().Get(consts.HeaderContentType))
+				assert.Equal(t, consts.AuthSchemeBearer, rw.Header().Get(consts.HeaderWWWAuthenticate))
 				assert.Nil(t, r.Form, "the request must not be parsed for a token")
 
 				return

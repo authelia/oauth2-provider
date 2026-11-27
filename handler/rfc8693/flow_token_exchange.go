@@ -30,7 +30,12 @@ import (
 type TokenExchangeGrantHandler struct {
 	Config oauth2.RFC8693ConfigProvider
 
-	ScopeStrategy    oauth2.ScopeStrategy
+	ScopeStrategy oauth2.ScopeStrategy
+
+	// AudienceStrategy and ResourceStrategy match the targets a request names against the client. The token type
+	// handlers apply their own to the targets an exchange inherits from the subject token, so a provider which sets
+	// these must set the same on the AccessTokenTypeHandler and RefreshTokenTypeHandler, as compose does. The Config
+	// ones apply when nil.
 	AudienceStrategy oauth2.AudienceStrategy
 	ResourceStrategy oauth2.ResourceStrategy
 }
@@ -261,6 +266,15 @@ func (c *TokenExchangeGrantHandler) GetScopeStrategy(ctx context.Context, client
 
 // GetAudienceStrategy returns the locally-configured audience strategy if set, otherwise the one from Config.
 func (c *TokenExchangeGrantHandler) GetAudienceStrategy(ctx context.Context, client oauth2.Client) (strategy oauth2.AudienceStrategy) {
+	return audienceStrategy(ctx, c.Config, c.AudienceStrategy, client)
+}
+
+// GetResourceStrategy returns the locally-configured resource strategy if set, otherwise the one from Config.
+func (c *TokenExchangeGrantHandler) GetResourceStrategy(ctx context.Context, client oauth2.Client) (strategy oauth2.ResourceStrategy) {
+	return resourceStrategy(ctx, c.Config, c.ResourceStrategy, client)
+}
+
+func audienceStrategy(ctx context.Context, config oauth2.RFC8693ConfigProvider, local oauth2.AudienceStrategy, client oauth2.Client) (strategy oauth2.AudienceStrategy) {
 	if client != nil {
 		if p, ok := client.(oauth2.AudienceStrategyProvider); ok {
 			if strategy = p.GetAudienceStrategy(ctx); strategy != nil {
@@ -269,19 +283,18 @@ func (c *TokenExchangeGrantHandler) GetAudienceStrategy(ctx context.Context, cli
 		}
 	}
 
-	if c.AudienceStrategy != nil {
-		return c.AudienceStrategy
+	if local != nil {
+		return local
 	}
 
-	if strategy = c.Config.GetAudienceStrategy(ctx); strategy != nil {
+	if strategy = config.GetAudienceStrategy(ctx); strategy != nil {
 		return strategy
 	}
 
 	return oauth2.DefaultAudienceStrategy
 }
 
-// GetResourceStrategy returns the locally-configured resource strategy if set, otherwise the one from Config.
-func (c *TokenExchangeGrantHandler) GetResourceStrategy(ctx context.Context, client oauth2.Client) (strategy oauth2.ResourceStrategy) {
+func resourceStrategy(ctx context.Context, config oauth2.RFC8693ConfigProvider, local oauth2.ResourceStrategy, client oauth2.Client) (strategy oauth2.ResourceStrategy) {
 	if client != nil {
 		if p, ok := client.(oauth2.ResourceStrategyProvider); ok {
 			if strategy = p.GetResourceStrategy(ctx); strategy != nil {
@@ -290,11 +303,11 @@ func (c *TokenExchangeGrantHandler) GetResourceStrategy(ctx context.Context, cli
 		}
 	}
 
-	if c.ResourceStrategy != nil {
-		return c.ResourceStrategy
+	if local != nil {
+		return local
 	}
 
-	if strategy = c.Config.GetResourceStrategy(ctx); strategy != nil {
+	if strategy = config.GetResourceStrategy(ctx); strategy != nil {
 		return strategy
 	}
 
@@ -371,22 +384,17 @@ func (c *TokenExchangeGrantHandler) PopulateTokenEndpointResponse(ctx context.Co
 }
 
 // ConsumeTokenJTIs marks the 'jti' of each 'subject_token' and 'actor_token' of a token type which sets ValidateJTI as
-// used. A token type handler calls it once every check that can refuse the request has passed, so that a refused
-// request does not consume a single-use token. A 'jti' which is already used is an 'invalid_request' error per RFC 8693
-// Section 2.2.2.
+// used. TokenExchangeGrantHandler does not mark them, so a token type handler which issues a token MUST call it once
+// every check that can refuse the request has passed, so that a refused request does not consume a single-use token. A
+// 'jti' which is already used is an 'invalid_request' error per RFC 8693 Section 2.2.2.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7523#section-3
 func ConsumeTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, store CustomJWTStorage, request oauth2.AccessRequester) (err error) {
 	return consumeTokenJTIs(ctx, config, store, request)
 }
 
-type tokenJTI struct {
-	iss, jti string
-	exp      time.Time
-}
-
 func consumeTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, store CustomJWTStorage, request oauth2.AccessRequester) (err error) {
-	var jtis []tokenJTI
+	var jtis []oauth2.TokenExchangeCustomJWT
 
 	if jtis, err = presentedTokenJTIs(ctx, config, store, request); err != nil || len(jtis) == 0 {
 		return err
@@ -397,7 +405,7 @@ func consumeTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, 
 	})
 }
 
-func presentedTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, store CustomJWTStorage, request oauth2.AccessRequester) (jtis []tokenJTI, err error) {
+func presentedTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider, store CustomJWTStorage, request oauth2.AccessRequester) (jtis []oauth2.TokenExchangeCustomJWT, err error) {
 	var session Session
 
 	if session, err = exchangeSession(request); err != nil {
@@ -431,27 +439,29 @@ func presentedTokenJTIs(ctx context.Context, config oauth2.RFC8693ConfigProvider
 			return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from token is missing."))
 		}
 
-		if slices.ContainsFunc(jtis, func(t tokenJTI) bool { return t.iss == iss && t.jti == jti }) {
+		if slices.ContainsFunc(jtis, func(t oauth2.TokenExchangeCustomJWT) bool { return t.Issuer == iss && t.JTI == jti }) {
 			continue
 		}
 
 		exp, _ := claimvalue.Number[int64](token.claims[consts.ClaimExpirationTime])
 
-		jtis = append(jtis, tokenJTI{iss: iss, jti: jti, exp: time.Unix(exp, 0)})
+		jtis = append(jtis, oauth2.TokenExchangeCustomJWT{Issuer: iss, JTI: jti, ExpiresAt: time.Unix(exp, 0)})
 	}
 
 	return jtis, nil
 }
 
-func markTokenJTIs(ctx context.Context, store CustomJWTStorage, jtis []tokenJTI) (err error) {
-	for _, t := range jtis {
-		if err = store.SetTokenExchangeCustomJWT(ctx, t.iss, t.jti, t.exp); err != nil {
-			if errors.Is(err, oauth2.ErrJTIKnown) {
-				return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from the token must be used only once.").WithWrap(err))
-			}
+func markTokenJTIs(ctx context.Context, store CustomJWTStorage, jtis []oauth2.TokenExchangeCustomJWT) (err error) {
+	if len(jtis) == 0 {
+		return nil
+	}
 
-			return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
+	if err = store.SetTokenExchangeCustomJWTs(ctx, jtis); err != nil {
+		if errors.Is(err, oauth2.ErrJTIKnown) {
+			return errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Claim 'jti' from the token must be used only once.").WithWrap(err))
 		}
+
+		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	return nil
@@ -598,9 +608,14 @@ func RequireActorToken(request oauth2.AccessRequester) (err error) {
 	return requireActorToken(request)
 }
 
-// CapToSubjectTokenExpiry returns the earlier of expires and the expiry of the validated 'subject_token'.
-func CapToSubjectTokenExpiry(request oauth2.Requester, expires time.Time) time.Time {
-	return capToSubjectTokenExpiry(request, expires)
+// CapIssuedTokenExpiry returns the expiry of a token a token exchange issues: the earlier of expires and the expiry of
+// the validated 'subject_token', which RFC 8693 Section 2.1 permits. When config or a
+// SubjectTokenExpiryCapOverrideClient disables the cap it is the earlier of expires and the expiry deadline of the grant
+// the 'subject_token' was issued for, if any. A nil config does not disable the cap.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
+func CapIssuedTokenExpiry(ctx context.Context, config oauth2.RFC8693SubjectTokenExpiryCapProvider, request oauth2.Requester, expires time.Time) time.Time {
+	return capToSubjectTokenExpiry(ctx, config, request, expires)
 }
 
 func errExchangeTokenLookup(err error) error {
@@ -612,7 +627,7 @@ func errExchangeTokenLookup(err error) error {
 }
 
 func errExchangeSubjectLookup(err error) error {
-	rfc := outermostRFC6749Error(err)
+	rfc, _ := oauth2.AsRFC6749Error(err)
 
 	switch {
 	case errors.Is(err, oauth2.ErrUnknownRequest):
@@ -623,37 +638,6 @@ func errExchangeSubjectLookup(err error) error {
 		return errors.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' does not identify a subject.", consts.FormParameterSubjectToken).WithWrap(err).WithDebugError(err))
 	default:
 		return errors.WithStack(rfc)
-	}
-}
-
-func outermostRFC6749Error(err error) *oauth2.RFC6749Error {
-	if custom, ok := err.(interface{ As(target any) bool }); ok { //nolint:errorlint
-		var rfc *oauth2.RFC6749Error
-
-		if custom.As(&rfc) && rfc != nil {
-			return rfc
-		}
-	}
-
-	switch e := err.(type) { //nolint:errorlint
-	case nil:
-		return nil
-	case *oauth2.RFC6749Error:
-		return e
-	case oauth2.RFC6749Error:
-		return &e
-	case interface{ Unwrap() []error }:
-		for _, wrapped := range e.Unwrap() {
-			if rfc := outermostRFC6749Error(wrapped); rfc != nil {
-				return rfc
-			}
-		}
-
-		return nil
-	case interface{ Unwrap() error }:
-		return outermostRFC6749Error(e.Unwrap())
-	default:
-		return nil
 	}
 }
 
@@ -679,6 +663,8 @@ func errExchangeTokenValidation(err error) error {
 // or when it opts in with GetAllowOwnAccessTokenExchange, and likewise a refresh token unless it opts in with
 // GetAllowOwnRefreshTokenExchange. It may also opt in with
 // GetRestrictOwnAccessTokenExchangeTargets to only request the audience and resources that access token was granted.
+// A request so limited which names neither an audience nor a resource is issued for those the token was granted, per
+// RFC 8707 Section 2.2.
 // A client may only request scopes the subject token was granted. Neither rule applies to an actor token, which
 // identifies the acting party rather than the authority being exchanged: that party is normally the requesting client
 // itself, and the issued token's scopes come from the subject token.
@@ -686,9 +672,10 @@ func errExchangeTokenValidation(err error) error {
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.1
 // See: https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.2
 // See: https://datatracker.ietf.org/doc/html/rfc6749#section-10.4
+// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
 //
 //nolint:gocyclo
-func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, store oauth2.ClientGetter, strategy oauth2.ScopeStrategy, original oauth2.Requester, role tokenRole, refresh bool) (err error) {
+func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, store oauth2.ClientGetter, strategy oauth2.ScopeStrategy, audience oauth2.AudienceStrategy, resource oauth2.ResourceStrategy, original oauth2.Requester, role tokenRole, refresh bool) (err error) {
 	client := request.GetClient()
 	originalClientID := original.GetClient().GetID()
 	self := client.GetID() == originalClientID
@@ -718,7 +705,7 @@ func validateExchangeTokenPolicy(ctx context.Context, request oauth2.AccessReque
 
 		// See: https://www.rfc-editor.org/rfc/rfc8707#section-2.2
 		if !grant && (refresh || restrictsOwnAccessTokenTargets(client)) {
-			if err = validateOwnTokenTarget(ctx, request, config, original); err != nil {
+			if err = validateOwnTokenTarget(request, audience, resource, original); err != nil {
 				return err
 			}
 		}
@@ -768,14 +755,38 @@ func permitsExchange(owner, client oauth2.Client, requested oauth2.RFC8693TokenT
 	return c.GetTokenExchangePermitted(client, requested)
 }
 
-func validateOwnTokenTarget(ctx context.Context, request oauth2.AccessRequester, config oauth2.RFC8693ConfigProvider, original oauth2.Requester) (err error) {
+func validateOwnTokenTarget(request oauth2.AccessRequester, audience oauth2.AudienceStrategy, resource oauth2.ResourceStrategy, original oauth2.Requester) (err error) {
 	client := request.GetClient()
 
-	if err = oauth2.GetAudienceStrategy(ctx, config, client)(original.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
+	if len(request.GetRequestedAudience()) == 0 && len(request.GetRequestedResource()) == 0 {
+		// The client must still be permitted the targets it inherits.
+		if err = audience(client.GetAudience(), original.GetGrantedAudience()); err != nil {
+			return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
+		}
+
+		if err = resource(client.GetResource(), original.GetGrantedResource()); err != nil {
+			return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
+		}
+
+		request.SetRequestedAudience(slices.Clone(original.GetGrantedAudience()))
+		request.SetRequestedResource(slices.Clone(original.GetGrantedResource()))
+
+		for _, target := range request.GetRequestedAudience() {
+			request.GrantAudience(target)
+		}
+
+		for _, target := range request.GetRequestedResource() {
+			request.GrantResource(target)
+		}
+
+		return nil
+	}
+
+	if err = audience(original.GetGrantedAudience(), request.GetRequestedAudience()); err != nil {
 		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
 	}
 
-	if err = oauth2.GetResourceStrategy(ctx, config, client)(original.GetGrantedResource(), request.GetRequestedResource()); err != nil {
+	if err = resource(original.GetGrantedResource(), request.GetRequestedResource()); err != nil {
 		return errors.WithStack(oauth2.ErrInvalidTarget.WithDebugError(err).WithWrap(err))
 	}
 
@@ -1442,6 +1453,13 @@ func sanitizeRefreshTokenRequester(request oauth2.AccessRequester, grant oauth2.
 		maps.Copy(form, request.Sanitize([]string{}).GetRequestForm())
 	}
 
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
+	if claims, ok := grant.(oauth2.ClaimsRequester); ok {
+		if keeper, ok := requester.(oauth2.ClaimsRequester); ok {
+			keeper.SetClaims(claims.GetClaims())
+		}
+	}
+
 	var session oauth2.Session
 
 	if session, err = refreshTokenSession(request.GetSession(), grant.GetSession()); err != nil {
@@ -1532,30 +1550,82 @@ func subjectTokenExpiry(request oauth2.Requester) time.Time {
 	return time.Time{}
 }
 
-func capToSubjectTokenExpiry(request oauth2.Requester, expires time.Time) time.Time {
+func capsToSubjectTokenExpiry(ctx context.Context, config any, request oauth2.Requester) bool {
+	if c, ok := request.GetClient().(SubjectTokenExpiryCapOverrideClient); ok && c.GetOverrideTokenExchangeSubjectTokenExpiryCap() {
+		return c.GetTokenExchangeSubjectTokenExpiryCap()
+	}
+
+	provider, ok := config.(oauth2.RFC8693SubjectTokenExpiryCapProvider)
+
+	return !ok || !provider.GetRFC8693DisableSubjectTokenExpiryCap(ctx)
+}
+
+func subjectGrantExpiryDeadline(request oauth2.Requester) time.Time {
+	session, ok := request.GetSession().(Session)
+	if !ok {
+		return time.Time{}
+	}
+
+	grant := session.GetSubjectRequester()
+	if grant == nil {
+		return time.Time{}
+	}
+
+	if bounded, ok := grant.GetSession().(oauth2.ExpiryDeadlineSession); ok {
+		return bounded.GetExpiryDeadline()
+	}
+
+	return time.Time{}
+}
+
+func issuedTokenExpiryLimit(ctx context.Context, config any, request oauth2.Requester) time.Time {
+	if capsToSubjectTokenExpiry(ctx, config, request) {
+		return subjectTokenExpiry(request)
+	}
+
+	return subjectGrantExpiryDeadline(request)
+}
+
+func capToExpiryLimit(limit, expires time.Time) time.Time {
 	// The comparison is of seconds, as a time.Time beyond its range compares as earlier than any other.
-	if limit := subjectTokenExpiry(request); !limit.IsZero() && limit.Unix() <= expires.Unix() {
+	if !limit.IsZero() && limit.Unix() <= expires.Unix() {
 		return limit
 	}
 
 	return expires
 }
 
-func refreshTokenExpiry(request oauth2.Requester, lifespan time.Duration) time.Time {
-	if lifespan > -1 {
-		return capToSubjectTokenExpiry(request, time.Now().UTC().Add(lifespan)).Truncate(jwt.TimePrecision)
-	}
-
-	return subjectTokenExpiry(request)
+func capToSubjectTokenExpiry(ctx context.Context, config any, request oauth2.Requester, expires time.Time) time.Time {
+	return capToExpiryLimit(issuedTokenExpiryLimit(ctx, config, request), expires)
 }
 
-func recordSubjectTokenDeadline(request oauth2.Requester) {
+func refreshTokenExpiry(ctx context.Context, config any, request oauth2.Requester, lifespan time.Duration) time.Time {
+	limit := issuedTokenExpiryLimit(ctx, config, request)
+
+	if lifespan > -1 {
+		return capToExpiryLimit(limit, time.Now().UTC().Add(lifespan)).Truncate(jwt.TimePrecision)
+	}
+
+	return limit
+}
+
+func recordSubjectTokenDeadline(ctx context.Context, config any, request, grant oauth2.Requester, rotate bool) {
 	session, ok := request.GetSession().(interface{ SetExpiryDeadline(deadline time.Time) })
 	if !ok {
 		return
 	}
 
-	if deadline := subjectTokenExpiry(request); !deadline.IsZero() {
+	deadline := issuedTokenExpiryLimit(ctx, config, request)
+
+	if rotate && grant != nil {
+		deadline = time.Time{}
+
+		if bounded, ok := grant.GetSession().(oauth2.ExpiryDeadlineSession); ok {
+			deadline = bounded.GetExpiryDeadline()
+		}
+	}
+
+	if !deadline.IsZero() {
 		session.SetExpiryDeadline(deadline)
 	}
 }

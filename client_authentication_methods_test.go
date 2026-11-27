@@ -231,15 +231,16 @@ func TestEndpointAuthSigningAlgValuesReplaceAllowList(t *testing.T) {
 
 func TestIntrospectionBearerCredentialHonorsAuthMethods(t *testing.T) {
 	testCases := []struct {
-		name    string
-		methods []string
-		scheme  string
-		err     bool
+		name      string
+		methods   []string
+		scheme    string
+		challenge string
 	}{
-		{"ShouldRejectBearerWhenOnlyPrivateKeyJWTListed", []string{consts.ClientAuthMethodPrivateKeyJWT}, "Bearer", true},
-		{"ShouldAcceptBearerWhenBearerListed", []string{"Bearer"}, "Bearer", false},
-		{"ShouldRejectDPoPWhenOnlyBearerListed", []string{"Bearer"}, "DPoP", true},
-		{"ShouldAcceptBearerWithNoList", nil, "Bearer", false},
+		// RFC 7662 Section 2.3: a bearer token invalid for the request is answered as described in RFC 6750 Section 3.
+		{"ShouldRejectBearerWhenOnlyPrivateKeyJWTListed", []string{consts.ClientAuthMethodPrivateKeyJWT}, "Bearer", `Bearer error="invalid_token", error_description="The access token provided is expired, revoked, malformed, or invalid for other reasons.", DPoP algs="ES256"`},
+		{"ShouldAcceptBearerWhenBearerListed", []string{"Bearer"}, "Bearer", ""},
+		{"ShouldRejectDPoPWhenOnlyBearerListed", []string{"Bearer"}, "DPoP", `Bearer, DPoP error="invalid_token", error_description="The access token provided is expired, revoked, malformed, or invalid for other reasons.", algs="ES256"`},
+		{"ShouldAcceptBearerWithNoList", nil, "Bearer", ""},
 	}
 
 	for _, tc := range testCases {
@@ -247,6 +248,8 @@ func TestIntrospectionBearerCredentialHonorsAuthMethods(t *testing.T) {
 			config := &Config{
 				IntrospectionEndpointAuthMethods: tc.methods,
 				TokenIntrospectionHandlers:       TokenIntrospectionHandlers{&bearerIntrospector{}},
+				DPoPEnabled:                      true,
+				DPoPAllowedJWSAlgorithms:         []string{"ES256"},
 			}
 
 			provider := &Fosite{Store: storage.NewMemoryStore(), Config: config}
@@ -257,15 +260,77 @@ func TestIntrospectionBearerCredentialHonorsAuthMethods(t *testing.T) {
 
 			_, err := provider.NewIntrospectionRequest(context.Background(), r, &DefaultSession{})
 
-			if tc.err {
-				require.Error(t, err)
-				assert.True(t, errors.Is(err, ErrInvalidClient))
+			if tc.challenge != "" {
+				require.ErrorIs(t, err, ErrInvalidToken)
 				assert.Contains(t, ErrorToRFC6749Error(err).HintField, "introspection")
+
+				rw := httptest.NewRecorder()
+
+				provider.WriteIntrospectionError(context.Background(), rw, r, err)
+
+				assert.Equal(t, http.StatusUnauthorized, rw.Code)
+				assert.Equal(t, tc.challenge, rw.Header().Get(consts.HeaderWWWAuthenticate))
+				assert.Contains(t, rw.Body.String(), `"error":"invalid_token"`)
 
 				return
 			}
 
-			assert.False(t, errors.Is(err, ErrInvalidClient))
+			assert.False(t, errors.Is(err, ErrInvalidToken))
+		})
+	}
+}
+
+func TestIntrospectionIgnoresTheDPoPSchemeWhenDPoPDisabled(t *testing.T) {
+	testCases := []struct {
+		name      string
+		dpop      bool
+		disabled  bool
+		expected  error
+		code      int
+		challenge string
+	}{
+		{name: "ShouldFallBackToClientAuthentication", expected: ErrInvalidClient, code: http.StatusUnauthorized, challenge: `Basic realm="oauth2"`},
+		// RFC 6750 Section 3.1: a request lacking any authentication information carries no error information.
+		{name: "ShouldChallengeWithoutErrorWhenClientAuthenticationIsDisabled", disabled: true, expected: ErrInvalidToken, code: http.StatusUnauthorized, challenge: `Bearer`},
+		{name: "ShouldReadTheCredentialWhenDPoPEnabled", dpop: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			introspector := &countingBearerIntrospector{}
+
+			config := &Config{
+				TokenIntrospectionHandlers:              TokenIntrospectionHandlers{introspector},
+				DPoPEnabled:                             tc.dpop,
+				IntrospectionEndpointClientAuthDisabled: tc.disabled,
+			}
+
+			provider := &Fosite{Store: storage.NewMemoryStore(), Config: config}
+
+			r := httptest.NewRequest(http.MethodPost, "https://as.example.com/introspect", strings.NewReader(url.Values{consts.FormParameterToken: {"target"}}.Encode()))
+			r.Header.Set(consts.HeaderContentType, "application/x-www-form-urlencoded")
+			r.Header.Set(consts.HeaderAuthorization, "DPoP caller-token")
+
+			_, err := provider.NewIntrospectionRequest(context.Background(), r, &DefaultSession{})
+
+			assert.Equal(t, tc.dpop, introspector.tokens["caller-token"])
+
+			if tc.dpop {
+				return
+			}
+
+			require.ErrorIs(t, err, tc.expected)
+
+			rw := httptest.NewRecorder()
+
+			provider.WriteIntrospectionError(context.Background(), rw, r, err)
+
+			assert.Equal(t, tc.code, rw.Code)
+			assert.True(t, strings.HasPrefix(rw.Header().Get(consts.HeaderWWWAuthenticate), tc.challenge), rw.Header().Get(consts.HeaderWWWAuthenticate))
+
+			if tc.challenge == "Bearer" {
+				assert.Equal(t, tc.challenge, rw.Header().Get(consts.HeaderWWWAuthenticate))
+			}
 		})
 	}
 }
@@ -290,6 +355,22 @@ func (i *bearerIntrospector) IntrospectToken(_ context.Context, _ string, _ Toke
 	request.SetSession(&DefaultSession{Subject: "peter"})
 
 	return AccessToken, nil
+}
+
+type countingBearerIntrospector struct {
+	bearerIntrospector
+
+	tokens map[string]bool
+}
+
+func (i *countingBearerIntrospector) IntrospectToken(ctx context.Context, token string, use TokenUse, request AccessRequester, scopes []string) (TokenUse, error) {
+	if i.tokens == nil {
+		i.tokens = map[string]bool{}
+	}
+
+	i.tokens[token] = true
+
+	return i.bearerIntrospector.IntrospectToken(ctx, token, use, request, scopes)
 }
 
 func authenticateWithMethodsConfig(t *testing.T, config *Config, strategy EndpointClientAuthStrategy) error {

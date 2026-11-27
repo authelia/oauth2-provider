@@ -40,7 +40,11 @@ func (f *Fosite) WriteRFC7592ClientConfigurationResponse(ctx context.Context, rw
 // or DELETE. A valid token not authorized for the target client is reported as 401 rather than 403 by
 // DefaultEndpointAuthStrategy (handler/rfc7591), so the status code does not distinguish it from an unknown token.
 //
+// r is the request being answered and may be nil. A request which included no access token is answered with HTTP 401
+// and the challenge alone, without a body (RFC 6750 Section 3.1). Without r the challenge omits the RFC 9728 Section
+// 5.1 'resource_metadata' parameter and the body is written.
+//
 // See: https://datatracker.ietf.org/doc/html/rfc7592#section-3
-func (f *Fosite) WriteRFC7592ClientConfigurationError(ctx context.Context, rw http.ResponseWriter, requester ClientConfigurationRequester, err error) {
-	f.writeClientRegistrationError(ctx, rw, requester, err, true)
+func (f *Fosite) WriteRFC7592ClientConfigurationError(ctx context.Context, rw http.ResponseWriter, r *http.Request, requester ClientConfigurationRequester, err error) {
+	f.writeClientRegistrationError(ctx, rw, r, requester, err, true)
 }

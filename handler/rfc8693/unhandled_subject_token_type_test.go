@@ -365,6 +365,7 @@ func TestExchangeWithoutActorTokenValidationRejectsAnUnvalidatedActorToken(t *te
 
 	client := &rfc8693Client{DefaultClient: newConfidentialClient(), exchangePermitted: true, allow: true}
 	client.GrantTypes = append(client.GrantTypes, consts.GrantTypeRefreshToken)
+	registerFixtureAudience(t, client.DefaultClient)
 
 	handlers := []oauth2.TokenEndpointHandler{
 		newAccessTokenTypeHandler(cfg, store, strategy),

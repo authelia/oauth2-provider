@@ -168,10 +168,12 @@ type Provider interface {
 	// See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.1
 	NewIntrospectionRequest(ctx context.Context, r *http.Request, session Session) (responder IntrospectionResponder, err error)
 
-	// WriteIntrospectionError responds with an error if token introspection failed.
+	// WriteIntrospectionError responds with an error if token introspection failed. r is the request being answered
+	// and may be nil. A request which included no access token is answered with HTTP 401 and the 'WWW-Authenticate'
+	// challenge alone, without a body (RFC 6750 Section 3.1).
 	//
 	// See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.3
-	WriteIntrospectionError(ctx context.Context, rw http.ResponseWriter, err error)
+	WriteIntrospectionError(ctx context.Context, rw http.ResponseWriter, r *http.Request, err error)
 
 	// WriteIntrospectionResponse responds with token metadata discovered by token introspection.
 	//
@@ -322,11 +324,13 @@ type Provider interface {
 	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1 (everything MUST be implemented).
 	WriteRFC7591ClientRegistrationResponse(ctx context.Context, rw http.ResponseWriter, requester ClientRegistrationRequester, responder ClientRegistrationResponder)
 
-	// WriteRFC7591ClientRegistrationError writes a client registration endpoint error response.
+	// WriteRFC7591ClientRegistrationError writes a client registration endpoint error response. r is the request
+	// being answered and may be nil. A request which included no access token is answered with HTTP 401 and the
+	// 'WWW-Authenticate' challenge alone, without a body (RFC 6750 Section 3.1).
 	//
 	// The following specs must be considered in any implementation of this method:
 	// * https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.2 (everything MUST be implemented).
-	WriteRFC7591ClientRegistrationError(ctx context.Context, rw http.ResponseWriter, requester ClientRegistrationRequester, err error)
+	WriteRFC7591ClientRegistrationError(ctx context.Context, rw http.ResponseWriter, r *http.Request, requester ClientRegistrationRequester, err error)
 
 	// NewRFC7592ClientConfigurationRequest validates the request and produces a ClientConfigurationRequester.
 	//
@@ -351,10 +355,12 @@ type Provider interface {
 	// WriteRFC7592ClientConfigurationError writes a client configuration endpoint error response, mapping to the
 	// status codes described in RFC 7592 Sections 2 and 3: 401 (with a 'WWW-Authenticate: Bearer' header) for a
 	// missing or invalid registration access token or a client that does not exist, and 405 for an unsupported method.
+	// r is the request being answered and may be nil. A request which included no access token is answered with HTTP
+	// 401 and the challenge alone, without a body (RFC 6750 Section 3.1).
 	//
 	// The following specs must be considered in any implementation of this method:
 	// * https://datatracker.ietf.org/doc/html/rfc7592#section-3 (everything MUST be implemented).
-	WriteRFC7592ClientConfigurationError(ctx context.Context, rw http.ResponseWriter, requester ClientConfigurationRequester, err error)
+	WriteRFC7592ClientConfigurationError(ctx context.Context, rw http.ResponseWriter, r *http.Request, requester ClientConfigurationRequester, err error)
 
 	// NewRPInitiatedLogoutRequest parses and validates a request to the OpenID Connect end session endpoint. It does
 	// not authenticate the client, end any session, or write a response; on error the returned requester carries no
@@ -961,6 +967,19 @@ type RFC8693TokenType interface {
 
 	// GetType returns the token type identifier, such as an RFC 8693 Section 3 token type URI.
 	GetType(ctx context.Context) (tokenType string)
+}
+
+// TokenExchangeCustomJWT identifies a single-use JSON Web Token consumed by an RFC 8693 token exchange. The JTI is only
+// unique among the JWTs of the Issuer per RFC 7519 Section 4.1.7.
+type TokenExchangeCustomJWT struct {
+	// Issuer is the 'iss' claim of the token.
+	Issuer string
+
+	// JTI is the 'jti' claim of the token.
+	JTI string
+
+	// ExpiresAt is the time after which the token is refused regardless, so the JTI no longer has to be known.
+	ExpiresAt time.Time
 }
 
 // RFC8693TokenTypeIdentifiersProvider is optionally implemented by an RFC8693TokenType to report the identifiers it

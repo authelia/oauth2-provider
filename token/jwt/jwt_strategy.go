@@ -251,7 +251,8 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 
 	kid, alg, enc = o.client.GetEncryptionKeyID(), o.client.GetEncryptionAlg(), o.client.GetEncryptionEnc()
 
-	if len(kid) == 0 && IsNoneAlg(alg) {
+	// See: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+	if IsNoneAlg(alg) {
 		return EncodeCompactSigned(ctx, claims, o.headers, keySig)
 	}
 

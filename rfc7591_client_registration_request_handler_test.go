@@ -171,7 +171,7 @@ func TestFositeWriteRFC7591ClientRegistrationError(t *testing.T) {
 
 	rw := httptest.NewRecorder()
 
-	provider.WriteRFC7591ClientRegistrationError(context.Background(), rw, NewClientRegistrationRequest(), errorsx.WithStack(ErrInvalidClientMetadata.WithHint("bad metadata")))
+	provider.WriteRFC7591ClientRegistrationError(context.Background(), rw, nil, NewClientRegistrationRequest(), errorsx.WithStack(ErrInvalidClientMetadata.WithHint("bad metadata")))
 
 	assert.Equal(t, http.StatusBadRequest, rw.Code)
 	assert.Contains(t, rw.Body.String(), `"error":"invalid_client_metadata"`)

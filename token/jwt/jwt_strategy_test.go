@@ -918,6 +918,58 @@ func TestDefaultStrategy_EncodeAlgNone(t *testing.T) {
 	}
 }
 
+func TestDefaultStrategy_EncodeEncryptionKeyIDWithoutAlg(t *testing.T) {
+	strategy := &DefaultStrategy{
+		Config: &testConfig{},
+		Issuer: NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{testKeySigECDSA}}),
+	}
+
+	jwks := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{testKeyPublicEncECDSA}}
+
+	testCases := []struct {
+		name      string
+		client    *testClient
+		encrypted bool
+	}{
+		{
+			name:   "ShouldNotEncryptWithKeyIDOnly",
+			client: &testClient{id: "client-id", alg: string(jose.ES256), encKID: testKeyPublicEncECDSA.KeyID, jwks: jwks},
+		},
+		{
+			name:   "ShouldNotEncryptWithKeyIDAndEncOnly",
+			client: &testClient{id: "client-id", alg: string(jose.ES256), encKID: testKeyPublicEncECDSA.KeyID, enc: string(jose.A128GCM), jwks: jwks},
+		},
+		{
+			name:   "ShouldNotEncryptWithKeyIDAndAlgNone",
+			client: &testClient{id: "client-id", alg: string(jose.ES256), encKID: testKeyPublicEncECDSA.KeyID, encAlg: JSONWebTokenAlgNone, jwks: jwks},
+		},
+		{
+			name:   "ShouldNotEncryptWithAnUnknownKeyIDOnly",
+			client: &testClient{id: "client-id", alg: string(jose.ES256), encKID: "unknown"},
+		},
+		{
+			name:      "ShouldEncryptWithKeyIDAndAlg",
+			client:    &testClient{id: "client-id", alg: string(jose.ES256), encKID: testKeyPublicEncECDSA.KeyID, encAlg: string(jose.ECDH_ES_A128KW), enc: string(jose.A128GCM), jwks: jwks},
+			encrypted: true,
+		},
+		{
+			name:      "ShouldEncryptWithAlgOnly",
+			client:    &testClient{id: "client-id", alg: string(jose.ES256), encAlg: string(jose.ECDH_ES_A128KW), enc: string(jose.A128GCM), jwks: jwks},
+			encrypted: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			token, _, err := strategy.Encode(t.Context(), MapClaims{"sub": "john"}, WithClient(tc.client))
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.encrypted, IsEncryptedJWT(token))
+			assert.Equal(t, !tc.encrypted, IsSignedJWT(token))
+		})
+	}
+}
+
 func TestEncodeNestedCompactEncrypted(t *testing.T) {
 	claims := MapClaims{
 		"iss": "example.com",

@@ -68,6 +68,10 @@ func ValidateBearerAuthorization(ctx context.Context, config BearerAuthorization
 		}
 	}
 
+	if err = validateBearerTransport(ctx, config, r, requester.GetClient(), client, token); err != nil {
+		return nil, err
+	}
+
 	if err = validateBearerProofOfPossession(ctx, config, r, requester, client, token, auth.Endpoints); err != nil {
 		return nil, err
 	}
@@ -81,6 +85,30 @@ func ValidateBearerAuthorization(ctx context.Context, config BearerAuthorization
 	}
 
 	return client, nil
+}
+
+func validateBearerTransport(ctx context.Context, config any, r *http.Request, recorded, client Client, token string) (err error) {
+	if !IsFAPI2SecurityProfile(ctx, config) && !IsFAPI2SecurityProfileClient(recorded) && !IsFAPI2SecurityProfileClient(client) {
+		return nil
+	}
+
+	if isAccessTokenURIQueryParameter(r, token) {
+		return errorsx.WithStack(ErrInvalidRequest.WithHint("An access token in the URI query is not accepted under the FAPI 2.0 Security Profile."))
+	}
+
+	return nil
+}
+
+func isAccessTokenURIQueryParameter(r *http.Request, token string) bool {
+	if r == nil || r.URL == nil || token == "" {
+		return false
+	}
+
+	if scheme, value, err := AuthorizationCredentialFromRequest(r); err == nil && value == token && (strings.EqualFold(scheme, BearerAccessToken) || strings.EqualFold(scheme, DPoPAccessToken)) {
+		return false
+	}
+
+	return r.URL.Query().Get(consts.FormParameterAccessToken) == token && r.PostForm.Get(consts.FormParameterAccessToken) != token
 }
 
 func resolveBearerClient(ctx context.Context, config any, store ClientGetter, requester Requester) (client Client, err error) {

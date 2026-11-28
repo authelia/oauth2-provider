@@ -194,7 +194,7 @@ func (h *DefaultResponseModeHandler) EncodeResponseForm(ctx context.Context, rm 
 			return nil, errorsx.WithStack(ErrServerError.WithDebug("The client is not capable of handling the JWT-Secured Authorization Response Mode."))
 		}
 
-		return jarm.EncodeParameters(jarm.Generate(ctx, h.Config, jclient, request.GetSession(), parameters, FAPI2SecurityProfileEncodeOptions(request.GetClient())...))
+		return jarm.EncodeParameters(jarm.Generate(ctx, h.Config, jclient, request.GetSession(), parameters, FAPI2SecurityProfileEncodeOptions(ctx, h.Config, request.GetClient())...))
 	default:
 		return parameters, nil
 	}

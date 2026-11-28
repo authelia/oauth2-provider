@@ -416,8 +416,8 @@ func SupportedRequestObjectSigningAlgValues(ctx context.Context, config Configur
 }
 
 // SupportedIDTokenSignedResponseAlgValues returns the 'id_token_signed_response_alg' values the server can produce:
-// SupportedIDTokenSigningAlgValues plus the client secret HMAC algorithms, or nil when the ID Token issuer has no
-// signing algorithms.
+// SupportedIDTokenSigningAlgValues plus the client secret HMAC algorithms unless the server is held to the FAPI 2.0
+// Security Profile, or nil when the ID Token issuer has no signing algorithms.
 //
 // See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
 func SupportedIDTokenSignedResponseAlgValues(ctx context.Context, config Configurator) []string {
@@ -426,25 +426,26 @@ func SupportedIDTokenSignedResponseAlgValues(ctx context.Context, config Configu
 		return nil
 	}
 
-	return sortedUnique(clientSecretSigningAlgValues(algs))
+	return sortedUnique(clientSecretSigningAlgValues(ctx, config, algs))
 }
 
 // SupportedUserinfoSignedResponseAlgValues returns the 'userinfo_signed_response_alg' values the server can produce:
-// the JWTStrategy algorithms plus the client secret HMAC algorithms, or none when there is no JWTStrategy. The value
-// 'none' is never included.
+// the JWTStrategy algorithms plus the client secret HMAC algorithms unless the server is held to the FAPI 2.0 Security
+// Profile, or none when there is no JWTStrategy. The value 'none' is never included.
 //
 // See: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
 func SupportedUserinfoSignedResponseAlgValues(ctx context.Context, config Configurator) []string {
-	return strategySignedResponseAlgValues(ctx, config.GetJWTStrategy(ctx))
+	return strategySignedResponseAlgValues(ctx, config, config.GetJWTStrategy(ctx))
 }
 
 // SupportedAuthorizationSignedResponseAlgValues returns the 'authorization_signed_response_alg' values the server can
-// produce: the JARM strategy algorithms plus the client secret HMAC algorithms, or nil when there is no JARM strategy,
-// restricted to those SignedResponseAlgValuesProvider permits.
+// produce: the JARM strategy algorithms plus the client secret HMAC algorithms unless the server is held to the FAPI
+// 2.0 Security Profile, or nil when there is no JARM strategy, restricted to those SignedResponseAlgValuesProvider
+// permits.
 //
 // See: https://openid.net/specs/oauth-v2-jarm.html#section-4
 func SupportedAuthorizationSignedResponseAlgValues(ctx context.Context, config Configurator) []string {
-	algs := strategySignedResponseAlgValues(ctx, config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx))
+	algs := strategySignedResponseAlgValues(ctx, config, config.GetJWTSecuredAuthorizeResponseModeStrategy(ctx))
 
 	if provider, ok := config.(SignedResponseAlgValuesProvider); ok {
 		return restrictedAlgValues(algs, provider.GetAuthorizationSignedResponseAlgValues(ctx))
@@ -454,14 +455,15 @@ func SupportedAuthorizationSignedResponseAlgValues(ctx context.Context, config C
 }
 
 // SupportedIntrospectionSignedResponseAlgValues returns the 'introspection_signed_response_alg' values the server can
-// produce: the JWT introspection response strategy algorithms plus the client secret HMAC algorithms, or nil when there
-// is no such strategy, restricted to those SignedResponseAlgValuesProvider permits. 'none' is excluded because the
-// introspection response JWT is cryptographically secured.
+// produce: the JWT introspection response strategy algorithms plus the client secret HMAC algorithms unless the server
+// is held to the FAPI 2.0 Security Profile, or nil when there is no such strategy, restricted to those
+// SignedResponseAlgValuesProvider permits. 'none' is excluded because the introspection response JWT is
+// cryptographically secured.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc9701#section-5
 // See: https://datatracker.ietf.org/doc/html/rfc9701#section-7
 func SupportedIntrospectionSignedResponseAlgValues(ctx context.Context, config Configurator) []string {
-	algs := strategySignedResponseAlgValues(ctx, config.GetIntrospectionJWTResponseStrategy(ctx))
+	algs := strategySignedResponseAlgValues(ctx, config, config.GetIntrospectionJWTResponseStrategy(ctx))
 
 	if provider, ok := config.(SignedResponseAlgValuesProvider); ok {
 		return restrictedAlgValues(algs, provider.GetIntrospectionSignedResponseAlgValues(ctx))
@@ -479,18 +481,19 @@ func restrictedAlgValues(algs, permitted []string) []string {
 }
 
 // SupportedAccessTokenSignedResponseAlgValues returns the 'access_token_signed_response_alg' values the server can
-// produce: the JWTStrategy algorithms plus the client secret HMAC algorithms, or nil when there is no JWTStrategy.
+// produce: the JWTStrategy algorithms plus the client secret HMAC algorithms unless the server is held to the FAPI 2.0
+// Security Profile, or nil when there is no JWTStrategy.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc9068#section-2.1
 func SupportedAccessTokenSignedResponseAlgValues(ctx context.Context, config Configurator) []string {
-	return strategySignedResponseAlgValues(ctx, config.GetJWTStrategy(ctx))
+	return strategySignedResponseAlgValues(ctx, config, config.GetJWTStrategy(ctx))
 }
 
-func strategySignedResponseAlgValues(ctx context.Context, strategy jwt.Strategy) []string {
+func strategySignedResponseAlgValues(ctx context.Context, config Configurator, strategy jwt.Strategy) []string {
 	var algs []string
 
 	if strategy != nil {
-		algs = clientSecretSigningAlgValues(strategy.SigningAlgValues(ctx))
+		algs = clientSecretSigningAlgValues(ctx, config, strategy.SigningAlgValues(ctx))
 	}
 
 	return sortedUnique(algs)

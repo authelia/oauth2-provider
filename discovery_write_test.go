@@ -91,6 +91,87 @@ func TestDiscoveryHookRuns(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestDiscoveryHookFAPI2SecurityProfileWithoutRS256(t *testing.T) {
+	config := newDiscoveryAllEnabledConfig()
+	config.FAPI2SecurityProfile = true
+	config.DiscoveryMetadataHooks = []oauth2.DiscoveryMetadataHook{&discoveryMutateHook{mutate: func(m *oauth2.OpenIDConnectProviderMetadata) {
+		m.IDTokenSigningAlgValuesSupported = []string{string(jose.ES256)}
+	}}}
+
+	provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), gen.MustRSAKey())
+
+	metadata, err := provider.NewOpenIDConnectProviderMetadata(context.Background())
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{string(jose.ES256)}, metadata.IDTokenSigningAlgValuesSupported)
+}
+
+func TestDiscoveryHookFAPI2SecurityProfileWithoutIDTokenAlgorithms(t *testing.T) {
+	config := newDiscoveryAllEnabledConfig()
+	config.FAPI2SecurityProfile = true
+	config.DiscoveryMetadataHooks = []oauth2.DiscoveryMetadataHook{&discoveryMutateHook{mutate: func(m *oauth2.OpenIDConnectProviderMetadata) {
+		m.IDTokenSigningAlgValuesSupported = nil
+	}}}
+
+	provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), gen.MustRSAKey())
+
+	_, err := provider.NewOpenIDConnectProviderMetadata(context.Background())
+
+	assert.EqualError(t, err, "the discovery metadata hooks produced invalid metadata: the openid provider metadata requires 'id_token_signing_alg_values_supported'")
+}
+
+func TestDiscoverySigningFAPI2SecurityProfile(t *testing.T) {
+	testCases := []struct {
+		name     string
+		keys     []jose.JSONWebKey
+		expected string
+		err      string
+	}{
+		{
+			name: "ShouldSignWithAPermittedAlgorithmOverRS256",
+			keys: []jose.JSONWebKey{
+				{Key: gen.MustRSAKey(), KeyID: "rsa", Use: jwt.JSONWebTokenUseSignature, Algorithm: string(jose.RS256)},
+				{Key: gen.MustES256Key(), KeyID: "ec", Use: jwt.JSONWebTokenUseSignature, Algorithm: string(jose.ES256)},
+			},
+			expected: string(jose.ES256),
+		},
+		{
+			name: "ShouldErrorWithoutAPermittedAlgorithm",
+			keys: []jose.JSONWebKey{
+				{Key: gen.MustRSAKey(), KeyID: "rsa", Use: jwt.JSONWebTokenUseSignature, Algorithm: string(jose.RS256)},
+			},
+			err: "unable to sign the discovery metadata: the signing strategy has no signing algorithm the FAPI 2.0 Security Profile permits",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := newDiscoveryAllEnabledConfig()
+			config.FAPI2SecurityProfile = true
+			config.DiscoveryMetadataSigningStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: tc.keys})}
+
+			provider := compose.ComposeAllEnabled(config, storage.NewMemoryStore(), gen.MustRSAKey())
+
+			metadata, err := provider.NewOAuth2AuthorizationServerMetadata(context.Background())
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			raw, err := base64.RawURLEncoding.DecodeString(strings.Split(metadata.SignedMetadata, ".")[0])
+			require.NoError(t, err)
+
+			header := map[string]any{}
+			require.NoError(t, json.Unmarshal(raw, &header))
+
+			assert.Equal(t, tc.expected, header["alg"])
+		})
+	}
+}
+
 func TestDiscoveryHookInvalidMetadataErrors(t *testing.T) {
 	testCases := []struct {
 		name   string

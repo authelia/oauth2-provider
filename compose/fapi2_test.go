@@ -84,6 +84,25 @@ func TestValidateFAPI2SecurityProfile(t *testing.T) {
 			modify: func(config *oauth2.Config) { config.GrantTypeJWTBearerCanSkipClientAuth = true },
 		},
 		{
+			name: "ShouldRejectHS256AuthorizationResponses",
+			modify: func(config *oauth2.Config) {
+				config.AuthorizationSignedResponseAlgValues = []string{string(jose.HS256)}
+			},
+			expected: []string{"Section 5.4.1: the authorization response algorithms 'HS256' include one not permitted"},
+		},
+		{
+			name: "ShouldRejectHS256IntrospectionResponses",
+			modify: func(config *oauth2.Config) {
+				config.IntrospectionSignedResponseAlgValues = []string{string(jose.HS256)}
+			},
+			expected: []string{"Section 5.4.1: the introspection response algorithms 'HS256' include one not permitted"},
+		},
+		{
+			name:     "ShouldRejectWithoutTheProfileFlag",
+			modify:   func(config *oauth2.Config) { config.FAPI2SecurityProfile = false },
+			expected: []string{"Section 5.4.1: the discovery metadata must list only the permitted algorithms, but FAPI2SecurityProfile is not set"},
+		},
+		{
 			name:     "ShouldRejectQueryAccessTokens",
 			modify:   func(config *oauth2.Config) { config.AccessTokenURIQueryParameterEnabled = true },
 			expected: []string{"Section 5.3.4: access tokens in the URI query must not be accepted, but AccessTokenURIQueryParameterEnabled is set"},
@@ -330,12 +349,17 @@ func TestApplyFAPI2SecurityProfile(t *testing.T) {
 		RFC7523AssertionSigningAlgValues:         []string{string(jose.RS256), string(jose.PS256)},
 		GrantTypeJWTBearerCanSkipClientAuth:      true,
 		AccessTokenURIQueryParameterEnabled:      true,
+		AuthorizationSignedResponseAlgValues:     []string{string(jose.HS256), string(jose.ES256)},
+		IntrospectionSignedResponseAlgValues:     []string{string(jose.RS256), string(jose.PS256)},
 	}
 
 	ApplyFAPI2SecurityProfile(config)
 
 	assert.False(t, config.GrantTypeJWTBearerCanSkipClientAuth)
 	assert.False(t, config.AccessTokenURIQueryParameterEnabled)
+	assert.True(t, config.FAPI2SecurityProfile)
+	assert.Equal(t, []string{string(jose.ES256)}, config.AuthorizationSignedResponseAlgValues)
+	assert.Equal(t, []string{string(jose.PS256)}, config.IntrospectionSignedResponseAlgValues)
 
 	assert.Equal(t, time.Minute, config.AuthorizeCodeLifespan)
 	assert.Equal(t, time.Duration(0), config.PushedAuthorizeContextLifespan)

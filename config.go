@@ -1484,6 +1484,15 @@ type IntrospectionPermissionProvider interface {
 	GetEnforceIntrospectionPermission(ctx context.Context) (enforce bool)
 }
 
+// FAPI2SecurityProfileProvider returns the provider for declaring that the whole authorization server is held to the
+// FAPI 2.0 Security Profile, which takes precedence over a conflicting requirement of another specification.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.4.1
+type FAPI2SecurityProfileProvider interface {
+	// GetFAPI2SecurityProfile returns true if the authorization server is held to the FAPI 2.0 Security Profile.
+	GetFAPI2SecurityProfile(ctx context.Context) (enabled bool)
+}
+
 // EnforceSenderConstrainedAccessTokensProvider returns the provider for requiring every access token to be
 // sender-constrained by either RFC 9449 DPoP or RFC 8705 Mutual-TLS.
 //

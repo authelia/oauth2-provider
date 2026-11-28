@@ -306,20 +306,38 @@ func TestValidateFAPICIBAProfile(t *testing.T) {
 			expected:  []string{"FAPI-CIBA Profile Section 5.10: the introspection endpoint client assertion algorithms 'EdDSA' include one not permitted"},
 		},
 		{
-			name: "ShouldRejectHS256AuthorizationResponses",
+			name: "ShouldRejectHS256AuthorizationResponsesWithoutTheProfileFlag",
 			modify: func(config *oauth2.Config) {
+				config.FAPI2SecurityProfile = false
 				config.JWTSecuredAuthorizeResponseModeStrategy = newFAPICIBATestES256Strategy(config)
 				config.AuthorizationSignedResponseAlgValues = []string{string(jose.ES256), string(jose.HS256)}
 			},
 			expected: []string{"FAPI-CIBA Profile Section 5.10: the authorization response algorithms 'ES256', 'HS256' include one not permitted"},
 		},
 		{
-			name: "ShouldRejectHS256IntrospectionResponses",
+			name: "ShouldRejectHS256AuthorizationResponsesWithTheProfileFlag",
 			modify: func(config *oauth2.Config) {
+				config.JWTSecuredAuthorizeResponseModeStrategy = newFAPICIBATestES256Strategy(config)
+				config.AuthorizationSignedResponseAlgValues = []string{string(jose.ES256), string(jose.HS256)}
+			},
+			expected: []string{"Section 5.4.1: the authorization response algorithms 'ES256', 'HS256' include one not permitted"},
+		},
+		{
+			name: "ShouldRejectHS256IntrospectionResponsesWithoutTheProfileFlag",
+			modify: func(config *oauth2.Config) {
+				config.FAPI2SecurityProfile = false
 				config.IntrospectionJWTResponseStrategy = newFAPICIBATestES256Strategy(config)
 				config.IntrospectionSignedResponseAlgValues = []string{string(jose.ES256), string(jose.HS256)}
 			},
 			expected: []string{"FAPI-CIBA Profile Section 5.10: the introspection response algorithms 'ES256', 'HS256' include one not permitted"},
+		},
+		{
+			name: "ShouldRejectHS256IntrospectionResponsesWithTheProfileFlag",
+			modify: func(config *oauth2.Config) {
+				config.IntrospectionJWTResponseStrategy = newFAPICIBATestES256Strategy(config)
+				config.IntrospectionSignedResponseAlgValues = []string{string(jose.ES256), string(jose.HS256)}
+			},
+			expected: []string{"Section 5.4.1: the introspection response algorithms 'ES256', 'HS256' include one not permitted"},
 		},
 		{
 			name: "ShouldPassWithSignedResponses",

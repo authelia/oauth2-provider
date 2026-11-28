@@ -83,6 +83,14 @@ type FAPI2SecurityProfileClient interface {
 	Client
 }
 
+// IsFAPI2SecurityProfile returns true if config is a FAPI2SecurityProfileProvider holding the whole authorization
+// server to the FAPI 2.0 Security Profile.
+func IsFAPI2SecurityProfile(ctx context.Context, config any) (enabled bool) {
+	p, ok := config.(FAPI2SecurityProfileProvider)
+
+	return ok && p.GetFAPI2SecurityProfile(ctx)
+}
+
 // IsFAPI2SecurityProfileClient returns true if the client is a FAPI2SecurityProfileClient held to the profile.
 func IsFAPI2SecurityProfileClient(client Client) (enabled bool) {
 	c, ok := client.(FAPI2SecurityProfileClient)
@@ -160,12 +168,12 @@ func FilterFAPI2SecurityProfileSigningAlgValues(client Client, algs []string) (p
 }
 
 // FAPI2SecurityProfileEncodeOptions returns the jwt.Strategy options which make Encode refuse to issue a JWT that is
-// unsigned or signed with an algorithm outside FAPI2SecurityProfileSigningAlgValues for a client held to the FAPI 2.0
-// Security Profile, and nil for any other client.
+// unsigned or signed with an algorithm outside FAPI2SecurityProfileSigningAlgValues when config holds the whole
+// authorization server to the FAPI 2.0 Security Profile or the client is held to it, and nil otherwise.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.4.1
-func FAPI2SecurityProfileEncodeOptions(client Client) (opts []jwt.StrategyOpt) {
-	if !IsFAPI2SecurityProfileClient(client) {
+func FAPI2SecurityProfileEncodeOptions(ctx context.Context, config any, client Client) (opts []jwt.StrategyOpt) {
+	if !IsFAPI2SecurityProfile(ctx, config) && !IsFAPI2SecurityProfileClient(client) {
 		return nil
 	}
 

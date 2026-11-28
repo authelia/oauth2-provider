@@ -933,6 +933,26 @@ func TestOpenIDMetadataRequiresRS256(t *testing.T) {
 	assert.EqualError(t, err, "the openid provider metadata requires 'id_token_signing_alg_values_supported' to include 'RS256' but the id token issuer has no 'RS256' signing key")
 }
 
+// FAPI 2.0 Security Profile Section 5.4.1.
+func TestOpenIDMetadataFAPI2SecurityProfile(t *testing.T) {
+	config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
+	config.FAPI2SecurityProfile = true
+
+	provider := composeDiscoveryOpenID(config, &jwt.DefaultStrategy{
+		Config: config,
+		Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+			{Key: gen.MustRSAKey(), KeyID: "ps256", Algorithm: string(jose.PS256), Use: consts.JSONWebTokenUseSignature},
+			{Key: gen.MustES256Key(), KeyID: "es256", Algorithm: string(jose.ES256), Use: consts.JSONWebTokenUseSignature},
+		}}),
+	})
+
+	metadata, err := provider.NewOpenIDConnectProviderMetadata(context.Background())
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{string(jose.ES256), string(jose.PS256)}, metadata.IDTokenSigningAlgValuesSupported)
+	assert.Equal(t, []string{string(jose.ES256)}, metadata.UserinfoSigningAlgValuesSupported)
+}
+
 func TestOpenIDMetadataNoSubjectTypesErrors(t *testing.T) {
 	config := newDiscoveryOpenIDConfig(gen.MustRSAKey())
 

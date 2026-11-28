@@ -290,7 +290,7 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 	// binding methods that are currently enabled.
 	oauth2.ApplyConfirmation(ctx, s.Config, mapClaims, request.GetSession())
 
-	return s.Encode(ctx, mapClaims, append(oauth2.FAPI2SecurityProfileEncodeOptions(request.GetClient()), jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))...)
+	return s.Encode(ctx, mapClaims, append(oauth2.FAPI2SecurityProfileEncodeOptions(ctx, s.Config, request.GetClient()), jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))...)
 }
 
 func (s *JWTProfileCoreStrategy) applyDefaultAudience(ctx context.Context, request oauth2.Requester) (err error) {

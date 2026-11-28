@@ -147,7 +147,7 @@ func (f *Fosite) encodeUserinfoJWT(ctx context.Context, client Client, values ma
 
 	var token string
 
-	if token, _, err = strategy.Encode(ctx, jwt.MapClaims(values), append(FAPI2SecurityProfileEncodeOptions(client), jwt.WithUserInfoClient(&userinfoUnsignedClient{UserInfoClient: client.(jwt.UserInfoClient)}), jwt.WithAllowUnsignedEncrypted())...); err != nil {
+	if token, _, err = strategy.Encode(ctx, jwt.MapClaims(values), append(FAPI2SecurityProfileEncodeOptions(ctx, f.Config, client), jwt.WithUserInfoClient(&userinfoUnsignedClient{UserInfoClient: client.(jwt.UserInfoClient)}), jwt.WithAllowUnsignedEncrypted())...); err != nil {
 		return nil, errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugf("The UserInfo JWT could not be generated with error %+v.", err))
 	}
 

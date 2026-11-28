@@ -45,6 +45,7 @@ func TestOIDCKeyBindingAuthorizationCodeFlow(t *testing.T) {
 func TestOIDCKeyBindingDeviceFlow(t *testing.T) {
 	provider, _, idTokenKey, clientID := newOIDCKeyBindingProvider(t, true)
 	session := newIDSession(&jwt.IDTokenClaims{Subject: "peter"})
+	session.UserCodeBindingSubject = "peter"
 
 	ts := oidckbServer(t, provider, session)
 	defer ts.Close()

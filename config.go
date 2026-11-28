@@ -787,8 +787,8 @@ type RFC8628VerificationURICompleteProvider interface {
 }
 
 // RFC8628UserCodeSubjectBindingProvider is optionally implemented by the configuration to decide whether an undecided
-// user code is bound to the subject who first presents it. A configuration which does not implement this interface is
-// treated as returning true.
+// user code is bound to the End-User who first presents it, as identified by RFC8628UserCodeBindingSession. A
+// configuration which does not implement this interface is treated as returning true.
 //
 // See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.3
 type RFC8628UserCodeSubjectBindingProvider interface {

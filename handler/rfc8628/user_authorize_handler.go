@@ -62,7 +62,8 @@ func (d *UserAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpointResponse(ctx 
 // interactions Device Authorization Response as defined in RFC8638 Section 3.5. A user code which is not accepted is
 // answered with 'invalid_grant' wrapping oauth2.ErrUserCodeUnknown, oauth2.ErrUserCodeExpired,
 // oauth2.ErrUserCodeDecided or oauth2.ErrUserCodeClaimed. Unless disabled, an undecided user code is bound to the
-// subject of the session of the first request presenting it, and refused when any other subject presents it. The user
+// End-User the oauth2.RFC8628UserCodeBindingSession of the first request presenting it identifies, and refused when
+// any other End-User presents it. The user
 // agent contributes only the 'user_code' to the request: every other parameter it sent is removed from the form of the
 // request, which is then the form of the stored device authorization request and the 'user_code'.
 //
@@ -91,11 +92,13 @@ func (d *UserAuthorizeHandler) HandleRFC8628UserAuthorizeEndpointRequest(ctx con
 		return err
 	}
 
-	// The stored session replaces the session of the request, so the presenting subject is read first.
-	binding, subject := d.isUserCodeSubjectBindingEnforced(ctx), request.GetSession().GetSubject()
+	// The stored session replaces the session of the request, so the presenting End-User is read first.
+	binding, subject := d.isUserCodeSubjectBindingEnforced(ctx), ""
 
-	if binding && subject == "" {
-		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Cannot process the request, the session must carry the subject of the authenticated End-User presenting the user_code."))
+	if binding {
+		if subject = oauth2.GetRFC8628UserCodeBindingSubject(request.GetSession()); subject == "" {
+			return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Cannot process the request, the session must implement oauth2.RFC8628UserCodeBindingSession and identify the authenticated End-User presenting the user_code."))
+		}
 	}
 
 	claims, ok := d.Storage.(ClaimStorage)

@@ -99,6 +99,7 @@ func TestJWTSessionClone(t *testing.T) {
 					ExpiryDeadline:              time.Unix(1700003600, 0).UTC(),
 					RefreshTokenMode:            oauth2.RefreshTokenModeOnline,
 					AccessTokenDigest:           "digest",
+					UserCodeBindingSubject:      "peter",
 				}
 
 				clonetest.AssertDeepCopy(t, s, s.Clone())

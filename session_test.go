@@ -266,6 +266,7 @@ func TestDefaultSessionClone(t *testing.T) {
 					Extra:                       map[string]any{"act": map[string]any{"sub": "bob"}, "groups": []any{"admin"}},
 					JWKThumbprint:               "jkt",
 					ClientCertificateThumbprint: "x5t",
+					UserCodeBindingSubject:      "peter",
 					PublicKeyJWK:                []byte(`{"kty":"EC"}`),
 					RequestedJWKThumbprint:      "requested-jkt",
 					KeyBindingGranted:           true,

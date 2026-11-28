@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2/internal/clone"
+	"authelia.com/provider/oauth2/internal/reflection"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -58,6 +59,9 @@ type DefaultSession struct {
 	// ClientCertificateThumbprint is the RFC 8705 X.509 SHA-256 certificate thumbprint (x5t#S256) this session's
 	// tokens are bound to, if any.
 	ClientCertificateThumbprint string `json:"client_certificate_thumbprint,omitempty"`
+
+	// UserCodeBindingSubject is the identifier of the authenticated End-User an RFC 8628 user code is bound to.
+	UserCodeBindingSubject string `json:"user_code_binding_subject,omitempty"`
 
 	// PublicKeyJWK is the raw JWK JSON of the DPoP proof-of-possession public key this session's ID Tokens are
 	// bound to, if any.
@@ -165,6 +169,28 @@ type ExtraClaimsSession interface {
 	// GetExtraClaims returns a map to store extra claims.
 	// The returned value can be modified in-place.
 	GetExtraClaims() map[string]any
+}
+
+// RFC8628UserCodeBindingSession is implemented by a Session which identifies the authenticated End-User a user code is
+// bound to while user code subject binding is enabled. The identifier is compared as an opaque string, and is
+// independent of the subject of the issued tokens, so it is known before the user code resolves the client, which a
+// pairwise or sector subject depends on. The same End-User must be given the same identifier at every client.
+//
+// See: https://www.rfc-editor.org/rfc/rfc10027#section-6.1.3
+type RFC8628UserCodeBindingSession interface {
+	// GetRFC8628UserCodeBindingSubject returns the identifier of the authenticated End-User, or an empty string when
+	// none is set.
+	GetRFC8628UserCodeBindingSubject() (subject string)
+}
+
+// GetRFC8628UserCodeBindingSubject returns the identifier of the End-User a user code is bound to from a session
+// implementing RFC8628UserCodeBindingSession, and otherwise an empty string.
+func GetRFC8628UserCodeBindingSubject(session Session) (subject string) {
+	if s, ok := session.(RFC8628UserCodeBindingSession); ok && !reflection.IsNil(s) {
+		return s.GetRFC8628UserCodeBindingSubject()
+	}
+
+	return ""
 }
 
 // ExpiryDeadlineSession is implemented by a Session whose tokens must not expire after a fixed time, such as the
@@ -343,7 +369,17 @@ func (s *DefaultSession) GetOIDCKeyBindingGranted() (granted bool) {
 	return s.KeyBindingGranted
 }
 
+// GetRFC8628UserCodeBindingSubject implements RFC8628UserCodeBindingSession for DefaultSession.
+func (s *DefaultSession) GetRFC8628UserCodeBindingSubject() (subject string) {
+	if s == nil {
+		return ""
+	}
+
+	return s.UserCodeBindingSubject
+}
+
 var (
-	_ DPoPBoundSession = (*DefaultSession)(nil)
-	_ MTLSBoundSession = (*DefaultSession)(nil)
+	_ DPoPBoundSession              = (*DefaultSession)(nil)
+	_ MTLSBoundSession              = (*DefaultSession)(nil)
+	_ RFC8628UserCodeBindingSession = (*DefaultSession)(nil)
 )

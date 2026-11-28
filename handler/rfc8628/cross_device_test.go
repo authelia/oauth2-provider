@@ -206,7 +206,7 @@ func TestUserAuthorizeHandlerUserCodeSubjectBinding(t *testing.T) {
 
 				require.NoError(t, handler.HandleRFC8628UserAuthorizeEndpointRequest(t.Context(), request))
 
-				request.SetSession(&oauth2.DefaultSession{Subject: "alice", ExpiresAt: map[oauth2.TokenType]time.Time{}})
+				request.SetSession(&oauth2.DefaultSession{Subject: "alice", UserCodeBindingSubject: "alice", ExpiresAt: map[oauth2.TokenType]time.Time{}})
 				request.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
 
 				require.NoError(t, handler.PopulateRFC8628UserAuthorizeEndpointResponse(t.Context(), request, oauth2.NewRFC8628UserAuthorizeResponse()))
@@ -694,7 +694,7 @@ func newCrossDeviceGrant(t *testing.T, store Storage, config *oauth2.Config, req
 
 func newUserCodeRequest(code, subject string) (request *oauth2.DeviceAuthorizeRequest) {
 	request = oauth2.NewDeviceAuthorizeRequest()
-	request.SetSession(&oauth2.DefaultSession{Subject: subject})
+	request.SetSession(&oauth2.DefaultSession{Subject: subject, UserCodeBindingSubject: subject})
 	request.GetRequestForm().Set(consts.FormParameterUserCode, code)
 
 	return request
@@ -730,7 +730,7 @@ func decideCrossDeviceGrant(t *testing.T, store crossDeviceStore, grant crossDev
 	decided := *getCrossDeviceGrant(t, store, grant)
 	request := &decided
 
-	session := &oauth2.DefaultSession{Subject: "alice"}
+	session := &oauth2.DefaultSession{Subject: "alice", UserCodeBindingSubject: "alice"}
 	session.SetExpiresAt(oauth2.DeviceCode, request.GetSession().GetExpiresAt(oauth2.DeviceCode))
 	session.SetExpiresAt(oauth2.UserCode, request.GetSession().GetExpiresAt(oauth2.UserCode))
 

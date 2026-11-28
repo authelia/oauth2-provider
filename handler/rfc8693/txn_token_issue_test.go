@@ -871,10 +871,13 @@ type txnIssueClient struct {
 	allowActor    bool
 	refresh       bool
 	replacement   bool
+	fapi2         bool
 	scopeStrategy oauth2.ScopeStrategy
 }
 
 func (c *txnIssueClient) GetAllowTxnTokenReplacement() bool { return c.replacement }
+
+func (c *txnIssueClient) GetFAPI2SecurityProfile() bool { return c.fapi2 }
 
 func (c *txnIssueClient) GetScopeStrategy(context.Context) oauth2.ScopeStrategy {
 	return c.scopeStrategy

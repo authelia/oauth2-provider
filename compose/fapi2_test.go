@@ -16,6 +16,7 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
@@ -250,6 +251,31 @@ func TestValidateFAPI2SecurityProfile(t *testing.T) {
 		{
 			name:   "ShouldNotCheckIssuerSigningKeysTheStrategyDoesNotReport",
 			modify: func(config *oauth2.Config) { config.JWTStrategy = &jwt.DefaultStrategy{Config: config} },
+		},
+		{
+			name: "ShouldRejectTheDefaultTransactionTokenAlgorithm",
+			modify: func(config *oauth2.Config) {
+				config.RFC8693TokenTypes = map[string]oauth2.RFC8693TokenType{
+					consts.TokenTypeRFC8693TxnToken: &rfc8693.TxnTokenType{Name: consts.TokenTypeRFC8693TxnToken, Domains: map[string]*rfc8693.TxnTokenTrustDomain{"https://td.example.com": {}}},
+				}
+			},
+			expected: []string{"Section 5.4.1: the transaction token type '" + consts.TokenTypeRFC8693TxnToken + "' signs the tokens of the trust domain 'https://td.example.com' with 'RS256', which is not permitted"},
+		},
+		{
+			name: "ShouldSkipANilTransactionTokenTrustDomain",
+			modify: func(config *oauth2.Config) {
+				config.RFC8693TokenTypes = map[string]oauth2.RFC8693TokenType{
+					consts.TokenTypeRFC8693TxnToken: &rfc8693.TxnTokenType{Name: consts.TokenTypeRFC8693TxnToken, Domains: map[string]*rfc8693.TxnTokenTrustDomain{"https://td.example.com": nil}},
+				}
+			},
+		},
+		{
+			name: "ShouldPassWithAPermittedTransactionTokenAlgorithm",
+			modify: func(config *oauth2.Config) {
+				config.RFC8693TokenTypes = map[string]oauth2.RFC8693TokenType{
+					consts.TokenTypeRFC8693TxnToken: &rfc8693.TxnTokenType{Name: consts.TokenTypeRFC8693TxnToken, Domains: map[string]*rfc8693.TxnTokenTrustDomain{"https://td.example.com": {SigningAlg: string(jose.ES256)}}},
+				}
+			},
 		},
 		{
 			name:     "ShouldRejectRS256DPoPProofs",

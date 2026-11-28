@@ -221,7 +221,8 @@ func (c *TxnTokenTypeHandler) validateReplacedToken(ctx context.Context, request
 	validated, err := txntoken.Validate(value, txntoken.Config{
 		TrustDomain: name,
 		KeyFunc:     domain.Replacement.KeyFunc,
-		ClockSkew:   c.Config.GetJWTClockSkew(ctx),
+		Algorithms:  c.txnTokenAlgorithms(ctx, request.GetClient()),
+		ClockSkew:   oauth2.GetJWTClockSkew(ctx, c.Config, request.GetClient()),
 	})
 	if err != nil {
 		return errInvalidSelfSigned("The presented Transaction Token could not be validated.", err)
@@ -438,7 +439,7 @@ func (c *TxnTokenTypeHandler) issue(ctx context.Context, request oauth2.AccessRe
 
 	var token string
 
-	if token, err = c.signTxnToken(ctx, domain, draft); err != nil {
+	if token, err = c.signTxnToken(ctx, request.GetClient(), domain, draft); err != nil {
 		return err
 	}
 
@@ -720,14 +721,26 @@ func errInvalidTxnTokenHook(format string, args ...any) error {
 	return errorsx.WithStack(oauth2.ErrServerError.WithDebugf(format, args...))
 }
 
-func (c *TxnTokenTypeHandler) signTxnToken(ctx context.Context, domain *TxnTokenTrustDomain, claims map[string]any) (token string, err error) {
+func (c *TxnTokenTypeHandler) signTxnToken(ctx context.Context, client oauth2.Client, domain *TxnTokenTrustDomain, claims map[string]any) (token string, err error) {
 	headers := &jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeTxnToken}}
 
-	if token, _, err = c.Strategy.Encode(ctx, jwt.MapClaims(claims), jwt.WithHeaders(headers), jwt.WithIssuerSigningAlg(domain.signingAlg()), jwt.WithIssuerSigningKeyID(domain.SigningKeyID)); err != nil {
+	if token, _, err = c.Strategy.Encode(ctx, jwt.MapClaims(claims), append(oauth2.FAPI2SecurityProfileEncodeOptions(ctx, c.Config, client), jwt.WithHeaders(headers), jwt.WithIssuerSigningAlg(domain.signingAlg()), jwt.WithIssuerSigningKeyID(domain.SigningKeyID))...); err != nil {
 		return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
 	return token, nil
+}
+
+func (c *TxnTokenTypeHandler) txnTokenAlgorithms(ctx context.Context, client oauth2.Client) []jose.SignatureAlgorithm {
+	algs := txntoken.DefaultAlgorithms()
+
+	if !oauth2.IsFAPI2SecurityProfile(ctx, c.Config) && !oauth2.IsFAPI2SecurityProfileClient(client) {
+		return algs
+	}
+
+	return slices.DeleteFunc(algs, func(alg jose.SignatureAlgorithm) bool {
+		return !slices.Contains(oauth2.FAPI2SecurityProfileSigningAlgValues, string(alg))
+	})
 }
 
 func grantedRequestedScopes(request oauth2.AccessRequester) (scopes []string) {
@@ -757,11 +770,11 @@ func (c *TxnTokenTypeHandler) validateSelfSigned(ctx context.Context, client oau
 		return nil, err
 	}
 
-	skew := c.Config.GetJWTClockSkew(ctx)
+	skew := oauth2.GetJWTClockSkew(ctx, c.Config, client)
 
 	var token *jwt.Token
 
-	if token, err = jwt.ParseCustomWithClaims(value, jwt.MapClaims{}, keyfunc, txntoken.DefaultAlgorithms()...); err != nil && (!resolved || !jwt.IsTimingValidationError(err)) {
+	if token, err = jwt.ParseCustomWithClaims(value, jwt.MapClaims{}, keyfunc, c.txnTokenAlgorithms(ctx, client)...); err != nil && (!resolved || !jwt.IsTimingValidationError(err)) {
 		return nil, errInvalidSelfSigned("The self-signed subject token could not be verified.", err)
 	}
 

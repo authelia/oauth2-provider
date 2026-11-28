@@ -1279,6 +1279,7 @@ func TestNewAuthorizeRequestRejectsInsecureRedirectURI(t *testing.T) {
 		expired   bool
 		noRefetch bool
 		deleteErr error
+		removed   bool
 		err       error
 		keep      bool
 	}{
@@ -1293,6 +1294,9 @@ func TestNewAuthorizeRequestRejectsInsecureRedirectURI(t *testing.T) {
 		{name: "ShouldKeepHTTPSFromExpiredPAR", redirect: "https://app.example.com/cb", par: true, expired: true, err: ErrInvalidRequestURI, keep: true},
 		{name: "ShouldKeepHTTPSFromPARWhenDeletionFails", redirect: "https://app.example.com/cb", par: true, deleteErr: errors.New("delete failed"), err: ErrServerError, keep: true},
 		{name: "ShouldPassHTTPSFromPAR", redirect: "https://app.example.com/cb", par: true},
+		{name: "ShouldNotKeepARemovedRedirectURIFromExpiredPAR", redirect: "https://app.example.com/cb", par: true, expired: true, removed: true, err: ErrInvalidRequestURI},
+		{name: "ShouldNotKeepARemovedRedirectURIFromPARWhenDeletionFails", redirect: "https://app.example.com/cb", par: true, deleteErr: errors.New("delete failed"), removed: true, err: ErrServerError},
+		{name: "ShouldRejectARemovedRedirectURIFromPAR", redirect: "https://app.example.com/cb", par: true, removed: true, err: ErrInvalidRequest},
 	}
 
 	for _, tc := range testCases {
@@ -1311,7 +1315,15 @@ func TestNewAuthorizeRequestRejectsInsecureRedirectURI(t *testing.T) {
 			mockStorage := mock.NewMockStorage(ctrl)
 
 			if !tc.noRefetch {
-				mockStorage.EXPECT().GetClient(gomock.Any(), client.ID).Return(client, nil)
+				current := client
+
+				if tc.removed {
+					updated := *client
+					updated.RedirectURIs = []string{"https://app.example.com/other"}
+					current = &updated
+				}
+
+				mockStorage.EXPECT().GetClient(gomock.Any(), client.ID).Return(current, nil)
 			}
 
 			mockPAR := mock.NewMockPARStorage(ctrl)
@@ -1343,7 +1355,7 @@ func TestNewAuthorizeRequestRejectsInsecureRedirectURI(t *testing.T) {
 
 				mockPAR.EXPECT().GetPARSession(gomock.Any(), requestURI).Return(par, nil)
 
-				if !errors.Is(tc.err, ErrInvalidRequest) {
+				if !errors.Is(tc.err, ErrInvalidRequest) || tc.removed {
 					mockPAR.EXPECT().DeletePARSession(gomock.Any(), requestURI).Return(tc.deleteErr)
 				}
 

@@ -991,6 +991,23 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 		return false, err
 	}
 
+	var mismatch error
+
+	// RFC 6749 Section 4.1.2.1: an error is not redirected to a redirect URI the current registration does not hold.
+	if client != nil {
+		request.Client = client
+
+		var raw string
+
+		if request.RedirectURI != nil {
+			raw = request.RedirectURI.String()
+		}
+
+		if _, mismatch = MatchRedirectURIWithClientRedirectURIs(raw, client); mismatch != nil {
+			request.RedirectURI = nil
+		}
+	}
+
 	if request.GetClaims() == nil {
 		var claims *ClaimsRequest
 
@@ -1011,9 +1028,11 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 		return false, errorsx.WithStack(ErrInvalidRequestURI.WithHint("The 'request_uri' provided is invalid, expired, or otherwise incorrect.").WithDebug("The Pushed Authorization Request session is expired."))
 	}
 
-	if client != nil {
-		request.Client = client
+	if mismatch != nil {
+		return false, mismatch
+	}
 
+	if client != nil {
 		if err = f.validateAuthorizeRequestFromPARClient(ctx, r, request); err != nil {
 			return false, err
 		}
@@ -1024,16 +1043,6 @@ func (f *Fosite) authorizeRequestFromPAR(ctx context.Context, r *http.Request, r
 
 func (f *Fosite) validateAuthorizeRequestFromPARClient(ctx context.Context, r *http.Request, request *AuthorizeRequest) (err error) {
 	client := request.GetClient()
-
-	var raw string
-
-	if request.RedirectURI != nil {
-		raw = request.RedirectURI.String()
-	}
-
-	if _, err = MatchRedirectURIWithClientRedirectURIs(raw, client); err != nil {
-		return err
-	}
 
 	strategy := GetScopeStrategy(ctx, f.Config, client)
 

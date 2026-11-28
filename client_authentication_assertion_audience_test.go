@@ -359,6 +359,114 @@ func TestClientAssertionClockSkewFAPI2SecurityProfileClient(t *testing.T) {
 	}
 }
 
+// RFC 8725 Section 3.12 and RFC 9101 Section 10.8.
+func TestClientAssertionRefusesAnAuthorizationRequest(t *testing.T) {
+	testCases := []struct {
+		name  string
+		claim string
+		value any
+	}{
+		{name: "ShouldAcceptAClientAssertion"},
+		{name: "ShouldRefuseARequestObject", claim: consts.FormParameterResponseType, value: consts.ResponseTypeAuthorizationCodeFlow},
+		{name: "ShouldRefuseACIBALoginHint", claim: consts.FormParameterLoginHint, value: "alice"},
+		{name: "ShouldRefuseACIBALoginHintToken", claim: consts.FormParameterLoginHintToken, value: "token"},
+		{name: "ShouldRefuseACIBAIDTokenHint", claim: consts.FormParameterIDTokenHint, value: "token"},
+	}
+
+	key := gen.MustES256Key()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config, provider := newAudienceTestProvider(gen.MustRSAKey())
+
+			provider.Store.(*storage.MemoryStore).Clients[audienceTestES] = &DefaultRegisteredClient{
+				DefaultClient:           &DefaultClient{ID: audienceTestES},
+				JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{KeyID: "kid-es", Use: "sig", Algorithm: "ES256", Key: &key.PublicKey}}},
+				TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
+			}
+
+			claims := jwt.MapClaims{
+				consts.ClaimSubject:        audienceTestES,
+				consts.ClaimIssuer:         audienceTestES,
+				consts.ClaimJWTID:          time.Now().String(),
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimAudience:       audienceTestIssuer,
+			}
+
+			if tc.claim != "" {
+				claims[tc.claim] = tc.value
+			}
+
+			form := url.Values{
+				consts.FormParameterClientAssertion:     {mustGenerateClientAssertion(t, claims, jose.ES256, jwt.JSONWebTokenTypeJWT, "kid-es", key)},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			}
+
+			err := authenticateAudienceTestClient(t, config, provider, "", form)
+
+			if tc.claim == "" {
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			require.ErrorIs(t, err, ErrInvalidClient)
+			assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), "'"+tc.claim+"' claim of an authorization request")
+		})
+	}
+}
+
+// FAPI 2.0 Security Profile Section 5.3.2.1.
+func TestClientAssertionSoleAudienceFAPI2SecurityProfileServer(t *testing.T) {
+	testCases := []struct {
+		name    string
+		profile bool
+		err     bool
+	}{
+		{name: "ShouldAcceptTheTokenEndpointWhenTheIssuerAudienceIsDisabled"},
+		{name: "ShouldRequireTheIssuerForAFAPI2Server", profile: true, err: true},
+	}
+
+	key := gen.MustES256Key()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config, provider := newAudienceTestProvider(gen.MustRSAKey())
+			config.DisableClientAssertionIssuerAudience = true
+			config.FAPI2SecurityProfile = tc.profile
+
+			provider.Store.(*storage.MemoryStore).Clients[audienceTestES] = &DefaultRegisteredClient{
+				DefaultClient:           &DefaultClient{ID: audienceTestES},
+				JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{KeyID: "kid-es", Use: "sig", Algorithm: "ES256", Key: &key.PublicKey}}},
+				TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
+			}
+
+			claims := jwt.MapClaims{
+				consts.ClaimSubject:        audienceTestES,
+				consts.ClaimIssuer:         audienceTestES,
+				consts.ClaimJWTID:          time.Now().String(),
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimAudience:       audienceTestTokenURL,
+			}
+
+			form := url.Values{
+				consts.FormParameterClientAssertion:     {mustGenerateClientAssertion(t, claims, jose.ES256, jwt.JSONWebTokenTypeClientAuthentication, "kid-es", key)},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			}
+
+			err := authenticateAudienceTestClient(t, config, provider, "", form)
+
+			if tc.err {
+				require.ErrorIs(t, err, ErrInvalidClient)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+		})
+	}
+}
+
 func TestClientAssertionAudienceDefaultsToEnforced(t *testing.T) {
 	config := &Config{}
 

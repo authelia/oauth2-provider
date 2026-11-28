@@ -106,3 +106,66 @@ func TestHydratingMemoryStoreHydratesRefreshTokenSessions(t *testing.T) {
 
 	assert.ErrorIs(t, store.UpdateRefreshTokenSession(ctx, "missing", &oauth2.Request{ID: "req-id"}), oauth2.ErrNotFound)
 }
+
+func TestHydratingMemoryStoreHydratesAuthorizeCodeAndPKCESessions(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name   string
+		create func(store *HydratingMemoryStore, signature string, request oauth2.Requester) error
+		get    func(store *HydratingMemoryStore, signature string, session oauth2.Session) (oauth2.Requester, error)
+	}{
+		{
+			name: "AuthorizeCode",
+			create: func(store *HydratingMemoryStore, signature string, request oauth2.Requester) error {
+				return store.CreateAuthorizeCodeSession(ctx, signature, request)
+			},
+			get: func(store *HydratingMemoryStore, signature string, session oauth2.Session) (oauth2.Requester, error) {
+				return store.GetAuthorizeCodeSession(ctx, signature, session)
+			},
+		},
+		{
+			name: "PKCE",
+			create: func(store *HydratingMemoryStore, signature string, request oauth2.Requester) error {
+				return store.CreatePKCERequestSession(ctx, signature, request)
+			},
+			get: func(store *HydratingMemoryStore, signature string, session oauth2.Session) (oauth2.Requester, error) {
+				return store.GetPKCERequestSession(ctx, signature, session)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("ShouldHydrateTheSuppliedSession", func(t *testing.T) {
+				store := NewHydratingMemoryStore()
+
+				require.NoError(t, tc.create(store, "sig", &oauth2.AuthorizeRequest{Request: oauth2.Request{ID: "req-id", Session: &oauth2.DefaultSession{Subject: "abc"}}}))
+
+				target := &oauth2.DefaultSession{}
+
+				got, err := tc.get(store, "sig", target)
+				require.NoError(t, err)
+
+				assert.Same(t, target, got.GetSession())
+				assert.Equal(t, "abc", target.Subject)
+			})
+
+			t.Run("ShouldNotHydrateASessionReplacedByNone", func(t *testing.T) {
+				store := NewHydratingMemoryStore()
+
+				require.NoError(t, tc.create(store, "sig", &oauth2.Request{ID: "first", Session: &oauth2.DefaultSession{Subject: "abc"}}))
+				require.NoError(t, tc.create(store, "sig", &oauth2.Request{ID: "second"}))
+
+				target := &oauth2.DefaultSession{}
+
+				got, err := tc.get(store, "sig", target)
+				require.NoError(t, err)
+
+				assert.Equal(t, "second", got.GetID())
+				assert.Nil(t, got.GetSession())
+				assert.Empty(t, target.Subject)
+			})
+		})
+	}
+}

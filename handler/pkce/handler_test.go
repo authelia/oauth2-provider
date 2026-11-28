@@ -1620,6 +1620,64 @@ func TestPKCERequestSessionSurvivesAFailedTokenRequest(t *testing.T) {
 	assert.ErrorIs(t, err, oauth2.ErrNotFound)
 }
 
+func TestHandlerTokenEndpointKeepsTheTokenRequestSession(t *testing.T) {
+	stores := map[string]interface {
+		Storage
+		hoauth2.AuthorizeCodeStorage
+	}{
+		"MemoryStore":          storage.NewMemoryStore(),
+		"HydratingMemoryStore": storage.NewHydratingMemoryStore(),
+	}
+
+	for name, store := range stores {
+		t.Run(name, func(t *testing.T) {
+			config := &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}
+			strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+			client := &oauth2.DefaultClient{ID: "app", Public: true}
+
+			verifier := strings.Repeat("a", 50)
+			sum := sha256.Sum256([]byte(verifier))
+
+			code, signature, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+			require.NoError(t, err)
+
+			authorized := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+			issued := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+
+			require.NoError(t, store.CreatePKCERequestSession(t.Context(), signature, &oauth2.Request{
+				ID:     "req-id",
+				Client: client,
+				Form: url.Values{
+					consts.FormParameterCodeChallenge:       {base64.RawURLEncoding.EncodeToString(sum[:])},
+					consts.FormParameterCodeChallengeMethod: {consts.PKCEChallengeMethodSHA256},
+				},
+				Session: &oauth2.DefaultSession{Subject: "peter", ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: authorized}},
+			}))
+
+			session := &oauth2.DefaultSession{Subject: "peter", ExpiresAt: map[oauth2.TokenType]time.Time{oauth2.AccessToken: issued}}
+
+			request := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+				Request: oauth2.Request{
+					Client:  client,
+					Session: session,
+					Form: url.Values{
+						consts.FormParameterAuthorizationCode: {code},
+						consts.FormParameterCodeVerifier:      {verifier},
+					},
+				},
+			}
+
+			handler := &Handler{AuthorizeCodeStrategy: strategy, Storage: store, Config: config}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), request)))
+
+			assert.Same(t, session, request.GetSession())
+			assert.Equal(t, issued, session.GetExpiresAt(oauth2.AccessToken))
+		})
+	}
+}
+
 func TestHandler_HandleAuthorizeEndpointRequestDetectsReusedChallenges(t *testing.T) {
 	const expected = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The PKCE code challenge was already used by this client, a new code challenge must be generated for every authorization request. The client with id 'client-a' used a 'code_challenge' value which it used in an earlier authorization request."
 

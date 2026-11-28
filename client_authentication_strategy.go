@@ -495,6 +495,16 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 		return "", "", "", nil, err
 	}
 
+	// RFC 8725 Section 3.12 and RFC 9101 Section 10.8: a Request Object or a CIBA signed authentication request, each of
+	// which carries one of these parameters, is not a client assertion.
+	claims := token.Claims.ToMapClaims()
+
+	for _, parameter := range []string{consts.FormParameterResponseType, consts.FormParameterLoginHint, consts.FormParameterLoginHintToken, consts.FormParameterIDTokenHint} {
+		if _, present := claims[parameter]; present {
+			return "", "", "", nil, errorsx.WithStack(ErrInvalidClient.WithHint("The client assertion is not valid.").WithDebugf("The client assertion of the OAuth 2.0 Client with id '%s' has the '%s' claim of an authorization request, so it is not a client assertion.", client.GetID(), parameter))
+		}
+	}
+
 	var (
 		allowEmptyType bool
 		types          []string
@@ -541,14 +551,15 @@ func (s *DefaultClientAuthenticationStrategy) doAuthenticateAssertionParseAssert
 
 // enforceIssuerAudience returns true if a client assertion from the client at the endpoint of strategy must have the
 // issuer as its sole audience, which is when DisableClientAssertionIssuerAudience is not set, when the client is held
-// to the FAPI 2.0 Security Profile or, at the backchannel authentication endpoint, when
+// to the FAPI 2.0 Security Profile or the configuration holds the authorization server to it, or, at the backchannel
+// authentication endpoint, when
 // CIBARequireSingleAudienceAssertion is set.
 //
 // See: https://www.rfc-editor.org/rfc/rfc10070#section-4
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 // See: https://openid.net/specs/fapi-ciba.html#section-4.1.1
 func (s *DefaultClientAuthenticationStrategy) enforceIssuerAudience(ctx context.Context, client Client, strategy EndpointClientAuthStrategy) bool {
-	if !s.Config.GetDisableClientAssertionIssuerAudience(ctx) || IsFAPI2SecurityProfileClient(client) {
+	if !s.Config.GetDisableClientAssertionIssuerAudience(ctx) || IsFAPI2SecurityProfile(ctx, s.Config) || IsFAPI2SecurityProfileClient(client) {
 		return true
 	}
 

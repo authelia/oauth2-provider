@@ -74,11 +74,18 @@ func (s *JWTProfileCoreStrategy) GenerateAccessToken(ctx context.Context, reques
 // ValidateAccessToken validates the token as a JWT when it has the shape of a signed JWT Profile access token, and with
 // the HMAC strategy otherwise. An encrypted one, which the server cannot always decrypt, must match the digest its
 // session records as an EncryptedAccessTokenSession, and is then validated against the expiry of the request. One with
-// no session is refused, as nothing records its digest; see VerifyAccessTokenSignature.
+// no session is refused, as nothing records its digest; see VerifyAccessTokenSignature. A signed one is rejected when
+// the client of the request registered for encrypted access tokens, as RFC 9068 Section 4 asks.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9068#section-4
 func (s *JWTProfileCoreStrategy) ValidateAccessToken(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
 	if possible, _ := s.IsPossiblyJWTProfileAccessToken(ctx, tokenString); possible && jwt.IsEncryptedJWT(tokenString) {
 		return s.validateEncryptedAccessToken(ctx, request, tokenString)
 	} else if possible {
+		if requiresEncryptedAccessToken(request.GetClient()) {
+			return errorsx.WithStack(oauth2.ErrInvalidTokenFormat.WithHint("The Access Token is not encrypted, but the client registered for encrypted Access Tokens."))
+		}
+
 		_, err = validateJWT(ctx, s.Strategy, jwt.NewJWTProfileAccessTokenClient(request.GetClient()), tokenString)
 
 		return
@@ -205,6 +212,12 @@ func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Con
 	default:
 		return false, ""
 	}
+}
+
+func requiresEncryptedAccessToken(client oauth2.Client) bool {
+	c, ok := client.(oauth2.JWTProfileClient)
+
+	return ok && !jwt.IsNoneAlg(c.GetAccessTokenEncryptedResponseAlg())
 }
 
 func encryptedAccessTokenSignature(tokenString string) string {

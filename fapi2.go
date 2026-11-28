@@ -70,10 +70,10 @@ var (
 // algorithm, and an 'iat' or 'nbf' claim is accepted up to between 10 and 60 seconds in the future. The JWTs issued to
 // it must be signed with a permitted algorithm, so its registered response algorithms must be permitted ones. Its
 // authorization responses carry the RFC 9207 'iss' parameter when an issuer is configured. Its access tokens are
-// sender-constrained and refused when presented unbound, its refresh tokens are not rotated, its authorization codes
-// last at most 60 seconds, and its pushed authorization requests expire in less than 600 seconds. Its redirect URIs
-// must pass the default redirect URI security rule as well as any RedirectSecureChecker. What the handlers registered
-// determine, such as the response types served, is left to the configuration, which
+// sender-constrained and refused when presented unbound or in the URI query, its refresh tokens are not rotated, its
+// authorization codes last at most 60 seconds, and its pushed authorization requests expire in less than 600 seconds.
+// Its redirect URIs must pass the default redirect URI security rule as well as any RedirectSecureChecker. What the
+// handlers registered determine, such as the response types served, is left to the configuration, which
 // compose.ValidateFAPI2SecurityProfileClientSupport checks. A custom ClientAuthenticationStrategy, DPoPStrategy,
 // SecurityEventTokenStrategy or response mode handler must apply these rules itself.
 //

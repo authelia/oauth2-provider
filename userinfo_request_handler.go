@@ -90,6 +90,10 @@ func (f *Fosite) NewUserinfoRequest(ctx context.Context, r *http.Request, sessio
 
 	urls := f.Config.GetEndpointURLs(ctx).URLs(EndpointUserInfo)
 
+	if err = validateBearerTransport(ctx, f.Config, r, ar.GetClient(), client, token); err != nil {
+		return request, err
+	}
+
 	if err = validateBearerProofOfPossession(ctx, f.Config, r, ar, client, token, urls); err != nil {
 		return request, err
 	}

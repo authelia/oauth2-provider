@@ -61,7 +61,7 @@ func (f *Fosite) writeBearerAuthorizationChallenge(ctx context.Context, rw http.
 	} else {
 		schemes = presentedSchemes(authorizationHeaderSchemes(r), f.Config.GetDPoPEnabled(ctx))
 
-		if len(schemes) == 0 && hasAccessTokenParameter(r, f.Config.GetAccessTokenURIQueryParameterEnabled(ctx)) {
+		if len(schemes) == 0 && hasAccessTokenParameter(r, f.accessTokenURIQueryParameterEnabled(ctx)) {
 			schemes = append(schemes, consts.AuthSchemeBearer)
 		}
 	}

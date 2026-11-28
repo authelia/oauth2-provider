@@ -287,7 +287,11 @@ func (f *Fosite) introspectionClientAuthenticationError(ctx context.Context, r *
 }
 
 func (f *Fosite) accessTokenCredentialFromRequest(ctx context.Context, r *http.Request) (token, method string, err error) {
-	return introspectionCredentialFromRequest(r, f.Config.GetAccessTokenURIQueryParameterEnabled(ctx), f.Config.GetDPoPEnabled(ctx))
+	return introspectionCredentialFromRequest(r, f.accessTokenURIQueryParameterEnabled(ctx), f.Config.GetDPoPEnabled(ctx))
+}
+
+func (f *Fosite) accessTokenURIQueryParameterEnabled(ctx context.Context) bool {
+	return f.Config.GetAccessTokenURIQueryParameterEnabled(ctx) && !IsFAPI2SecurityProfile(ctx, f.Config)
 }
 
 // introspectionCredentialFromRequest extracts the access token presented to authenticate a request to the introspection

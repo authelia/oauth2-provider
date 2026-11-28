@@ -95,6 +95,14 @@ type JWTValidationConfig struct {
 	// Types is the set of permitted 'typ' header values, compared per RFC 8725 Section 3.11. An absent 'typ' is
 	// permitted when the set includes 'JWT'. When empty, only 'JWT' or an absent 'typ' is permitted.
 	Types []string `json:"types"`
+
+	// SigningAlgValues is the set of permitted JWS 'alg' values. When empty, the RSA, RSASSA-PSS, ECDSA and EdDSA
+	// algorithms are permitted. 'none' is never permitted. When the authorization server or the client is held to the
+	// FAPI 2.0 Security Profile, only the algorithms in oauth2.FAPI2SecurityProfileSigningAlgValues are permitted.
+	//
+	// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.1
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.4.1
+	SigningAlgValues []string `json:"signing_alg_values"`
 }
 
 // GetIdentifiers returns the issuer this type issues JWTs as and the issuer it accepts JWTs from.

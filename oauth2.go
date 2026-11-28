@@ -1002,6 +1002,13 @@ type IDTokenValidationOpts struct {
 
 	// IDTokenHint permits an ID Token signed with the client secret of a client registered for that algorithm.
 	IDTokenHint bool
+
+	// SigningAlgValues restricts the JWS algorithms the ID Token may be signed with. When empty, every algorithm the
+	// strategy supports is permitted.
+	SigningAlgValues []string
+
+	// ClockSkew accepts an 'iat' or 'nbf' claim up to this duration in the future.
+	ClockSkew time.Duration
 }
 
 // IDTokenValidationOpt configures IDTokenValidationOpts.
@@ -1020,8 +1027,8 @@ func NewIDTokenValidationOpts(opts ...IDTokenValidationOpt) (o *IDTokenValidatio
 }
 
 // WithAllowExpired permits an ID Token with an 'exp' claim in the past to validate successfully. It narrowly disables
-// the expiration check; the 'iat' and 'nbf' claims remain enforced when present, as do signature verification and
-// every other check.
+// the expiration check; the 'exp' and 'iat' claims must still be present, the 'iat' and 'nbf' claims remain enforced,
+// as do signature verification and every other check.
 //
 // This exists for OpenID Connect RP-Initiated Logout, where the 'id_token_hint' identifies the session the Relying
 // Party is asking to end and is therefore expected to be expired.
@@ -1039,6 +1046,20 @@ func WithAllowExpired() IDTokenValidationOpt {
 func WithAllowUnverified() IDTokenValidationOpt {
 	return func(opts *IDTokenValidationOpts) {
 		opts.AllowUnverified = true
+	}
+}
+
+// WithIDTokenSigningAlgValues restricts the JWS algorithms the ID Token may be signed with.
+func WithIDTokenSigningAlgValues(algs ...string) IDTokenValidationOpt {
+	return func(opts *IDTokenValidationOpts) {
+		opts.SigningAlgValues = algs
+	}
+}
+
+// WithIDTokenClockSkew accepts an 'iat' or 'nbf' claim of the ID Token up to skew in the future.
+func WithIDTokenClockSkew(skew time.Duration) IDTokenValidationOpt {
+	return func(opts *IDTokenValidationOpts) {
+		opts.ClockSkew = skew
 	}
 }
 

@@ -279,7 +279,7 @@ func (h *RedeemHandler) unused(ctx context.Context, claims josejwt.Claims) (err 
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4.1
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.4.1
 func (h *RedeemHandler) algorithms(ctx context.Context, client oauth2.Client) []jose.SignatureAlgorithm {
-	return jwt.ToAsymmetricSignatureAlgorithms(oauth2.FilterFAPI2SecurityProfileSigningAlgValues(client, h.Config.GetIDJAGRedeemSigningAlgValues(ctx)))
+	return jwt.ToAsymmetricSignatureAlgorithms(oauth2.FilterFAPI2SecurityProfileSigningAlgValues(ctx, h.Config, client, h.Config.GetIDJAGRedeemSigningAlgValues(ctx)))
 }
 
 func (h *RedeemHandler) consume(ctx context.Context, client oauth2.Client, assertion string) (err error) {

@@ -62,8 +62,10 @@ func IsRedirectURISecureForClient(ctx context.Context, client Client, uri *url.U
 // RedirectSecureChecker, or IsRedirectURISecureForClient when none is configured. The check applies to every client,
 // unless the client is public and AllowInsecureRedirectURIForPublicClients is enabled. When the client or the
 // authorization server is held to the FAPI 2.0 Security Profile the redirect URI must pass IsRedirectURISecureForClient
-// as well as the RedirectSecureChecker, and AllowInsecureRedirectURIForPublicClients does not apply.
+// as well as the RedirectSecureChecker, AllowInsecureRedirectURIForPublicClients does not apply, and an 'http' redirect
+// URI must have a loopback IP literal as its host rather than a name such as 'localhost'.
 //
+// See: https://www.rfc-editor.org/rfc/rfc8252#section-7.3
 // See: https://www.rfc-editor.org/rfc/rfc9700#section-2.6
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
 func ValidateRedirectURISecurity(ctx context.Context, config RedirectURISecurityProvider, client Client, uri *url.URL) (err error) {
@@ -79,6 +81,11 @@ func ValidateRedirectURISecurity(ctx context.Context, config RedirectURISecurity
 		secure = checker(ctx, uri) && (!fapi2 || IsRedirectURISecureForClient(ctx, client, uri))
 	} else {
 		secure = IsRedirectURISecureForClient(ctx, client, uri)
+	}
+
+	// RFC 8252 Section 7.3: a loopback redirect URI is constructed with the loopback IP literal.
+	if fapi2 && uri.Scheme == consts.SchemeHTTP && !isLoopbackAddress(uri) {
+		secure = false
 	}
 
 	if !secure {

@@ -376,7 +376,7 @@ func (f *Fosite) authorizeRequestParametersFromJAR(ctx context.Context, request 
 
 	strategy := f.Config.GetJWTStrategy(ctx)
 
-	token, err := strategy.Decode(ctx, assertion, jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(FilterFAPI2SecurityProfileSigningAlgValues(client, f.Config.GetRequestObjectSigningAlgValues(ctx)))...), jwt.WithKeyAlgorithm(jwt.ToKeyAlgorithms(f.Config.GetRequestObjectEncryptionAlgValues(ctx))...), jwt.WithContentEncryption(jwt.ToContentEncryptions(f.Config.GetRequestObjectEncryptionEncValues(ctx))...), jwt.WithJARClient(client))
+	token, err := strategy.Decode(ctx, assertion, jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(FilterFAPI2SecurityProfileSigningAlgValues(ctx, f.Config, client, f.Config.GetRequestObjectSigningAlgValues(ctx)))...), jwt.WithKeyAlgorithm(jwt.ToKeyAlgorithms(f.Config.GetRequestObjectEncryptionAlgValues(ctx))...), jwt.WithContentEncryption(jwt.ToContentEncryptions(f.Config.GetRequestObjectEncryptionEncValues(ctx))...), jwt.WithJARClient(client))
 	if err != nil {
 		return errorsx.WithStack(fmtRequestObjectDecodeError(token, client, issuer, openid, err))
 	}

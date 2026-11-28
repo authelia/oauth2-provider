@@ -195,7 +195,7 @@ func (c *Handler) PopulateTokenEndpointResponse(ctx context.Context, request oau
 }
 
 func (c *Handler) assertionSigningAlgs(ctx context.Context, client oauth2.Client) []jose.SignatureAlgorithm {
-	return oauth2jwt.ToAsymmetricSignatureAlgorithms(oauth2.FilterFAPI2SecurityProfileSigningAlgValues(client, c.Config.GetRFC7523AssertionSigningAlgValues(ctx)))
+	return oauth2jwt.ToAsymmetricSignatureAlgorithms(oauth2.FilterFAPI2SecurityProfileSigningAlgValues(ctx, c.Config, client, c.Config.GetRFC7523AssertionSigningAlgValues(ctx)))
 }
 
 func (c *Handler) consume(ctx context.Context, client oauth2.Client, assertion string) (err error) {

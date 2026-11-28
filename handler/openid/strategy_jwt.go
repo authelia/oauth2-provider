@@ -6,7 +6,6 @@ package openid
 
 import (
 	"context"
-	"errors"
 	"maps"
 	"slices"
 	"strings"
@@ -399,20 +398,10 @@ func (h DefaultStrategy) GenerateIDToken(ctx context.Context, lifespan time.Dura
 		}
 
 		if tokenHintString := request.GetRequestForm().Get(consts.FormParameterIDTokenHint); tokenHintString != "" {
-			var tokenHint *jwt.Token
-
-			tokenHint, err = h.Decode(ctx, tokenHintString, jwt.WithIDTokenHintClient(request.GetClient()))
-
-			if ve, ok := errors.AsType[*jwt.ValidationError](err); ok && ve.IsExactly(jwt.ValidationErrorExpired) {
-				// Expired ID Tokens are allowed as values to id_token_hint.
-			} else if err != nil {
-				return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Unable to decode ID Token from 'id_token_hint' parameter because %s.", err.Error()))
-			}
-
 			var subHint string
 
-			if subHint, err = tokenHint.Claims.GetSubject(); subHint == "" || err != nil {
-				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Provided ID Token from 'id_token_hint' does not have a subject."))
+			if subHint, err = validateIDTokenHint(ctx, h.Strategy, h.Config, h.Config.GetIssuer(ctx), request.GetClient(), tokenHintString); err != nil {
+				return "", errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugf("Unable to validate the ID Token from the 'id_token_hint' parameter because %s.", err.Error()))
 			} else if subHint != claims.Subject {
 				return "", errorsx.WithStack(oauth2.ErrServerError.WithDebug("Subject from authorization mismatches ID Token subject from 'id_token_hint'."))
 			}

@@ -73,8 +73,9 @@ func TestFAPI2SigningAlgValues(t *testing.T) {
 
 	algs := []string{rs256, ps256, es256, consts.JSONWebTokenAlgNone}
 
-	assert.Equal(t, algs, FilterFAPI2SecurityProfileSigningAlgValues(&DefaultClient{}, algs))
-	assert.Equal(t, []string{ps256, es256}, FilterFAPI2SecurityProfileSigningAlgValues(newFAPI2Client(), algs))
+	assert.Equal(t, algs, FilterFAPI2SecurityProfileSigningAlgValues(t.Context(), &Config{}, &DefaultClient{}, algs))
+	assert.Equal(t, []string{ps256, es256}, FilterFAPI2SecurityProfileSigningAlgValues(t.Context(), &Config{}, newFAPI2Client(), algs))
+	assert.Equal(t, []string{ps256, es256}, FilterFAPI2SecurityProfileSigningAlgValues(t.Context(), &Config{FAPI2SecurityProfile: true}, &DefaultClient{}, algs))
 	assert.Equal(t, []string{rs256, ps256, es256, consts.JSONWebTokenAlgNone}, algs)
 }
 
@@ -84,20 +85,23 @@ func TestGetJWTClockSkewFAPI2SecurityProfileClient(t *testing.T) {
 		skew     time.Duration
 		client   Client
 		expected time.Duration
+		profile  bool
 	}{
-		{"ShouldKeepTheConfiguredSkew", 5 * time.Second, &DefaultClient{}, 5 * time.Second},
-		{"ShouldKeepADisabledSkew", 0, &DefaultClient{}, 0},
-		{"ShouldKeepALongSkew", 5 * time.Minute, &DefaultClient{}, 5 * time.Minute},
-		{"ShouldKeepASkewWithoutAClient", 5 * time.Minute, nil, 5 * time.Minute},
-		{"ShouldRaiseADisabledSkewForAFAPI2Client", 0, newFAPI2Client(), 10 * time.Second},
-		{"ShouldRaiseAShortSkewForAFAPI2Client", 5 * time.Second, newFAPI2Client(), 10 * time.Second},
-		{"ShouldKeepAPermittedSkewForAFAPI2Client", 30 * time.Second, newFAPI2Client(), 30 * time.Second},
-		{"ShouldLowerALongSkewForAFAPI2Client", 5 * time.Minute, newFAPI2Client(), time.Minute},
+		{"ShouldKeepTheConfiguredSkew", 5 * time.Second, &DefaultClient{}, 5 * time.Second, false},
+		{"ShouldKeepADisabledSkew", 0, &DefaultClient{}, 0, false},
+		{"ShouldKeepALongSkew", 5 * time.Minute, &DefaultClient{}, 5 * time.Minute, false},
+		{"ShouldKeepASkewWithoutAClient", 5 * time.Minute, nil, 5 * time.Minute, false},
+		{"ShouldRaiseADisabledSkewForAFAPI2Client", 0, newFAPI2Client(), 10 * time.Second, false},
+		{"ShouldRaiseAShortSkewForAFAPI2Client", 5 * time.Second, newFAPI2Client(), 10 * time.Second, false},
+		{"ShouldKeepAPermittedSkewForAFAPI2Client", 30 * time.Second, newFAPI2Client(), 30 * time.Second, false},
+		{"ShouldLowerALongSkewForAFAPI2Client", 5 * time.Minute, newFAPI2Client(), time.Minute, false},
+		{"ShouldRaiseADisabledSkewForAFAPI2Server", 0, &DefaultClient{}, 10 * time.Second, true},
+		{"ShouldLowerALongSkewForAFAPI2Server", 5 * time.Minute, nil, time.Minute, true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := &fapi2ClockSkewConfig{skew: tc.skew}
+			config := &fapi2ClockSkewConfig{skew: tc.skew, profile: tc.profile}
 
 			assert.Equal(t, tc.expected, GetJWTClockSkew(t.Context(), config, tc.client))
 			assert.Equal(t, tc.expected, GetDPoPClockSkew(t.Context(), config, tc.client))
@@ -359,7 +363,12 @@ func (s *fapi2DPoPStrategy) ValidateResourceAccess(ctx context.Context, _ *http.
 }
 
 type fapi2ClockSkewConfig struct {
-	skew time.Duration
+	skew    time.Duration
+	profile bool
+}
+
+func (c *fapi2ClockSkewConfig) GetFAPI2SecurityProfile(_ context.Context) bool {
+	return c.profile
 }
 
 func (c *fapi2ClockSkewConfig) GetJWTClockSkew(_ context.Context) time.Duration {

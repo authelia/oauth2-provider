@@ -194,7 +194,7 @@ func (s *DefaultStrategy) ValidateDPoPNonce(ctx context.Context, nonce string) (
 }
 
 func (s *DefaultStrategy) allowedAlgorithms(ctx context.Context, client oauth2.Client) []jose.SignatureAlgorithm {
-	raw := oauth2.FilterFAPI2SecurityProfileSigningAlgValues(client, s.Config.GetDPoPAllowedJWSAlgorithms(ctx))
+	raw := oauth2.FilterFAPI2SecurityProfileSigningAlgValues(ctx, s.Config, client, s.Config.GetDPoPAllowedJWSAlgorithms(ctx))
 	algs := make([]jose.SignatureAlgorithm, 0, len(raw))
 
 	for _, a := range raw {

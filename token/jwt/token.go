@@ -57,6 +57,12 @@ func ParseWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc) (tok
 // ParseCustomWithClaims parses, validates, and returns a token with its respective claims. The keyFunc will receive the parsed token and should
 // return the key for validating. If everything is kosher, err will be nil.
 func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc, algs ...jose.SignatureAlgorithm) (token *Token, err error) {
+	return ParseCustomWithClaimsOptions(tokenString, claims, keyFunc, algs)
+}
+
+// ParseCustomWithClaimsOptions is ParseCustomWithClaims validating the claims with opts, such as a clock skew, so a token
+// whose claims pass with them is returned as valid.
+func ParseCustomWithClaimsOptions(tokenString string, claims MapClaims, keyFunc Keyfunc, algs []jose.SignatureAlgorithm, opts ...ClaimValidationOption) (token *Token, err error) {
 	var parsed *jwt.JSONWebToken
 
 	if parsed, err = jwt.ParseSigned(tokenString, algs); err != nil {
@@ -106,7 +112,7 @@ func ParseCustomWithClaims(tokenString string, claims MapClaims, keyFunc Keyfunc
 	// Validate claims
 	// This validation is performed to be backwards compatible
 	// with jwt-go library behavior.
-	if err = claims.Valid(); err != nil {
+	if err = claims.Valid(opts...); err != nil {
 		if _, ok := errors.AsType[*ValidationError](err); !ok {
 			err = &ValidationError{Inner: err, Errors: ValidationErrorClaimsInvalid}
 		}

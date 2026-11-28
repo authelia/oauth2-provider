@@ -137,6 +137,12 @@ func TestValidateRedirectURISecurity(t *testing.T) {
 		{name: "ShouldRejectHTTPWithPermissiveCheckerOfAFAPI2Server", uri: "http://client.example.com/cb", profile: true, checker: permissive, err: true},
 		{name: "ShouldRejectHTTPPublicWhenPublicClientsAllowedOfAFAPI2Server", uri: "http://client.example.com/cb", public: true, allow: true, profile: true, err: true},
 		{name: "ShouldAllowHTTPSFAPI2ClientWithPermissiveChecker", uri: "https://client.example.com/cb", fapi2: true, checker: permissive},
+		{name: "ShouldAllowLoopbackFAPI2NativeClient", uri: "http://127.0.0.1:8080/cb", fapi2: true, applicationType: consts.ApplicationTypeNative},
+		{name: "ShouldAllowIPv6LoopbackFAPI2NativeClient", uri: "http://[::1]:8080/cb", fapi2: true, applicationType: consts.ApplicationTypeNative},
+		{name: "ShouldRejectLocalhostFAPI2NativeClient", uri: "http://localhost:8080/cb", fapi2: true, applicationType: consts.ApplicationTypeNative, err: true},
+		{name: "ShouldRejectLocalhostSubdomainOfAFAPI2Server", uri: "http://app.localhost:8080/cb", profile: true, applicationType: consts.ApplicationTypeNative, err: true},
+		{name: "ShouldRejectANumericIPv4HostOfAFAPI2Server", uri: "http://2130706433:8080/cb", profile: true, applicationType: consts.ApplicationTypeNative, err: true},
+		{name: "ShouldRejectLocalhostFAPI2NativeClientWithIsRedirectURISecureChecker", uri: "http://localhost/cb", fapi2: true, applicationType: consts.ApplicationTypeNative, checker: IsRedirectURISecure, err: true},
 	}
 
 	for _, tc := range testCases {
@@ -156,10 +162,8 @@ func TestValidateRedirectURISecurity(t *testing.T) {
 				client = nil
 			case tc.applicationType == "unset":
 				client = &DefaultRegisteredClient{DefaultClient: client.(*DefaultClient)}
-			case tc.applicationType != "":
-				client = &DefaultRegisteredClient{DefaultClient: client.(*DefaultClient), ApplicationType: tc.applicationType}
-			case tc.fapi2:
-				client = &DefaultRegisteredClient{DefaultClient: client.(*DefaultClient), FAPI2SecurityProfile: true}
+			case tc.applicationType != "" || tc.fapi2:
+				client = &DefaultRegisteredClient{DefaultClient: client.(*DefaultClient), ApplicationType: tc.applicationType, FAPI2SecurityProfile: tc.fapi2}
 			}
 
 			err := ValidateRedirectURISecurity(t.Context(), config, client, uri)

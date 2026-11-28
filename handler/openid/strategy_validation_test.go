@@ -288,7 +288,8 @@ func TestDefaultIDTokenValidationStrategy_RequiresTimeClaims(t *testing.T) {
 		{"ShouldAcceptWithExpirationAndIssuedAt", "", nil, ""},
 		{"ShouldRejectWithoutExpiration", jwt.ClaimExpirationTime, nil, "Token is expired"},
 		{"ShouldRejectWithoutIssuedAt", jwt.ClaimIssuedAt, nil, "Token used before issued"},
-		{"ShouldAcceptWithoutExpirationWhenExpiredIsAllowed", jwt.ClaimExpirationTime, []oauth2.IDTokenValidationOpt{oauth2.WithAllowExpired()}, ""},
+		{"ShouldRejectWithoutExpirationWhenExpiredIsAllowed", jwt.ClaimExpirationTime, []oauth2.IDTokenValidationOpt{oauth2.WithAllowExpired()}, "token is missing the 'exp' claim"},
+		{"ShouldRejectWithoutIssuedAtWhenExpiredIsAllowed", jwt.ClaimIssuedAt, []oauth2.IDTokenValidationOpt{oauth2.WithAllowExpired()}, "Token used before issued"},
 	}
 
 	for _, tc := range testCases {
@@ -316,6 +317,57 @@ func TestDefaultIDTokenValidationStrategy_RequiresTimeClaims(t *testing.T) {
 			}
 
 			assert.EqualError(t, err, tc.err)
+			assert.Nil(t, actual)
+		})
+	}
+}
+
+// FAPI 2.0 Security Profile Sections 5.3.2.1 and 5.4.1.
+func TestDefaultIDTokenValidationStrategyClientOpts(t *testing.T) {
+	cfg := &oauth2.Config{Issuer: "https://issuer.example/"}
+	jwtStrategy := &jwt.DefaultStrategy{Config: cfg, Issuer: jwt.NewDefaultIssuerRS256Unverified(key)}
+
+	strategy := &DefaultIDTokenValidationStrategy{Strategy: jwtStrategy}
+
+	fapi2 := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "test-client"}, FAPI2SecurityProfile: true}
+	other := &oauth2.DefaultClient{ID: "test-client"}
+
+	testCases := []struct {
+		name   string
+		iat    time.Time
+		config *oauth2.Config
+		client oauth2.Client
+		err    string
+	}{
+		{name: "ShouldAcceptRS256ForAnotherClient", iat: time.Now(), config: &oauth2.Config{}, client: other},
+		{name: "ShouldRejectRS256ForAFAPI2Client", iat: time.Now(), config: &oauth2.Config{}, client: fapi2, err: "unexpected signature algorithm"},
+		{name: "ShouldRejectRS256ForAFAPI2Server", iat: time.Now(), config: &oauth2.Config{FAPI2SecurityProfile: true}, client: other, err: "unexpected signature algorithm"},
+		{name: "ShouldAcceptAnIssuedAtWithinTheConfiguredClockSkew", iat: time.Now().Add(5 * time.Second), config: &oauth2.Config{JWTClockSkew: 10 * time.Second}, client: other},
+		{name: "ShouldRejectAnIssuedAtBeyondTheConfiguredClockSkew", iat: time.Now().Add(2 * time.Minute), config: &oauth2.Config{JWTClockSkew: 10 * time.Second}, client: other, err: "Token used before issued"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			token, _, err := jwtStrategy.Encode(t.Context(), jwt.MapClaims{
+				jwt.ClaimIssuer:         cfg.Issuer,
+				jwt.ClaimSubject:        "alice",
+				jwt.ClaimAudience:       []string{"test-client"},
+				jwt.ClaimIssuedAt:       tc.iat.Unix(),
+				jwt.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+			})
+			require.NoError(t, err)
+
+			actual, err := strategy.ValidateIDToken(t.Context(), &oauth2.Request{Client: tc.client}, token, oauth2.IDTokenValidationClientOpts(t.Context(), tc.config, tc.client)...)
+
+			if tc.err == "" {
+				require.NoError(t, err)
+				assert.Equal(t, "alice", actual[jwt.ClaimSubject])
+
+				return
+			}
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.err)
 			assert.Nil(t, actual)
 		})
 	}

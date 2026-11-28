@@ -14,7 +14,6 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
-	"authelia.com/provider/oauth2/handler/pkce"
 	"authelia.com/provider/oauth2/handler/rfc7591"
 	"authelia.com/provider/oauth2/internal/consts"
 )
@@ -152,8 +151,8 @@ func (v *fapi2Violations) oauth21ClientAuthentication(ctx context.Context, confi
 }
 
 func (v *fapi2Violations) oauth21AuthorizationCode(ctx context.Context, config oauth2.Configurator) {
-	if fapi2Registered[*hoauth2.AuthorizeExplicitGrantHandler](config.GetAuthorizeEndpointHandlers(ctx)) && !fapi2Registered[*pkce.Handler](config.GetAuthorizeEndpointHandlers(ctx)) {
-		v.fail(oauth21SectionAuthorizationRequest, "PKCE must be supported, but the PKCE handler is not registered")
+	if fapi2Registered[*hoauth2.AuthorizeExplicitGrantHandler](config.GetAuthorizeEndpointHandlers(ctx)) {
+		v.pkce(ctx, config, oauth21SectionAuthorizationRequest, "PKCE must be supported")
 	}
 
 	if fapi2Registered[*hoauth2.AuthorizeExplicitGrantHandler](config.GetAuthorizeEndpointHandlers(ctx)) {

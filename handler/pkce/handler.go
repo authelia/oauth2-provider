@@ -163,7 +163,7 @@ func (c *Handler) validate(ctx context.Context, challenge, method string, client
 	}
 
 	// FAPI 2.0 Security Profile Section 5.3.2.2: PKCE with the S256 code challenge method.
-	if method != consts.PKCEChallengeMethodSHA256 && oauth2.IsFAPI2SecurityProfileClient(client) {
+	if method != consts.PKCEChallengeMethodSHA256 && (oauth2.IsFAPI2SecurityProfile(ctx, c.Config) || oauth2.IsFAPI2SecurityProfileClient(client)) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.
 			WithHintf("Authorization was requested with 'code_challenge_method' value '%s', but the authorization server policy does not allow method '%s' and requires method 'S256'.", method, method).
 			WithDebugf("The client with id '%s' is held to the FAPI 2.0 Security Profile, which requires the 'S256' 'code_challenge_method'.", client.GetID()))
@@ -317,7 +317,7 @@ func (c *Handler) validateNoPKCE(ctx context.Context, parameter string, client o
 		}
 	}
 
-	if oauth2.IsFAPI2SecurityProfileClient(client) {
+	if oauth2.IsFAPI2SecurityProfile(ctx, c.Config) || oauth2.IsFAPI2SecurityProfileClient(client) {
 		return errorsx.WithStack(oauth2.ErrInvalidRequest.
 			WithHintf("Clients must include a '%s' when performing the authorize code flow, but it is missing.", parameter).
 			WithDebugf("The client with id '%s' is held to the FAPI 2.0 Security Profile, which requires PKCE.", client.GetID()))

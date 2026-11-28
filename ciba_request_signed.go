@@ -99,7 +99,7 @@ func (f *Fosite) decodeBackChannelSignedRequest(ctx context.Context, client Clie
 		return nil, nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The signed authentication request must use an asymmetric signature algorithm.").WithDebugf("The client with id '%s' registered the signing algorithm '%s'.", client.GetID(), alg))
 	}
 
-	if !slices.Contains(FilterFAPI2SecurityProfileSigningAlgValues(client, f.Config.GetCIBARequestSigningAlgValues(ctx)), alg) {
+	if !slices.Contains(FilterFAPI2SecurityProfileSigningAlgValues(ctx, f.Config, client, f.Config.GetCIBARequestSigningAlgValues(ctx)), alg) {
 		return nil, nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'backchannel_authentication_request_signing_alg' registered for the OAuth 2.0 Client is not supported.").WithDebugf("The client with id '%s' registered the signing algorithm '%s'.", client.GetID(), alg))
 	}
 

@@ -1759,6 +1759,23 @@ func TestHandlerFAPI2SecurityProfileClient(t *testing.T) {
 	})
 }
 
+func TestHandlerFAPI2SecurityProfileServer(t *testing.T) {
+	h := &Handler{Config: &oauth2.Config{EnablePKCEPlainChallengeMethod: true, AllowPublicClientsWithoutPKCE: true, FAPI2SecurityProfile: true}}
+
+	client := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "client"}}
+
+	t.Run("ShouldRequirePKCE", func(t *testing.T) {
+		assert.ErrorIs(t, h.validate(t.Context(), "", "", client), oauth2.ErrInvalidRequest)
+		assert.ErrorIs(t, h.validateNoPKCE(t.Context(), consts.FormParameterCodeVerifier, client), oauth2.ErrInvalidRequest)
+	})
+
+	t.Run("ShouldRequireS256", func(t *testing.T) {
+		assert.ErrorIs(t, h.validate(t.Context(), testChallengeS256, consts.PKCEChallengeMethodPlain, client), oauth2.ErrInvalidRequest)
+		assert.ErrorIs(t, h.validate(t.Context(), testChallengeS256, "", client), oauth2.ErrInvalidRequest)
+		assert.NoError(t, h.validate(t.Context(), testChallengeS256, consts.PKCEChallengeMethodSHA256, client))
+	})
+}
+
 func TestHandlerNativeClient(t *testing.T) {
 	native := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "native"}, ApplicationType: consts.ApplicationTypeNative}
 	web := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "web"}, ApplicationType: consts.ApplicationTypeWeb}

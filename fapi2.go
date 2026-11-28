@@ -129,7 +129,8 @@ func GetAuthorizeCodeLifespan(ctx context.Context, config AuthorizeCodeLifespanP
 
 // GetPushedAuthorizeContextLifespan returns the lifetime of a pushed authorization request from the client: its own
 // when it is a PushedAuthorizationRequestClient returning a positive duration, otherwise the configured lifespan, and
-// at most FAPI2SecurityProfileMaximumPushedAuthorizeContextLifespan for a client held to the FAPI 2.0 Security Profile.
+// at most FAPI2SecurityProfileMaximumPushedAuthorizeContextLifespan when the client or the authorization server is held
+// to the FAPI 2.0 Security Profile.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
 func GetPushedAuthorizeContextLifespan(ctx context.Context, config PushedAuthorizeRequestConfigProvider, client Client) (lifespan time.Duration) {
@@ -139,7 +140,7 @@ func GetPushedAuthorizeContextLifespan(ctx context.Context, config PushedAuthori
 		lifespan = c.GetPushedAuthorizeContextLifespan()
 	}
 
-	if IsFAPI2SecurityProfileClient(client) {
+	if IsFAPI2SecurityProfile(ctx, config) || IsFAPI2SecurityProfileClient(client) {
 		return min(lifespan, FAPI2SecurityProfileMaximumPushedAuthorizeContextLifespan)
 	}
 

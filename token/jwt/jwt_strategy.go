@@ -366,7 +366,17 @@ func (j *DefaultStrategy) Decrypt(ctx context.Context, tokenStringEnc string, op
 	return tokenString, signature, jwe, nil
 }
 
-// Decode handles decoding JWT's.
+// Decode decrypts the token when it is a JWE, parses it as a JWS signed with one of the permitted algorithms, verifies
+// its signature, and returns it with its claims. It does not validate the claims, such as 'exp', 'nbf' and 'iat', which
+// the caller must validate with the Valid method of the claims.
+//
+// A token whose signature is not verified is returned without an error, so the caller must check Token.Valid or
+// Token.IsSignatureValid before trusting it. This happens when WithAllowUnverified is given without a client, and for
+// an unsecured JWT, whose 'none' algorithm is only parsed when the caller permits it with WithSigAlgorithm and which is
+// only marked valid when the client registered 'none' as its signing algorithm.
+//
+// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.1
+// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.2
 func (j *DefaultStrategy) Decode(ctx context.Context, tokenString string, opts ...StrategyOpt) (token *Token, err error) {
 	o := &StrategyOpts{
 		sigAlgorithm:      SignatureAlgorithms,

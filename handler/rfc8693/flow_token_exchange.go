@@ -1150,6 +1150,7 @@ func (s *storedTokenSession) UnmarshalJSON(data []byte) (err error) {
 		ExpiresAt                   map[oauth2.TokenType]time.Time `json:"ExpiresAt"`
 		JWKThumbprint               string                         `json:"JWKThumbprint"`
 		ClientCertificateThumbprint string                         `json:"ClientCertificateThumbprint"`
+		AccessTokenDigest           string                         `json:"AccessTokenDigest"`
 	}
 
 	if err = json.Unmarshal(data, &stored); err != nil {
@@ -1166,6 +1167,10 @@ func (s *storedTokenSession) UnmarshalJSON(data []byte) (err error) {
 
 	if bound, ok := s.Session.(oauth2.MTLSBoundSession); ok && stored.ClientCertificateThumbprint != "" {
 		bound.SetClientCertificateSHA256Thumbprint(stored.ClientCertificateThumbprint)
+	}
+
+	if recorder, ok := s.Session.(hoauth2.EncryptedAccessTokenSession); ok && stored.AccessTokenDigest != "" && recorder.GetAccessTokenDigest() == "" {
+		recorder.SetAccessTokenDigest(stored.AccessTokenDigest)
 	}
 
 	return nil

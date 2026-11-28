@@ -225,3 +225,105 @@ func (s *sessionlessAccessTokenStore) GetAccessTokenSession(ctx context.Context,
 
 	return &stored, nil
 }
+
+func TestEncryptedJWTProfileAccessTokenStatelessIntrospection(t *testing.T) {
+	ctx := t.Context()
+
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+		ScopeStrategy:                 oauth2.HierarchicScopeStrategy,
+	}
+
+	strategy := NewCoreStrategy(config, "authelia_%s_", &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())})
+
+	stateless := &StatelessJWTValidator{StatelessJWTStrategy: strategy.(*JWTProfileCoreStrategy), Config: config}
+
+	foreign := NewCoreStrategy(config, "authelia_%s_", &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())})
+
+	testCases := []struct {
+		name     string
+		client   *oauth2.DefaultRegisteredClient
+		issuer   CoreStrategy
+		present  bool
+		deferred bool
+		definite bool
+	}{
+		{
+			name: "ShouldSkipATokenEncryptedToAPublicKeyOfTheClient",
+			client: &oauth2.DefaultRegisteredClient{
+				DefaultClient:                   &oauth2.DefaultClient{ID: "client-abc"},
+				JSONWebKeys:                     &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: gen.MustRSAKey().Public(), KeyID: "enc", Use: consts.JSONWebTokenUseEncryption, Algorithm: string(jose.RSA_OAEP_256)}}},
+				AccessTokenEncryptedResponseAlg: string(jose.RSA_OAEP_256),
+				AccessTokenEncryptedResponseEnc: string(jose.A128GCM),
+			},
+			present:  true,
+			deferred: true,
+		},
+		{
+			name: "ShouldSkipATokenEncryptedToTheClientSecretWithoutTheClient",
+			client: &oauth2.DefaultRegisteredClient{
+				DefaultClient:                   &oauth2.DefaultClient{ID: "client-abc", ClientSecret: oauth2.NewPlainTextClientSecret("foobarfoobarfoobarfoobarfoobarfoobar")},
+				AccessTokenEncryptedResponseAlg: string(jose.A256KW),
+				AccessTokenEncryptedResponseEnc: string(jose.A128GCM),
+			},
+			deferred: true,
+		},
+		{
+			name: "ShouldIntrospectATokenEncryptedToTheClientSecretWithTheClient",
+			client: &oauth2.DefaultRegisteredClient{
+				DefaultClient:                   &oauth2.DefaultClient{ID: "client-abc", ClientSecret: oauth2.NewPlainTextClientSecret("foobarfoobarfoobarfoobarfoobarfoobar")},
+				AccessTokenEncryptedResponseAlg: string(jose.A256KW),
+				AccessTokenEncryptedResponseEnc: string(jose.A128GCM),
+			},
+			present: true,
+		},
+		{
+			name: "ShouldRejectADecryptedTokenWithAnotherSignature",
+			client: &oauth2.DefaultRegisteredClient{
+				DefaultClient:                   &oauth2.DefaultClient{ID: "client-abc", ClientSecret: oauth2.NewPlainTextClientSecret("foobarfoobarfoobarfoobarfoobarfoobar")},
+				AccessTokenEncryptedResponseAlg: string(jose.A256KW),
+				AccessTokenEncryptedResponseEnc: string(jose.A128GCM),
+			},
+			issuer:   foreign,
+			present:  true,
+			definite: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := jwtValidCase(oauth2.AccessToken)
+			request.Client = tc.client
+
+			issuer := strategy
+			if tc.issuer != nil {
+				issuer = tc.issuer
+			}
+
+			token, _, err := issuer.GenerateAccessToken(ctx, request)
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			require.Len(t, strings.Split(token, "."), 5)
+
+			introspection := oauth2.NewAccessRequest(&JWTSession{})
+
+			if tc.present {
+				introspection.Client = tc.client
+			}
+
+			use, err := stateless.IntrospectToken(ctx, token, oauth2.AccessToken, introspection, nil)
+
+			switch {
+			case tc.deferred:
+				assert.ErrorIs(t, err, oauth2.ErrUnknownRequest)
+			case tc.definite:
+				require.Error(t, err)
+				assert.NotErrorIs(t, err, oauth2.ErrUnknownRequest)
+			default:
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+				assert.Equal(t, oauth2.AccessToken, use)
+				assert.Equal(t, "peter", introspection.GetSession().GetSubject())
+			}
+		})
+	}
+}

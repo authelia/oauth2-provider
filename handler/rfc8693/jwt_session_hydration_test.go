@@ -6,6 +6,7 @@ package rfc8693_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,10 +14,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	. "authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/internal/gen"
+	"authelia.com/provider/oauth2/token/jwt"
 )
 
 func TestTokenExchangeReadsTheJWTSessionOfASubjectToken(t *testing.T) {
@@ -151,4 +156,51 @@ func mintJWTSessionRefreshToken(ctx context.Context, strategy hoauth2.CoreStrate
 	}
 
 	return token
+}
+
+func TestTokenExchangeValidatesAnEncryptedSubjectTokenOfAJWTSession(t *testing.T) {
+	for _, sc := range bindingExchangeStores() {
+		t.Run(sc.name, func(t *testing.T) {
+			store := sc.newStore()
+			config, _ := newBindingExchangeConfig()
+
+			config.EnforceJWTProfileAccessTokens = true
+			config.Issuer = "https://auth.example.com"
+
+			strategy := hoauth2.NewCoreStrategy(config, "authelia_%s_", &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())})
+
+			subjectClient := &oauth2.DefaultRegisteredClient{
+				DefaultClient:                   store.GetClients()["custom-lifespan-client"].(*oauth2.DefaultClientWithCustomTokenLifespans).DefaultClient,
+				JSONWebKeys:                     &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: gen.MustRSAKey().Public(), KeyID: "enc", Use: consts.JSONWebTokenUseEncryption, Algorithm: string(jose.RSA_OAEP_256)}}},
+				AccessTokenEncryptedResponseAlg: string(jose.RSA_OAEP_256),
+				AccessTokenEncryptedResponseEnc: string(jose.A128GCM),
+			}
+
+			request := &oauth2.AccessRequest{
+				GrantTypes: oauth2.Arguments{"password"},
+				Request:    oauth2.Request{ID: uuid.New().String(), RequestedAt: time.Now().UTC(), Session: &hoauth2.JWTSession{Subject: "peter", ExpiresAt: jwtSessionExpiry(time.Now().UTC().Add(time.Hour))}, Client: subjectClient},
+			}
+
+			grantFixtureAudience(request)
+
+			token, signature, err := strategy.GenerateAccessToken(t.Context(), request)
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			require.Len(t, strings.Split(token, "."), 5)
+			require.NoError(t, store.CreateAccessTokenSession(t.Context(), signature, request.Sanitize([]string{})))
+
+			exchange := newLifetimeExchangeRequest(store, consts.TokenTypeRFC8693AccessToken, token, "")
+
+			handler := &AccessTokenTypeHandler{
+				Config:               config,
+				AccessTokenLifespan:  5 * time.Minute,
+				RefreshTokenLifespan: 5 * time.Minute,
+				CoreStrategy:         strategy,
+				ScopeStrategy:        config.ScopeStrategy,
+				Storage:              store,
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(handler.HandleTokenEndpointRequest(t.Context(), exchange)))
+			assert.Equal(t, "peter", exchange.GetSession().GetSubject())
+		})
+	}
 }

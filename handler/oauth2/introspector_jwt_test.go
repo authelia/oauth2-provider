@@ -461,6 +461,88 @@ func TestStatelessJWTValidatorFAPI2SecurityProfile(t *testing.T) {
 	}
 }
 
+func TestStatelessJWTValidatorCarriesTheRegisteredClient(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	strategy := &JWTProfileCoreStrategy{
+		HMACCoreStrategy: NewHMACCoreStrategy(config, "authelia_%s_"),
+		Strategy:         &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())},
+		Config:           config,
+	}
+
+	issue := func(t *testing.T, id string) string {
+		t.Helper()
+
+		request := jwtValidCase(oauth2.AccessToken)
+		request.Client.(*oauth2.DefaultClient).ID = id
+		request.GrantedScope = oauth2.Arguments{"orders"}
+
+		token, _, err := strategy.GenerateAccessToken(t.Context(), request)
+		require.NoError(t, err)
+
+		return token
+	}
+
+	const id = "scoped-client"
+
+	registered := &scopeStrategyClient{DefaultClient: &oauth2.DefaultClient{ID: id}, strategy: oauth2.HierarchicScopeStrategy}
+
+	testCases := []struct {
+		name     string
+		id       string
+		clients  oauth2.ClientGetter
+		scopes   []string
+		err      error
+		expected oauth2.Client
+	}{
+		{name: "ShouldApplyTheScopeStrategyOfTheRegisteredClient", id: id, clients: statelessClients{id: registered}, scopes: []string{"orders.read"}, expected: registered},
+		{name: "ShouldApplyTheConfiguredScopeStrategyWithoutClients", id: id, scopes: []string{"orders.read"}, err: oauth2.ErrInvalidScope},
+		{name: "ShouldKeepTheTokenClientForAClientNotInTheStore", id: "https://client.example.com/client.json", clients: statelessClients{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validator := &StatelessJWTValidator{
+				StatelessJWTStrategy: strategy,
+				Config:               &oauth2.Config{ScopeStrategy: oauth2.ExactScopeStrategy},
+				Clients:              tc.clients,
+			}
+
+			request := oauth2.NewAccessRequest(&oauth2.DefaultSession{})
+
+			_, err := validator.IntrospectToken(t.Context(), issue(t, tc.id), oauth2.AccessToken, request, tc.scopes)
+
+			if tc.err != nil {
+				require.ErrorIs(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, tc.id, request.GetClient().GetID())
+
+			if tc.expected != nil {
+				assert.Same(t, tc.expected, request.GetClient())
+			} else {
+				assert.IsType(t, &oauth2.DefaultClient{}, request.GetClient())
+			}
+		})
+	}
+}
+
+type scopeStrategyClient struct {
+	*oauth2.DefaultClient
+
+	strategy oauth2.ScopeStrategy
+}
+
+func (c *scopeStrategyClient) GetScopeStrategy(_ context.Context) oauth2.ScopeStrategy {
+	return c.strategy
+}
+
 type statelessClientsFailure struct{}
 
 func (statelessClientsFailure) GetClient(context.Context, string) (client oauth2.Client, err error) {

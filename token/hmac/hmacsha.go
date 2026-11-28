@@ -164,12 +164,12 @@ func (c *HMACStrategy) validate(ctx context.Context, secret []byte, token string
 
 	decodedTokenSignature, err := b64.DecodeString(tokenSignature)
 	if err != nil {
-		return errorsx.WithStack(err)
+		return errorsx.WithStack(oauth2.ErrInvalidTokenFormat.WithWrap(err).WithDebugError(err))
 	}
 
 	decodedTokenKey, err := b64.DecodeString(tokenKey)
 	if err != nil {
-		return errorsx.WithStack(err)
+		return errorsx.WithStack(oauth2.ErrInvalidTokenFormat.WithWrap(err).WithDebugError(err))
 	}
 
 	expectedMAC := c.generateHMAC(ctx, decodedTokenKey, &signingKey)

@@ -163,7 +163,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 			err: "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). crypto/bcrypt: hashedPassword is not the hash of the given password",
 		},
 		{
-			name: "ShouldFailIntrospectionError",
+			name: "ShouldReportAPlainIntrospectionErrorAsAServerError",
 			setup: func(config *Config, validator *mock.MockTokenIntrospector, ctx gomock.Matcher) *http.Request {
 				config.TokenIntrospectionHandlers = TokenIntrospectionHandlers{validator}
 				validator.EXPECT().IntrospectToken(ctx, "some-token", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(grantCredential)
@@ -176,7 +176,7 @@ func TestNewIntrospectionRequest(t *testing.T) {
 				return r
 			},
 			isActive: false,
-			err:      "Token is inactive because it is malformed, expired or otherwise invalid. An introspection strategy indicated that the token is inactive. The error is unrecognizable asdf",
+			err:      "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. The error is unrecognizable asdf",
 		},
 		{
 			name: "ShouldPass",

@@ -73,7 +73,7 @@ func (f *Fosite) NewUserinfoRequest(ctx context.Context, r *http.Request, sessio
 	)
 
 	if use, ar, err = f.IntrospectToken(ctx, token, AccessToken, session); err != nil {
-		if failure, ok := requestServerFailure(err); ok {
+		if failure, ok := IntrospectionServerFailure(err); ok {
 			return request, failure
 		}
 

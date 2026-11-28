@@ -860,7 +860,7 @@ func (f *Fosite) prepareSSFError(ctx context.Context, rw http.ResponseWriter, r 
 	rw.Header().Set(consts.HeaderPragma, consts.PragmaNoCache)
 	rw.Header().Set(consts.HeaderContentType, consts.ContentTypeApplicationJSON)
 
-	if IsBearerCredentialError(err) {
+	if ErrorToRFC6749Error(err).StatusCode() < http.StatusInternalServerError && IsBearerCredentialError(err) {
 		if rfc, bare = f.writeBearerAuthorizationChallenge(ctx, rw, r, err); bare {
 			writeBareAuthorizationChallenge(rw)
 

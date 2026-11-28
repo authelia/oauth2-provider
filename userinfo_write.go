@@ -42,7 +42,7 @@ func (f *Fosite) WriteUserinfoError(ctx context.Context, rw http.ResponseWriter,
 		r = RequestFromContext(ctx)
 	}
 
-	if IsBearerCredentialError(rfc) {
+	if rfc.StatusCode() < http.StatusInternalServerError && IsBearerCredentialError(rfc) {
 		var bare bool
 
 		if rfc, bare = f.writeBearerAuthorizationChallenge(ctx, rw, r, rfc); bare {

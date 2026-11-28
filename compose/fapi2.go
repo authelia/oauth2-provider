@@ -8,9 +8,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
+
+	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
@@ -18,6 +21,7 @@ import (
 	"authelia.com/provider/oauth2/handler/par"
 	"authelia.com/provider/oauth2/handler/pkce"
 	"authelia.com/provider/oauth2/handler/rfc7523"
+	"authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/handler/rfc8705"
 	"authelia.com/provider/oauth2/handler/rfc9449"
 	"authelia.com/provider/oauth2/internal/slicesx"
@@ -122,6 +126,7 @@ func ValidateFAPI2SecurityProfile(ctx context.Context, config oauth2.Configurato
 	v.resourceServer(ctx, config)
 	v.cryptography(ctx, config)
 	v.responseSigning(ctx, config)
+	v.extensionSigning(ctx, config)
 
 	return errors.Join(v.errs...)
 }
@@ -347,6 +352,33 @@ func (v *fapi2Violations) responseSigning(ctx context.Context, config oauth2.Con
 	if algs := p.GetIntrospectionSignedResponseAlgValues(ctx); len(algs) != 0 && !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
 		v.fail(fapi2SectionCryptography, "the introspection response algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
 	}
+}
+
+func (v *fapi2Violations) extensionSigning(ctx context.Context, config oauth2.Configurator) {
+	for _, name := range slices.Sorted(maps.Keys(config.GetRFC8693TokenTypes(ctx))) {
+		t, ok := config.GetRFC8693TokenTypes(ctx)[name].(*rfc8693.TxnTokenType)
+		if !ok {
+			continue
+		}
+
+		for _, domain := range slices.Sorted(maps.Keys(t.Domains)) {
+			if t.Domains[domain] == nil {
+				continue
+			}
+
+			if alg := fapi2SigningAlg(t.Domains[domain].SigningAlg); !slices.Contains(oauth2.FAPI2SecurityProfileSigningAlgValues, alg) {
+				v.fail(fapi2SectionCryptography, "the transaction token type '%s' signs the tokens of the trust domain '%s' with '%s', which is not permitted", name, domain, alg)
+			}
+		}
+	}
+}
+
+func fapi2SigningAlg(alg string) string {
+	if alg == "" {
+		return string(jose.RS256)
+	}
+
+	return alg
 }
 
 func fapi2PermittedIntrospectionAuthMethods(methods []string) []string {

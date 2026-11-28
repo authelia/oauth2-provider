@@ -108,10 +108,14 @@ func OAuth2TokenIntrospectionFactory(config oauth2.Configurator, storage any, st
 // storage implementation at all.
 //
 // Due to the stateless nature of this factory, THE BUILT-IN REVOCATION MECHANISMS WILL NOT WORK.
-// If you need revocation, you can validate JWTs statefully, using the other factories.
+// If you need revocation, you can validate JWTs statefully, using the other factories. A token of an authorization
+// server or client held to the FAPI 2.0 Security Profile is left to the next introspector, which must be stateful.
 func OAuth2StatelessJWTIntrospectionFactory(config oauth2.Configurator, storage any, strategy any) any {
+	clients, _ := storage.(oauth2.ClientGetter)
+
 	return &hoauth2.StatelessJWTValidator{
 		StatelessJWTStrategy: strategy.(hoauth2.StatelessJWTStrategy),
 		Config:               config,
+		Clients:              clients,
 	}
 }

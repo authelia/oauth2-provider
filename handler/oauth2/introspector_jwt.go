@@ -7,6 +7,7 @@ package oauth2
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"authelia.com/provider/oauth2"
@@ -22,12 +23,24 @@ type StatelessJWTStrategy interface {
 	RefreshTokenStrategy
 }
 
-// StatelessJWTValidator introspects JWT access tokens without consulting storage.
+// StatelessJWTValidator introspects JWT access tokens without consulting storage, so it cannot tell whether one was
+// revoked. As the FAPI 2.0 Security Profile requires the revocation status to be verified, it defers to the next
+// introspector, as for a token it does not handle, when the authorization server is held to the profile, and when
+// Clients is set and the client the token was issued to is a FAPI2SecurityProfileClient held to it, or cannot be
+// resolved for a reason other than not being registered. A storage-backed introspector such as CoreValidator must then
+// be registered after it. JWTProfileCoreStrategy does not issue an encrypted access token in those cases, as storage
+// cannot resolve one.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.4
 type StatelessJWTValidator struct {
 	StatelessJWTStrategy
 	Config interface {
 		oauth2.ScopeStrategyProvider
 	}
+
+	// Clients resolves the registration of the client a token was issued to. When nil, a client held to the FAPI 2.0
+	// Security Profile is not recognized.
+	Clients oauth2.ClientGetter
 }
 
 // IntrospectToken validates the token as an RFC 9068 JWT Profile access token without consulting storage, checks the
@@ -45,7 +58,7 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 		}
 	}
 
-	if v.IsOpaqueAccessToken(ctx, tokenString) || v.IsOpaqueRefreshToken(ctx, tokenString) {
+	if oauth2.IsFAPI2SecurityProfile(ctx, v.Config) || v.IsOpaqueAccessToken(ctx, tokenString) || v.IsOpaqueRefreshToken(ctx, tokenString) {
 		return "", oauth2.ErrUnknownRequest
 	}
 
@@ -65,6 +78,10 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 
 	r := AccessTokenJWTToRequest(token)
 
+	if v.defersToStorage(ctx, r.GetClient()) {
+		return "", oauth2.ErrUnknownRequest
+	}
+
 	// The claim is recovered as both requested and granted, and only while RFC 9396 is enabled. Numeric Extra values
 	// are recovered with JSON number precision and may not round-trip exactly.
 	//
@@ -83,6 +100,23 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 	request.Merge(r)
 
 	return oauth2.AccessToken, nil
+}
+
+func (v *StatelessJWTValidator) defersToStorage(ctx context.Context, client oauth2.Client) bool {
+	if v.Clients == nil || client == nil || client.GetID() == "" {
+		return false
+	}
+
+	registered, err := v.Clients.GetClient(ctx, client.GetID())
+
+	switch {
+	case errors.Is(err, oauth2.ErrNotFound):
+		return false
+	case err != nil:
+		return true
+	default:
+		return oauth2.IsFAPI2SecurityProfileClient(registered)
+	}
 }
 
 // AccessTokenJWTToRequest tries to reconstruct oauth2.Request from a JWT. It does not recover the

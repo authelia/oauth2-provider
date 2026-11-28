@@ -227,6 +227,23 @@ func (v *fapi2Violations) resourceServer(ctx context.Context, config oauth2.Conf
 	if p, ok := config.(oauth2.AccessTokenURIQueryParameterEnabledProvider); ok && p.GetAccessTokenURIQueryParameterEnabled(ctx) {
 		v.fail(fapi2SectionResourceServer, "access tokens in the URI query must not be accepted, but AccessTokenURIQueryParameterEnabled is set")
 	}
+
+	if stateless, stateful := fapi2Introspection(ctx, config); stateless != nil && !stateful {
+		v.fail(fapi2SectionResourceServer, "the revocation status of access tokens must be verified, but the stateless JWT introspection handler is registered without a storage-backed one")
+	}
+}
+
+func fapi2Introspection(ctx context.Context, config oauth2.Configurator) (stateless *hoauth2.StatelessJWTValidator, stateful bool) {
+	for _, h := range config.GetTokenIntrospectionHandlers(ctx) {
+		switch handler := h.(type) {
+		case *hoauth2.StatelessJWTValidator:
+			stateless = handler
+		case *hoauth2.CoreValidator:
+			stateful = true
+		}
+	}
+
+	return stateless, stateful
 }
 
 func (v *fapi2Violations) senderConstrained(ctx context.Context, config oauth2.Configurator) {

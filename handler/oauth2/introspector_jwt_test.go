@@ -5,7 +5,9 @@
 package oauth2
 
 import (
+	"context"
 	"encoding/base64"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -399,6 +401,82 @@ func BenchmarkIntrospectJWT(b *testing.B) {
 	}
 
 	assert.NoError(b, err)
+}
+
+// FAPI 2.0 Security Profile Section 5.3.4.
+func TestStatelessJWTValidatorFAPI2SecurityProfile(t *testing.T) {
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+	}
+
+	strategy := &JWTProfileCoreStrategy{
+		HMACCoreStrategy: NewHMACCoreStrategy(config, "authelia_%s_"),
+		Strategy:         &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())},
+		Config:           config,
+	}
+
+	const id = "fapi2-client"
+
+	request := jwtValidCase(oauth2.AccessToken)
+	request.Client.(*oauth2.DefaultClient).ID = id
+
+	token, _, err := strategy.GenerateAccessToken(t.Context(), request)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name    string
+		profile bool
+		clients oauth2.ClientGetter
+		err     error
+	}{
+		{name: "ShouldValidateWithoutClients"},
+		{name: "ShouldValidateForAnotherClient", clients: statelessClients{id: &oauth2.DefaultClient{ID: id}}},
+		{name: "ShouldValidateForAnUnregisteredClient", clients: statelessClients{}},
+		{name: "ShouldDeferForAFAPI2Client", clients: statelessClients{id: &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: id}, FAPI2SecurityProfile: true}}, err: oauth2.ErrUnknownRequest},
+		{name: "ShouldDeferForAFAPI2Server", profile: true, err: oauth2.ErrUnknownRequest},
+		{name: "ShouldDeferWhenTheClientLookupFails", clients: statelessClientsFailure{}, err: oauth2.ErrUnknownRequest},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validator := &StatelessJWTValidator{
+				StatelessJWTStrategy: strategy,
+				Config:               &oauth2.Config{ScopeStrategy: oauth2.HierarchicScopeStrategy, FAPI2SecurityProfile: tc.profile},
+				Clients:              tc.clients,
+			}
+
+			use, err := validator.IntrospectToken(t.Context(), token, oauth2.AccessToken, oauth2.NewAccessRequest(&oauth2.DefaultSession{}), nil)
+
+			if tc.err != nil {
+				require.ErrorIs(t, err, tc.err)
+				assert.Empty(t, use)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, oauth2.AccessToken, use)
+		})
+	}
+}
+
+type statelessClientsFailure struct{}
+
+func (statelessClientsFailure) GetClient(context.Context, string) (client oauth2.Client, err error) {
+	return nil, errors.New("storage failure")
+}
+
+type statelessClients map[string]oauth2.Client
+
+func (c statelessClients) GetClient(_ context.Context, id string) (client oauth2.Client, err error) {
+	var ok bool
+
+	if client, ok = c[id]; !ok {
+		return nil, oauth2.ErrNotFound
+	}
+
+	return client, nil
 }
 
 func TestStatelessJWTValidatorTokenFormat(t *testing.T) {

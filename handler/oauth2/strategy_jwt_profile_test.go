@@ -622,6 +622,59 @@ func TestGenerateJWTFAPI2SecurityProfileClient(t *testing.T) {
 	}
 }
 
+// FAPI 2.0 Security Profile Section 5.3.4.
+func TestGenerateJWTEncryptedFAPI2SecurityProfile(t *testing.T) {
+	encryption := gen.MustRSAKey()
+
+	testCases := []struct {
+		name    string
+		fapi2   bool
+		profile bool
+		err     bool
+	}{
+		{name: "ShouldEncryptForAnotherClient"},
+		{name: "ShouldNotEncryptForAFAPI2Client", fapi2: true, err: true},
+		{name: "ShouldNotEncryptForAFAPI2Server", profile: true, err: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{
+				EnforceJWTProfileAccessTokens: true,
+				FAPI2SecurityProfile:          tc.profile,
+				GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+			}
+
+			strategy := NewCoreStrategy(config, "authelia_%s_", &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+				{Key: gen.MustRSAKey(), KeyID: "ps256", Algorithm: string(jose.PS256), Use: consts.JSONWebTokenUseSignature},
+			}})})
+
+			r := jwtValidCase(oauth2.AccessToken)
+			r.Client = &oauth2.DefaultRegisteredClient{
+				DefaultClient:                   &oauth2.DefaultClient{ID: "client-abc"},
+				FAPI2SecurityProfile:            tc.fapi2,
+				JSONWebKeys:                     &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: encryption.Public(), KeyID: "enc", Use: consts.JSONWebTokenUseEncryption, Algorithm: string(jose.RSA_OAEP_256)}}},
+				AccessTokenSignedResponseAlg:    string(jose.PS256),
+				AccessTokenEncryptedResponseAlg: string(jose.RSA_OAEP_256),
+				AccessTokenEncryptedResponseEnc: string(jose.A128GCM),
+			}
+
+			token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+
+			if tc.err {
+				require.ErrorIs(t, err, oauth2.ErrServerError)
+				assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "An encrypted JWT profile access token is not issued under the FAPI 2.0 Security Profile")
+				assert.Empty(t, token)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.Len(t, strings.Split(token, "."), 5)
+		})
+	}
+}
+
 func anyInt64ToTime(in any) time.Time {
 	return time.Unix(in.(int64), 0)
 }

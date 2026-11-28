@@ -204,7 +204,7 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 
 	var requesterPKCE oauth2.Requester
 
-	if requesterPKCE, err = c.Storage.GetPKCERequestSession(ctx, signature, request.GetSession()); err != nil {
+	if requesterPKCE, err = c.Storage.GetPKCERequestSession(ctx, signature, sessionCopy(request)); err != nil {
 		if errors.Is(err, oauth2.ErrNotFound) {
 			if nv == 0 {
 				return c.validateNoPKCE(ctx, consts.FormParameterCodeVerifier, request.GetClient())
@@ -380,3 +380,13 @@ var (
 	_ oauth2.AuthorizeEndpointHandler  = (*Handler)(nil)
 	_ oauth2.TokenEndpointHandler      = (*Handler)(nil)
 )
+
+// sessionCopy returns a copy of the session of the request, as the stored PKCE request is only read and hydrating it
+// into the session of the token request would overwrite what the token request recorded.
+func sessionCopy(request oauth2.Requester) oauth2.Session {
+	if session := request.GetSession(); session != nil {
+		return session.Clone()
+	}
+
+	return nil
+}

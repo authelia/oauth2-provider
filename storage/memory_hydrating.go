@@ -19,8 +19,8 @@ import (
 // carrying that caller-supplied value. MemoryStore does neither, so use this store for any test whose subject is the
 // session a Get*Session call returns.
 //
-// Hydration clones the stored request and swaps in the caller-supplied session. Only a *oauth2.Request or a
-// *oauth2.AccessRequest can be cloned, or for the device code and CIBA sessions a *oauth2.DeviceAuthorizeRequest and a
+// Hydration clones the stored request and swaps in the caller-supplied session. Only a *oauth2.Request, a
+// *oauth2.AccessRequest or a *oauth2.AuthorizeRequest can be cloned, or for the device code and CIBA sessions a *oauth2.DeviceAuthorizeRequest and a
 // *oauth2.BackChannelAuthenticationRequest; a Get*Session call for any other oauth2.Requester implementation returns
 // an error. The clone is shallow: fields such as Form and Client are shared with the stored request, and only Session
 // is decoupled.
@@ -41,6 +41,11 @@ func NewHydratingMemoryStore() *HydratingMemoryStore {
 
 func (s *HydratingMemoryStore) marshal(key string, request oauth2.Requester) (err error) {
 	if request.GetSession() == nil {
+		s.sessionsMutex.Lock()
+		defer s.sessionsMutex.Unlock()
+
+		delete(s.sessions, key)
+
 		return nil
 	}
 
@@ -61,7 +66,8 @@ func (s *HydratingMemoryStore) marshal(key string, request oauth2.Requester) (er
 // hydrate unmarshals the stored session blob into session and returns a shallow copy of request carrying it. When no
 // blob was stored, or the caller supplied no session, request is returned untouched.
 //
-// request must be a *oauth2.Request or a *oauth2.AccessRequest - the only types this method knows how to clone. It is
+// request must be a *oauth2.Request, a *oauth2.AccessRequest or a *oauth2.AuthorizeRequest - the only types this
+// method knows how to clone. It is
 // checked before any unmarshalling happens, so a caller-supplied session is never mutated on a path that then fails to
 // return it.
 func (s *HydratingMemoryStore) hydrate(key string, request oauth2.Requester, session oauth2.Session) (out oauth2.Requester, err error) {
@@ -70,9 +76,9 @@ func (s *HydratingMemoryStore) hydrate(key string, request oauth2.Requester, ses
 	}
 
 	switch request.(type) {
-	case *oauth2.Request, *oauth2.AccessRequest:
+	case *oauth2.Request, *oauth2.AccessRequest, *oauth2.AuthorizeRequest:
 	default:
-		return nil, fmt.Errorf("HydratingMemoryStore cannot hydrate a %T; it can only clone *oauth2.Request or *oauth2.AccessRequest", request)
+		return nil, fmt.Errorf("HydratingMemoryStore cannot hydrate a %T; it can only clone *oauth2.Request, *oauth2.AccessRequest or *oauth2.AuthorizeRequest", request)
 	}
 
 	s.sessionsMutex.RLock()
@@ -93,12 +99,58 @@ func (s *HydratingMemoryStore) hydrate(key string, request oauth2.Requester, ses
 		clone.Session = session
 
 		return &clone, nil
+	case *oauth2.AuthorizeRequest:
+		clone := *req
+		clone.Session = session
+
+		return &clone, nil
 	default:
 		clone := *req.(*oauth2.Request)
 		clone.Session = session
 
 		return &clone, nil
 	}
+}
+
+// CreateAuthorizeCodeSession marshals the session of the request and stores the request against the authorization
+// code signature.
+func (s *HydratingMemoryStore) CreateAuthorizeCodeSession(ctx context.Context, signature string, request oauth2.Requester) (err error) {
+	if err = s.marshal("ac:"+signature, request); err != nil {
+		return err
+	}
+
+	return s.MemoryStore.CreateAuthorizeCodeSession(ctx, signature, request)
+}
+
+// GetAuthorizeCodeSession returns the request stored against the authorization code signature, carrying the
+// caller-supplied session hydrated from the marshaled session. An invalidated code returns the stored request
+// unhydrated alongside oauth2.ErrInvalidatedAuthorizeCode.
+func (s *HydratingMemoryStore) GetAuthorizeCodeSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {
+	if request, err = s.MemoryStore.GetAuthorizeCodeSession(ctx, signature, session); err != nil {
+		return request, err
+	}
+
+	return s.hydrate("ac:"+signature, request, session)
+}
+
+// CreatePKCERequestSession marshals the session of the request and stores the request against the authorization code
+// signature.
+func (s *HydratingMemoryStore) CreatePKCERequestSession(ctx context.Context, signature string, request oauth2.Requester) (err error) {
+	if err = s.marshal("pkce:"+signature, request); err != nil {
+		return err
+	}
+
+	return s.MemoryStore.CreatePKCERequestSession(ctx, signature, request)
+}
+
+// GetPKCERequestSession returns the PKCE request stored against the authorization code signature, carrying the
+// caller-supplied session hydrated from the marshaled session.
+func (s *HydratingMemoryStore) GetPKCERequestSession(ctx context.Context, signature string, session oauth2.Session) (request oauth2.Requester, err error) {
+	if request, err = s.MemoryStore.GetPKCERequestSession(ctx, signature, session); err != nil {
+		return nil, err
+	}
+
+	return s.hydrate("pkce:"+signature, request, session)
 }
 
 // CreateAccessTokenSession marshals the session of the request and stores the request against the access token

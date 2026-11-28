@@ -677,6 +677,71 @@ func TestGenerateSecurityEventTokenEncryptedWithProfile(t *testing.T) {
 	}
 }
 
+func TestGenerateSecurityEventTokenEncryptedFAPI2SecurityProfile(t *testing.T) {
+	keyRSA, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	keyEC, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	keyClient, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	store := storage.NewMemoryStore()
+
+	store.Clients["rx-client"] = &oauth2.DefaultRegisteredClient{
+		DefaultClient: &oauth2.DefaultClient{ID: "rx-client"},
+		JSONWebKeys: &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+			{Key: keyClient.Public(), KeyID: "rsa-1", Algorithm: string(jose.RSA_OAEP_256), Use: jwt.JSONWebTokenUseEncryption},
+		}},
+
+		SecurityEventTokenEncryptedResponseAlg: string(jose.RSA_OAEP_256),
+	}
+
+	subject, err := jwt.NewSubjectIdentifierOpaque("abc")
+	require.NoError(t, err)
+
+	stream := &oauth2.SSFStream{ClientID: "rx-client", Issuer: "https://tx.example.com", Audience: []string{"rx"}}
+
+	testCases := []struct {
+		name    string
+		alg     string
+		profile bool
+		err     bool
+	}{
+		{name: "ShouldEncryptRS256WithoutTheProfile"},
+		{name: "ShouldRefuseRS256WithTheProfile", profile: true, err: true},
+		{name: "ShouldEncryptES256WithTheProfile", alg: string(jose.ES256), profile: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &oauth2.DefaultSecurityEventTokenStrategy{SigningAlg: tc.alg, Strategy: &jwt.DefaultStrategy{
+				Config: &oauth2.Config{},
+				Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+					{Key: keyRSA, KeyID: "rs", Algorithm: string(jose.RS256), Use: jwt.JSONWebTokenUseSignature},
+					{Key: keyEC, KeyID: "es", Algorithm: string(jose.ES256), Use: jwt.JSONWebTokenUseSignature},
+				}}),
+			}}
+
+			f := &oauth2.Fosite{Store: store, Config: &oauth2.Config{FAPI2SecurityProfile: tc.profile, SSF: &oauth2.SSFConfig{TokenStrategy: strategy}}}
+
+			token, _, err := f.GenerateSecurityEventToken(t.Context(), stream, subject, jwt.CAEPSessionRevoked{}, "", "")
+
+			if tc.err {
+				require.ErrorIs(t, err, oauth2.ErrServerError)
+				assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "the signing algorithm 'RS256' is not permitted")
+				assert.Empty(t, token)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			require.Len(t, strings.Split(token, "."), 5)
+		})
+	}
+}
+
 func TestDefaultSecurityEventTokenStrategy(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
@@ -861,6 +926,119 @@ func TestGenerateSecurityEventTokenStoredIssuer(t *testing.T) {
 	}
 }
 
+// FAPI 2.0 Security Profile §5.4.1: a JWT is signed with PS256, ES256 or EdDSA.
+func TestGenerateSecurityEventTokenFAPI2SecurityProfile(t *testing.T) {
+	subject, err := jwt.NewSubjectIdentifierOpaque("abc")
+	require.NoError(t, err)
+
+	event := jwt.RawSecurityEvent{URI: "https://schemas.openid.net/secevent/risc/event-type/account-disabled", Claims: map[string]any{}}
+
+	ordinary := &oauth2.DefaultClient{ID: "rx-client"}
+	profile := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "rx-client"}, FAPI2SecurityProfile: true}
+
+	testCases := []struct {
+		name     string
+		provider bool
+		owner    oauth2.Client
+		alg      string
+		refused  bool
+	}{
+		{name: "ShouldAcceptRS256WithoutTheProfile", owner: ordinary, alg: "RS256"},
+		{name: "ShouldRefuseRS256ForAProfileProvider", provider: true, owner: ordinary, alg: "RS256", refused: true},
+		{name: "ShouldRefuseRS256ForAProfileOwner", owner: profile, alg: "RS256", refused: true},
+		{name: "ShouldAcceptES256ForAProfileProvider", provider: true, owner: ordinary, alg: "ES256"},
+		{name: "ShouldAcceptPS256ForAProfileOwner", owner: profile, alg: "PS256"},
+		{name: "ShouldAcceptEdDSAForAProfileOwner", owner: profile, alg: "EdDSA"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := ssfTestStore()
+			store.Clients["rx-client"] = tc.owner
+
+			strategy := &ssfTestStrategy{token: ssfTestTokenSigned(tc.alg)}
+			f := &oauth2.Fosite{Store: store, Config: &oauth2.Config{FAPI2SecurityProfile: tc.provider, SSF: &oauth2.SSFConfig{TokenStrategy: strategy}}}
+			stream := &oauth2.SSFStream{ClientID: "rx-client", Issuer: "https://tx.example.com", Audience: []string{"rx"}}
+
+			token, jti, err := f.GenerateSecurityEventToken(t.Context(), stream, subject, event, "", "txn-1")
+
+			if tc.refused {
+				require.ErrorIs(t, err, oauth2.ErrServerError)
+				assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "which the FAPI 2.0 Security Profile does not permit")
+				assert.Empty(t, token)
+				assert.Empty(t, jti)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.Equal(t, strategy.token, token)
+			assert.NotEmpty(t, jti)
+		})
+	}
+}
+
+// FAPI 2.0 Security Profile §5.4.1: a JWT is signed with PS256, ES256 or EdDSA.
+func TestDefaultSecurityEventTokenStrategyFAPI2SecurityProfile(t *testing.T) {
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	jwks := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+		{Key: rsaKey, KeyID: "rs", Algorithm: string(jose.RS256), Use: jwt.JSONWebTokenUseSignature},
+		{Key: ecKey, KeyID: "es", Algorithm: string(jose.ES256), Use: jwt.JSONWebTokenUseSignature},
+	}}
+
+	subject, err := jwt.NewSubjectIdentifierOpaque("abc")
+	require.NoError(t, err)
+
+	ordinary := &oauth2.DefaultClient{ID: "rx-client"}
+	profile := &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "rx-client"}, FAPI2SecurityProfile: true}
+
+	testCases := []struct {
+		name    string
+		client  oauth2.Client
+		alg     string
+		refused bool
+	}{
+		{name: "ShouldSignRS256ForAnOrdinaryClient", client: ordinary, alg: "RS256"},
+		{name: "ShouldRefuseRS256ForAProfileClient", client: profile, alg: "RS256", refused: true},
+		{name: "ShouldSignES256ForAProfileClient", client: profile, alg: "ES256"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := &oauth2.DefaultSecurityEventTokenStrategy{
+				Strategy:   &jwt.DefaultStrategy{Config: &oauth2.Config{}, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(jwks)},
+				SigningAlg: tc.alg,
+			}
+
+			claims, err := jwt.NewSecurityEventTokenClaims("https://tx.example.com", []string{"rx"}, subject, jwt.RawSecurityEvent{URI: "https://schemas.openid.net/secevent/risc/event-type/account-disabled", Claims: map[string]any{}}, "txn-1")
+			require.NoError(t, err)
+
+			token, err := strategy.GenerateSecurityEventToken(t.Context(), tc.client, claims)
+
+			if tc.refused {
+				require.Error(t, err)
+				assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "the signing algorithm 'RS256' is not permitted")
+				assert.Empty(t, token)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			decoded, err := jwt.UnsafeParseSignedAny(token, &jwt.MapClaims{})
+			require.NoError(t, err)
+			require.Len(t, decoded.Headers, 1)
+
+			assert.Equal(t, tc.alg, decoded.Headers[0].Algorithm)
+		})
+	}
+}
+
 var errSSFSign = errors.New("sign failed")
 
 type ssfTestStrategy struct {
@@ -897,6 +1075,12 @@ func ssfTestStore() *storage.MemoryStore {
 
 func ssfTestToken(typ string) string {
 	header, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": typ})
+
+	return base64.RawURLEncoding.EncodeToString(header) + ".e30.sig"
+}
+
+func ssfTestTokenSigned(alg string) string {
+	header, _ := json.Marshal(map[string]string{"alg": alg, "typ": jwt.JSONWebTokenTypeSecurityEventToken})
 
 	return base64.RawURLEncoding.EncodeToString(header) + ".e30.sig"
 }

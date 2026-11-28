@@ -278,6 +278,26 @@ func TestValidateFAPI2SecurityProfile(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldRejectTheDefaultSecurityEventTokenAlgorithm",
+			modify: func(config *oauth2.Config) {
+				config.SSF = &oauth2.SSFConfig{TokenStrategy: &oauth2.DefaultSecurityEventTokenStrategy{}}
+			},
+			expected: []string{"Section 5.4.1: security event tokens are signed with 'RS256', which is not permitted"},
+		},
+		{
+			name: "ShouldRejectTheCAEPInteroperabilityProfile",
+			modify: func(config *oauth2.Config) {
+				config.SSF = &oauth2.SSFConfig{TokenStrategy: &oauth2.DefaultSecurityEventTokenStrategy{SigningAlg: string(jose.ES256)}, EnforceCAEPInteroperabilityProfile: true}
+			},
+			expected: []string{"Section 5.4.1: security event tokens must use a permitted algorithm, but EnforceCAEPInteroperabilityProfile requires RS256"},
+		},
+		{
+			name: "ShouldPassWithAPermittedSecurityEventTokenAlgorithm",
+			modify: func(config *oauth2.Config) {
+				config.SSF = &oauth2.SSFConfig{TokenStrategy: &oauth2.DefaultSecurityEventTokenStrategy{SigningAlg: string(jose.ES256)}}
+			},
+		},
+		{
 			name:     "ShouldRejectRS256DPoPProofs",
 			modify:   func(config *oauth2.Config) { config.DPoPAllowedJWSAlgorithms = []string{string(jose.RS256)} },
 			expected: []string{"Section 5.4.1: the DPoP proof algorithms 'RS256' include one not permitted"},

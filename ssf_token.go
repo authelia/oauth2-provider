@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"authelia.com/provider/jose"
@@ -29,6 +30,9 @@ const ssfInteroperabilityProfileSignatureBytes = 2048 / 8
 // symmetric algorithm (RFC 8417 Section 5.1). A client with no key the algorithm can use gives an error. The JWE has a
 // 'cty' and a 'typ' of 'JWT'.
 //
+// The token, nested or not, is only signed with an algorithm the FAPI 2.0 Security Profile permits when the client or
+// the authorization server is held to the profile, the latter as IsFAPI2SecurityProfile reports for the context.
+//
 // An encryption algorithm of 'none' gives ErrServerError rather than a signed token. So does a SigningAlg of HS256,
 // HS384 or HS512 for a client with an encryption algorithm, as the key would be the client secret and not the issuer
 // key. So does a Strategy that returns anything other than a JWE for a client with an encryption algorithm, and a
@@ -42,7 +46,7 @@ type DefaultSecurityEventTokenStrategy struct {
 	Strategy jwt.Strategy
 
 	// SigningAlg selects the issuer key. Empty means RS256, which is the only value the CAEP Interoperability Profile
-	// permits (Profile Section 2.6).
+	// permits (Profile Section 2.6), and which the FAPI 2.0 Security Profile does not permit (Section 5.4.1).
 	SigningAlg string
 }
 
@@ -64,9 +68,9 @@ func (s *DefaultSecurityEventTokenStrategy) GenerateSecurityEventToken(ctx conte
 		return "", errorsx.WithStack(ErrServerError.WithDebug("The Security Event Token client is a nil pointer."))
 	}
 
-	opts := []jwt.StrategyOpt{
+	opts := append(FAPI2SecurityProfileEncodeOptions(ctx, nil, client),
 		jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: jwt.JSONWebTokenTypeSecurityEventToken}}),
-	}
+	)
 
 	enc := jwt.NewSecurityEventTokenClient(client, s.SigningAlg)
 
@@ -177,12 +181,12 @@ func (f *Fosite) GenerateSecurityEventToken(ctx context.Context, stream *SSFStre
 		claims.JTI = jti
 	}
 
-	if token, err = config.TokenStrategy.GenerateSecurityEventToken(ctx, client, claims); err != nil {
+	if token, err = config.TokenStrategy.GenerateSecurityEventToken(newFAPI2SecurityProfileContext(ctx, f.Config), client, claims); err != nil {
 		return "", "", errorsx.WithStack(ErrServerError.WithHint("Failed to generate the Security Event Token.").WithWrap(err).WithDebugError(err))
 	}
 
-	if fault := securityEventTokenFault(token, config.EnforceCAEPInteroperabilityProfile); fault != "" {
-		return "", "", errorsx.WithStack(ErrServerError.WithDebugf("The Security Event Token strategy returned a token %s.", fault))
+	if err = f.validateSecurityEventToken(ctx, config, client, token); err != nil {
+		return "", "", err
 	}
 
 	// RFC 8417 Section 5.1: a client that configures encryption is never given a token that is only signed.
@@ -284,6 +288,37 @@ func securityEventTokenFaultCAEPInteroperabilityProfile(header *securityEventTok
 	}
 
 	return ""
+}
+
+func (f *Fosite) validateSecurityEventToken(ctx context.Context, config *SSFConfig, client Client, token string) (err error) {
+	if fault := securityEventTokenFault(token, config.EnforceCAEPInteroperabilityProfile); fault != "" {
+		return errorsx.WithStack(ErrServerError.WithDebugf("The Security Event Token strategy returned a token %s.", fault))
+	}
+
+	if !IsFAPI2SecurityProfile(ctx, f.Config) && !IsFAPI2SecurityProfileClient(client) || isSecurityEventTokenCompactJWE(token) {
+		return nil
+	}
+
+	if alg := securityEventTokenAlgorithm(token); !slices.Contains(FAPI2SecurityProfileSigningAlgValues, alg) {
+		return errorsx.WithStack(ErrServerError.WithDebugf("The Security Event Token strategy returned a token signed with the 'alg' '%s', which the FAPI 2.0 Security Profile does not permit.", alg))
+	}
+
+	return nil
+}
+
+func securityEventTokenAlgorithm(token string) (alg string) {
+	data, err := base64.RawURLEncoding.DecodeString(token[:max(strings.IndexByte(token, '.'), 0)])
+	if err != nil {
+		return ""
+	}
+
+	var header securityEventTokenHeader
+
+	if err = json.Unmarshal(data, &header); err != nil {
+		return ""
+	}
+
+	return header.Algorithm
 }
 
 func isSecurityEventTokenEncryptionClient(client Client) (is bool) {

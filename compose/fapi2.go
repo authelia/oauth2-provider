@@ -371,6 +371,26 @@ func (v *fapi2Violations) extensionSigning(ctx context.Context, config oauth2.Co
 			}
 		}
 	}
+
+	p, ok := config.(oauth2.SSFConfigProvider)
+	if !ok {
+		return
+	}
+
+	ssf := p.GetSSFConfig(ctx)
+	if ssf == nil {
+		return
+	}
+
+	if ssf.EnforceCAEPInteroperabilityProfile {
+		v.fail(fapi2SectionCryptography, "security event tokens must use a permitted algorithm, but EnforceCAEPInteroperabilityProfile requires RS256")
+	}
+
+	if s, ok := ssf.TokenStrategy.(*oauth2.DefaultSecurityEventTokenStrategy); ok {
+		if alg := fapi2SigningAlg(s.SigningAlg); !slices.Contains(oauth2.FAPI2SecurityProfileSigningAlgValues, alg) {
+			v.fail(fapi2SectionCryptography, "security event tokens are signed with '%s', which is not permitted", alg)
+		}
+	}
 }
 
 func fapi2SigningAlg(alg string) string {

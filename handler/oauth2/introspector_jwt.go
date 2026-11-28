@@ -28,9 +28,11 @@ type StatelessJWTStrategy interface {
 // introspector, as for a token it does not handle, when the authorization server is held to the profile, and when
 // Clients is set and the client the token was issued to is a FAPI2SecurityProfileClient held to it, or cannot be
 // resolved for a reason other than not being registered. A storage-backed introspector such as CoreValidator must then
-// be registered after it.
+// be registered after it. A token that is not encrypted, when the client it was issued to registered for encrypted
+// access tokens, is rejected as RFC 9068 Section 4 asks.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.4
+// See: https://www.rfc-editor.org/rfc/rfc9068#section-4
 type StatelessJWTValidator struct {
 	StatelessJWTStrategy
 	Config interface {
@@ -77,8 +79,8 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 
 	r := AccessTokenJWTToRequest(token)
 
-	if v.defersToStorage(ctx, r.GetClient()) {
-		return "", oauth2.ErrUnknownRequest
+	if err = v.validateRegistration(ctx, r.GetClient(), tokenString); err != nil {
+		return "", err
 	}
 
 	// The claim is recovered as both requested and granted, and only while RFC 9396 is enabled. Numeric Extra values
@@ -101,20 +103,33 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 	return oauth2.AccessToken, nil
 }
 
-func (v *StatelessJWTValidator) defersToStorage(ctx context.Context, client oauth2.Client) bool {
+func (v *StatelessJWTValidator) validateRegistration(ctx context.Context, client oauth2.Client, tokenString string) (err error) {
+	registered, deferred := v.registration(ctx, client)
+
+	switch {
+	case deferred:
+		return oauth2.ErrUnknownRequest
+	case !jwt.IsEncryptedJWT(tokenString) && requiresEncryptedAccessToken(registered):
+		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebug("The provided token is not encrypted, but the client it was issued to registered for encrypted Access Tokens."))
+	default:
+		return nil
+	}
+}
+
+func (v *StatelessJWTValidator) registration(ctx context.Context, client oauth2.Client) (registered oauth2.Client, deferred bool) {
 	if v.Clients == nil || client == nil || client.GetID() == "" {
-		return false
+		return nil, false
 	}
 
 	registered, err := v.Clients.GetClient(ctx, client.GetID())
 
 	switch {
 	case errors.Is(err, oauth2.ErrNotFound):
-		return false
+		return nil, false
 	case err != nil:
-		return true
+		return nil, true
 	default:
-		return oauth2.IsFAPI2SecurityProfileClient(registered)
+		return registered, oauth2.IsFAPI2SecurityProfileClient(registered)
 	}
 }
 

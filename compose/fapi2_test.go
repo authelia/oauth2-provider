@@ -74,6 +74,21 @@ func TestValidateFAPI2SecurityProfile(t *testing.T) {
 			expected: []string{"Section 5.3.2.1: the issuer must be the sole client assertion audience"},
 		},
 		{
+			name:      "ShouldRejectSkippedJWTBearerClientAuthentication",
+			modify:    func(config *oauth2.Config) { config.GrantTypeJWTBearerCanSkipClientAuth = true },
+			factories: []Factory{RFC7523AssertionGrantFactory},
+			expected:  []string{"Section 5.3.2.1: clients must authenticate, but GrantTypeJWTBearerCanSkipClientAuth is set"},
+		},
+		{
+			name:   "ShouldPassSkippedJWTBearerClientAuthenticationWithoutTheGrant",
+			modify: func(config *oauth2.Config) { config.GrantTypeJWTBearerCanSkipClientAuth = true },
+		},
+		{
+			name:     "ShouldRejectQueryAccessTokens",
+			modify:   func(config *oauth2.Config) { config.AccessTokenURIQueryParameterEnabled = true },
+			expected: []string{"Section 5.3.4: access tokens in the URI query must not be accepted, but AccessTokenURIQueryParameterEnabled is set"},
+		},
+		{
 			name:     "ShouldRejectRefreshTokenRotation",
 			modify:   func(config *oauth2.Config) { config.DisableRefreshTokenRotation = false },
 			expected: []string{"Section 5.3.2.1: refresh tokens must not be rotated"},
@@ -191,6 +206,33 @@ func TestValidateFAPI2SecurityProfile(t *testing.T) {
 			expected:  []string{"Section 5.4.1: the introspection endpoint client assertion algorithms 'RS256' include one not permitted"},
 		},
 		{
+			name:     "ShouldRejectAClientAssertionAudienceWhichMayBeAnArray",
+			modify:   func(config *oauth2.Config) { config.RequireStringClientAssertionAudience = false },
+			expected: []string{"Section 5.3.2.1: the issuer must be the client assertion audience as a string, but RequireStringClientAssertionAudience is not set"},
+		},
+		{
+			name: "ShouldRejectRS256IssuerSigningKeys",
+			modify: func(config *oauth2.Config) {
+				config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+					{Key: gen.MustRSAKey(), KeyID: "rs256", Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature},
+					{Key: gen.MustES256Key(), KeyID: "es256", Algorithm: string(jose.ES256), Use: consts.JSONWebTokenUseSignature},
+				}})}
+			},
+			expected: []string{"Section 5.4.1: the issuer signing algorithms 'ES256', 'RS256' include one not permitted"},
+		},
+		{
+			name: "ShouldPassWithES256IssuerSigningKeys",
+			modify: func(config *oauth2.Config) {
+				config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+					{Key: gen.MustES256Key(), KeyID: "es256", Algorithm: string(jose.ES256), Use: consts.JSONWebTokenUseSignature},
+				}})}
+			},
+		},
+		{
+			name:   "ShouldNotCheckIssuerSigningKeysTheStrategyDoesNotReport",
+			modify: func(config *oauth2.Config) { config.JWTStrategy = &jwt.DefaultStrategy{Config: config} },
+		},
+		{
 			name:     "ShouldRejectRS256DPoPProofs",
 			modify:   func(config *oauth2.Config) { config.DPoPAllowedJWSAlgorithms = []string{string(jose.RS256)} },
 			expected: []string{"Section 5.4.1: the DPoP proof algorithms 'RS256' include one not permitted"},
@@ -286,9 +328,14 @@ func TestApplyFAPI2SecurityProfile(t *testing.T) {
 		RevocationEndpointAuthSigningAlgValues:   []string{string(jose.RS256)},
 		IntrospectionEndpointAuthMethods:         []string{consts.ClientAuthMethodClientSecretBasic, consts.ClientAuthMethodPrivateKeyJWT, consts.AuthSchemeBearer},
 		RFC7523AssertionSigningAlgValues:         []string{string(jose.RS256), string(jose.PS256)},
+		GrantTypeJWTBearerCanSkipClientAuth:      true,
+		AccessTokenURIQueryParameterEnabled:      true,
 	}
 
 	ApplyFAPI2SecurityProfile(config)
+
+	assert.False(t, config.GrantTypeJWTBearerCanSkipClientAuth)
+	assert.False(t, config.AccessTokenURIQueryParameterEnabled)
 
 	assert.Equal(t, time.Minute, config.AuthorizeCodeLifespan)
 	assert.Equal(t, time.Duration(0), config.PushedAuthorizeContextLifespan)
@@ -300,6 +347,7 @@ func TestApplyFAPI2SecurityProfile(t *testing.T) {
 	assert.False(t, config.EnablePKCEPlainChallengeMethod)
 	assert.False(t, config.DisableAuthorizationServerIdentification)
 	assert.False(t, config.DisableClientAssertionIssuerAudience)
+	assert.True(t, config.RequireStringClientAssertionAudience)
 	assert.True(t, config.DisableRefreshTokenRotation)
 	assert.True(t, config.EnforceSenderConstrainedAccessTokens)
 	assert.Equal(t, []string{consts.ClientAuthMethodPrivateKeyJWT}, config.TokenEndpointAuthMethods)

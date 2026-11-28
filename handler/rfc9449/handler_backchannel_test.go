@@ -88,6 +88,32 @@ func TestBackChannelDPoPProof(t *testing.T) {
 				assert.Equal(t, thumbprint(t, key), session.GetDPoPJWKThumbprint())
 			})
 
+			t.Run("ShouldApplyTheFAPI2SecurityProfileToTheProofOfItsClient", func(t *testing.T) {
+				for i, client := range []oauth2.Client{&oauth2.DefaultClient{}, newTestFAPI2Client()} {
+					h := newHandler()
+					h.Config.(*testHandlerConfig).algs = []string{"ES256", "ES384"}
+
+					raw := signProof(t, newTestProofKeyWithAlgorithm(t, jose.ES384), jwt.JSONWebTokenTypeDPoP, map[string]any{
+						jwt.ClaimJWTID: "bc-fapi2", jwt.ClaimHTTPMethod: http.MethodPost, jwt.ClaimHTTPURI: testBackChannelURL, jwt.ClaimIssuedAt: time.Now().Unix(),
+					})
+
+					session := &oauth2.DefaultSession{}
+					request := newTestBackChannelRequest(session, consts.CIBAModePoll, client, "")
+
+					err := h.BindBackChannelAuthenticationRequest(ctxWithDPoP(testBackChannelURL, raw), request)
+
+					if i == 0 {
+						require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+						assert.NotEmpty(t, session.GetDPoPJWKThumbprint())
+
+						continue
+					}
+
+					assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+					assert.Empty(t, session.GetDPoPJWKThumbprint())
+				}
+			})
+
 			t.Run("ShouldRejectTheWrongHTU", func(t *testing.T) {
 				h := newHandler()
 				key := newTestProofKey(t)

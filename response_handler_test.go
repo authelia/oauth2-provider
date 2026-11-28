@@ -96,6 +96,39 @@ func TestDefaultResponseModeHandlerJWTRedirectURIQuery(t *testing.T) {
 	}
 }
 
+func TestDefaultResponseModeHandlerJWTFAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name  string
+		fapi2 bool
+		err   bool
+	}{
+		{name: "ShouldSignWithRS256ForAnotherClient"},
+		{name: "ShouldNotSignWithRS256ForAFAPI2Client", fapi2: true, err: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := testNewJARMResponseModeHandler()
+
+			request := NewAuthorizeRequest()
+			request.ResponseTypes = Arguments{consts.ResponseTypeAuthorizationCodeFlow}
+			request.Client = &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "client"}, AuthorizationSignedResponseAlg: "RS256", FAPI2SecurityProfile: tc.fapi2}
+
+			form, err := handler.EncodeResponseForm(t.Context(), ResponseModeQueryJWT, request, url.Values{consts.FormParameterAuthorizationCode: {"code-value"}})
+
+			if tc.err {
+				require.ErrorContains(t, err, "the signing algorithm 'RS256' is not permitted")
+				assert.Empty(t, form)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.NotEmpty(t, form.Get(consts.FormParameterResponse))
+		})
+	}
+}
+
 func TestDefaultResponseModeHandlerJWTRedirectURIQueryResponseParameter(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -241,6 +274,7 @@ func TestRFC9207ResponseModeParameterHandlerWriteParameters(t *testing.T) {
 	testCases := []struct {
 		name     string
 		config   *Config
+		client   Client
 		expected []string
 	}{
 		{
@@ -256,15 +290,32 @@ func TestRFC9207ResponseModeParameterHandlerWriteParameters(t *testing.T) {
 			name:   "ShouldNotSetAnEmptyIssuer",
 			config: &Config{},
 		},
+		{
+			name:     "ShouldSetTheIssuerForAFAPI2ClientWhenDisabled",
+			config:   &Config{Issuer: "https://auth.example.com", DisableAuthorizationServerIdentification: true},
+			client:   &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "fapi2"}, FAPI2SecurityProfile: true},
+			expected: []string{"https://auth.example.com"},
+		},
+		{
+			name:   "ShouldNotSetAnEmptyIssuerForAFAPI2Client",
+			config: &Config{DisableAuthorizationServerIdentification: true},
+			client: &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: "fapi2"}, FAPI2SecurityProfile: true},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			handler := &RFC9207ResponseModeParameterHandler{Config: tc.config}
 
+			request := NewAuthorizeRequest()
+
+			if tc.client != nil {
+				request.Client = tc.client
+			}
+
 			parameters := url.Values{}
 
-			handler.WriteParameters(t.Context(), NewAuthorizeRequest(), parameters)
+			handler.WriteParameters(t.Context(), request, parameters)
 
 			assert.Equal(t, tc.expected, parameters[consts.FormParameterIssuer])
 		})

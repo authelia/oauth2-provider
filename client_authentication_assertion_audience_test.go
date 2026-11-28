@@ -41,6 +41,7 @@ const (
 
 	audienceTestRSA = "rsa"
 	audienceTestHS  = "hs"
+	audienceTestES  = "es"
 
 	audienceTestPAR           = "par"
 	audienceTestDevice        = "device"
@@ -52,6 +53,7 @@ const (
 	audienceTestErrSole     = "sole audience value"
 	audienceTestErrSingle   = "must carry exactly one of"
 	audienceTestErrNoIssuer = "no issuer identifier configured"
+	audienceTestErrString   = "must be carried as a string"
 )
 
 func TestClientAssertionAudience(t *testing.T) {
@@ -236,6 +238,123 @@ func TestClientAssertionAudienceBackChannelEndpoint(t *testing.T) {
 
 			require.ErrorIs(t, err, ErrInvalidClient)
 			assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), tc.err)
+		})
+	}
+}
+
+func TestClientAssertionAudienceString(t *testing.T) {
+	testCases := []struct {
+		name    string
+		disable bool
+		require bool
+		fapi2   bool
+		aud     any
+		err     string
+	}{
+		{name: "ShouldAcceptAnArrayByDefault", aud: []string{audienceTestIssuer}},
+		{name: "ShouldAcceptAStringWhenRequired", require: true, aud: audienceTestIssuer},
+		{name: "ShouldRejectAnArrayWhenRequired", require: true, aud: []string{audienceTestIssuer}, err: audienceTestErrString},
+		{name: "ShouldAcceptAnEndpointArrayWhenRequiredButDisabled", require: true, disable: true, aud: []string{audienceTestTokenURL}},
+		{name: "ShouldAcceptAStringFromAFAPI2Client", fapi2: true, aud: audienceTestIssuer},
+		{name: "ShouldRejectAnArrayFromAFAPI2Client", fapi2: true, aud: []string{audienceTestIssuer}, err: audienceTestErrString},
+		{name: "ShouldAcceptAStringFromAFAPI2ClientWhenDisabled", fapi2: true, disable: true, aud: audienceTestIssuer},
+		{name: "ShouldRejectAnArrayFromAFAPI2ClientWhenDisabled", fapi2: true, disable: true, aud: []string{audienceTestIssuer}, err: audienceTestErrString},
+		{name: "ShouldRejectTheTokenEndpointURLFromAFAPI2ClientWhenDisabled", fapi2: true, disable: true, aud: audienceTestTokenURL, err: audienceTestErrInvalid},
+		{name: "ShouldAcceptTheTokenEndpointURLFromAnotherClientWhenDisabled", disable: true, aud: audienceTestTokenURL},
+	}
+
+	key := gen.MustES256Key()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config, provider := newAudienceTestProvider(gen.MustRSAKey())
+			config.DisableClientAssertionIssuerAudience = tc.disable
+			config.RequireStringClientAssertionAudience = tc.require
+
+			provider.Store.(*storage.MemoryStore).Clients[audienceTestES] = &DefaultRegisteredClient{
+				DefaultClient:           &DefaultClient{ID: audienceTestES},
+				JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{KeyID: "kid-es", Use: "sig", Algorithm: "ES256", Key: &key.PublicKey}}},
+				TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
+				FAPI2SecurityProfile:    tc.fapi2,
+			}
+
+			claims := jwt.MapClaims{
+				consts.ClaimSubject:        audienceTestES,
+				consts.ClaimIssuer:         audienceTestES,
+				consts.ClaimJWTID:          time.Now().String(),
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimAudience:       tc.aud,
+			}
+
+			form := url.Values{
+				consts.FormParameterClientAssertion:     {mustGenerateClientAssertion(t, claims, jose.ES256, jwt.JSONWebTokenTypeClientAuthentication, "kid-es", key)},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			}
+
+			err := authenticateAudienceTestClient(t, config, provider, "", form)
+
+			if tc.err == "" {
+				require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			require.ErrorIs(t, err, ErrInvalidClient)
+			assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), tc.err)
+		})
+	}
+}
+
+func TestClientAssertionClockSkewFAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name   string
+		skew   time.Duration
+		fapi2  bool
+		future time.Duration
+		err    bool
+	}{
+		{name: "ShouldRejectTheNearFutureWithoutSkew", skew: -1, future: 6 * time.Second, err: true},
+		{name: "ShouldAcceptTheNearFutureFromAFAPI2ClientWithoutSkew", skew: -1, fapi2: true, future: 6 * time.Second},
+		{name: "ShouldRejectTheFarFutureFromAFAPI2ClientWithoutSkew", skew: -1, fapi2: true, future: 2 * time.Minute, err: true},
+	}
+
+	key := gen.MustES256Key()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config, provider := newAudienceTestProvider(gen.MustRSAKey())
+			config.JWTClockSkew = tc.skew
+
+			provider.Store.(*storage.MemoryStore).Clients[audienceTestES] = &DefaultRegisteredClient{
+				DefaultClient:           &DefaultClient{ID: audienceTestES},
+				JSONWebKeys:             &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{KeyID: "kid-es", Use: "sig", Algorithm: "ES256", Key: &key.PublicKey}}},
+				TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT,
+				FAPI2SecurityProfile:    tc.fapi2,
+			}
+
+			claims := jwt.MapClaims{
+				consts.ClaimSubject:        audienceTestES,
+				consts.ClaimIssuer:         audienceTestES,
+				consts.ClaimJWTID:          time.Now().String(),
+				consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+				consts.ClaimNotBefore:      time.Now().Add(tc.future).Unix(),
+				consts.ClaimAudience:       audienceTestIssuer,
+			}
+
+			form := url.Values{
+				consts.FormParameterClientAssertion:     {mustGenerateClientAssertion(t, claims, jose.ES256, jwt.JSONWebTokenTypeClientAuthentication, "kid-es", key)},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			}
+
+			err := authenticateAudienceTestClient(t, config, provider, "", form)
+
+			if tc.err {
+				require.ErrorIs(t, err, ErrInvalidClient)
+
+				return
+			}
+
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
 		})
 	}
 }

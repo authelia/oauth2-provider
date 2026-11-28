@@ -186,7 +186,8 @@ func (j *DefaultStrategy) IssuerSigningJWK(ctx context.Context, kid, alg string)
 
 // Encode handles encoding JWT's. A client whose signing algorithm is 'none' is refused, unless WithAllowUnsignedEncrypted
 // is given and the client has an encryption algorithm, in which case it receives a JWE whose plaintext is the JSON
-// claims set, which is not signed.
+// claims set, which is not signed. With WithSigAlgorithm an unsigned JWT and a signing key of any other algorithm are
+// refused.
 //
 //nolint:gocyclo
 func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...StrategyOpt) (tokenString string, signature string, err error) {
@@ -242,6 +243,16 @@ func (j *DefaultStrategy) Encode(ctx context.Context, claims Claims, opts ...Str
 			if keySig, err = j.issuerJWK(ctx, o.client.GetSigningKeyID(), o.client.GetSigningAlg(), JSONWebTokenUseSignature); err != nil {
 				return "", "", errorsx.WithStack(fmt.Errorf("error occurred retrieving issuer jwk: %w", err))
 			}
+		}
+	}
+
+	if len(o.sigAlgorithm) != 0 {
+		if keySig == nil {
+			return "", "", errorsx.WithStack(errors.New("failed to sign the JWT: an unsigned JWT is not permitted"))
+		}
+
+		if !slices.Contains(o.sigAlgorithm, jose.SignatureAlgorithm(keySig.Algorithm)) {
+			return "", "", errorsx.WithStack(fmt.Errorf("failed to sign the JWT: the signing algorithm '%s' is not permitted", keySig.Algorithm))
 		}
 	}
 

@@ -6,6 +6,9 @@ package rfc9449
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
 	"net/http"
 	"net/url"
@@ -480,6 +483,111 @@ func TestStrategyValidateProofAgainstReconstructedRequestURI(t *testing.T) {
 		_, err := s.ValidateDPoPProof(context.Background(), r.Method, requestURL(r), raw, false)
 		assert.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
 	})
+}
+
+func TestStrategyValidateProofFAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name   string
+		alg    jose.SignatureAlgorithm
+		skew   time.Duration
+		offset time.Duration
+		client oauth2.Client
+		err    string
+	}{
+		{name: "ShouldAcceptES384WithoutAClient", alg: jose.ES384, skew: 30 * time.Second},
+		{name: "ShouldAcceptES384FromAnotherClient", alg: jose.ES384, skew: 30 * time.Second, client: &oauth2.DefaultClient{}},
+		{name: "ShouldAcceptES256FromAFAPI2Client", alg: jose.ES256, skew: 30 * time.Second, client: newTestFAPI2Client()},
+		{name: "ShouldRejectES384FromAFAPI2Client", alg: jose.ES384, skew: 30 * time.Second, client: newTestFAPI2Client(), err: "The DPoP proof could not be parsed"},
+		{name: "ShouldAcceptTheFarFutureFromAnotherClient", alg: jose.ES256, skew: 5 * time.Minute, offset: 2 * time.Minute, client: &oauth2.DefaultClient{}},
+		{name: "ShouldRejectTheFarFutureFromAFAPI2Client", alg: jose.ES256, skew: 5 * time.Minute, offset: 2 * time.Minute, client: newTestFAPI2Client(), err: "the permitted clock skew of 1m0s"},
+		{name: "ShouldRejectTheNearFutureFromAnotherClient", alg: jose.ES256, skew: time.Second, offset: 6 * time.Second, client: &oauth2.DefaultClient{}, err: "the permitted clock skew of 1s"},
+		{name: "ShouldAcceptTheNearFutureFromAFAPI2Client", alg: jose.ES256, skew: time.Second, offset: 6 * time.Second, client: newTestFAPI2Client()},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewDefaultStrategy(&testStrategyConfig{algs: []string{"ES256", "ES384"}, skew: tc.skew, lifespan: time.Minute, nonceExp: time.Minute}, storage.NewMemoryStore())
+
+			raw := signProof(t, newTestProofKeyWithAlgorithm(t, tc.alg), jwt.JSONWebTokenTypeDPoP, map[string]any{
+				jwt.ClaimJWTID: "fapi2-" + tc.name, jwt.ClaimHTTPMethod: http.MethodPost,
+				jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: time.Now().Add(tc.offset).Unix(),
+			})
+
+			_, err := s.ValidateDPoPProof(oauth2.NewDPoPProofClientContext(t.Context(), tc.client), http.MethodPost, "https://as.example.com/token", raw, false)
+
+			if tc.err == "" {
+				assert.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidDPoPProof)
+			assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
+		})
+	}
+}
+
+func TestStrategyValidateProofReplayMarkerOutlivesEveryClientWindow(t *testing.T) {
+	testCases := []struct {
+		name     string
+		skew     time.Duration
+		client   oauth2.Client
+		expected time.Duration
+	}{
+		{name: "ShouldKeepTheConfiguredWindowForAnotherClient", skew: 5 * time.Minute, client: &oauth2.DefaultClient{}, expected: 6 * time.Minute},
+		{name: "ShouldKeepTheConfiguredWindowForAFAPI2Client", skew: 5 * time.Minute, client: newTestFAPI2Client(), expected: 6 * time.Minute},
+		{name: "ShouldKeepTheFAPI2WindowForAnotherClient", skew: time.Second, client: &oauth2.DefaultClient{}, expected: time.Minute + oauth2.FAPI2SecurityProfileMinimumClockSkew},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &recordingReplayStore{MemoryStore: storage.NewMemoryStore()}
+			s := NewDefaultStrategy(&testStrategyConfig{algs: []string{"ES256"}, skew: tc.skew, lifespan: time.Minute, nonceExp: time.Minute}, store)
+
+			iat := time.Now().Truncate(time.Second)
+
+			raw := signProof(t, newTestProofKeyWithAlgorithm(t, jose.ES256), jwt.JSONWebTokenTypeDPoP, map[string]any{
+				jwt.ClaimJWTID: "marker-" + tc.name, jwt.ClaimHTTPMethod: http.MethodPost,
+				jwt.ClaimHTTPURI: "https://as.example.com/token", jwt.ClaimIssuedAt: iat.Unix(),
+			})
+
+			_, err := s.ValidateDPoPProof(oauth2.NewDPoPProofClientContext(t.Context(), tc.client), http.MethodPost, "https://as.example.com/token", raw, false)
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+			assert.True(t, iat.Add(tc.expected).Equal(store.expires), "expected %s, got %s", iat.Add(tc.expected), store.expires)
+		})
+	}
+}
+
+type recordingReplayStore struct {
+	*storage.MemoryStore
+
+	expires time.Time
+}
+
+func (s *recordingReplayStore) CheckAndSetDPoPProofUsed(ctx context.Context, jti, jkt, nonce, htm, htu string, expires time.Time) (used bool, err error) {
+	s.expires = expires
+
+	return s.MemoryStore.CheckAndSetDPoPProofUsed(ctx, jti, jkt, nonce, htm, htu, expires)
+}
+
+func newTestFAPI2Client() *oauth2.DefaultRegisteredClient {
+	return &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "fapi2"}, FAPI2SecurityProfile: true}
+}
+
+func newTestProofKeyWithAlgorithm(t *testing.T, alg jose.SignatureAlgorithm) *jose.JSONWebKey {
+	t.Helper()
+
+	curve := elliptic.P256()
+
+	if alg == jose.ES384 {
+		curve = elliptic.P384()
+	}
+
+	priv, err := ecdsa.GenerateKey(curve, rand.Reader)
+	require.NoError(t, err)
+
+	return &jose.JSONWebKey{Key: priv, Algorithm: string(alg)}
 }
 
 func newTestStrategy() (*DefaultStrategy, *storage.MemoryStore) {

@@ -221,10 +221,10 @@ func (h *IssueHandler) PopulateTokenEndpointResponse(ctx context.Context, reques
 		return err
 	}
 
-	token, _, err := h.Strategy.Encode(ctx, claims,
+	token, _, err := h.Strategy.Encode(ctx, claims, append(oauth2.FAPI2SecurityProfileEncodeOptions(request.GetClient()),
 		jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: consts.JSONWebTokenTypeIDJAG}}),
 		jwt.WithIssuerSigningAlg(relationship.SigningAlg),
-	)
+	)...)
 	if err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}

@@ -69,6 +69,20 @@ func TestResourceOwnerFlow_HandleTokenEndpointRequest(t *testing.T) {
 			err: "The client is not authorized to request a token using this method. The client is not allowed to use authorization grant 'password'.",
 		},
 		{
+			// FAPI 2.0 Security Profile Section 5.3.2.1.
+			name: "ShouldFailFAPI2SecurityProfileClient",
+			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
+				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}
+				areq.Form.Set(consts.FormParameterUsername, "peter")
+				areq.Form.Set(consts.FormParameterPassword, "pan")
+				areq.Client = &oauth2.DefaultRegisteredClient{
+					DefaultClient:        &oauth2.DefaultClient{ID: "fapi2", GrantTypes: oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}, Scopes: []string{"foo-scope"}},
+					FAPI2SecurityProfile: true,
+				}
+			},
+			err: "The client is not authorized to request a token using this method. The client is not allowed to use authorization grant 'password'. The client with id 'fapi2' is held to the FAPI 2.0 Security Profile, which does not permit the resource owner password credentials grant.",
+		},
+		{
 			name: "ShouldFailInvalidCredentials",
 			setup: func(areq *oauth2.AccessRequest, store *mock.MockResourceOwnerPasswordCredentialsGrantStorage, config *oauth2.Config) {
 				areq.GrantTypes = oauth2.Arguments{consts.GrantTypeResourceOwnerPasswordCredentials}

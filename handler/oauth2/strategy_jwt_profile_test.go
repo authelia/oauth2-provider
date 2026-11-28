@@ -586,6 +586,42 @@ func TestGenerateJWTRefusesSigningAlgorithmNone(t *testing.T) {
 	}
 }
 
+func TestGenerateJWTFAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name  string
+		fapi2 bool
+		err   string
+	}{
+		{name: "ShouldSignWithRS256ForAnotherClient"},
+		{name: "ShouldNotSignWithRS256ForAFAPI2Client", fapi2: true, err: "the signing algorithm 'RS256' is not permitted"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{
+				EnforceJWTProfileAccessTokens: true,
+				GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+			}
+
+			strategy := NewCoreStrategy(config, "authelia_%s_", &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(rsaKey)})
+
+			r := jwtValidCase(oauth2.AccessToken)
+			r.Client = &oauth2.DefaultRegisteredClient{DefaultClient: &oauth2.DefaultClient{ID: "client-abc"}, FAPI2SecurityProfile: tc.fapi2}
+
+			token, _, err := strategy.GenerateAccessToken(t.Context(), r)
+
+			if tc.err != "" {
+				require.ErrorContains(t, err, tc.err)
+				assert.Empty(t, token)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+		})
+	}
+}
+
 func anyInt64ToTime(in any) time.Time {
 	return time.Unix(in.(int64), 0)
 }

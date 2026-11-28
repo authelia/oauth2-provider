@@ -435,7 +435,7 @@ func (c *CustomJWTTypeHandler) issue(ctx context.Context, request oauth2.AccessR
 
 	var token string
 
-	if token, _, err = c.Encode(ctx, mapped, jwt.WithHeaders(headers), jwt.WithIDTokenClient(request.GetClient())); err != nil {
+	if token, _, err = c.Encode(ctx, mapped, append(oauth2.FAPI2SecurityProfileEncodeOptions(request.GetClient()), jwt.WithHeaders(headers), jwt.WithIDTokenClient(request.GetClient()))...); err != nil {
 		return err
 	}
 
@@ -538,7 +538,7 @@ func (c *CustomJWTTypeHandler) issueAuthorizationGrant(ctx context.Context, requ
 
 	var token string
 
-	if token, _, err = c.Encode(ctx, jwt.MapClaims(claims), jwt.WithIssuerSigningAlg(jwtType.Issue.SigningAlg)); err != nil {
+	if token, _, err = c.Encode(ctx, jwt.MapClaims(claims), append(oauth2.FAPI2SecurityProfileEncodeOptions(request.GetClient()), jwt.WithIssuerSigningAlg(jwtType.Issue.SigningAlg))...); err != nil {
 		return errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 

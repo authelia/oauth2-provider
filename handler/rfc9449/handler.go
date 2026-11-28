@@ -105,7 +105,7 @@ func (h *Handler) BindAccessRequest(ctx context.Context, request oauth2.AccessRe
 
 	urls := h.Config.GetEndpointURLs(ctx)
 
-	proof, err := h.Strategy.ValidateDPoPProof(ctx, r.Method, requestURL(r), header, h.Config.GetDPoPNonceRequired(ctx), urls.URLs(oauth2.EndpointToken)...)
+	proof, err := h.Strategy.ValidateDPoPProof(oauth2.NewDPoPProofClientContext(ctx, request.GetClient()), r.Method, requestURL(r), header, h.Config.GetDPoPNonceRequired(ctx), urls.URLs(oauth2.EndpointToken)...)
 	if err != nil {
 		return err
 	}

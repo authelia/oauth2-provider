@@ -92,7 +92,7 @@ func (h *RedeemHandler) HandleTokenEndpointRequest(ctx context.Context, request 
 		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use authorization grant '%s'.", grantType))
 	}
 
-	token, issuer, err := jwtgrant.Parse(grantName, h.algorithms(ctx), assertion)
+	token, issuer, err := jwtgrant.Parse(grantName, h.algorithms(ctx, client), assertion)
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func (h *RedeemHandler) PopulateTokenEndpointResponse(ctx context.Context, reque
 		return errorsx.WithStack(oauth2.ErrUnknownRequest)
 	}
 
-	if err = h.consume(ctx, request.GetRequestForm().Get(consts.FormParameterAssertion)); err != nil {
+	if err = h.consume(ctx, request.GetClient(), request.GetRequestForm().Get(consts.FormParameterAssertion)); err != nil {
 		return err
 	}
 
@@ -189,7 +189,7 @@ func (h *RedeemHandler) BindAccessRequest(ctx context.Context, request oauth2.Ac
 		return nil
 	}
 
-	jkt, err := confirmationJWKThumbprint(h.algorithms(ctx), request.GetRequestForm().Get(consts.FormParameterAssertion))
+	jkt, err := confirmationJWKThumbprint(h.algorithms(ctx, request.GetClient()), request.GetRequestForm().Get(consts.FormParameterAssertion))
 
 	switch {
 	case err != nil:
@@ -273,19 +273,21 @@ func (h *RedeemHandler) unused(ctx context.Context, claims josejwt.Claims) (err 
 }
 
 // algorithms returns the JWS algorithms an ID-JAG may be signed with. 'none' and the HMAC algorithms are never
-// accepted, whether listed or not, as the keys of the issuer are public.
+// accepted, whether listed or not, as the keys of the issuer are public. For a client held to the FAPI 2.0 Security
+// Profile only the algorithms it permits are accepted.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-assertion-authz-grant-06#section-4.4.1
-func (h *RedeemHandler) algorithms(ctx context.Context) []jose.SignatureAlgorithm {
-	return jwt.ToAsymmetricSignatureAlgorithms(h.Config.GetIDJAGRedeemSigningAlgValues(ctx))
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.4.1
+func (h *RedeemHandler) algorithms(ctx context.Context, client oauth2.Client) []jose.SignatureAlgorithm {
+	return jwt.ToAsymmetricSignatureAlgorithms(oauth2.FilterFAPI2SecurityProfileSigningAlgValues(client, h.Config.GetIDJAGRedeemSigningAlgValues(ctx)))
 }
 
-func (h *RedeemHandler) consume(ctx context.Context, assertion string) (err error) {
+func (h *RedeemHandler) consume(ctx context.Context, client oauth2.Client, assertion string) (err error) {
 	if !h.Config.GetIDJAGSingleUse(ctx) {
 		return nil
 	}
 
-	claims, _, err := jwtgrant.UnverifiedClaims(grantName, h.algorithms(ctx), assertion)
+	claims, _, err := jwtgrant.UnverifiedClaims(grantName, h.algorithms(ctx, client), assertion)
 	if err != nil {
 		return err
 	}
@@ -340,7 +342,7 @@ func (h *RedeemHandler) validate(ctx context.Context, client oauth2.Client, clai
 		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHintf("The '%s' claim is not supported.", consts.ClaimAuthorizationDetails))
 	}
 
-	return jwtgrant.ValidateTime(grantName, claims, jwtgrant.TimeOptions{Skew: h.Config.GetJWTClockSkew(ctx), MaxDuration: h.Config.GetJWTMaxDuration(ctx)})
+	return jwtgrant.ValidateTime(grantName, claims, jwtgrant.TimeOptions{Skew: oauth2.GetJWTClockSkew(ctx, h.Config, client), MaxDuration: h.Config.GetJWTMaxDuration(ctx)})
 }
 
 func (h *RedeemHandler) validateTenant(ctx context.Context, trusted *oauth2.IDJAGTrustedIssuer, raw map[string]any) (err error) {

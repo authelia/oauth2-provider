@@ -47,6 +47,12 @@ func (c *ResourceOwnerPasswordCredentialsGrantHandler) HandleTokenEndpointReques
 	}
 
 	client := request.GetClient()
+
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	if oauth2.IsFAPI2SecurityProfileClient(client) {
+		return errorsx.WithStack(oauth2.ErrUnauthorizedClient.WithHint("The client is not allowed to use authorization grant 'password'.").WithDebugf("The client with id '%s' is held to the FAPI 2.0 Security Profile, which does not permit the resource owner password credentials grant.", client.GetID()))
+	}
+
 	strategy := oauth2.GetScopeStrategy(ctx, c.Config, client)
 
 	for _, scope := range request.GetRequestedScopes() {

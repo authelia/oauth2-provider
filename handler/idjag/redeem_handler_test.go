@@ -101,6 +101,50 @@ func TestIDJAGRedeemRejectsSymmetricAlgEvenWhenListed(t *testing.T) {
 	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "Unable to parse the Identity Assertion JWT Authorization Grant")
 }
 
+func TestRedeemHandlerFAPI2SecurityProfileClient(t *testing.T) {
+	testCases := []struct {
+		name   string
+		fapi2  bool
+		alg    jose.SignatureAlgorithm
+		future time.Duration
+		err    string
+	}{
+		{name: "ShouldRedeemRS256ForAnotherClient", alg: jose.RS256},
+		{name: "ShouldNotRedeemRS256ForAFAPI2Client", fapi2: true, alg: jose.RS256, err: "Unable to parse the Identity Assertion JWT Authorization Grant"},
+		{name: "ShouldRedeemPS256ForAFAPI2Client", fapi2: true, alg: jose.PS256},
+		{name: "ShouldRejectTheNearFutureForAnotherClient", alg: jose.PS256, future: 6 * time.Second, err: "future"},
+		{name: "ShouldRedeemTheNearFutureForAFAPI2Client", fapi2: true, alg: jose.PS256, future: 6 * time.Second},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newRedeemFixture(t, false)
+			fixture.config.JWTClockSkew = time.Second
+
+			trusted := fixture.store.IDJAGTrustedIssuers[redeemIssuer]
+			trusted.JSONWebKeys = &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &fixture.private.PublicKey, KeyID: redeemKeyID, Algorithm: string(tc.alg), Use: consts.JSONWebTokenUseSignature}}}
+			trusted.SigningAlgs = []string{string(tc.alg)}
+			fixture.store.IDJAGTrustedIssuers[redeemIssuer] = trusted
+
+			claims := fixture.claims()
+			claims["iat"] = time.Now().Add(tc.future).Unix()
+
+			client := &oauth2.DefaultRegisteredClient{DefaultClient: fixture.store.Clients[redeemClient].(*oauth2.DefaultClient), FAPI2SecurityProfile: tc.fapi2}
+
+			err := fixture.handler.HandleTokenEndpointRequest(t.Context(), newRedeemRequest(client, fixture.sign(t, claims, "", tc.alg, ""), nil))
+
+			if tc.err == "" {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+			assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
+		})
+	}
+}
+
 func TestRedeemHandlerValidation(t *testing.T) {
 	testCases := []struct {
 		name    string

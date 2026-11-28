@@ -38,11 +38,14 @@ func TestGenerateSigningAlgorithm(t *testing.T) {
 		keys     []jose.JSONWebKey
 		alg      string
 		kid      string
+		opts     []jwt.StrategyOpt
 		expected string
 		keyID    string
 		err      string
 	}{
 		{name: "ShouldDefaultToRS256", keys: []jose.JSONWebKey{es256, rs256}, expected: "RS256", keyID: "rsa"},
+		{name: "ShouldUseAnAlgorithmTheOptionsPermit", keys: []jose.JSONWebKey{rs256, es256}, alg: "ES256", opts: []jwt.StrategyOpt{jwt.WithSigAlgorithm(jose.ES256)}, expected: "ES256", keyID: "ec"},
+		{name: "ShouldRefuseAnAlgorithmTheOptionsDoNotPermit", keys: []jose.JSONWebKey{es256, rs256}, opts: []jwt.StrategyOpt{jwt.WithSigAlgorithm(jose.ES256)}, err: "the signing algorithm 'RS256' is not permitted"},
 		{name: "ShouldDefaultToRS256WithAKeyIdentifier", keys: []jose.JSONWebKey{es256, rs256}, kid: "rsa", expected: "RS256", keyID: "rsa"},
 		{name: "ShouldUseTheRegisteredAlgorithm", keys: []jose.JSONWebKey{rs256, es256}, alg: "ES256", expected: "ES256", keyID: "ec"},
 		{name: "ShouldFailWithoutARS256Key", keys: []jose.JSONWebKey{es256}, err: "Unable to find JSON web key"},
@@ -55,7 +58,7 @@ func TestGenerateSigningAlgorithm(t *testing.T) {
 				signer:           &jwt.DefaultStrategy{Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: tc.keys})},
 			}
 
-			token, _, err := Generate(context.Background(), config, &registeredJARMClient{alg: tc.alg, kid: tc.kid}, nil, url.Values{"code": {"abc"}})
+			token, _, err := Generate(context.Background(), config, &registeredJARMClient{alg: tc.alg, kid: tc.kid}, nil, url.Values{"code": {"abc"}}, tc.opts...)
 
 			if tc.err != "" {
 				assert.ErrorContains(t, err, tc.err)

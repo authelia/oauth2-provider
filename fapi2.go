@@ -12,6 +12,7 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2/internal/consts"
+	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
 
@@ -27,6 +28,18 @@ const (
 	//
 	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
 	FAPI2SecurityProfileMaximumPushedAuthorizeContextLifespan = 10*time.Minute - time.Second
+
+	// FAPI2SecurityProfileMinimumClockSkew is the shortest time into the future the FAPI 2.0 Security Profile requires
+	// an 'iat' or 'nbf' claim to be accepted.
+	//
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	FAPI2SecurityProfileMinimumClockSkew = 10 * time.Second
+
+	// FAPI2SecurityProfileMaximumClockSkew is the time into the future beyond which the FAPI 2.0 Security Profile
+	// requires an 'iat' or 'nbf' claim to be rejected.
+	//
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	FAPI2SecurityProfileMaximumClockSkew = time.Minute
 )
 
 var (
@@ -51,11 +64,16 @@ var (
 
 // FAPI2SecurityProfileClient is a client held to the FAPI 2.0 Security Profile at every request it makes, whatever the
 // provider-wide options. Such a client must authenticate with private_key_jwt or mutual-TLS, push its authorization
-// requests with a redirect URI, use the 'code' response type and PKCE with S256, and sign its client assertions and
-// request objects with a permitted algorithm. Its access tokens are sender-constrained, its refresh tokens are not
-// rotated, its authorization codes last at most 60 seconds, and its pushed authorization requests expire in less than
-// 600 seconds. The options which apply to every client, such as the RFC 9207 'iss' parameter and the DPoP proof
-// algorithms, are left to the configuration; see compose.ValidateFAPI2SecurityProfile.
+// requests with a redirect URI, use the 'code' response type and PKCE with S256, and never use the resource owner
+// password credentials grant. Its client assertions must carry the issuer as their sole audience, as a string. The
+// JWTs it sends, being client assertions, request objects, JWT bearer grant assertions and DPoP proofs, must use a
+// permitted algorithm, and an 'iat' or 'nbf' claim is accepted up to between 10 and 60 seconds in the future. The JWTs
+// issued to it must be signed with a permitted algorithm, so its registered response algorithms must be permitted
+// ones. Its authorization responses carry the RFC 9207 'iss' parameter when an issuer is configured. Its access tokens
+// are sender-constrained and refused when presented unbound, its refresh tokens are not rotated, its authorization
+// codes last at most 60 seconds, and its pushed authorization requests expire in less than 600 seconds. What the
+// handlers registered determine, such as the response types served, is left to the configuration; see
+// compose.ValidateFAPI2SecurityProfile.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2
 type FAPI2SecurityProfileClient interface {
@@ -105,6 +123,72 @@ func GetPushedAuthorizeContextLifespan(ctx context.Context, config PushedAuthori
 	return lifespan
 }
 
+// GetJWTClockSkew returns how far into the future an 'iat' or 'nbf' claim may be in a JWT received from the client: the
+// configured clock skew, held between FAPI2SecurityProfileMinimumClockSkew and FAPI2SecurityProfileMaximumClockSkew for
+// a client held to the FAPI 2.0 Security Profile.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+func GetJWTClockSkew(ctx context.Context, config JWTClockSkewProvider, client Client) (skew time.Duration) {
+	return fapi2ClockSkew(client, config.GetJWTClockSkew(ctx))
+}
+
+// DPoPClockSkewProvider returns the provider for configuring the clock skew permitted when validating a DPoP proof.
+type DPoPClockSkewProvider interface {
+	// GetDPoPClockSkew returns the tolerance allowed when judging the 'iat' claim of a DPoP proof.
+	GetDPoPClockSkew(ctx context.Context) (skew time.Duration)
+}
+
+// GetDPoPClockSkew returns the tolerance allowed when judging the 'iat' claim of a DPoP proof from the client: the
+// configured clock skew, held between FAPI2SecurityProfileMinimumClockSkew and FAPI2SecurityProfileMaximumClockSkew for
+// a client held to the FAPI 2.0 Security Profile.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+func GetDPoPClockSkew(ctx context.Context, config DPoPClockSkewProvider, client Client) (skew time.Duration) {
+	return fapi2ClockSkew(client, config.GetDPoPClockSkew(ctx))
+}
+
+// FilterFAPI2SecurityProfileSigningAlgValues returns the algs which FAPI2SecurityProfileSigningAlgValues holds for a
+// client held to the FAPI 2.0 Security Profile, and the algs unchanged for any other client.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.4.1
+func FilterFAPI2SecurityProfileSigningAlgValues(client Client, algs []string) (permitted []string) {
+	if !IsFAPI2SecurityProfileClient(client) {
+		return algs
+	}
+
+	return slices.DeleteFunc(slices.Clone(algs), func(alg string) bool { return !slices.Contains(FAPI2SecurityProfileSigningAlgValues, alg) })
+}
+
+// FAPI2SecurityProfileEncodeOptions returns the jwt.Strategy options which make Encode refuse to issue a JWT that is
+// unsigned or signed with an algorithm outside FAPI2SecurityProfileSigningAlgValues for a client held to the FAPI 2.0
+// Security Profile, and nil for any other client.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.4.1
+func FAPI2SecurityProfileEncodeOptions(client Client) (opts []jwt.StrategyOpt) {
+	if !IsFAPI2SecurityProfileClient(client) {
+		return nil
+	}
+
+	return []jwt.StrategyOpt{jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(FAPI2SecurityProfileSigningAlgValues)...)}
+}
+
+// NewDPoPProofClientContext returns a context carrying the client a DPoP proof is validated for, which lets a
+// DPoPStrategy apply the client's own policy to the proof.
+func NewDPoPProofClientContext(ctx context.Context, client Client) context.Context {
+	if client == nil {
+		return ctx
+	}
+
+	return context.WithValue(ctx, DPoPProofClientContextKey, client)
+}
+
+// DPoPProofClientFromContext returns the client stored by NewDPoPProofClientContext, or nil if there is none.
+func DPoPProofClientFromContext(ctx context.Context) (client Client) {
+	client, _ = ctx.Value(DPoPProofClientContextKey).(Client)
+
+	return client
+}
+
 func validateFAPI2ResponseTypes(client Client, responseTypes Arguments) (err error) {
 	if !IsFAPI2SecurityProfileClient(client) || responseTypes.ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
 		return nil
@@ -113,10 +197,10 @@ func validateFAPI2ResponseTypes(client Client, responseTypes Arguments) (err err
 	return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter.").WithDebugf("The client with id '%s' is held to the FAPI 2.0 Security Profile, which permits only the 'code' response type.", client.GetID()))
 }
 
-func fapi2SigningAlgValues(client Client, algs []string) []string {
+func fapi2ClockSkew(client Client, skew time.Duration) time.Duration {
 	if !IsFAPI2SecurityProfileClient(client) {
-		return algs
+		return skew
 	}
 
-	return slices.DeleteFunc(slices.Clone(algs), func(alg string) bool { return !slices.Contains(FAPI2SecurityProfileSigningAlgValues, alg) })
+	return min(max(skew, FAPI2SecurityProfileMinimumClockSkew), FAPI2SecurityProfileMaximumClockSkew)
 }

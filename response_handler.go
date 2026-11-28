@@ -124,6 +124,9 @@ func (h *DefaultResponseModeHandler) handleWriteAuthorizeResponse(ctx context.Co
 
 	setClientIDMetadataDocumentIssuer(ctx, h.Config, request, rm, parameters)
 
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
+	setFAPI2SecurityProfileIssuer(ctx, h.Config, request, rm, parameters)
+
 	switch rm {
 	case ResponseModeFormPost, ResponseModeFormPostJWT:
 		if form, err = h.EncodeResponseForm(ctx, rm, request, parameters); err != nil {
@@ -191,7 +194,7 @@ func (h *DefaultResponseModeHandler) EncodeResponseForm(ctx context.Context, rm 
 			return nil, errorsx.WithStack(ErrServerError.WithDebug("The client is not capable of handling the JWT-Secured Authorization Response Mode."))
 		}
 
-		return jarm.EncodeParameters(jarm.Generate(ctx, h.Config, jclient, request.GetSession(), parameters))
+		return jarm.EncodeParameters(jarm.Generate(ctx, h.Config, jclient, request.GetSession(), parameters, FAPI2SecurityProfileEncodeOptions(request.GetClient())...))
 	default:
 		return parameters, nil
 	}
@@ -251,10 +254,27 @@ func setClientIDMetadataDocumentIssuer(ctx context.Context, config ResponseModeH
 	}
 }
 
-// RFC9207ResponseModeParameterHandler adds the RFC 9207 'iss' parameter to the authorization response when
-// GetAuthorizationServerIdentificationEnabled is true and GetIssuer is not empty.
+func setFAPI2SecurityProfileIssuer(ctx context.Context, config ResponseModeHandlerConfigurator, request AuthorizeRequester, rm ResponseModeType, parameters url.Values) {
+	switch rm {
+	case ResponseModeQueryJWT, ResponseModeFragmentJWT, ResponseModeFormPostJWT:
+		return
+	}
+
+	if parameters.Has(consts.FormParameterIssuer) {
+		return
+	}
+
+	if issuer := config.GetIssuer(ctx); len(issuer) != 0 && IsFAPI2SecurityProfileClient(request.GetClient()) {
+		parameters.Set(consts.FormParameterIssuer, issuer)
+	}
+}
+
+// RFC9207ResponseModeParameterHandler adds the RFC 9207 'iss' parameter to the authorization response when GetIssuer
+// is not empty and either GetAuthorizationServerIdentificationEnabled is true or the client is held to the FAPI 2.0
+// Security Profile.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc9207#section-2
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
 type RFC9207ResponseModeParameterHandler struct {
 	Config interface {
 		IssuerProvider
@@ -273,12 +293,13 @@ func (h *RFC9207ResponseModeParameterHandler) ResponseModes() ResponseModeTypes 
 	}
 }
 
-// WriteParameters injects the RFC 9207 'iss' parameter into the authorization response when
-// GetAuthorizationServerIdentificationEnabled is true and GetIssuer is not empty.
+// WriteParameters injects the RFC 9207 'iss' parameter into the authorization response when GetIssuer is not empty and
+// either GetAuthorizationServerIdentificationEnabled is true or the client is held to the FAPI 2.0 Security Profile.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc9207#section-2
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
 func (h *RFC9207ResponseModeParameterHandler) WriteParameters(ctx context.Context, request AuthorizeRequester, parameters url.Values) {
-	if !h.Config.GetAuthorizationServerIdentificationEnabled(ctx) {
+	if !h.Config.GetAuthorizationServerIdentificationEnabled(ctx) && (request == nil || !IsFAPI2SecurityProfileClient(request.GetClient())) {
 		return
 	}
 

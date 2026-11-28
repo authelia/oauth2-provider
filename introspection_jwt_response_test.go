@@ -209,6 +209,76 @@ func (i *fixedIntrospector) IntrospectToken(_ context.Context, token string, _ T
 	return AccessToken, nil
 }
 
+func TestIntrospectionJWTResponseFAPI2SecurityProfileClient(t *testing.T) {
+	const (
+		secret       = "foobarfoobarfoobarfoobarfoobar12"
+		caller       = "rs"
+		introspected = "active-token"
+		issuer       = "https://as.example.com"
+	)
+
+	issuerKeys := &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+		{Key: gen.MustRSAKey(), KeyID: "rs256", Algorithm: string(jose.RS256), Use: consts.JSONWebTokenUseSignature},
+		{Key: gen.MustES256Key(), KeyID: "es256", Algorithm: string(jose.ES256), Use: consts.JSONWebTokenUseSignature},
+	}}
+
+	testCases := []struct {
+		name  string
+		alg   jose.SignatureAlgorithm
+		fapi2 bool
+		code  int
+	}{
+		{name: "ShouldSignWithRS256ForAnotherClient", alg: jose.RS256, code: http.StatusOK},
+		{name: "ShouldSignWithES256ForAFAPI2Client", alg: jose.ES256, fapi2: true, code: http.StatusOK},
+		{name: "ShouldNotSignWithRS256ForAFAPI2Client", alg: jose.RS256, fapi2: true, code: http.StatusInternalServerError},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &DefaultRegisteredClient{
+				DefaultClient:                  &DefaultClient{ID: caller, ClientSecret: NewPlainTextClientSecret(secret)},
+				IntrospectionSignedResponseAlg: string(tc.alg),
+			}
+
+			store := storage.NewMemoryStore()
+			store.Clients[caller] = client
+
+			config := &Config{
+				Issuer:                     issuer,
+				TokenIntrospectionHandlers: TokenIntrospectionHandlers{&fixedIntrospector{token: introspected}},
+			}
+
+			config.IntrospectionJWTResponseStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(issuerKeys)}
+
+			provider := &Fosite{Store: store, Config: config}
+
+			r := httptest.NewRequest(http.MethodPost, issuer+"/introspect", strings.NewReader(url.Values{consts.FormParameterToken: {introspected}}.Encode()))
+			r.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+			r.SetBasicAuth(caller, secret)
+
+			responder, err := provider.NewIntrospectionRequest(t.Context(), r, &DefaultSession{})
+			require.NoError(t, ErrorToDebugRFC6749Error(err))
+
+			client.FAPI2SecurityProfile = tc.fapi2
+
+			recorder := httptest.NewRecorder()
+
+			provider.WriteIntrospectionResponse(t.Context(), recorder, responder)
+
+			assert.Equal(t, tc.code, recorder.Code)
+
+			if tc.code != http.StatusOK {
+				assert.Contains(t, recorder.Body.String(), "server_error")
+				assert.NotContains(t, recorder.Body.String(), "peter")
+
+				return
+			}
+
+			assert.Contains(t, recorder.Header().Get(consts.HeaderContentType), consts.ContentTypeApplicationTokenIntrospectionJWT)
+		})
+	}
+}
+
 func TestIntrospectionJWTResponseEncoding(t *testing.T) {
 	const (
 		secret       = "foobarfoobarfoobarfoobarfoobar12"

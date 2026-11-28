@@ -29,7 +29,10 @@ type StatelessJWTStrategy interface {
 // Clients is set and the client the token was issued to is a FAPI2SecurityProfileClient held to it, or cannot be
 // resolved for a reason other than not being registered. A storage-backed introspector such as CoreValidator must then
 // be registered after it. A token that is not encrypted, when the client it was issued to registered for encrypted
-// access tokens, is rejected as RFC 9068 Section 4 asks.
+// access tokens, is rejected as RFC 9068 Section 4 asks. When Clients is set and resolves the client the token was
+// issued to, the returned request carries its current registration rather than a client with only the 'client_id'
+// claim, so per-client policy such as the scope strategy applies. A token of a client Clients does not resolve, such as
+// one resolved from a Client ID Metadata Document, carries a client with only the 'client_id' claim.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.4
 // See: https://www.rfc-editor.org/rfc/rfc9068#section-4
@@ -40,7 +43,7 @@ type StatelessJWTValidator struct {
 	}
 
 	// Clients resolves the registration of the client a token was issued to. When nil, a client held to the FAPI 2.0
-	// Security Profile is not recognized.
+	// Security Profile is not recognized, and the returned request carries a client with only the 'client_id' claim.
 	Clients oauth2.ClientGetter
 }
 
@@ -79,7 +82,7 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 
 	r := AccessTokenJWTToRequest(token)
 
-	if err = v.validateRegistration(ctx, r.GetClient(), tokenString); err != nil {
+	if err = v.validateRegistration(ctx, r, tokenString); err != nil {
 		return "", err
 	}
 
@@ -103,17 +106,23 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 	return oauth2.AccessToken, nil
 }
 
-func (v *StatelessJWTValidator) validateRegistration(ctx context.Context, client oauth2.Client, tokenString string) (err error) {
-	registered, deferred := v.registration(ctx, client)
+// validateRegistration validates the token against the current registration of the client it was issued to, and sets
+// that registration on the request reconstructed from the token.
+func (v *StatelessJWTValidator) validateRegistration(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
+	registered, deferred := v.registration(ctx, request.GetClient())
 
 	switch {
 	case deferred:
 		return oauth2.ErrUnknownRequest
 	case !jwt.IsEncryptedJWT(tokenString) && requiresEncryptedAccessToken(registered):
 		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebug("The provided token is not encrypted, but the client it was issued to registered for encrypted Access Tokens."))
-	default:
-		return nil
 	}
+
+	if r, ok := request.(*oauth2.Request); ok && registered != nil {
+		r.Client = registered
+	}
+
+	return nil
 }
 
 func (v *StatelessJWTValidator) registration(ctx context.Context, client oauth2.Client) (registered oauth2.Client, deferred bool) {

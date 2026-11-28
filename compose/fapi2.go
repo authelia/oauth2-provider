@@ -37,15 +37,17 @@ const (
 	fapi2MaximumPushedAuthorizeLife   = 10 * time.Minute
 	fapi2MinimumClockSkew             = oauth2.FAPI2SecurityProfileMinimumClockSkew
 	fapi2MaximumClockSkew             = oauth2.FAPI2SecurityProfileMaximumClockSkew
+	fapi2MaximumNonceLength           = 64
 )
 
 // ApplyFAPI2SecurityProfile sets the options of config which the FAPI 2.0 Security Profile requires of an authorization
 // server: pushed authorization requests with a redirect URI, PKCE with S256, the RFC 9207 'iss' parameter, the issuer
 // as the sole client assertion audience and a string, no refresh token rotation, sender-constrained access tokens which
 // are refused when presented unbound or in the URI query, client authentication for the JWT bearer grant, an
-// authorization code lifetime of at most 60 seconds, a clock skew allowance between 10 and 60 seconds, and only the
-// permitted client authentication methods and JWS algorithms for the JWTs received. It also sets FAPI2SecurityProfile,
-// so the discovery metadata lists only the permitted JWS algorithms. A value already within the profile is kept.
+// authorization code lifetime of at most 60 seconds, a clock skew allowance between 10 and 60 seconds, a 'nonce'
+// minimum length of at most 64 characters, and only the permitted client authentication methods and JWS algorithms for
+// the JWTs received. It also sets FAPI2SecurityProfile, so the discovery metadata lists only the permitted JWS
+// algorithms. A value already within the profile is kept.
 //
 // It does not set Issuer, enable DPoP or mTLS, register handlers, or choose the keys which sign the JWTs the server
 // issues, so ValidateFAPI2SecurityProfile must still be called once the provider is composed. An unset introspection endpoint list, which accepts every supported method, and
@@ -67,21 +69,7 @@ func ApplyFAPI2SecurityProfile(config *oauth2.Config) {
 	config.AccessTokenURIQueryParameterEnabled = false
 	config.FAPI2SecurityProfile = true
 
-	if config.AuthorizeCodeLifespan <= 0 || config.AuthorizeCodeLifespan > fapi2MaximumAuthorizeCodeLifespan {
-		config.AuthorizeCodeLifespan = fapi2MaximumAuthorizeCodeLifespan
-	}
-
-	if config.PushedAuthorizeContextLifespan >= fapi2MaximumPushedAuthorizeLife {
-		config.PushedAuthorizeContextLifespan = 0
-	}
-
-	if config.JWTClockSkew != 0 && (config.JWTClockSkew < fapi2MinimumClockSkew || config.JWTClockSkew > fapi2MaximumClockSkew) {
-		config.JWTClockSkew = 0
-	}
-
-	if config.DPoPClockSkew != 0 && (config.DPoPClockSkew < fapi2MinimumClockSkew || config.DPoPClockSkew > fapi2MaximumClockSkew) {
-		config.DPoPClockSkew = 0
-	}
+	applyFAPI2SecurityProfileLimits(config)
 
 	config.TokenEndpointAuthMethods = fapi2Permitted(config.TokenEndpointAuthMethods, oauth2.FAPI2SecurityProfileClientAuthMethods)
 	config.RevocationEndpointAuthMethods = fapi2Permitted(config.RevocationEndpointAuthMethods, oauth2.FAPI2SecurityProfileClientAuthMethods)
@@ -114,6 +102,28 @@ func ApplyFAPI2SecurityProfile(config *oauth2.Config) {
 	}
 }
 
+func applyFAPI2SecurityProfileLimits(config *oauth2.Config) {
+	if config.AuthorizeCodeLifespan <= 0 || config.AuthorizeCodeLifespan > fapi2MaximumAuthorizeCodeLifespan {
+		config.AuthorizeCodeLifespan = fapi2MaximumAuthorizeCodeLifespan
+	}
+
+	if config.PushedAuthorizeContextLifespan >= fapi2MaximumPushedAuthorizeLife {
+		config.PushedAuthorizeContextLifespan = 0
+	}
+
+	if config.MinParameterEntropy > fapi2MaximumNonceLength {
+		config.MinParameterEntropy = 0
+	}
+
+	if config.JWTClockSkew != 0 && (config.JWTClockSkew < fapi2MinimumClockSkew || config.JWTClockSkew > fapi2MaximumClockSkew) {
+		config.JWTClockSkew = 0
+	}
+
+	if config.DPoPClockSkew != 0 && (config.DPoPClockSkew < fapi2MinimumClockSkew || config.DPoPClockSkew > fapi2MaximumClockSkew) {
+		config.DPoPClockSkew = 0
+	}
+}
+
 // ValidateFAPI2SecurityProfile returns an error joining every way the configuration and the handlers registered with it
 // fail the authorization server requirements of the FAPI 2.0 Security Profile which the configuration determines, or
 // nil when it meets them. Call it once the provider is composed. Of the authorize endpoint handlers it recognizes only
@@ -129,6 +139,7 @@ func ValidateFAPI2SecurityProfile(ctx context.Context, config oauth2.Configurato
 	v.general(ctx, config)
 	v.senderConstrained(ctx, config)
 	v.authorizationEndpoint(ctx, config)
+	v.nonce(ctx, config)
 	v.resourceServer(ctx, config)
 	v.cryptography(ctx, config)
 	v.responseSigning(ctx, config)
@@ -251,6 +262,12 @@ func (v *fapi2Violations) senderConstrained(ctx context.Context, config oauth2.C
 
 	if algs := config.GetDPoPAllowedJWSAlgorithms(ctx); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
 		v.fail(fapi2SectionCryptography, "the DPoP proof algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
+	}
+}
+
+func (v *fapi2Violations) nonce(ctx context.Context, config oauth2.Configurator) {
+	if p, ok := config.(oauth2.MinParameterEntropyProvider); ok && p.GetMinParameterEntropy(ctx) > fapi2MaximumNonceLength {
+		v.fail(fapi2SectionAuthorizationEndpoint, "'nonce' values of up to %d characters must be accepted, but MinParameterEntropy is %d", fapi2MaximumNonceLength, p.GetMinParameterEntropy(ctx))
 	}
 }
 

@@ -23,6 +23,28 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+func TestApplyFAPI2SecurityProfileMinParameterEntropy(t *testing.T) {
+	testCases := []struct {
+		name     string
+		value    int
+		expected int
+	}{
+		{name: "ShouldResetAMinimumOver64", value: 65, expected: 0},
+		{name: "ShouldKeepAMinimumOf64", value: 64, expected: 64},
+		{name: "ShouldKeepTheDefault", value: 0, expected: 0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &oauth2.Config{MinParameterEntropy: tc.value}
+
+			ApplyFAPI2SecurityProfile(config)
+
+			assert.Equal(t, tc.expected, config.MinParameterEntropy)
+		})
+	}
+}
+
 func TestApplyFAPI2SecurityProfileDefaultTrustedIssuerAlgorithms(t *testing.T) {
 	config := &oauth2.Config{}
 
@@ -318,6 +340,15 @@ func TestValidateFAPI2SecurityProfile(t *testing.T) {
 			modify: func(config *oauth2.Config) {
 				config.SSF = &oauth2.SSFConfig{TokenStrategy: &oauth2.DefaultSecurityEventTokenStrategy{SigningAlg: string(jose.ES256)}}
 			},
+		},
+		{
+			name:     "ShouldRejectAMinimumNonceLengthOver64",
+			modify:   func(config *oauth2.Config) { config.MinParameterEntropy = 65 },
+			expected: []string{"Section 5.3.2.2: 'nonce' values of up to 64 characters must be accepted, but MinParameterEntropy is 65"},
+		},
+		{
+			name:   "ShouldPassWithAMinimumNonceLengthOf64",
+			modify: func(config *oauth2.Config) { config.MinParameterEntropy = 64 },
 		},
 		{
 			name:     "ShouldRejectRS256DPoPProofs",

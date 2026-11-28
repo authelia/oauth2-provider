@@ -420,8 +420,9 @@ between 10 and 60 seconds into the future. It may not use the resource owner pas
 authorization responses carry the RFC 9207 `iss` parameter, and a JWT is only issued to it when signed with a permitted
 algorithm, so it must register one wherever the default is RS256. Its access tokens are sender-constrained and refused
 when presented unbound, its refresh tokens are not rotated, and its authorization codes and pushed authorization
-requests are short-lived. What the registered handlers determine, such as the response types served, must still meet the
-profile.
+requests are short-lived. Its redirect URIs must pass the default rule as well as any `RedirectSecureChecker`. What the
+configuration and the registered handlers determine, such as the issuer and the response types served, must still meet
+the profile, which `compose.ValidateFAPI2SecurityProfileClientSupport` checks.
 
 For [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html),
 `compose.ApplyFAPI2MessageSigning` sets the options each selected part requires, being signed authorization requests,

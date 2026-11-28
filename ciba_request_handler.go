@@ -36,28 +36,16 @@ var (
 	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.1
 	regexCIBAClientNotificationToken = regexp.MustCompile(`^[A-Za-z0-9\-._~+/]+=*$`)
 
-	// cibaSingleValueParameters are the authentication request parameters which must not be included more than once.
+	// cibaRecognizedParameters are the parameters of a CIBA authentication request this endpoint recognizes.
 	//
-	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.13
-	cibaSingleValueParameters = []string{
-		consts.FormParameterScope,
-		consts.FormParameterAuthenticationContextClassReferenceValues,
-		consts.FormParameterLoginHint,
-		consts.FormParameterIDTokenHint,
-		consts.FormParameterLoginHintToken,
-		consts.FormParameterBindingMessage,
-		consts.FormParameterUserCode,
-		consts.FormParameterRequestedExpiry,
-		consts.FormParameterClientNotificationToken,
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.1
+	cibaRecognizedParameters = append(slices.Clone(cibaAuthenticationRequestParameters),
 		consts.FormParameterRequest,
-		consts.FormParameterRequestContext,
 		consts.FormParameterClientID,
+		consts.FormParameterClientSecret,
 		consts.FormParameterClientAssertion,
 		consts.FormParameterClientAssertionType,
-		consts.FormParameterClientSecret,
-		consts.FormParameterAuthorizationDetails,
-		consts.FormParameterDPoPJKT,
-	}
+	)
 
 	// cibaIgnoredParameters are the authorization endpoint parameters which are not CIBA authentication request
 	// parameters but which ID Token issuance or the authorization code grant read from the request form.
@@ -95,10 +83,12 @@ func (f *Fosite) NewBackChannelAuthenticationRequest(ctx context.Context, r *htt
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
 	}
 
-	for _, parameter := range cibaSingleValueParameters {
-		if len(r.PostForm[parameter]) > 1 {
-			return request, errorsx.WithStack(ErrInvalidRequest.WithHintf("The '%s' parameter must not be included more than once.", parameter))
-		}
+	// The OP ignores the parameters it does not recognize, repeated or not.
+	//
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.2
+	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.13
+	if err = validateRequestParametersNotRepeatedWithin(r.PostForm, cibaRecognizedParameters); err != nil {
+		return request, err
 	}
 
 	request.Form = withoutClientCredentials(r.PostForm)
@@ -111,11 +101,7 @@ func (f *Fosite) NewBackChannelAuthenticationRequest(ctx context.Context, r *htt
 	// See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.1
 	client, method, err := f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, &BackChannelAuthenticationEndpointClientAuthStrategy{})
 	if err != nil {
-		if rfcerr, ok := errors.AsType[*RFC6749Error](err); ok && rfcerr.ErrorField != ErrInvalidClient.ErrorField {
-			return request, withClientAuthenticationChallenge(r, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client could not be authenticated.").WithWrap(err).WithDebugError(err)), f.Config.GetClientAuthenticationRealm(ctx))
-		}
-
-		return request, err
+		return request, f.clientAuthenticationEndpointError(ctx, r, err)
 	}
 
 	request.Client = client

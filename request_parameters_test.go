@@ -361,6 +361,11 @@ func TestNewAccessRequestRepeatedParameters(t *testing.T) {
 			parameter: consts.FormParameterAuthorizationCode,
 		},
 		{
+			name:      "ShouldRejectRepeatedAuthReqID",
+			form:      url.Values{consts.FormParameterGrantType: {consts.GrantTypeOpenIDCIBA}, consts.FormParameterAuthReqID: {"a", "b"}},
+			parameter: consts.FormParameterAuthReqID,
+		},
+		{
 			name: "ShouldAcceptRepeatedResource",
 			form: url.Values{consts.FormParameterGrantType: {"client_credentials"}, consts.FormParameterResource: {"https://a.example.com/", "https://b.example.com/"}},
 		},
@@ -507,6 +512,130 @@ func TestNewDeviceAuthorizeRequestRepeatedParameters(t *testing.T) {
 			if tc.parameter == "" {
 				require.NoError(t, ErrorToDebugRFC6749Error(err))
 				assert.ElementsMatch(t, []string{"https://a.example.com/", "https://b.example.com/"}, requester.GetRequestedResource())
+
+				return
+			}
+
+			require.ErrorIs(t, err, ErrInvalidRequest)
+			assert.Equal(t, "The '"+tc.parameter+"' parameter must not be included more than once.", ErrorToRFC6749Error(err).HintField)
+		})
+	}
+}
+
+func TestNewBackChannelAuthenticationRequestRepeatedParameters(t *testing.T) {
+	testCases := []struct {
+		name      string
+		form      url.Values
+		parameter string
+	}{
+		{name: "ShouldRejectRepeatedNonce", form: url.Values{consts.FormParameterNonce: {"a", "b"}}, parameter: consts.FormParameterNonce},
+		{name: "ShouldRejectRepeatedClaims", form: url.Values{consts.FormParameterClaims: {"{}", "{}"}}, parameter: consts.FormParameterClaims},
+		{name: "ShouldRejectRepeatedLoginHint", form: url.Values{consts.FormParameterLoginHint: {"a", "b"}}, parameter: consts.FormParameterLoginHint},
+		{name: "ShouldNotRejectARepeatedIgnoredParameter", form: url.Values{consts.FormParameterRedirectURI: {"https://a.example.com/cb", "https://b.example.com/cb"}}},
+		{name: "ShouldNotRejectARepeatedPrompt", form: url.Values{consts.FormParameterPrompt: {"login", "consent"}}},
+		{name: "ShouldNotRejectARepeatedMaximumAge", form: url.Values{consts.FormParameterMaximumAge: {"1", "2"}}},
+		{name: "ShouldNotRejectARepeatedUnrecognizedParameter", form: url.Values{consts.FormParameterState: {"a", "b"}, consts.FormParameterResponseType: {"code", "token"}}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider, _ := newRepeatedParametersProvider()
+
+			form := url.Values{consts.FormParameterScope: {consts.ScopeOpenID}}
+
+			for key, values := range tc.form {
+				form[key] = values
+			}
+
+			_, err := provider.NewBackChannelAuthenticationRequest(t.Context(), newRepeatedParametersPostRequest("https://auth.example.com/bc-authorize", form), &DefaultSession{})
+
+			if tc.parameter == "" {
+				if err != nil {
+					assert.NotContains(t, ErrorToRFC6749Error(err).HintField, "must not be included more than once")
+				}
+
+				return
+			}
+
+			hint := ErrorToRFC6749Error(err).HintField
+
+			require.ErrorIs(t, err, ErrInvalidRequest)
+			assert.Equal(t, "The '"+tc.parameter+"' parameter must not be included more than once.", hint)
+		})
+	}
+}
+
+func TestNewRFC8628UserAuthorizeRequestRepeatedParameters(t *testing.T) {
+	testCases := []struct {
+		name  string
+		query url.Values
+		form  url.Values
+		hint  string
+	}{
+		{name: "ShouldRejectARepeatedUserCode", form: url.Values{consts.FormParameterUserCode: {"ABCD", "EFGH"}}, hint: "The 'user_code' parameter must not be included more than once."},
+		{name: "ShouldRejectARepeatedUserCodeInTheQuery", query: url.Values{consts.FormParameterUserCode: {"ABCD", "EFGH"}}, hint: "The 'user_code' parameter must not be included more than once."},
+		{name: "ShouldAcceptAnotherUserCodeInTheBodyThanInTheQuery", query: url.Values{consts.FormParameterUserCode: {"WDJBMJHT"}}, form: url.Values{consts.FormParameterUserCode: {"wdjb-mjht"}}},
+		{name: "ShouldAcceptTheSameUserCodeInTheQueryAndTheBody", query: url.Values{consts.FormParameterUserCode: {"ABCD"}}, form: url.Values{consts.FormParameterUserCode: {"ABCD"}}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider, _ := newRepeatedParametersProvider()
+
+			r := httptest.NewRequest(http.MethodPost, "https://auth.example.com/device?"+tc.query.Encode(), strings.NewReader(tc.form.Encode()))
+			r.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+
+			_, err := provider.NewRFC8628UserAuthorizeRequest(t.Context(), r, &DefaultSession{Subject: "peter", UserCodeBindingSubject: "peter"})
+
+			if tc.hint == "" {
+				if err != nil {
+					assert.NotContains(t, ErrorToRFC6749Error(err).HintField, "must not be included more than once")
+				}
+
+				return
+			}
+
+			require.ErrorIs(t, err, ErrInvalidRequest)
+			assert.Equal(t, tc.hint, ErrorToRFC6749Error(err).HintField)
+		})
+	}
+}
+
+func TestNewRPInitiatedLogoutRequestRepeatedParameters(t *testing.T) {
+	testCases := []struct {
+		name      string
+		method    string
+		query     url.Values
+		form      url.Values
+		parameter string
+	}{
+		{name: "ShouldRejectARepeatedIDTokenHint", method: http.MethodGet, form: url.Values{consts.FormParameterIDTokenHint: {"a", "b"}}, parameter: consts.FormParameterIDTokenHint},
+		{name: "ShouldRejectARepeatedPostLogoutRedirectURI", method: http.MethodPost, form: url.Values{consts.FormParameterPostLogoutRedirectURI: {"https://a.example.com/", "https://b.example.com/"}}, parameter: consts.FormParameterPostLogoutRedirectURI},
+		{name: "ShouldRejectARepeatedLogoutHint", method: http.MethodGet, form: url.Values{consts.FormParameterLogoutHint: {"a", "b"}}, parameter: consts.FormParameterLogoutHint},
+		{name: "ShouldRejectARepeatedState", method: http.MethodPost, form: url.Values{consts.FormParameterState: {"a", "b"}}, parameter: consts.FormParameterState},
+		{name: "ShouldAcceptTheSameStateInTheQueryAndTheBody", method: http.MethodPost, query: url.Values{consts.FormParameterState: {"a"}}, form: url.Values{consts.FormParameterState: {"a"}}},
+		{name: "ShouldAcceptAnotherStateInTheBodyThanInTheQuery", method: http.MethodPost, query: url.Values{consts.FormParameterState: {"a"}}, form: url.Values{consts.FormParameterState: {"b"}}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider, _ := newRepeatedParametersProvider()
+
+			var r *http.Request
+
+			if tc.method == http.MethodGet {
+				r = httptest.NewRequest(http.MethodGet, "https://auth.example.com/logout?"+tc.form.Encode(), nil)
+			} else {
+				r = httptest.NewRequest(http.MethodPost, "https://auth.example.com/logout?"+tc.query.Encode(), strings.NewReader(tc.form.Encode()))
+				r.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)
+			}
+
+			_, err := provider.NewRPInitiatedLogoutRequest(t.Context(), r)
+
+			if tc.parameter == "" {
+				if err != nil {
+					assert.NotContains(t, ErrorToRFC6749Error(err).HintField, "must not be included more than once")
+				}
 
 				return
 			}

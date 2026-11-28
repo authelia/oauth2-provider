@@ -202,6 +202,49 @@ func TestAuthenticateClient(t *testing.T) {
 			err:  "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The request uses more than one client authentication method. Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id 'abc' and the authorization server policy does not permit this malformed request. The `token_endpoint_auth_method` methods determined to be used were 'client_secret_basic', 'client_secret_post'.",
 		},
 		{
+			// RFC 7521 Section 4.2.1.
+			name: "ShouldFailWithAClientAssertionAndTheBasicAuthenticationMethod",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT}
+			},
+			form: url.Values{
+				consts.FormParameterClientAssertion: {
+					mustGenerateClientAssertion(t, jwt.MapClaims{
+						consts.ClaimSubject:        "bar",
+						consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+						consts.ClaimIssuer:         "bar",
+						consts.ClaimJWTID:          "12345",
+						consts.ClaimAudience:       "token-url",
+					}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", keyRSA),
+				},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+			},
+			r:         &http.Request{Header: clientBasicAuthHeader("bar", "bar")},
+			expectErr: ErrInvalidClient,
+		},
+		{
+			// RFC 7521 Section 4.2.1.
+			name: "ShouldFailWithAClientAssertionAndThePostAuthenticationMethod",
+			client: func(ts *httptest.Server) Client {
+				return &DefaultJARClient{DefaultClient: &DefaultClient{ID: "bar", ClientSecret: testClientSecretBar}, JSONWebKeys: jwksRSA, TokenEndpointAuthMethod: consts.ClientAuthMethodPrivateKeyJWT}
+			},
+			form: url.Values{
+				consts.FormParameterClientAssertion: {
+					mustGenerateClientAssertion(t, jwt.MapClaims{
+						consts.ClaimSubject:        "bar",
+						consts.ClaimExpirationTime: time.Now().Add(time.Hour).Unix(),
+						consts.ClaimIssuer:         "bar",
+						consts.ClaimJWTID:          "12345",
+						consts.ClaimAudience:       "token-url",
+					}, jose.RS256, jwt.JSONWebTokenTypeClientAuthentication, "kid-foo", keyRSA),
+				},
+				consts.FormParameterClientAssertionType: {consts.ClientAssertionTypeJWTBearer},
+				consts.FormParameterClientSecret:        {"bar"},
+			},
+			r:         new(http.Request),
+			expectErr: ErrInvalidClient,
+		},
+		{
 			name: "ShouldPassWithMultipleAuthenticationMethods",
 			client: func(ts *httptest.Server) Client {
 				return &TestClientAuthenticationPolicyClient{

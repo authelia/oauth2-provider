@@ -59,7 +59,8 @@ func (f *Fosite) NewRevocationRequest(ctx context.Context, r *http.Request) erro
 	return nil
 }
 
-// WriteRevocationResponse writes a token revocation response.
+// WriteRevocationResponse writes a token revocation response. An error is answered with its RFC 6749 Section 5.2 error
+// response, temporarily_unavailable with the status 503, and any other error with server_error.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
 func (f *Fosite) WriteRevocationResponse(ctx context.Context, rw http.ResponseWriter, err error) {
@@ -82,8 +83,10 @@ func (f *Fosite) WriteRevocationResponse(ctx context.Context, rw http.ResponseWr
 		f.writeRevocationResponseError(ctx, rw, ErrUnsupportedGrantType)
 	case errors.Is(err, ErrInvalidScope):
 		f.writeRevocationResponseError(ctx, rw, ErrInvalidScope)
+	case errors.Is(err, ErrTemporarilyUnavailable):
+		f.writeRevocationResponseError(ctx, rw, ErrTemporarilyUnavailable)
 	default:
-		rw.WriteHeader(http.StatusInternalServerError)
+		f.writeRevocationResponseError(ctx, rw, ErrServerError)
 	}
 }
 

@@ -25,11 +25,12 @@ import (
 
 func TestValidateFAPI2SecurityProfileClientSupport(t *testing.T) {
 	testCases := []struct {
-		name      string
-		modify    func(config *oauth2.Config)
-		composed  func(config *oauth2.Config)
-		factories []Factory
-		expected  []string
+		name       string
+		modify     func(config *oauth2.Config)
+		composed   func(config *oauth2.Config)
+		factories  []Factory
+		strategies func(config *oauth2.Config) []any
+		expected   []string
 	}{
 		{
 			name: "ShouldPass",
@@ -107,6 +108,19 @@ func TestValidateFAPI2SecurityProfileClientSupport(t *testing.T) {
 			expected: []string{"Section 5.4.1: the issuer signing algorithms 'RS256' include none permitted"},
 		},
 		{
+			name: "ShouldRejectAComposedStrategyWithoutAPermittedSigningKey",
+			strategies: func(config *oauth2.Config) []any {
+				return []any{&CommonStrategy{CoreStrategy: NewOAuth2HMACStrategy(config), Strategy: newFAPI2TestSigner(config, jose.RS256)}}
+			},
+			expected: []string{"Section 5.4.1: the strategy 1 JWT signing algorithms 'RS256' include none permitted"},
+		},
+		{
+			name: "ShouldPassAComposedStrategyWithAPermittedSigningKey",
+			strategies: func(config *oauth2.Config) []any {
+				return []any{&CommonStrategy{CoreStrategy: NewOAuth2HMACStrategy(config), Strategy: newFAPI2TestSigner(config, jose.PS256)}}
+			},
+		},
+		{
 			name: "ShouldPassWithAPermittedIssuerSigningKey",
 			modify: func(config *oauth2.Config) {
 				config.JWTStrategy = &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
@@ -136,7 +150,13 @@ func TestValidateFAPI2SecurityProfileClientSupport(t *testing.T) {
 				tc.composed(config)
 			}
 
-			err := ValidateFAPI2SecurityProfileClientSupport(context.Background(), config)
+			var strategies []any
+
+			if tc.strategies != nil {
+				strategies = tc.strategies(config)
+			}
+
+			err := ValidateFAPI2SecurityProfileClientSupport(context.Background(), config, strategies...)
 
 			if len(tc.expected) == 0 {
 				assert.NoError(t, err)

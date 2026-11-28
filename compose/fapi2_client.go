@@ -26,20 +26,21 @@ import (
 // authorization response parameter and the client assertion audience, the RFC 9207 response mode parameter handler, the
 // authorization code grant, pushed authorization request and PKCE handlers, a sender-constraining method with its
 // handlers, a permitted client authentication method at the token endpoint, an issuer signing key of a permitted
-// algorithm when the JWT strategy reports any, and a storage-backed introspection handler behind a stateless JWT one,
+// algorithm for each signing strategy which reports any, and a storage-backed introspection handler behind a stateless JWT one,
 // which must recognize such a client. A custom ClientAuthenticationStrategy, DPoPStrategy, SecurityEventTokenStrategy
 // or response mode handler is not checked, and must apply the rules of oauth2.FAPI2SecurityProfileClient itself. A JWT
 // strategy reporting no signing algorithms is not checked, as ValidateFAPI2SecurityProfile does not check one either:
-// an authorization server issuing only opaque tokens signs nothing, and the signer passed to Compose is not visible
-// here. Each JWT issued to such a client is still refused unless signed with a permitted algorithm.
+// an authorization server issuing only opaque tokens signs nothing. The strategies are those ValidateFAPI2SecurityProfile
+// checks, including each of strategies such as the one passed to Compose, and each must hold a key of a permitted
+// algorithm. Each JWT issued to such a client is still refused unless signed with a permitted algorithm.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2
-func ValidateFAPI2SecurityProfileClientSupport(ctx context.Context, config oauth2.Configurator) (err error) {
+func ValidateFAPI2SecurityProfileClientSupport(ctx context.Context, config oauth2.Configurator, strategies ...any) (err error) {
 	v := &fapi2Violations{}
 
 	v.clientSupportAuthorization(ctx, config)
 	v.clientSupportSenderConstrained(ctx, config)
-	v.clientSupportCryptography(ctx, config)
+	v.clientSupportCryptography(ctx, config, strategies)
 	v.clientSupportResourceServer(ctx, config)
 
 	return errors.Join(v.errs...)
@@ -108,17 +109,12 @@ func (v *fapi2Violations) clientSupportResourceServer(ctx context.Context, confi
 	}
 }
 
-func (v *fapi2Violations) clientSupportCryptography(ctx context.Context, config oauth2.Configurator) {
-	strategy, ok := config.GetJWTStrategy(ctx).(interface {
-		SigningAlgValues(ctx context.Context) []string
-	})
-	if !ok {
-		return
-	}
-
-	if algs := strategy.SigningAlgValues(ctx); len(algs) != 0 && !slices.ContainsFunc(algs, func(alg string) bool {
-		return slices.Contains(oauth2.FAPI2SecurityProfileSigningAlgValues, alg)
-	}) {
-		v.fail(fapi2SectionCryptography, "the issuer signing algorithms '%s' include none permitted", strings.Join(algs, "', '"))
+func (v *fapi2Violations) clientSupportCryptography(ctx context.Context, config oauth2.Configurator, strategies []any) {
+	for _, signer := range fapi2Signers(ctx, config, strategies) {
+		if algs := signer.algs(ctx); len(algs) != 0 && !slices.ContainsFunc(algs, func(alg string) bool {
+			return slices.Contains(oauth2.FAPI2SecurityProfileSigningAlgValues, alg)
+		}) {
+			v.fail(fapi2SectionCryptography, "the %s signing algorithms '%s' include none permitted", signer.name, strings.Join(algs, "', '"))
+		}
 	}
 }

@@ -6,6 +6,9 @@ package oauth2
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -36,8 +39,9 @@ func (s *JWTProfileCoreStrategy) IsOpaqueAccessToken(ctx context.Context, tokenS
 	return s.HMACCoreStrategy.IsOpaqueAccessToken(ctx, tokenString)
 }
 
-// AccessTokenSignature returns the JWS signature segment when the token has the shape of a JWT Profile access token,
-// and the HMAC strategy signature otherwise.
+// AccessTokenSignature returns the JWS signature segment when the token has the shape of a signed JWT Profile access
+// token, the SHA-256 digest of the token when it has the shape of an encrypted one, and the HMAC strategy signature
+// otherwise. An encrypted token is stored under that digest, as the server cannot always decrypt it.
 func (s *JWTProfileCoreStrategy) AccessTokenSignature(ctx context.Context, tokenString string) (signature string) {
 	var possible bool
 
@@ -67,10 +71,14 @@ func (s *JWTProfileCoreStrategy) GenerateAccessToken(ctx context.Context, reques
 	return s.HMACCoreStrategy.GenerateAccessToken(ctx, request)
 }
 
-// ValidateAccessToken validates the token as a JWT when it has the shape of a JWT Profile access token, and with the
-// HMAC strategy otherwise.
+// ValidateAccessToken validates the token as a JWT when it has the shape of a signed JWT Profile access token, and with
+// the HMAC strategy otherwise. An encrypted one, which the server cannot always decrypt, must match the digest its
+// session records as an EncryptedAccessTokenSession, and is then validated against the expiry of the request. One with
+// no session is refused, as nothing records its digest; see VerifyAccessTokenSignature.
 func (s *JWTProfileCoreStrategy) ValidateAccessToken(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
-	if possible, _ := s.IsPossiblyJWTProfileAccessToken(ctx, tokenString); possible {
+	if possible, _ := s.IsPossiblyJWTProfileAccessToken(ctx, tokenString); possible && jwt.IsEncryptedJWT(tokenString) {
+		return s.validateEncryptedAccessToken(ctx, request, tokenString)
+	} else if possible {
 		_, err = validateJWT(ctx, s.Strategy, jwt.NewJWTProfileAccessTokenClient(request.GetClient()), tokenString)
 
 		return
@@ -180,27 +188,71 @@ func (s *JWTProfileCoreStrategy) ValidateRFC8628DeviceCode(ctx context.Context, 
 }
 
 // IsPossiblyJWTProfileAccessToken reports whether the token has the shape of a JWT Profile access token, that is it is
-// not an opaque access token and has exactly three dot separated segments. The third segment is returned as the
-// signature. The token is not validated.
-func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Context, tokenString string) (jwt bool, signature string) {
+// not an opaque access token and is either a compact serialized JWS, whose third segment is returned as the signature,
+// or a compact serialized JWE, whose SHA-256 digest is returned as the signature. The token is not validated.
+func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Context, tokenString string) (possible bool, signature string) {
 	if s.HMACCoreStrategy.IsOpaqueAccessToken(ctx, tokenString) {
 		return false, ""
 	}
 
-	parts := strings.SplitN(tokenString, ".", 4)
+	parts := strings.SplitN(tokenString, ".", 6)
 
-	if len(parts) != 3 {
+	switch {
+	case len(parts) == 3:
+		return true, parts[2]
+	case len(parts) == 5 && jwt.IsEncryptedJWT(tokenString):
+		return true, encryptedAccessTokenSignature(tokenString)
+	default:
 		return false, ""
 	}
+}
 
-	return true, parts[2]
+func encryptedAccessTokenSignature(tokenString string) string {
+	digest := sha256.Sum256([]byte(tokenString))
+
+	return base64.RawURLEncoding.EncodeToString(digest[:])
+}
+
+// VerifyAccessTokenSignature implements AccessTokenSignatureVerifier. An encrypted token must have the signature as its
+// digest, and any other token is validated by ValidateAccessToken.
+func (s *JWTProfileCoreStrategy) VerifyAccessTokenSignature(ctx context.Context, request oauth2.Requester, tokenString, signature string) (err error) {
+	if possible, _ := s.IsPossiblyJWTProfileAccessToken(ctx, tokenString); !possible || !jwt.IsEncryptedJWT(tokenString) {
+		return s.ValidateAccessToken(ctx, request, tokenString)
+	}
+
+	if subtle.ConstantTimeCompare([]byte(signature), []byte(encryptedAccessTokenSignature(tokenString))) != 1 {
+		return errorsx.WithStack(oauth2.ErrTokenSignatureMismatch.WithDebug("The encrypted access token is not the one stored under the signature."))
+	}
+
+	return nil
+}
+
+func (s *JWTProfileCoreStrategy) validateEncryptedAccessToken(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
+	session := request.GetSession()
+
+	recorder, ok := session.(EncryptedAccessTokenSession)
+	if !ok || subtle.ConstantTimeCompare([]byte(recorder.GetAccessTokenDigest()), []byte(encryptedAccessTokenSignature(tokenString))) != 1 {
+		return errorsx.WithStack(oauth2.ErrTokenSignatureMismatch.WithDebug("The encrypted access token is not the one issued with the session."))
+	}
+
+	exp := session.GetExpiresAt(oauth2.AccessToken)
+
+	if exp.IsZero() {
+		exp = request.GetRequestedAt().Add(s.HMACCoreStrategy.Config.GetAccessTokenLifespan(ctx))
+	}
+
+	if exp.Before(time.Now().UTC()) {
+		return errorsx.WithStack(oauth2.ErrTokenExpired.WithHintf("Access Token expired at '%s'.", exp))
+	}
+
+	return nil
 }
 
 // GenerateJWT encodes the claims of the request session, which must be a JWTSessionContainer, as a signed JWT and
-// returns the token and its signature. The 'client_id' claim is taken from the request client, the
+// returns the token and its signature, which for an encrypted token is the SHA-256 digest of the token
+// AccessTokenSignature returns for it. The 'client_id' claim is taken from the request client, the
 // 'authorization_details' claim from the granted authorization details, and the 'cnf' claim is rebuilt from the
-// bindings recorded on the session. An encrypted token is not issued when the authorization server or the client is
-// held to the FAPI 2.0 Security Profile, as its revocation status cannot be verified from storage.
+// bindings recorded on the session.
 //
 // RFC 9068 Section 2.2 requires the 'iss', 'exp', 'aud' and 'sub' claims, so a token that would have no value for one of
 // them nor a default is not issued. The 'aud' claim defaults to oauth2.JWTProfileAccessTokenDefaultAudienceProvider,
@@ -209,7 +261,6 @@ func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Con
 //
 // See: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
 // See: https://www.rfc-editor.org/rfc/rfc9068#section-3
-// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.4
 func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oauth2.TokenType, request oauth2.Requester, client oauth2.JWTProfileClient) (tokenString string, signature string, err error) {
 	var (
 		session JWTSessionContainer
@@ -292,23 +343,19 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 	// binding methods that are currently enabled.
 	oauth2.ApplyConfirmation(ctx, s.Config, mapClaims, request.GetSession())
 
-	if err = s.validateFAPI2SecurityProfileEncryption(ctx, request, client); err != nil {
+	if tokenString, signature, err = s.Encode(ctx, mapClaims, append(oauth2.FAPI2SecurityProfileEncodeOptions(ctx, s.Config, request.GetClient()), jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))...); err != nil {
 		return "", "", err
 	}
 
-	return s.Encode(ctx, mapClaims, append(oauth2.FAPI2SecurityProfileEncodeOptions(ctx, s.Config, request.GetClient()), jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))...)
-}
+	if jwt.IsEncryptedJWT(tokenString) {
+		signature = encryptedAccessTokenSignature(tokenString)
 
-func (s *JWTProfileCoreStrategy) validateFAPI2SecurityProfileEncryption(ctx context.Context, request oauth2.Requester, client oauth2.JWTProfileClient) (err error) {
-	if client == nil || jwt.IsNoneAlg(client.GetAccessTokenEncryptedResponseAlg()) {
-		return nil
+		if session, ok := request.GetSession().(EncryptedAccessTokenSession); ok {
+			session.SetAccessTokenDigest(signature)
+		}
 	}
 
-	if !oauth2.IsFAPI2SecurityProfile(ctx, s.Config) && !oauth2.IsFAPI2SecurityProfileClient(request.GetClient()) {
-		return nil
-	}
-
-	return errorsx.WithStack(oauth2.ErrServerError.WithDebug("An encrypted JWT profile access token is not issued under the FAPI 2.0 Security Profile, as its revocation status cannot be verified from storage."))
+	return tokenString, signature, nil
 }
 
 func (s *JWTProfileCoreStrategy) applyDefaultAudience(ctx context.Context, request oauth2.Requester) (err error) {

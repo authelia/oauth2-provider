@@ -146,11 +146,19 @@ func (r *TokenRevocationHandler) handleGetAccessTokenRequester(ctx context.Conte
 		return request, consts.TokenTypeAccessToken, err
 	}
 
-	if err = validateRevokedToken(r.AccessTokenStrategy.ValidateAccessToken(ctx, request, token)); err != nil {
+	if err = validateRevokedToken(r.validateAccessToken(ctx, request, token, signature)); err != nil {
 		return nil, consts.TokenTypeAccessToken, err
 	}
 
 	return request, consts.TokenTypeAccessToken, nil
+}
+
+func (r *TokenRevocationHandler) validateAccessToken(ctx context.Context, request oauth2.Requester, token, signature string) (err error) {
+	if verifier, ok := r.AccessTokenStrategy.(AccessTokenSignatureVerifier); ok {
+		return verifier.VerifyAccessTokenSignature(ctx, request, token, signature)
+	}
+
+	return r.AccessTokenStrategy.ValidateAccessToken(ctx, request, token)
 }
 
 func validateRevokedToken(err error) error {

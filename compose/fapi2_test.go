@@ -16,6 +16,8 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/handler/rfc8693"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
@@ -71,10 +73,11 @@ func TestApplyFAPI2SecurityProfileDefaultTrustedIssuerAlgorithms(t *testing.T) {
 
 func TestValidateFAPI2SecurityProfile(t *testing.T) {
 	testCases := []struct {
-		name      string
-		modify    func(config *oauth2.Config)
-		factories []Factory
-		expected  []string
+		name       string
+		modify     func(config *oauth2.Config)
+		factories  []Factory
+		strategies func(config *oauth2.Config) []any
+		expected   []string
 	}{
 		{
 			name: "ShouldPassWithDPoP",
@@ -423,6 +426,72 @@ func TestValidateFAPI2SecurityProfile(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldRejectRS256JARMSigningKeys",
+			modify: func(config *oauth2.Config) {
+				config.JWTSecuredAuthorizeResponseModeStrategy = newFAPI2TestSigner(config, jose.RS256)
+			},
+			expected: []string{"Section 5.4.1: the JARM signing algorithms 'RS256' include one not permitted"},
+		},
+		{
+			name: "ShouldRejectRS256IntrospectionResponseSigningKeys",
+			modify: func(config *oauth2.Config) {
+				config.IntrospectionJWTResponseStrategy = newFAPI2TestSigner(config, jose.RS256)
+			},
+			expected: []string{"Section 5.4.1: the introspection response signing algorithms 'RS256' include one not permitted"},
+		},
+		{
+			name: "ShouldRejectRS256LogoutTokenSigningKeys",
+			modify: func(config *oauth2.Config) {
+				config.BackChannelLogoutTokenStrategy = &openid.DefaultStrategy{Strategy: newFAPI2TestSigner(config, jose.RS256), Config: config}
+			},
+			expected: []string{"Section 5.4.1: the Logout Token signing algorithms 'RS256' include one not permitted"},
+		},
+		{
+			name: "ShouldRejectAnRS256ComposedStrategy",
+			strategies: func(config *oauth2.Config) []any {
+				return []any{&CommonStrategy{
+					CoreStrategy:               NewOAuth2HMACStrategy(config),
+					OpenIDConnectTokenStrategy: &openid.DefaultStrategy{Strategy: newFAPI2TestSigner(config, jose.RS256), Config: config},
+					Strategy:                   newFAPI2TestSigner(config, jose.PS256),
+				}}
+			},
+			expected: []string{"Section 5.4.1: the strategy 1 OpenID Connect signing algorithms 'RS256' include one not permitted"},
+		},
+		{
+			name: "ShouldRejectAnRS256ComposedStrategyValue",
+			strategies: func(config *oauth2.Config) []any {
+				return []any{CommonStrategy{
+					CoreStrategy:               NewOAuth2HMACStrategy(config),
+					OpenIDConnectTokenStrategy: &openid.DefaultStrategy{Strategy: newFAPI2TestSigner(config, jose.RS256), Config: config},
+					Strategy:                   newFAPI2TestSigner(config, jose.PS256),
+				}}
+			},
+			expected: []string{"Section 5.4.1: the strategy 1 OpenID Connect signing algorithms 'RS256' include one not permitted"},
+		},
+		{
+			name: "ShouldRejectAnRS256Strategy",
+			strategies: func(config *oauth2.Config) []any {
+				return []any{newFAPI2TestSigner(config, jose.PS256), newFAPI2TestSigner(config, jose.RS256)}
+			},
+			expected: []string{"Section 5.4.1: the strategy 2 signing algorithms 'RS256' include one not permitted"},
+		},
+		{
+			name: "ShouldPassWithAPermittedComposedStrategy",
+			strategies: func(config *oauth2.Config) []any {
+				return []any{&CommonStrategy{
+					CoreStrategy:               NewOAuth2HMACStrategy(config),
+					OpenIDConnectTokenStrategy: &openid.DefaultStrategy{Strategy: newFAPI2TestSigner(config, jose.ES256), Config: config},
+					Strategy:                   newFAPI2TestSigner(config, jose.PS256),
+				}}
+			},
+		},
+		{
+			name: "ShouldNotCheckNilStrategies",
+			strategies: func(config *oauth2.Config) []any {
+				return []any{nil, (*jwt.DefaultStrategy)(nil), &openid.DefaultStrategy{}, &hoauth2.JWTProfileCoreStrategy{}, (*CommonStrategy)(nil), &CommonStrategy{}, CommonStrategy{}}
+			},
+		},
+		{
 			name:     "ShouldRejectRS256DPoPProofs",
 			modify:   func(config *oauth2.Config) { config.DPoPAllowedJWSAlgorithms = []string{string(jose.RS256)} },
 			expected: []string{"Section 5.4.1: the DPoP proof algorithms 'RS256' include one not permitted"},
@@ -441,7 +510,13 @@ func TestValidateFAPI2SecurityProfile(t *testing.T) {
 
 			composeFAPI2(t, config, tc.factories...)
 
-			err := ValidateFAPI2SecurityProfile(context.Background(), config)
+			var strategies []any
+
+			if tc.strategies != nil {
+				strategies = tc.strategies(config)
+			}
+
+			err := ValidateFAPI2SecurityProfile(context.Background(), config, strategies...)
 
 			if len(tc.expected) == 0 {
 				assert.NoError(t, err)
@@ -575,6 +650,21 @@ func TestApplyFAPI2SecurityProfile(t *testing.T) {
 			assert.Equal(t, tc.expected, config.IntrospectionEndpointAuthMethods)
 		})
 	}
+}
+
+func newFAPI2TestSigner(config *oauth2.Config, alg jose.SignatureAlgorithm) *jwt.DefaultStrategy {
+	var key any
+
+	switch alg {
+	case jose.ES256:
+		key = gen.MustES256Key()
+	default:
+		key = gen.MustRSAKey()
+	}
+
+	return &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+		{Key: key, KeyID: string(alg), Algorithm: string(alg), Use: consts.JSONWebTokenUseSignature},
+	}})}
 }
 
 func newFAPI2Config() *oauth2.Config {

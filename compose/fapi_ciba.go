@@ -93,15 +93,14 @@ func ApplyFAPICIBAProfile(config *oauth2.Config) {
 // the authorization server requirements of the FAPI-CIBA profile on a FAPI 2.0 base, including those
 // ValidateFAPI2SecurityProfile returns, or nil when they meet them. Call it once the provider is composed. It does not
 // check the clients, which must be confidential, register the poll or ping token delivery mode and not waive the
-// 'binding_message' requirement through oauth2.CIBABindingMessageClient, or the keys which sign the ID Tokens, UserInfo
-// responses and JWT access tokens the server issues and their signing algorithms, which the configuration does not
-// expose.
+// 'binding_message' requirement through oauth2.CIBABindingMessageClient. The signing strategies are checked as
+// ValidateFAPI2SecurityProfile checks them, so pass the strategy given to Compose as one of strategies.
 //
 // See: https://openid.net/specs/fapi-ciba.html#section-4.1.1
-func ValidateFAPICIBAProfile(ctx context.Context, config oauth2.Configurator) (err error) {
+func ValidateFAPICIBAProfile(ctx context.Context, config oauth2.Configurator, strategies ...any) (err error) {
 	v := &fapi2Violations{document: fapiCIBADocument}
 
-	if err = ValidateFAPI2SecurityProfile(ctx, config); err != nil {
+	if err = ValidateFAPI2SecurityProfile(ctx, config, strategies...); err != nil {
 		v.fail(fapiCIBASectionAuthorizationServer, "the FAPI 2.0 Security Profile requirements must be met, but they are not")
 		v.errs = append(v.errs, err)
 	}

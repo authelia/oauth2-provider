@@ -403,21 +403,24 @@ setting that does not meet the profile and every missing required handler. Of th
 only `AuthorizeImplicitGrantTypeHandler`, `OpenIDConnectImplicitHandler`, `OpenIDConnectHybridHandler` and
 `NoneResponseTypeHandler`; a custom handler is not checked, even one serving a response type other than `code`. It does
 not set `Issuer`, enable DPoP or mTLS, or choose the keys which sign the JWTs the server issues, such as ID Tokens and
-JWT access tokens: these must use PS256, ES256 or EdDSA, and the check fails when the JWT strategy reports a signing
-algorithm outside them. `RequireStringClientAssertionAudience`, which it sets, refuses a client assertion carrying the
-issuer in an `aud` array rather than as a string. It also clears `GrantTypeJWTBearerCanSkipClientAuth` and
-`AccessTokenURIQueryParameterEnabled`, so a JWT bearer grant request must authenticate its client and an access token in
-the URI query is not accepted. It sets `FAPI2SecurityProfile` too, under which every JWT the server issues must be
-signed with a permitted algorithm, and the discovery metadata lists only those: the RS256 that OpenID Connect Discovery
-1.0 requires for the ID Token is no longer required, and no client secret algorithm is offered for a signed response.
-The rule covers Transaction Tokens, Security Event Tokens and software statements too: `ValidateFAPI2SecurityProfile`
-reports a transaction token trust domain or a `DefaultSecurityEventTokenStrategy` signing with another algorithm, RS256
-when unset, and `EnforceCAEPInteroperabilityProfile`, which requires RS256. It narrows the algorithms accepted for a
-CIBA signed authentication request and a redeemed Identity Assertion JWT Authorization Grant, which the check reports
-when their handlers are registered, and the check reports a JWT authorization grant type signing with another algorithm.
-An access token bound to neither a DPoP key nor a client certificate is refused by `ValidateBearerAuthorization` and the
-UserInfo endpoint when `EnforceSenderConstrainedAccessTokens` is set. A client implementing `FAPI2SecurityProfileClient`
-is instead held to the profile at each request, whatever the options: it must push its authorization requests with a
+JWT access tokens: these must use PS256, ES256 or EdDSA, and the check fails when a signing strategy reports a signing
+algorithm outside them. It checks the JWT, JARM, introspection response and Logout Token strategies of the
+configuration, and the strategy passed to `Compose` when it is passed to the check as well, as in
+`compose.ValidateFAPI2SecurityProfile(ctx, config, strategy)`, which is otherwise not visible to it.
+`RequireStringClientAssertionAudience`, which it sets, refuses a client assertion carrying the issuer in an `aud` array
+rather than as a string. It also clears `GrantTypeJWTBearerCanSkipClientAuth` and `AccessTokenURIQueryParameterEnabled`,
+so a JWT bearer grant request must authenticate its client and an access token in the URI query is not accepted. It sets
+`FAPI2SecurityProfile` too, under which every JWT the server issues must be signed with a permitted algorithm, and the
+discovery metadata lists only those: the RS256 that OpenID Connect Discovery 1.0 requires for the ID Token is no longer
+required, and no client secret algorithm is offered for a signed response. The rule covers Transaction Tokens, Security
+Event Tokens and software statements too: `ValidateFAPI2SecurityProfile` reports a transaction token trust domain or a
+`DefaultSecurityEventTokenStrategy` signing with another algorithm, RS256 when unset, and
+`EnforceCAEPInteroperabilityProfile`, which requires RS256. It narrows the algorithms accepted for a CIBA signed
+authentication request and a redeemed Identity Assertion JWT Authorization Grant, which the check reports when their
+handlers are registered, and the check reports a JWT authorization grant type signing with another algorithm. An access
+token bound to neither a DPoP key nor a client certificate is refused by `ValidateBearerAuthorization` and the UserInfo
+endpoint when `EnforceSenderConstrainedAccessTokens` is set. A client implementing `FAPI2SecurityProfileClient` is
+instead held to the profile at each request, whatever the options: it must push its authorization requests with a
 redirect URI, use the `code` response type, PKCE with S256, `private_key_jwt` or mutual-TLS client authentication with
 the issuer as the string `aud` of its client assertions, and a permitted algorithm for its client assertions, request
 objects, JWT bearer grant assertions, Identity Assertion JWT Authorization Grants and DPoP proofs, whose `iat` and `nbf`
@@ -427,7 +430,8 @@ permitted algorithm, so it must register one wherever the default is RS256. Its 
 refused when presented unbound or in the URI query, its refresh tokens are not rotated, and its authorization codes and
 pushed authorization requests are short-lived. Its redirect URIs must pass the default rule as well as any
 `RedirectSecureChecker`. What the configuration and the registered handlers determine, such as the issuer and the
-response types served, must still meet the profile, which `compose.ValidateFAPI2SecurityProfileClientSupport` checks.
+response types served, must still meet the profile, which `compose.ValidateFAPI2SecurityProfileClientSupport` checks,
+given the strategy passed to `Compose` in the same way.
 
 For [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html),
 `compose.ApplyFAPI2MessageSigning` sets the options each selected part requires, being signed authorization requests,

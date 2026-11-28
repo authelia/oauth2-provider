@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -140,14 +141,17 @@ func applyFAPI2SecurityProfileLimits(config *oauth2.Config) {
 // fail the authorization server requirements of the FAPI 2.0 Security Profile which the configuration determines, or
 // nil when it meets them. Call it once the provider is composed. Of the authorize endpoint handlers it recognizes only
 // those of this library serving the implicit, hybrid and 'none' response types, not a custom handler serving another
-// response type. The signing algorithms of the JWTs the server issues are checked when the JWT strategy reports them
-// with a SigningAlgValues method, and not when it reports none. It does not check the clients, which must be
+// response type. The signing algorithms of the JWTs the server issues are checked for the JWT strategy, the JARM,
+// introspection response and Logout Token strategies of the configuration, and each of strategies, such as the strategy
+// passed to Compose, which is not visible through the configuration. Each must report only permitted algorithms
+// through a SigningAlgValues method, and one reporting none, such as a custom strategy without the method, is not
+// checked. A CommonStrategy is checked through each strategy it is composed of. It does not check the clients, which must be
 // confidential, register the 'code' response type, and register only PS256, ES256 or EdDSA for the JWTs issued to them.
 // The signing algorithm of an Identity Assertion JWT Authorization Grant relationship is held by the storage and not
 // checked, though under FAPI2SecurityProfile a grant is never signed with one the profile does not permit.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2
-func ValidateFAPI2SecurityProfile(ctx context.Context, config oauth2.Configurator) (err error) {
+func ValidateFAPI2SecurityProfile(ctx context.Context, config oauth2.Configurator, strategies ...any) (err error) {
 	v := &fapi2Violations{}
 
 	v.general(ctx, config)
@@ -160,7 +164,87 @@ func ValidateFAPI2SecurityProfile(ctx context.Context, config oauth2.Configurato
 	v.extensionSigning(ctx, config)
 	v.grantSigning(ctx, config)
 
+	for _, signer := range fapi2Signers(ctx, config, strategies) {
+		if algs := signer.algs(ctx); len(algs) != 0 && !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
+			v.fail(fapi2SectionCryptography, "the %s signing algorithms '%s' include one not permitted", signer.name, strings.Join(algs, "', '"))
+		}
+	}
+
 	return errors.Join(v.errs...)
+}
+
+type fapi2Signer struct {
+	name     string
+	strategy any
+}
+
+// algs returns the signing algorithms the strategy reports, or nil when it reports none, including when it is a nil
+// pointer or wraps a nil jwt.Strategy.
+func (s fapi2Signer) algs(ctx context.Context) (algs []string) {
+	strategy, ok := s.strategy.(interface {
+		SigningAlgValues(ctx context.Context) []string
+	})
+	if !ok {
+		return nil
+	}
+
+	if value := reflect.ValueOf(strategy); value.Kind() == reflect.Pointer && value.IsNil() {
+		return nil
+	}
+
+	defer func() {
+		if recover() != nil {
+			algs = nil
+		}
+	}()
+
+	return strategy.SigningAlgValues(ctx)
+}
+
+// fapi2Signers returns the strategies the authorization server signs JWTs with which are visible to a check: those of
+// the configuration and the given strategies, with a CommonStrategy, or a pointer to one, replaced by those it is
+// composed of.
+func fapi2Signers(ctx context.Context, config oauth2.Configurator, strategies []any) (signers []fapi2Signer) {
+	signers = append(signers, fapi2Signer{name: "issuer", strategy: config.GetJWTStrategy(ctx)})
+
+	if p, ok := config.(oauth2.JWTSecuredAuthorizeResponseModeStrategyProvider); ok {
+		signers = append(signers, fapi2Signer{name: "JARM", strategy: p.GetJWTSecuredAuthorizeResponseModeStrategy(ctx)})
+	}
+
+	if p, ok := config.(oauth2.IntrospectionJWTResponseStrategyProvider); ok {
+		signers = append(signers, fapi2Signer{name: "introspection response", strategy: p.GetIntrospectionJWTResponseStrategy(ctx)})
+	}
+
+	if p, ok := config.(oauth2.BackChannelLogoutTokenStrategyProvider); ok {
+		signers = append(signers, fapi2Signer{name: "Logout Token", strategy: p.GetBackChannelLogoutTokenStrategy(ctx)})
+	}
+
+	for i, strategy := range strategies {
+		name := fmt.Sprintf("strategy %d", i+1)
+
+		var common *CommonStrategy
+
+		switch value := strategy.(type) {
+		case *CommonStrategy:
+			common = value
+		case CommonStrategy:
+			common = &value
+		}
+
+		if common != nil {
+			signers = append(signers,
+				fapi2Signer{name: name + " core", strategy: common.CoreStrategy},
+				fapi2Signer{name: name + " OpenID Connect", strategy: common.OpenIDConnectTokenStrategy},
+				fapi2Signer{name: name + " JWT", strategy: common.Strategy},
+			)
+
+			continue
+		}
+
+		signers = append(signers, fapi2Signer{name: name, strategy: strategy})
+	}
+
+	return signers
 }
 
 type fapi2Violations struct {
@@ -370,14 +454,6 @@ func (v *fapi2Violations) cryptography(ctx context.Context, config oauth2.Config
 	if len(config.GetTokenIntrospectionHandlers(ctx)) != 0 {
 		if algs := oauth2.SupportedEndpointAuthSigningAlgValues(ctx, config, oauth2.ClientAuthEndpointIntrospection); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
 			v.fail(fapi2SectionCryptography, "the introspection endpoint client assertion algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
-		}
-	}
-
-	if strategy, ok := config.GetJWTStrategy(ctx).(interface {
-		SigningAlgValues(ctx context.Context) []string
-	}); ok {
-		if algs := strategy.SigningAlgValues(ctx); len(algs) != 0 && !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
-			v.fail(fapi2SectionCryptography, "the issuer signing algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
 		}
 	}
 

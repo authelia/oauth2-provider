@@ -19,6 +19,8 @@ import (
 )
 
 const (
+	oauth21Document = "OAuth 2.1"
+
 	oauth21SectionCommunicationSecurity = "1.5"
 	oauth21SectionClientAuthentication  = "2.4"
 	oauth21SectionClientSecret          = "2.4.1"
@@ -95,15 +97,17 @@ func ApplyOAuth21Profile(config *oauth2.Config) {
 // only those of this library which can issue an access token in the authorization response, being the implicit grant
 // and the OpenID Connect implicit and hybrid flows, not a custom handler doing so. PKCE support is required when the
 // authorization code grant handler is registered, the refresh token maximum lifespan when the refresh token grant
-// handler is, and the TokenEntropy of generated client secrets when the client registration handler is.
+// handler is, not exceeding the refresh token lifespan, and the TokenEntropy of generated client secrets when the client
+// registration handler is.
 //
 // It does not check the clients, including their redirect URI comparison strategy, which must be exact string
-// matching, their own lifespans, PKCE, refresh token and 'redirect_uri' token request parameter policies, and whether
-// they are browser-based applications. Nor does it check a custom RedirectSecureChecker.
+// matching, their own lifespans, which ValidateOAuth21ProfileClient checks, PKCE, refresh token and 'redirect_uri'
+// token request parameter policies, and whether they are browser-based applications. Nor does it check a custom
+// RedirectSecureChecker.
 //
 // See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17
 func ValidateOAuth21Profile(ctx context.Context, config oauth2.Configurator) (err error) {
-	v := &fapi2Violations{document: "OAuth 2.1"}
+	v := &fapi2Violations{document: oauth21Document}
 
 	v.oauth21Grants(ctx, config)
 	v.oauth21ClientAuthentication(ctx, config)
@@ -199,9 +203,60 @@ func (v *fapi2Violations) oauth21RefreshTokens(ctx context.Context, config oauth
 		return
 	}
 
-	if config.GetRefreshTokenMaximumLifespan(ctx) <= 0 {
+	maximum, lifespan := config.GetRefreshTokenMaximumLifespan(ctx), config.GetRefreshTokenLifespan(ctx)
+
+	switch {
+	case maximum <= 0:
 		v.fail(oauth21SectionBrowserRefreshTokens, "rotated refresh tokens must not outlive the first refresh token of the grant, but RefreshTokenMaximumLifespan is not set")
+	case lifespan >= 0 && maximum > lifespan:
+		v.fail(oauth21SectionBrowserRefreshTokens, "rotated refresh tokens must not outlive the first refresh token of the grant, but RefreshTokenMaximumLifespan %s exceeds the RefreshTokenLifespan %s", maximum, lifespan)
 	}
+}
+
+// ValidateOAuth21ProfileClient returns an error joining every way the token lifespans of the client let a rotated
+// refresh token outlive the first refresh token of its grant, or nil when they do not. Call it for each statically
+// configured client of an authorization server held to The OAuth 2.1 Authorization Framework which is registered for
+// the refresh token grant, once ValidateOAuth21Profile passes for the configuration. A rotated refresh token expires at
+// the latest when the maximum lifespan the client or the configuration gives has passed since the grant, so that
+// maximum must be set and must not exceed the lifespan of the first refresh token issued by any grant of the client.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-9.3.2
+func ValidateOAuth21ProfileClient(ctx context.Context, config oauth2.Configurator, client oauth2.Client) (err error) {
+	v := &fapi2Violations{document: oauth21Document}
+
+	grants := client.GetGrantTypes()
+
+	if !grants.Has(consts.GrantTypeRefreshToken) {
+		return nil
+	}
+
+	maximum := oauth2.GetRefreshTokenMaximumLifespan(ctx, config, client)
+
+	if maximum <= 0 {
+		v.fail(oauth21SectionBrowserRefreshTokens, "rotated refresh tokens of the client '%s' must not outlive the first refresh token of the grant, but its refresh token maximum lifespan is not set", client.GetID())
+
+		return errors.Join(v.errs...)
+	}
+
+	for _, grant := range oauth21RefreshTokenIssuingGrants {
+		if !grants.Has(string(grant)) {
+			continue
+		}
+
+		if lifespan := oauth2.GetEffectiveLifespan(client, grant, oauth2.RefreshToken, config.GetRefreshTokenLifespan(ctx)); lifespan >= 0 && maximum > lifespan {
+			v.fail(oauth21SectionBrowserRefreshTokens, "rotated refresh tokens of the client '%s' must not outlive the first refresh token of the grant, but its refresh token maximum lifespan %s exceeds the lifespan %s of the refresh token its '%s' grant issues", client.GetID(), maximum, lifespan, grant)
+		}
+	}
+
+	return errors.Join(v.errs...)
+}
+
+var oauth21RefreshTokenIssuingGrants = []oauth2.GrantType{
+	oauth2.GrantTypeAuthorizationCode,
+	oauth2.GrantTypeDeviceCode,
+	oauth2.GrantTypeCIBA,
+	oauth2.GrantTypePassword,
+	oauth2.GrantTypeTokenExchange,
 }
 
 func oauth21AcceptsClientSecretWithoutPost(methods []string) bool {

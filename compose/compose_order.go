@@ -48,6 +48,11 @@ var ErrHandlerOrder = errors.New("oauth2: handlers are registered in an order wh
 //     handlers, as each consumes the DPoP proof rfc9449.Handler publishes.
 //   - Every idjag.RedeemHandler registered in the token endpoint handlers must also be registered in the token
 //     endpoint binding handlers, as it enforces the grant's 'cnf' claim there.
+//   - A pkce.Handler registered in the authorize endpoint handlers or the token endpoint handlers must be registered
+//     in both. At the authorize endpoint it validates and records the 'code_challenge', and at the token endpoint it
+//     checks the 'code_verifier' against it, so registered in only one the code is not bound to the client, though
+//     the discovery metadata and the 'redirect_uri' token request parameter policy rely on it (see RFC 7636 Section 4.6
+//     and OAuth 2.1 Section 10.2).
 //   - Every oidckb.UserAuthorizeHandler must precede the rfc8628.UserAuthorizeHandler in the RFC 8628 user authorize
 //     endpoint handlers, as it records the granted key binding onto the session rfc8628.UserAuthorizeHandler persists.
 //   - Every openid.OpenIDConnectDeviceAuthorizeHandler must precede the rfc8628.UserAuthorizeHandler in the RFC 8628
@@ -80,6 +85,7 @@ func ValidateHandlerOrder(config *oauth2.Config) (err error) {
 		validateRFC8693HandlerOrder(config),
 		validateTokenEndpointBindingHandlerOrder(config),
 		validateIDJAGRedeemHandlerBinding(config),
+		validatePKCEHandlerRegistration(config),
 		validateRFC8628UserAuthorizeHandlerOrder(config),
 		validateCIBAHandlerOrder(config),
 		validateBackChannelAuthenticationBindingHandlerOrder(config),
@@ -261,6 +267,29 @@ func validateTokenEndpointBindingHandlerOrder(config *oauth2.Config) (err error)
 	}
 
 	return err
+}
+
+func validatePKCEHandlerRegistration(config *oauth2.Config) (err error) {
+	authorize := slices.ContainsFunc(config.AuthorizeEndpointHandlers, func(handler oauth2.AuthorizeEndpointHandler) bool {
+		_, ok := handler.(*pkce.Handler)
+
+		return ok
+	})
+
+	token := slices.ContainsFunc(config.TokenEndpointHandlers, func(handler oauth2.TokenEndpointHandler) bool {
+		_, ok := handler.(*pkce.Handler)
+
+		return ok
+	})
+
+	switch {
+	case authorize && !token:
+		return fmt.Errorf("%w: the pkce.Handler (OAuth2PKCEFactory) must also be registered in the token endpoint handlers, as it checks the 'code_verifier' there", ErrHandlerOrder)
+	case token && !authorize:
+		return fmt.Errorf("%w: the pkce.Handler (OAuth2PKCEFactory) must also be registered in the authorize endpoint handlers, as it validates and records the 'code_challenge' there", ErrHandlerOrder)
+	default:
+		return nil
+	}
 }
 
 func validateIDJAGRedeemHandlerBinding(config *oauth2.Config) (err error) {

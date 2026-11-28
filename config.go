@@ -889,8 +889,8 @@ type CIBAConfigProvider interface {
 // BackChannelNotifierProvider returns the provider for configuring the notifier of OpenID Connect CIBA ping and push
 // notifications.
 type BackChannelNotifierProvider interface {
-	// GetBackChannelNotifier returns the BackChannelNotifier. Defaults to an HTTPBackChannelNotifier with a guarded
-	// HTTP client.
+	// GetBackChannelNotifier returns the BackChannelNotifier. Defaults to an HTTPBackChannelNotifier which applies the
+	// special-use address guard settings of the configuration to each delivery.
 	GetBackChannelNotifier(ctx context.Context) (notifier BackChannelNotifier)
 }
 

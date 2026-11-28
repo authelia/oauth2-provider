@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -51,7 +52,13 @@ func TestValidateHandlerOrderPKCE(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateHandlerOrder(&oauth2.Config{TokenEndpointHandlers: tc.handlers})
+			config := &oauth2.Config{TokenEndpointHandlers: tc.handlers}
+
+			if slices.Contains(tc.handlers, oauth2.TokenEndpointHandler(proof)) {
+				config.AuthorizeEndpointHandlers = oauth2.AuthorizeEndpointHandlers{explicit, proof}
+			}
+
+			err := ValidateHandlerOrder(config)
 
 			if !tc.err {
 				assert.NoError(t, err)
@@ -61,6 +68,37 @@ func TestValidateHandlerOrderPKCE(t *testing.T) {
 
 			require.ErrorIs(t, err, ErrHandlerOrder)
 			assert.Contains(t, err.Error(), "pkce.Handler")
+		})
+	}
+}
+
+func TestValidateHandlerOrderPKCERegistration(t *testing.T) {
+	explicit, proof := &hoauth2.AuthorizeExplicitGrantHandler{}, &pkce.Handler{}
+
+	testCases := []struct {
+		name      string
+		authorize oauth2.AuthorizeEndpointHandlers
+		token     oauth2.TokenEndpointHandlers
+		err       string
+	}{
+		{name: "ShouldPassAtBothEndpoints", authorize: oauth2.AuthorizeEndpointHandlers{explicit, proof}, token: oauth2.TokenEndpointHandlers{explicit, proof}},
+		{name: "ShouldPassAtNeitherEndpoint", authorize: oauth2.AuthorizeEndpointHandlers{explicit}, token: oauth2.TokenEndpointHandlers{explicit}},
+		{name: "ShouldFailAtTheAuthorizeEndpointOnly", authorize: oauth2.AuthorizeEndpointHandlers{explicit, proof}, token: oauth2.TokenEndpointHandlers{explicit}, err: "must also be registered in the token endpoint handlers"},
+		{name: "ShouldFailAtTheTokenEndpointOnly", authorize: oauth2.AuthorizeEndpointHandlers{explicit}, token: oauth2.TokenEndpointHandlers{explicit, proof}, err: "must also be registered in the authorize endpoint handlers"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateHandlerOrder(&oauth2.Config{AuthorizeEndpointHandlers: tc.authorize, TokenEndpointHandlers: tc.token})
+
+			if tc.err == "" {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.ErrorIs(t, err, ErrHandlerOrder)
+			assert.Contains(t, err.Error(), tc.err)
 		})
 	}
 }
@@ -119,7 +157,13 @@ func TestValidateHandlerOrderAuthorizeEndpoint(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateHandlerOrder(&oauth2.Config{AuthorizeEndpointHandlers: tc.handlers})
+			config := &oauth2.Config{AuthorizeEndpointHandlers: tc.handlers}
+
+			if slices.Contains(tc.handlers, oauth2.AuthorizeEndpointHandler(proof)) {
+				config.TokenEndpointHandlers = oauth2.TokenEndpointHandlers{proof}
+			}
+
+			err := ValidateHandlerOrder(config)
 
 			if len(tc.contains) == 0 {
 				assert.NoError(t, err)
@@ -164,7 +208,13 @@ func TestValidateHandlerOrderRFC8693(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateHandlerOrder(&oauth2.Config{TokenEndpointHandlers: tc.handlers})
+			config := &oauth2.Config{TokenEndpointHandlers: tc.handlers}
+
+			if slices.ContainsFunc(tc.handlers, func(handler oauth2.TokenEndpointHandler) bool { _, ok := handler.(*pkce.Handler); return ok }) {
+				config.AuthorizeEndpointHandlers = oauth2.AuthorizeEndpointHandlers{&pkce.Handler{}}
+			}
+
+			err := ValidateHandlerOrder(config)
 
 			if tc.err == "" {
 				assert.NoError(t, err)

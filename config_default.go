@@ -355,8 +355,8 @@ type Config struct {
 	// CIBALoginHintTokenTypes are the 'login_hint_token' types the backchannel authentication endpoint accepts.
 	CIBALoginHintTokenTypes []string
 
-	// BackChannelNotifier delivers CIBA ping and push notifications. Defaults to an HTTPBackChannelNotifier with a
-	// guarded HTTP client.
+	// BackChannelNotifier delivers CIBA ping and push notifications. Defaults to an HTTPBackChannelNotifier which
+	// applies the special-use address guard settings of the configuration to each delivery.
 	BackChannelNotifier BackChannelNotifier
 
 	// PublicClientIdentityChecker is a function that returns true if the authorization request assures the identity of
@@ -524,8 +524,9 @@ type Config struct {
 	// or delivery to, a location supplied by a client or another party that is not trusted refuses to connect to a
 	// special-use address, as the HTTP client used for it is guarded with GuardHTTPClient, which also ignores the proxy.
 	// It covers the 'request_uri', the 'jwks_uri' of a client fetched by a DefaultJWKSFetcherStrategy, the
-	// 'backchannel_logout_uri', the 'sector_identifier_uri' and the Shared Signals Framework push endpoint. A custom
-	// JWKSFetcherStrategy is not guarded and must guard itself. The HTTP clients of Client ID Metadata Documents are not
+	// 'backchannel_logout_uri', the 'sector_identifier_uri', the Shared Signals Framework push endpoint and the
+	// 'backchannel_client_notification_endpoint' the default BackChannelNotifier delivers to. A custom
+	// JWKSFetcherStrategy or BackChannelNotifier is not guarded and must guard itself. The HTTP clients of Client ID Metadata Documents are not
 	// changed, as they must already refuse special-use addresses. Defaults to false.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-rfc8725bis-10#section-3.10
@@ -2109,12 +2110,12 @@ func (c *Config) GetCIBALoginHintTokenTypes(_ context.Context) (types []string) 
 	return c.CIBALoginHintTokenTypes
 }
 
-// GetBackChannelNotifier returns the BackChannelNotifier. Defaults to an HTTPBackChannelNotifier with a guarded HTTP
-// client.
+// GetBackChannelNotifier returns the BackChannelNotifier. Defaults to an HTTPBackChannelNotifier which applies the
+// special-use address guard settings of the configuration to each delivery.
 func (c *Config) GetBackChannelNotifier(_ context.Context) (notifier BackChannelNotifier) {
 	c.backChannelNotifierOnce.Do(func() {
 		if c.BackChannelNotifier == nil {
-			c.BackChannelNotifier = NewHTTPBackChannelNotifier(nil)
+			c.BackChannelNotifier = &HTTPBackChannelNotifier{Config: c}
 		}
 	})
 

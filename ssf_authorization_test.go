@@ -57,6 +57,9 @@ func TestAuthorizeSSFRequest(t *testing.T) {
 		clientNil
 		clientEmptyID
 		clientDocument
+		clientFAPI2Registration
+		clientUnregistered
+		clientDocumentRecorded
 	)
 
 	testCases := []struct {
@@ -73,6 +76,7 @@ func TestAuthorizeSSFRequest(t *testing.T) {
 		noStorage bool
 		code      int
 		errCode   string
+		debug     string
 	}{
 		{name: "ShouldRejectMissingToken", issuer: issuer, audience: audience, noToken: true, code: http.StatusUnauthorized, errCode: "invalid_token"},
 		{name: "ShouldRejectWrongAudience", issuer: issuer, audience: audience, granted: []string{consts.ScopeSSFManage}, aud: []string{"https://other.example.com"}, code: http.StatusUnauthorized, errCode: "invalid_token"},
@@ -89,6 +93,9 @@ func TestAuthorizeSSFRequest(t *testing.T) {
 		{name: "ShouldRejectNilClient", issuer: issuer, audience: audience, granted: []string{consts.ScopeSSFManage}, aud: []string{audience}, client: clientNil, code: http.StatusUnauthorized, errCode: "invalid_token"},
 		{name: "ShouldRejectEmptyClientID", issuer: issuer, audience: audience, granted: []string{consts.ScopeSSFManage}, aud: []string{audience}, client: clientEmptyID, code: http.StatusUnauthorized, errCode: "invalid_token"},
 		{name: "ShouldRejectClientIDMetadataDocumentClient", issuer: issuer, audience: audience, granted: []string{consts.ScopeSSFManage}, aud: []string{audience}, write: true, client: clientDocument, code: http.StatusUnauthorized, errCode: "invalid_token"},
+		{name: "ShouldRejectAnUnboundTokenOfAFAPI2Registration", issuer: issuer, audience: audience, granted: []string{consts.ScopeSSFManage}, aud: []string{audience}, client: clientFAPI2Registration, code: http.StatusUnauthorized, errCode: "invalid_token", debug: "is not sender-constrained"},
+		{name: "ShouldRejectAnUnregisteredClient", issuer: issuer, audience: audience, granted: []string{consts.ScopeSSFManage}, aud: []string{audience}, client: clientUnregistered, code: http.StatusUnauthorized, errCode: "invalid_token", debug: "The client with id 'client' the credential was issued to could not be found."},
+		{name: "ShouldRejectARecordedClientIDMetadataDocumentClient", issuer: issuer, audience: audience, granted: []string{consts.ScopeSSFManage}, aud: []string{audience}, write: true, client: clientDocumentRecorded, code: http.StatusUnauthorized, errCode: "invalid_token", debug: "issued to a client resolved from a Client ID Metadata Document"},
 		{name: "ShouldRejectRefreshToken", issuer: issuer, audience: audience, granted: []string{consts.ScopeSSFManage}, aud: []string{audience}, use: RefreshToken, code: http.StatusUnauthorized, errCode: "invalid_token"},
 	}
 
@@ -117,6 +124,22 @@ func TestAuthorizeSSFRequest(t *testing.T) {
 
 			provider := &Fosite{Store: s, Config: config}
 
+			var client Client = &DefaultClient{ID: "client"}
+
+			if tc.client == clientDocument || tc.client == clientDocumentRecorded {
+				client = &ssfDocumentClient{DefaultClient: &DefaultClient{ID: "https://client.example.com/metadata.json"}}
+			}
+
+			switch tc.client {
+			case clientFAPI2Registration:
+				store.Clients[client.GetID()] = &DefaultRegisteredClient{DefaultClient: &DefaultClient{ID: client.GetID()}, FAPI2SecurityProfile: true}
+			case clientUnregistered:
+			case clientDocumentRecorded:
+				store.Clients[client.GetID()] = &DefaultClient{ID: client.GetID()}
+			default:
+				store.Clients[client.GetID()] = client
+			}
+
 			r := httptest.NewRequest(http.MethodPost, requestURL, nil)
 
 			if !tc.noToken {
@@ -133,10 +156,8 @@ func TestAuthorizeSSFRequest(t *testing.T) {
 							ar.Client = nil
 						case clientEmptyID:
 							ar.Client = &DefaultClient{}
-						case clientDocument:
-							ar.Client = &ssfDocumentClient{DefaultClient: &DefaultClient{ID: "https://client.example.com/metadata.json"}}
 						default:
-							ar.Client = &DefaultClient{ID: "client"}
+							ar.Client = client
 						}
 					}).Return(cmpUse(tc.use), nil).AnyTimes()
 			}
@@ -158,6 +179,7 @@ func TestAuthorizeSSFRequest(t *testing.T) {
 			rfc := ErrorToRFC6749Error(err)
 			assert.Equal(t, tc.code, rfc.StatusCode())
 			assert.Equal(t, tc.errCode, rfc.ErrorField)
+			assert.Contains(t, ErrorToDebugRFC6749Error(err).Error(), tc.debug)
 		})
 	}
 }
@@ -291,6 +313,7 @@ func TestAuthorizeSSFRequestDPoP(t *testing.T) {
 			require.NoError(t, err)
 
 			store := storage.NewMemoryStore()
+			store.Clients["client"] = &DefaultClient{ID: "client"}
 
 			config := &Config{
 				DPoPEnabled:              true,

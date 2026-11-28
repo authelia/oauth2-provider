@@ -103,12 +103,6 @@ func (f *Fosite) NewUserinfoRequest(ctx context.Context, r *http.Request, sessio
 		return request, err
 	}
 
-	// The registration is checked as well as the client the storage returned with the credential, which need not be
-	// the registration.
-	if err = validateBearerSenderConstrained(ctx, f.Config, client, ar.GetSession()); err != nil {
-		return request, err
-	}
-
 	request.AccessRequester = ar
 	request.Client = client
 
@@ -117,18 +111,12 @@ func (f *Fosite) NewUserinfoRequest(ctx context.Context, r *http.Request, sessio
 
 // userinfoClient returns the current registration of the client the Access Token was issued to.
 func (f *Fosite) userinfoClient(ctx context.Context, requester AccessRequester) (client Client, err error) {
-	if client = requester.GetClient(); client == nil || client.GetID() == "" {
-		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The Access Token is missing, malformed, or invalid.").WithDebug("The credential does not identify a client."))
+	if client, err = resolveBearerClient(ctx, f.Config, f.Store, requester); err != nil {
+		return nil, err
 	}
 
-	id := client.GetID()
-
-	if client, err = GetClient(ctx, f.Config, f.Store, id); err != nil {
-		if failure, ok := requestServerFailure(err); ok {
-			return nil, failure
-		}
-
-		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The Access Token is missing, malformed, or invalid.").WithWrap(err).WithDebugf("The client with id '%s' the credential was issued to could not be found.", id))
+	if client == nil {
+		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The Access Token is missing, malformed, or invalid.").WithDebug("The credential does not identify a client."))
 	}
 
 	return client, nil

@@ -119,6 +119,11 @@ func newSSFHandlerHarness(t *testing.T, mutate func(c *SSFConfig)) *ssfHandlerHa
 
 	store := &ssfCountingStore{MemoryStore: storage.NewMemoryStore()}
 
+	// The clients the introspector resolves the test tokens to.
+	for _, id := range []string{"a", "a-ro", "b", "c", "p", "r-ro"} {
+		store.Clients[id] = &DefaultClient{ID: id}
+	}
+
 	root := &Config{Issuer: ssfHandlerIssuer, SSF: config, TokenIntrospectionHandlers: TokenIntrospectionHandlers{introspector}}
 
 	return &ssfHandlerHarness{

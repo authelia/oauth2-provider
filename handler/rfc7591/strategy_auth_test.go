@@ -63,6 +63,7 @@ func TestAuthenticateClientRegistrationSurfacesPolicy(t *testing.T) {
 					token, signature, err := tokens.GenerateAccessToken(ctx, request)
 					require.NoError(t, err)
 					require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+					registerTokenClient(t, ctx, store, request.Client)
 
 					result, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 					require.NoError(t, err)
@@ -114,6 +115,7 @@ func TestAuthenticateClientRegistrationOmitsCounterKeyWithoutRequestID(t *testin
 			token, signature, err := tokens.GenerateAccessToken(ctx, request)
 			require.NoError(t, err)
 			require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+			registerTokenClient(t, ctx, store, request.Client)
 
 			result, err := auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 			require.NoError(t, err)
@@ -160,6 +162,7 @@ func TestAuthenticateClientRegistrationDoesNotChangeTheStoredSession(t *testing.
 				token, signature, err := tokens.GenerateAccessToken(ctx, request)
 				require.NoError(t, err)
 				require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+				registerTokenClient(t, ctx, store, request.Client)
 
 				var wg sync.WaitGroup
 
@@ -430,6 +433,7 @@ func TestAuthRejectsAnExpiredAccessToken(t *testing.T) {
 	token, signature, err := access.GenerateAccessToken(ctx, request)
 	require.NoError(t, err)
 	require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+	registerTokenClient(t, ctx, store, request.Client)
 
 	_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 	require.Error(t, err)
@@ -454,12 +458,14 @@ func TestAuthRejectsAnAccessTokenOfAClientIDMetadataDocumentClient(t *testing.T)
 	ctx := context.Background()
 
 	testCases := []struct {
-		name   string
-		client oauth2.Client
-		err    error
+		name       string
+		client     oauth2.Client
+		registered oauth2.Client
+		err        error
 	}{
-		{"ShouldRejectADocumentClient", &documentClient{Client: &oauth2.DefaultClient{ID: "https://client.example.com/metadata.json"}, document: true}, oauth2.ErrInvalidToken},
-		{"ShouldAcceptAClientReportingItIsNotADocumentClient", &documentClient{Client: &oauth2.DefaultClient{ID: "onboarding"}}, nil},
+		{"ShouldRejectADocumentClient", &documentClient{Client: &oauth2.DefaultClient{ID: "https://client.example.com/metadata.json"}, document: true}, nil, oauth2.ErrInvalidToken},
+		{"ShouldRejectAClientResolvedAsADocumentClient", &oauth2.DefaultClient{ID: "https://client.example.com/metadata.json"}, &documentClient{Client: &oauth2.DefaultClient{ID: "https://client.example.com/metadata.json"}, document: true}, oauth2.ErrInvalidToken},
+		{"ShouldAcceptAClientReportingItIsNotADocumentClient", &documentClient{Client: &oauth2.DefaultClient{ID: "onboarding"}}, nil, nil},
 	}
 
 	for _, tc := range testCases {
@@ -478,6 +484,12 @@ func TestAuthRejectsAnAccessTokenOfAClientIDMetadataDocumentClient(t *testing.T)
 			token, signature, err := access.GenerateAccessToken(ctx, request)
 			require.NoError(t, err)
 			require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+
+			if tc.registered != nil {
+				registerTokenClient(t, ctx, store, tc.registered)
+			} else {
+				registerTokenClient(t, ctx, store, request.Client)
+			}
 
 			requester, err := handler.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
@@ -703,6 +715,7 @@ func TestAuthIgnoresClientAudienceStrategyAtTheRegistrationEndpoint(t *testing.T
 	token, signature, err := access.GenerateAccessToken(ctx, request)
 	require.NoError(t, err)
 	require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+	registerTokenClient(t, ctx, store, request.Client)
 
 	_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
@@ -728,6 +741,7 @@ func TestAuthIgnoresClientScopeStrategyAtTheRegistrationEndpoint(t *testing.T) {
 	token, signature, err := access.GenerateAccessToken(ctx, request)
 	require.NoError(t, err)
 	require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+	registerTokenClient(t, ctx, store, request.Client)
 
 	_, err = auth.AuthenticateClientRegistrationRequest(ctx, authRequest(t, http.MethodPost, testEndpoint, token), "")
 
@@ -948,6 +962,18 @@ func newAuthFixtures(t *testing.T) (*DefaultEndpointAuthStrategy, *oauth2.Config
 	return NewDefaultEndpointAuthStrategy(config, store, tokens, tokens), config, store, tokens
 }
 
+// registerTokenClient registers the client a credential is issued to, which the endpoint resolves when the credential
+// is presented.
+func registerTokenClient(t *testing.T, ctx context.Context, store oauth2.ClientManager, client oauth2.Client) {
+	t.Helper()
+
+	if _, err := store.GetClient(ctx, client.GetID()); err == nil {
+		return
+	}
+
+	require.NoError(t, store.CreateClient(ctx, client))
+}
+
 func authRequest(t *testing.T, method, url, token string) *http.Request {
 	t.Helper()
 
@@ -977,6 +1003,7 @@ func mintAccessToken(t *testing.T, ctx context.Context, store *storage.MemorySto
 	token, signature, err := strategy.GenerateAccessToken(ctx, request)
 	require.NoError(t, err)
 	require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+	registerTokenClient(t, ctx, store, request.Client)
 
 	return token
 }

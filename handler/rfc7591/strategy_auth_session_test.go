@@ -68,6 +68,7 @@ func TestAuthReadsTheSessionStateOfEverySessionType(t *testing.T) {
 					token, signature, err := auth.AccessTokenStrategy.GenerateAccessToken(ctx, request)
 					require.NoError(t, err)
 					require.NoError(t, auth.Store.CreateAccessTokenSession(ctx, signature, request))
+					registerTokenClient(t, ctx, auth.Store, request.Client)
 
 					return token
 				}
@@ -194,6 +195,7 @@ func TestAuthReadsThePolicyClaimOfEverySessionType(t *testing.T) {
 				token, signature, err := access.GenerateAccessToken(ctx, request)
 				require.NoError(t, err)
 				require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+				registerTokenClient(t, ctx, store, request.Client)
 
 				requester, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest("Bearer", token, "", nil), "")
 				require.NoError(t, err)

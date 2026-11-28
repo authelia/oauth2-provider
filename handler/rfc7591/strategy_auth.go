@@ -166,15 +166,21 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistration(ctx context
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-9.1
 	if jwt.IsClientIDMetadataDocumentClient(requester.GetClient()) {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The provided Access Token is not valid.").WithDebug("The Access Token was issued to a client resolved from a Client ID Metadata Document."))
+		return nil, errDocumentClientAccessToken()
 	}
 
-	if err = oauth2.ValidateBearerAuthorization(ctx, s.Config, r, requester, tokenString, oauth2.BearerAuthorization{
+	var client oauth2.Client
+
+	if client, err = oauth2.ValidateBearerAuthorization(ctx, s.Config, s.Store, r, requester, tokenString, oauth2.BearerAuthorization{
 		Audiences: s.Config.GetRFC7591ClientRegistrationEndpointAudiences(ctx),
 		Endpoints: s.registrationEndpoints(ctx),
 		Scopes:    s.Config.GetRFC7591ClientRegistrationScopes(ctx),
 	}); err != nil {
 		return nil, err
+	}
+
+	if jwt.IsClientIDMetadataDocumentClient(client) {
+		return nil, errDocumentClientAccessToken()
 	}
 
 	var key string
@@ -269,12 +275,25 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistrationJWT(ctx cont
 
 	requester = hoauth2.AccessTokenJWTToRequest(token)
 
-	if err = oauth2.ValidateBearerAuthorization(ctx, s.Config, r, requester, tokenString, oauth2.BearerAuthorization{
+	// A token of a trusted issuer was issued to a client of that issuer, which has no registration here.
+	var store oauth2.ClientGetter
+
+	if issuer == s.Config.GetIssuer(ctx) {
+		store = s.Store
+	}
+
+	var client oauth2.Client
+
+	if client, err = oauth2.ValidateBearerAuthorization(ctx, s.Config, store, r, requester, tokenString, oauth2.BearerAuthorization{
 		Audiences: s.Config.GetRFC7591ClientRegistrationEndpointAudiences(ctx),
 		Endpoints: s.registrationEndpoints(ctx),
 		Scopes:    s.Config.GetRFC7591ClientRegistrationScopes(ctx),
 	}); err != nil {
 		return nil, err
+	}
+
+	if jwt.IsClientIDMetadataDocumentClient(client) {
+		return nil, errDocumentClientAccessToken()
 	}
 
 	if !resolved {
@@ -290,6 +309,10 @@ func (s *DefaultEndpointAuthStrategy) authenticateClientRegistrationJWT(ctx cont
 	patterns := issuer == s.Config.GetIssuer(ctx) || slices.Contains(s.Config.GetRFC7591ClientRegistrationPatternIssuers(ctx), issuer)
 
 	return &policyRequester{Requester: requester, claim: claim, ok: hasClaim, key: key, patterns: patterns}, nil
+}
+
+func errDocumentClientAccessToken() error {
+	return errorsx.WithStack(oauth2.ErrInvalidToken.WithHint("The provided Access Token is not valid.").WithDebug("The Access Token was issued to a client resolved from a Client ID Metadata Document."))
 }
 
 func (s *DefaultEndpointAuthStrategy) storedCounterKey(ctx context.Context, tokenString string) (key string, err error) {

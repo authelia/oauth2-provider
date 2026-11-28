@@ -16,6 +16,8 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/handler/ciba"
+	"authelia.com/provider/oauth2/handler/idjag"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/handler/par"
@@ -83,6 +85,16 @@ func ApplyFAPI2SecurityProfile(config *oauth2.Config) {
 		config.RevocationEndpointAuthSigningAlgValues = fapi2Permitted(config.RevocationEndpointAuthSigningAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
 	}
 
+	if len(config.CIBARequestSigningAlgValues) != 0 {
+		config.CIBARequestSigningAlgValues = fapi2Permitted(config.CIBARequestSigningAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
+	}
+
+	if len(config.IDJAGRedeemSigningAlgValues) == 0 {
+		config.IDJAGRedeemSigningAlgValues = slices.Clone(oauth2.FAPI2SecurityProfileSigningAlgValues)
+	} else {
+		config.IDJAGRedeemSigningAlgValues = fapi2Permitted(config.IDJAGRedeemSigningAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
+	}
+
 	if len(config.RFC7591TrustedIssuerSigningAlgValues) == 0 {
 		config.RFC7591TrustedIssuerSigningAlgValues = slices.Clone(oauth2.FAPI2SecurityProfileSigningAlgValues)
 	} else {
@@ -131,6 +143,8 @@ func applyFAPI2SecurityProfileLimits(config *oauth2.Config) {
 // response type. The signing algorithms of the JWTs the server issues are checked when the JWT strategy reports them
 // with a SigningAlgValues method, and not when it reports none. It does not check the clients, which must be
 // confidential, register the 'code' response type, and register only PS256, ES256 or EdDSA for the JWTs issued to them.
+// The signing algorithm of an Identity Assertion JWT Authorization Grant relationship is held by the storage and not
+// checked, though under FAPI2SecurityProfile a grant is never signed with one the profile does not permit.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2
 func ValidateFAPI2SecurityProfile(ctx context.Context, config oauth2.Configurator) (err error) {
@@ -144,6 +158,7 @@ func ValidateFAPI2SecurityProfile(ctx context.Context, config oauth2.Configurato
 	v.cryptography(ctx, config)
 	v.responseSigning(ctx, config)
 	v.extensionSigning(ctx, config)
+	v.grantSigning(ctx, config)
 
 	return errors.Join(v.errs...)
 }
@@ -435,6 +450,31 @@ func (v *fapi2Violations) extensionSigning(ctx context.Context, config oauth2.Co
 	if s, ok := ssf.TokenStrategy.(*oauth2.DefaultSecurityEventTokenStrategy); ok {
 		if alg := fapi2SigningAlg(s.SigningAlg); !slices.Contains(oauth2.FAPI2SecurityProfileSigningAlgValues, alg) {
 			v.fail(fapi2SectionCryptography, "security event tokens are signed with '%s', which is not permitted", alg)
+		}
+	}
+}
+
+func (v *fapi2Violations) grantSigning(ctx context.Context, config oauth2.Configurator) {
+	if fapi2Registered[*ciba.EndpointHandler](config.GetBackChannelAuthenticationEndpointHandlers(ctx)) {
+		if algs := config.GetCIBARequestSigningAlgValues(ctx); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
+			v.fail(fapi2SectionCryptography, "the CIBA signed authentication request algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
+		}
+	}
+
+	if p, ok := config.(oauth2.GrantAssertionAlgorithmsProvider); ok && fapi2Registered[*idjag.RedeemHandler](config.GetTokenEndpointHandlers(ctx)) {
+		if algs := p.GetIDJAGRedeemSigningAlgValues(ctx); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
+			v.fail(fapi2SectionCryptography, "the Identity Assertion JWT Authorization Grant redemption algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
+		}
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(config.GetRFC8693TokenTypes(ctx))) {
+		t, ok := config.GetRFC8693TokenTypes(ctx)[name].(*rfc8693.JWTType)
+		if !ok || t.Issue == nil || !t.Issue.AuthorizationGrant {
+			continue
+		}
+
+		if alg := fapi2SigningAlg(t.Issue.SigningAlg); !slices.Contains(oauth2.FAPI2SecurityProfileSigningAlgValues, alg) {
+			v.fail(fapi2SectionCryptography, "the JWT authorization grant type '%s' is signed with '%s', which is not permitted", name, alg)
 		}
 	}
 }

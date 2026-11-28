@@ -45,6 +45,22 @@ func TestApplyFAPI2SecurityProfileMinParameterEntropy(t *testing.T) {
 	}
 }
 
+func TestApplyFAPI2SecurityProfileGrantAlgorithms(t *testing.T) {
+	config := &oauth2.Config{CIBARequestSigningAlgValues: []string{string(jose.RS256), string(jose.PS256)}}
+
+	ApplyFAPI2SecurityProfile(config)
+
+	assert.Equal(t, []string{string(jose.PS256)}, config.CIBARequestSigningAlgValues)
+	assert.Equal(t, oauth2.FAPI2SecurityProfileSigningAlgValues, config.IDJAGRedeemSigningAlgValues)
+
+	config = &oauth2.Config{IDJAGRedeemSigningAlgValues: []string{string(jose.RS256), string(jose.ES256)}}
+
+	ApplyFAPI2SecurityProfile(config)
+
+	assert.Nil(t, config.CIBARequestSigningAlgValues)
+	assert.Equal(t, []string{string(jose.ES256)}, config.IDJAGRedeemSigningAlgValues)
+}
+
 func TestApplyFAPI2SecurityProfileDefaultTrustedIssuerAlgorithms(t *testing.T) {
 	config := &oauth2.Config{}
 
@@ -364,6 +380,47 @@ func TestValidateFAPI2SecurityProfile(t *testing.T) {
 		{
 			name:   "ShouldPassWithAMinimumNonceLengthOf64",
 			modify: func(config *oauth2.Config) { config.MinParameterEntropy = 64 },
+		},
+		{
+			name:      "ShouldRejectRS256CIBARequestAlgorithms",
+			modify:    func(config *oauth2.Config) { config.CIBARequestSigningAlgValues = []string{string(jose.RS256)} },
+			factories: CIBAFactories(),
+			expected:  []string{"Section 5.4.1: the CIBA signed authentication request algorithms 'RS256' include one not permitted"},
+		},
+		{
+			name:   "ShouldNotCheckCIBARequestAlgorithmsWithoutCIBA",
+			modify: func(config *oauth2.Config) { config.CIBARequestSigningAlgValues = []string{string(jose.RS256)} },
+		},
+		{
+			name:      "ShouldRejectRS256IDJAGRedemptionAlgorithms",
+			modify:    func(config *oauth2.Config) { config.IDJAGRedeemSigningAlgValues = []string{string(jose.RS256)} },
+			factories: []Factory{IDJAGRedeemFactory},
+			expected:  []string{"Section 5.4.1: the Identity Assertion JWT Authorization Grant redemption algorithms 'RS256' include one not permitted"},
+		},
+		{
+			name: "ShouldRejectTheDefaultJWTAuthorizationGrantAlgorithm",
+			modify: func(config *oauth2.Config) {
+				config.RFC8693TokenTypes = map[string]oauth2.RFC8693TokenType{
+					"urn:example:grant": &rfc8693.JWTType{Name: "urn:example:grant", Issue: &rfc8693.JWTIssueConfig{Issuer: "https://grants.example.com", AuthorizationGrant: true}},
+				}
+			},
+			expected: []string{"Section 5.4.1: the JWT authorization grant type 'urn:example:grant' is signed with 'RS256', which is not permitted"},
+		},
+		{
+			name: "ShouldPassWithAPermittedJWTAuthorizationGrantAlgorithm",
+			modify: func(config *oauth2.Config) {
+				config.RFC8693TokenTypes = map[string]oauth2.RFC8693TokenType{
+					"urn:example:grant": &rfc8693.JWTType{Name: "urn:example:grant", Issue: &rfc8693.JWTIssueConfig{Issuer: "https://grants.example.com", AuthorizationGrant: true, SigningAlg: string(jose.ES256)}},
+				}
+			},
+		},
+		{
+			name: "ShouldNotCheckAJWTTypeThatIsNotAnAuthorizationGrant",
+			modify: func(config *oauth2.Config) {
+				config.RFC8693TokenTypes = map[string]oauth2.RFC8693TokenType{
+					"urn:example:jwt": &rfc8693.JWTType{Name: "urn:example:jwt", Issue: &rfc8693.JWTIssueConfig{Issuer: "https://jwt.example.com"}},
+				}
+			},
 		},
 		{
 			name:     "ShouldRejectRS256DPoPProofs",

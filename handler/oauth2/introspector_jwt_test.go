@@ -679,7 +679,7 @@ func TestStatelessJWTValidatorTokenFormat(t *testing.T) {
 		{name: "ShouldSkipAPrefixedAccessToken", prefix: prefix, token: "authelia_at_key.signature"},
 		{name: "ShouldSkipAPrefixedRegistrationToken", prefix: prefix, token: "authelia_cr_key.signature"},
 		{name: "ShouldRejectAMalformedSignedJWT", token: "header.payload.signature", definite: true},
-		{name: "ShouldRejectAMalformedEncryptedJWT", token: "header.key.iv.ciphertext.tag", definite: true},
+		{name: "ShouldSkipAnEncryptedJWTItCannotDecrypt", token: "header.key.iv.ciphertext.tag"},
 	}
 
 	for _, tc := range testCases {

@@ -265,7 +265,9 @@ func (s *JWTProfileCoreStrategy) validateEncryptedAccessToken(ctx context.Contex
 // returns the token and its signature, which for an encrypted token is the SHA-256 digest of the token
 // AccessTokenSignature returns for it. The 'client_id' claim is taken from the request client, the
 // 'authorization_details' claim from the granted authorization details, and the 'cnf' claim is rebuilt from the
-// bindings recorded on the session.
+// bindings recorded on the session. An encrypted token is only issued on a session implementing
+// EncryptedAccessTokenSession, which records its digest, as without it the token cannot be validated; otherwise
+// oauth2.ErrMisconfiguration is returned.
 //
 // RFC 9068 Section 2.2 requires the 'iss', 'exp', 'aud' and 'sub' claims, so a token that would have no value for one of
 // them nor a default is not issued. The 'aud' claim defaults to oauth2.JWTProfileAccessTokenDefaultAudienceProvider,
@@ -361,11 +363,14 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 	}
 
 	if jwt.IsEncryptedJWT(tokenString) {
+		recorder, ok := request.GetSession().(EncryptedAccessTokenSession)
+		if !ok {
+			return "", "", errorsx.WithStack(oauth2.ErrMisconfiguration.WithDebugf("The access token is encrypted, but the session of type '%T' does not implement EncryptedAccessTokenSession, so the token could not be validated.", request.GetSession()))
+		}
+
 		signature = encryptedAccessTokenSignature(tokenString)
 
-		if session, ok := request.GetSession().(EncryptedAccessTokenSession); ok {
-			session.SetAccessTokenDigest(signature)
-		}
+		recorder.SetAccessTokenDigest(signature)
 	}
 
 	return tokenString, signature, nil

@@ -52,7 +52,8 @@ type StatelessJWTValidator struct {
 // granted scopes against the required scopes, and merges the request reconstructed from the claims into the given
 // request. It returns oauth2.ErrUnknownRequest for a token which does not have the format of a compact serialized JWT,
 // so that other introspectors may resolve it as required by RFC 7662 Section 2.1, for an opaque access or refresh token,
-// and when the context carries ContextKeySkipStatelessIntrospection.
+// for an encrypted token it cannot decrypt, such as one encrypted to a key of the client which storage resolves by its
+// digest, and when the context carries ContextKeySkipStatelessIntrospection.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.1
 func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString string, tokenUse oauth2.TokenUse, request oauth2.AccessRequester, scopes []string) (use oauth2.TokenUse, err error) {
@@ -73,7 +74,7 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 
 	var token *jwt.Token
 
-	if token, err = validateJWT(ctx, v.StatelessJWTStrategy, jwt.NewStatelessJWTProfileIntrospectionClient(request.GetClient()), tokenString); err != nil {
+	if token, err = v.decode(ctx, request, tokenString); err != nil {
 		return "", err
 	}
 
@@ -109,6 +110,18 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 	request.Merge(r)
 
 	return oauth2.AccessToken, nil
+}
+
+func (v *StatelessJWTValidator) decode(ctx context.Context, request oauth2.AccessRequester, tokenString string) (token *jwt.Token, err error) {
+	client := jwt.NewStatelessJWTProfileIntrospectionClient(request.GetClient())
+
+	if jwt.IsEncryptedJWT(tokenString) {
+		if _, _, _, err = v.Decrypt(ctx, tokenString, jwt.WithClient(client)); err != nil {
+			return nil, errorsx.WithStack(oauth2.ErrUnknownRequest.WithWrap(err).WithDebugError(err))
+		}
+	}
+
+	return validateJWT(ctx, v.StatelessJWTStrategy, client, tokenString)
 }
 
 // validateRegistration validates the token against the current registration of the client it was issued to, and sets

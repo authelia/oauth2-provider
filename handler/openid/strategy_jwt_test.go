@@ -107,6 +107,7 @@ func TestDefaultSession_Clone(t *testing.T) {
 					KeyBindingGranted:                    true,
 					RequestedAuthenticationContextClaims: []string{"acr"},
 					RefreshTokenMode:                     oauth2.RefreshTokenModeOnline,
+					AccessTokenDigest:                    "digest",
 					ExpiryDeadline:                       time.Unix(1700003600, 0).UTC(),
 					RequestedAt:                          now,
 				}

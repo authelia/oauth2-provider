@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/slicesx"
 	"authelia.com/provider/oauth2/token/jwt"
@@ -58,6 +59,7 @@ type DefaultSession struct {
 	ExpiryDeadline                       time.Time                      `json:"expiry_deadline,omitzero"`
 	RequestedAuthenticationContextClaims []string                       `json:"requested_authentication_context_claims,omitempty"`
 	RefreshTokenMode                     oauth2.RefreshTokenMode        `json:"refresh_token_mode,omitempty"`
+	AccessTokenDigest                    string                         `json:"access_token_digest,omitempty"`
 }
 
 // NewDefaultSession returns a DefaultSession with empty claims and headers, requested at the current time.
@@ -498,6 +500,20 @@ func (h DefaultStrategy) GenerateBackChannelLogoutToken(ctx context.Context, cli
 	return token, err
 }
 
+// SetAccessTokenDigest implements hoauth2.EncryptedAccessTokenSession for DefaultSession.
+func (s *DefaultSession) SetAccessTokenDigest(digest string) {
+	s.AccessTokenDigest = digest
+}
+
+// GetAccessTokenDigest implements hoauth2.EncryptedAccessTokenSession for DefaultSession.
+func (s *DefaultSession) GetAccessTokenDigest() (digest string) {
+	if s == nil {
+		return ""
+	}
+
+	return s.AccessTokenDigest
+}
+
 // SetOIDCKeyBindingGranted implements DPoPBoundSession for DefaultSession.
 func (s *DefaultSession) SetOIDCKeyBindingGranted(granted bool) {
 	s.KeyBindingGranted = granted
@@ -515,4 +531,6 @@ func (s *DefaultSession) GetOIDCKeyBindingGranted() (granted bool) {
 var (
 	_ oauth2.DPoPBoundSession = (*DefaultSession)(nil)
 	_ oauth2.MTLSBoundSession = (*DefaultSession)(nil)
+
+	_ hoauth2.EncryptedAccessTokenSession = (*DefaultSession)(nil)
 )

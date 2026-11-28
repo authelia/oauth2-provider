@@ -57,6 +57,8 @@ func TestGetPushedAuthorizeContextLifespan(t *testing.T) {
 		{"ShouldUseTheClientLifespan", &Config{PushedAuthorizeContextLifespan: 15 * time.Minute}, &DefaultRegisteredClient{DefaultClient: &DefaultClient{}, PushedAuthorizeContextLifespan: 2 * time.Minute}, 2 * time.Minute},
 		{"ShouldCapTheContextLifespanForAFAPI2Client", &Config{PushedAuthorizeContextLifespan: 15 * time.Minute}, newFAPI2Client(), 10*time.Minute - time.Second},
 		{"ShouldKeepTheDefaultLifespanForAFAPI2Client", &Config{}, newFAPI2Client(), 5 * time.Minute},
+		{"ShouldCapTheClientLifespanOfAFAPI2Server", &Config{FAPI2SecurityProfile: true}, &DefaultRegisteredClient{DefaultClient: &DefaultClient{}, PushedAuthorizeContextLifespan: time.Hour}, 10*time.Minute - time.Second},
+		{"ShouldKeepTheClientLifespanOfAnotherServer", &Config{}, &DefaultRegisteredClient{DefaultClient: &DefaultClient{}, PushedAuthorizeContextLifespan: time.Hour}, time.Hour},
 	}
 
 	for _, tc := range testCases {

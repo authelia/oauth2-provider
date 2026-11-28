@@ -580,6 +580,14 @@ func validateTokenType(values []string, header map[string]any, allowEmpty bool) 
 	return validateTokenTypeValue(raw, values...)
 }
 
+// IsTokenType reports whether the 'typ' header value raw is one of values, comparing media types without regard to case
+// and treating a value without a '/' as having the 'application/' prefix.
+//
+// See: https://www.rfc-editor.org/rfc/rfc7515#section-4.1.9
+func IsTokenType(raw any, values ...string) bool {
+	return validateTokenTypeValue(raw, values...)
+}
+
 func validateTokenTypeValue(raw any, values ...string) bool {
 	var (
 		typ string

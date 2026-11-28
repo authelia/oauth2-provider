@@ -41,6 +41,25 @@ func TestParseProof(t *testing.T) {
 		check   func(t *testing.T, proof *oauth2.DPoPProof)
 	}{
 		{
+			name: "ValidWithTheMediaTypePrefix",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				return signProof(t, key, "application/dpop+jwt", map[string]any{ijwt.ClaimJWTID: "x", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})
+			},
+		},
+		{
+			name: "ValidWithADifferentCase",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				return signProof(t, key, "DPoP+JWT", map[string]any{ijwt.ClaimJWTID: "x", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})
+			},
+		},
+		{
+			name: "InvalidTypWithAnotherMediaTypePrefix",
+			raw: func(t *testing.T, key *jose.JSONWebKey) string {
+				return signProof(t, key, "text/dpop+jwt", map[string]any{ijwt.ClaimJWTID: "x", ijwt.ClaimHTTPMethod: http.MethodPost, ijwt.ClaimHTTPURI: "https://as/token", ijwt.ClaimIssuedAt: 1})
+			},
+			wantErr: oauth2.ErrInvalidDPoPProof,
+		},
+		{
 			name: "Valid",
 			raw: func(t *testing.T, key *jose.JSONWebKey) string {
 				return signProof(t, key, ijwt.JSONWebTokenTypeDPoP, map[string]any{

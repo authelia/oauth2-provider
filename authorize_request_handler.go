@@ -54,6 +54,7 @@ func (f *Fosite) newAuthorizeRequest(ctx context.Context, r *http.Request, isPAR
 	defer func() {
 		if err != nil {
 			setAuthorizeErrorDefaultResponseMode(request)
+			setAuthorizeErrorClientResponseMode(request)
 		}
 	}()
 
@@ -227,6 +228,58 @@ func (f *Fosite) validateNonceEntropy(ctx context.Context, form url.Values) (err
 	}
 
 	return nil
+}
+
+// setAuthorizeErrorClientResponseMode makes an error raised before the response mode was validated against the client
+// use a response mode the client registered, and one which can deliver it to the redirect URI. A client which registered
+// response modes receives the error in the default response mode of the response type when it registered it, and in
+// the first it registered otherwise. The 'form_post' response modes are replaced by the 'query' ones for a redirect URI
+// that is not an HTTP URI, which a form cannot be posted to.
+//
+// See: https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html#FormPostResponseMode
+func setAuthorizeErrorClientResponseMode(request *AuthorizeRequest) {
+	if request.RedirectURI == nil {
+		return
+	}
+
+	responseTypes := Arguments(RemoveEmpty(strings.Split(request.Form.Get(consts.FormParameterResponseType), " ")))
+
+	if client, ok := request.GetClient().(ResponseModeClient); ok {
+		if modes := client.GetResponseModes(); len(modes) != 0 && !slices.Contains(modes, request.ResponseMode) {
+			if mode := defaultResponseModeForResponseTypes(responseTypes); slices.Contains(modes, mode) {
+				request.ResponseMode = mode
+			} else {
+				request.ResponseMode = modes[0]
+			}
+		}
+	}
+
+	// JWT Secured Authorization Response Mode Section 2.3.4: 'jwt' is 'query.jwt' for the 'code' response type and
+	// 'fragment.jwt' otherwise, which the response types parsed from the form decide, as the request may not have them.
+	//
+	// See: https://openid.net/specs/oauth-v2-jarm-final.html#section-2.3.4
+	if request.ResponseMode == ResponseModeJWT {
+		if responseTypes.ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
+			request.ResponseMode = ResponseModeQueryJWT
+		} else {
+			request.ResponseMode = ResponseModeFragmentJWT
+		}
+	}
+
+	if isHTTPRedirectURI(request.RedirectURI) {
+		return
+	}
+
+	switch request.ResponseMode {
+	case ResponseModeFormPost:
+		request.ResponseMode = ResponseModeQuery
+	case ResponseModeFormPostJWT:
+		request.ResponseMode = ResponseModeQueryJWT
+	}
+}
+
+func isHTTPRedirectURI(uri *url.URL) bool {
+	return uri != nil && (uri.Scheme == consts.SchemeHTTP || uri.Scheme == consts.SchemeHTTPS)
 }
 
 func setAuthorizeErrorDefaultResponseMode(request *AuthorizeRequest) {
@@ -875,6 +928,13 @@ func defaultResponseModeForResponseTypes(responseTypes Arguments) ResponseModeTy
 func (f *Fosite) validateResponseMode(_ context.Context, _ *http.Request, request *AuthorizeRequest) error {
 	if request.ResponseMode == ResponseModeDefault {
 		return validateDefaultResponseMode(request)
+	}
+
+	// OAuth 2.0 Form Post Response Mode Section 2: the response is posted to the redirect URI, so it must be an HTTP URI.
+	//
+	// See: https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html#FormPostResponseMode
+	if (request.ResponseMode == ResponseModeFormPost || request.ResponseMode == ResponseModeFormPostJWT) && !isHTTPRedirectURI(request.RedirectURI) {
+		return errorsx.WithStack(ErrUnsupportedResponseMode.WithHintf("The 'response_mode' requested was '%s', which cannot be used with a redirect URI which is not an HTTP URI.", request.ResponseMode))
 	}
 
 	client, ok := request.GetClient().(ResponseModeClient)

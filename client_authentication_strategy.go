@@ -30,6 +30,7 @@ type DefaultClientAuthenticationStrategy struct {
 	Config interface {
 		JWTStrategyProvider
 		JWKSFetcherStrategyProvider
+		ClientJWKSFetcherStrategyProvider
 		IssuerProvider
 		EndpointURLsProvider
 		AllowedJWTAssertionAudiencesProvider

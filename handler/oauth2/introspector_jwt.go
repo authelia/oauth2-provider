@@ -29,7 +29,8 @@ type StatelessJWTStrategy interface {
 // Clients is set and the client the token was issued to is a FAPI2SecurityProfileClient held to it, or cannot be
 // resolved for a reason other than not being registered. A storage-backed introspector such as CoreValidator must then
 // be registered after it. A token that is not encrypted, when the client it was issued to registered for encrypted
-// access tokens, is rejected as RFC 9068 Section 4 asks. When Clients is set and resolves the client the token was
+// access tokens, is rejected as RFC 9068 Section 4 asks, as is a token without an 'exp' claim and, when Config is an
+// oauth2.IssuerProvider returning an issuer, one whose 'iss' claim is not exactly that issuer. When Clients is set and resolves the client the token was
 // issued to, the returned request carries its current registration rather than a client with only the 'client_id'
 // claim, so per-client policy such as the scope strategy applies. A token of a client Clients does not resolve, such as
 // one resolved from a Client ID Metadata Document, carries a client with only the 'client_id' claim.
@@ -80,6 +81,10 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 		return "", errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebug("The provided token is not a valid RFC9068 JWT Profile Access Token as it is missing the header 'typ' value of 'at+jwt'."))
 	}
 
+	if err = v.validateIssuerAndExpiry(ctx, token); err != nil {
+		return "", err
+	}
+
 	r := AccessTokenJWTToRequest(token)
 
 	if err = v.validateRegistration(ctx, r, tokenString); err != nil {
@@ -108,6 +113,37 @@ func (v *StatelessJWTValidator) IntrospectToken(ctx context.Context, tokenString
 
 // validateRegistration validates the token against the current registration of the client it was issued to, and sets
 // that registration on the request reconstructed from the token.
+// validateIssuerAndExpiry requires the 'exp' claim to be after the current time, which the claims validation does not
+// check when it is absent or zero, and when the configuration provides an issuer, an 'iss' claim exactly matching it.
+//
+// See: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
+// See: https://www.rfc-editor.org/rfc/rfc9068#section-4
+func (v *StatelessJWTValidator) validateIssuerAndExpiry(ctx context.Context, token *jwt.Token) (err error) {
+	claims := token.Claims.ToMapClaims()
+
+	exp, err := claims.GetExpirationTime()
+
+	switch {
+	case err != nil || exp == nil:
+		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebug("The provided token is not a valid RFC9068 JWT Profile Access Token as it is missing the 'exp' claim."))
+	case !time.Now().Before(exp.Time):
+		return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebug("The provided token is not a valid RFC9068 JWT Profile Access Token as its 'exp' claim is not after the current time."))
+	}
+
+	p, ok := v.Config.(oauth2.IssuerProvider)
+	if !ok {
+		return nil
+	}
+
+	if issuer := p.GetIssuer(ctx); issuer != "" {
+		if iss, _ := claims[consts.ClaimIssuer].(string); iss != issuer {
+			return errorsx.WithStack(oauth2.ErrRequestUnauthorized.WithDebugf("The provided token is not a valid RFC9068 JWT Profile Access Token as its 'iss' claim '%s' is not the issuer '%s'.", iss, issuer))
+		}
+	}
+
+	return nil
+}
+
 func (v *StatelessJWTValidator) validateRegistration(ctx context.Context, request oauth2.Requester, tokenString string) (err error) {
 	registered, deferred := v.registration(ctx, request.GetClient())
 

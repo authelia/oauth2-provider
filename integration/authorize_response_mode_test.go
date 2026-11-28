@@ -61,6 +61,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 		check        func(t *testing.T, stateFromServer string, code string, token xoauth2.Token, iDToken string, err map[string]string)
 		responseType string
 		responseMode string
+		delivered    string
 	}{
 		{
 			name:         "Should give err because implicit grant with response mode query",
@@ -98,6 +99,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			name:         "Should fail because response mode form_post is not allowed by the client",
 			responseType: consts.ResponseTypeImplicitFlowBoth,
 			responseMode: consts.ResponseModeFormPost,
+			delivered:    consts.ResponseModeQuery,
 			setup: func() {
 				state = testState
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
@@ -113,6 +115,7 @@ func TestAuthorizeResponseModes(t *testing.T) {
 			name:         "Should fail because response mode form_post is not allowed by the client without legacy format",
 			responseType: consts.ResponseTypeImplicitFlowBoth,
 			responseMode: consts.ResponseModeFormPost,
+			delivered:    consts.ResponseModeQuery,
 			setup: func() {
 				state = testState
 				oauthClient.Scopes = []string{consts.ScopeOpenID}
@@ -236,7 +239,14 @@ func TestAuthorizeResponseModes(t *testing.T) {
 
 			resp, err := client.Get(authURL)
 
-			switch oauth2.ResponseModeType(tc.responseMode) {
+			delivered := tc.responseMode
+
+			// An error raised before the response mode is validated is delivered in a response mode the client registered.
+			if tc.delivered != "" {
+				delivered = tc.delivered
+			}
+
+			switch oauth2.ResponseModeType(delivered) {
 			case oauth2.ResponseModeFragment:
 				require.EqualError(t, errors.Unwrap(err), redirErr.Error())
 

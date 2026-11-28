@@ -1120,6 +1120,10 @@ func (*testConfig) GetJWKSFetcherStrategy(ctx context.Context) (strategy JWKSFet
 	return &testFetcher{client: http.DefaultClient}
 }
 
+func (c *testConfig) GetClientJWKSFetcherStrategy(ctx context.Context, _ any) (strategy JWKSFetcherStrategy) {
+	return c.GetJWKSFetcherStrategy(ctx)
+}
+
 type testFetcher struct {
 	client *http.Client
 }

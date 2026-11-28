@@ -59,8 +59,9 @@ func ParseProof(proof string, algorithms []jose.SignatureAlgorithm) (parsed *oau
 
 	header := jws.Signatures[0].Header
 
+	// RFC 9449 Section 4.3 and RFC 7515 Section 4.1.9: 'application/dpop+jwt' is the same media type as 'dpop+jwt'.
 	typ, _ := header.ExtraHeaders[jose.HeaderType].(string)
-	if typ != jwt.JSONWebTokenTypeDPoP {
+	if !jwt.IsTokenType(typ, jwt.JSONWebTokenTypeDPoP) {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidDPoPProof.WithHintf("The DPoP proof has an invalid 'typ' header value of '%s'.", typ))
 	}
 

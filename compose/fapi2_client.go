@@ -15,6 +15,7 @@ import (
 	"authelia.com/provider/oauth2/handler/par"
 	"authelia.com/provider/oauth2/handler/rfc8705"
 	"authelia.com/provider/oauth2/handler/rfc9449"
+	"authelia.com/provider/oauth2/internal/consts"
 )
 
 // ValidateFAPI2SecurityProfileClientSupport returns an error joining every way the configuration and the handlers
@@ -42,6 +43,34 @@ func ValidateFAPI2SecurityProfileClientSupport(ctx context.Context, config oauth
 	v.clientSupportSenderConstrained(ctx, config)
 	v.clientSupportCryptography(ctx, config, strategies)
 	v.clientSupportResourceServer(ctx, config)
+
+	return errors.Join(v.errs...)
+}
+
+// ValidateFAPI2SecurityProfileClient returns an error joining every way the registration of the client cannot meet the
+// FAPI 2.0 Security Profile, or nil when it can. Call it for each statically configured client held to the profile,
+// such as one implementing oauth2.FAPI2SecurityProfileClient or every client of an authorization server held to it, as
+// a request of such a client would otherwise be refused at each request. The client must be confidential, register
+// only the 'code' response type, and not require a PKCE 'code_challenge_method' other than S256.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
+func ValidateFAPI2SecurityProfileClient(client oauth2.Client) (err error) {
+	v := &fapi2Violations{}
+
+	if client.IsPublic() {
+		v.fail(fapi2SectionGeneral, "the client '%s' must be confidential, but it is public", client.GetID())
+	}
+
+	for _, responseType := range client.GetResponseTypes() {
+		if !oauth2.Arguments(oauth2.RemoveEmpty(strings.Split(responseType, " "))).ExactOne(consts.ResponseTypeAuthorizationCodeFlow) {
+			v.fail(fapi2SectionAuthorizationEndpoint, "the client '%s' must register only the 'code' response type, but it registers '%s'", client.GetID(), responseType)
+		}
+	}
+
+	if pkce, ok := client.(oauth2.ProofKeyCodeExchangeClient); ok && pkce.GetEnforcePKCEChallengeMethod() && pkce.GetPKCEChallengeMethod() != consts.PKCEChallengeMethodSHA256 {
+		v.fail(fapi2SectionAuthorizationEndpoint, "the client '%s' requires the PKCE code challenge method '%s', but only 'S256' is permitted, so no authorization request of it can succeed", client.GetID(), pkce.GetPKCEChallengeMethod())
+	}
 
 	return errors.Join(v.errs...)
 }

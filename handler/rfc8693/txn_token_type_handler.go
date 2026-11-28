@@ -827,9 +827,7 @@ func (c *TxnTokenTypeHandler) selfSignedKeyfunc(ctx context.Context, client oaut
 	var fetcher jwt.JWKSFetcherStrategy
 
 	if !inline {
-		if fetcher = jwt.ClientJWKSFetcherStrategy(ctx, c.Config, client); fetcher == nil {
-			return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("The JSON Web Key Set fetcher strategy is not configured."))
-		}
+		fetcher = jwt.ClientJWKSFetcherStrategy(ctx, c.Config, client)
 	}
 
 	return func(token *jwt.Token) (key any, err error) {

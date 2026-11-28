@@ -70,17 +70,6 @@ func TestClientJWKSFetcherStrategy(t *testing.T) {
 		_, err := fetcher.Resolve(t.Context(), "https://client.example.com/jwks.json", false)
 		assert.Error(t, err)
 	})
-
-	t.Run("ShouldFailClosedWhenConfigIsNotAProvider", func(t *testing.T) {
-		config := stubSharedOnlyConfig{shared: shared}
-
-		fetcher := ClientJWKSFetcherStrategy(t.Context(), config, markedClient(true))
-
-		_, err := fetcher.Resolve(t.Context(), "https://client.example.com/jwks.json", false)
-		assert.Error(t, err)
-
-		assert.Same(t, shared, ClientJWKSFetcherStrategy(t.Context(), config, markedClient(false)))
-	})
 }
 
 func TestStrategyFetchesTheJWKSURIOfADocumentClientOnlyWithItsOwnFetcher(t *testing.T) {
@@ -148,16 +137,6 @@ func TestStrategyFetchesTheJWKSURIOfADocumentClientOnlyWithItsOwnFetcher(t *test
 				require.Error(t, site.run(&DefaultStrategy{Config: config, Issuer: MustGenDefaultIssuer()}, site.document))
 				assert.Equal(t, 0, config.shared.calls)
 			})
-
-			t.Run("ShouldFailClosedForADocumentClientWhenTheConfigIsNotAProvider", func(t *testing.T) {
-				shared := &countingFetcher{jwks: jwks}
-
-				require.Error(t, site.run(&DefaultStrategy{Config: stubSharedOnlyConfig{shared: shared}, Issuer: MustGenDefaultIssuer()}, site.document))
-				assert.Equal(t, 0, shared.calls)
-
-				require.NoError(t, site.run(&DefaultStrategy{Config: stubSharedOnlyConfig{shared: shared}, Issuer: MustGenDefaultIssuer()}, site.registered))
-				assert.Equal(t, 1, shared.calls)
-			})
 		})
 	}
 }
@@ -198,12 +177,6 @@ type clientStubFetcher struct{ name string }
 
 func (s *clientStubFetcher) Resolve(_ context.Context, _ string, _ bool) (*jose.JSONWebKeySet, error) {
 	return &jose.JSONWebKeySet{}, nil
-}
-
-type stubSharedOnlyConfig struct{ shared JWKSFetcherStrategy }
-
-func (s stubSharedOnlyConfig) GetJWKSFetcherStrategy(_ context.Context) JWKSFetcherStrategy {
-	return s.shared
 }
 
 type stubFetcherConfig struct{ shared, guarded *clientStubFetcher }

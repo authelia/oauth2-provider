@@ -38,6 +38,28 @@ type JWTSession struct {
 	KeyBindingGranted           bool                    `json:",omitempty"`
 	ExpiryDeadline              time.Time               `json:",omitzero"`
 	RefreshTokenMode            oauth2.RefreshTokenMode `json:",omitempty"`
+	AccessTokenDigest           string                  `json:",omitempty"`
+}
+
+// EncryptedAccessTokenSession is a session recording the digest of the encrypted JWT profile access token issued with
+// it, which JWTProfileCoreStrategy compares with a presented encrypted access token to verify its integrity, as the
+// token cannot always be decrypted.
+type EncryptedAccessTokenSession interface {
+	// GetAccessTokenDigest returns the digest of the encrypted access token issued with the session.
+	GetAccessTokenDigest() (digest string)
+
+	// SetAccessTokenDigest records the digest of the encrypted access token issued with the session.
+	SetAccessTokenDigest(digest string)
+}
+
+// GetAccessTokenDigest implements EncryptedAccessTokenSession for JWTSession.
+func (s *JWTSession) GetAccessTokenDigest() (digest string) {
+	return s.AccessTokenDigest
+}
+
+// SetAccessTokenDigest implements EncryptedAccessTokenSession for JWTSession.
+func (s *JWTSession) SetAccessTokenDigest(digest string) {
+	s.AccessTokenDigest = digest
 }
 
 // SetRequestedDPoPJWKThumbprint implements oauth2.DPoPBoundSession for JWTSession.

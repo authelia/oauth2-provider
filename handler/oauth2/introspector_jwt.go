@@ -28,8 +28,7 @@ type StatelessJWTStrategy interface {
 // introspector, as for a token it does not handle, when the authorization server is held to the profile, and when
 // Clients is set and the client the token was issued to is a FAPI2SecurityProfileClient held to it, or cannot be
 // resolved for a reason other than not being registered. A storage-backed introspector such as CoreValidator must then
-// be registered after it. JWTProfileCoreStrategy does not issue an encrypted access token in those cases, as storage
-// cannot resolve one.
+// be registered after it.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.4
 type StatelessJWTValidator struct {

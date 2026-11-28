@@ -53,6 +53,15 @@ type AccessTokenStrategy interface {
 	ValidateAccessToken(ctx context.Context, request oauth2.Requester, token string) (err error)
 }
 
+// AccessTokenSignatureVerifier is an AccessTokenStrategy whose tokens cannot all be verified without the session they
+// were issued with. The token revocation handler, which looks tokens up without a session, verifies such a token is the
+// one stored under the signature it was resolved by rather than calling ValidateAccessToken.
+type AccessTokenSignatureVerifier interface {
+	// VerifyAccessTokenSignature verifies that the token is the one stored under the signature, which the request was
+	// resolved by, without checking its expiry. The request may have no session.
+	VerifyAccessTokenSignature(ctx context.Context, request oauth2.Requester, token, signature string) (err error)
+}
+
 // RefreshTokenStrategy generates, validates, and identifies refresh tokens.
 type RefreshTokenStrategy interface {
 	// IsOpaqueRefreshToken returns true if the provided token is possibly an opaque Refresh Token.

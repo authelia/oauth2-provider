@@ -148,7 +148,7 @@ func (c *AuthorizeExplicitGrantHandler) GetAuthorizeCodeSessionParameters(ctx co
 func (c *AuthorizeExplicitGrantHandler) isPKCEVerified(ctx context.Context) bool {
 	config, ok := c.Config.(oauth2.Configurator)
 
-	return ok && len(oauth2.SupportedCodeChallengeMethods(ctx, config)) != 0
+	return ok && oauth2.IsPKCEVerified(ctx, config)
 }
 
 // ResponseTypesSupported returns the response types this handler serves.

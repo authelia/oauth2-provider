@@ -24,6 +24,9 @@ type BackChannelNotification struct {
 	// ClientID is the identifier of the client the notification is for.
 	ClientID string
 
+	// Client is the client the notification is for.
+	Client Client
+
 	// RequestID is the application handle of the authentication request, for correlation in logs and queues.
 	RequestID string
 
@@ -101,6 +104,7 @@ func newBackChannelNotification(client Client, request BackChannelAuthentication
 
 	notification = &BackChannelNotification{
 		ClientID:    client.GetID(),
+		Client:      client,
 		RequestID:   request.GetID(),
 		Mode:        mode,
 		Endpoint:    cc.GetBackChannelClientNotificationEndpoint(),

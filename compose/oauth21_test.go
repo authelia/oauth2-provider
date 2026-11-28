@@ -109,6 +109,32 @@ func TestValidateOAuth21Profile(t *testing.T) {
 			expected: []string{"OAuth 2.1 Section 9.3.2: rotated refresh tokens must not outlive the first refresh token of the grant, but RefreshTokenMaximumLifespan is not set"},
 		},
 		{
+			name: "ShouldRejectAMaximumLifespanBeyondTheRefreshTokenLifespan",
+			modify: func(config *oauth2.Config) {
+				config.RefreshTokenLifespan, config.RefreshTokenMaximumLifespan = 30*24*time.Hour, 365*24*time.Hour
+			},
+			expected: []string{"OAuth 2.1 Section 9.3.2: rotated refresh tokens must not outlive the first refresh token of the grant, but RefreshTokenMaximumLifespan 8760h0m0s exceeds the RefreshTokenLifespan 720h0m0s"},
+		},
+		{
+			name: "ShouldRejectAMaximumLifespanBeyondTheDefaultRefreshTokenLifespan",
+			modify: func(config *oauth2.Config) {
+				config.RefreshTokenLifespan, config.RefreshTokenMaximumLifespan = 0, 365*24*time.Hour
+			},
+			expected: []string{"OAuth 2.1 Section 9.3.2: rotated refresh tokens must not outlive the first refresh token of the grant, but RefreshTokenMaximumLifespan 8760h0m0s exceeds the RefreshTokenLifespan 720h0m0s"},
+		},
+		{
+			name: "ShouldPassWithAMaximumLifespanOfTheRefreshTokenLifespan",
+			modify: func(config *oauth2.Config) {
+				config.RefreshTokenLifespan, config.RefreshTokenMaximumLifespan = 30*24*time.Hour, 30*24*time.Hour
+			},
+		},
+		{
+			name: "ShouldPassWithAMaximumLifespanBelowTheRefreshTokenLifespan",
+			modify: func(config *oauth2.Config) {
+				config.RefreshTokenLifespan, config.RefreshTokenMaximumLifespan = 30*24*time.Hour, 7*24*time.Hour
+			},
+		},
+		{
 			name:     "ShouldRejectLowTokenEntropy",
 			modify:   func(config *oauth2.Config) { config.TokenEntropy = 16 },
 			expected: []string{"OAuth 2.1 Section 7.7: the client secrets the client registration handler generates must have a guessing probability of at most 2^-128, which needs a TokenEntropy of at least 22, but it is 16"},
@@ -169,6 +195,111 @@ func TestValidateOAuth21Profile(t *testing.T) {
 			for _, expected := range tc.expected {
 				assert.Contains(t, err.Error(), expected)
 			}
+		})
+	}
+}
+
+func TestValidateOAuth21ProfileClient(t *testing.T) {
+	day := 24 * time.Hour
+
+	testCases := []struct {
+		name      string
+		grants    []string
+		maximum   time.Duration
+		lifespan  *time.Duration
+		lifespans *oauth2.ClientLifespanConfig
+		expected  string
+	}{
+		{name: "ShouldPassWithTheConfiguredLifespans", grants: []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken}},
+		{name: "ShouldPassWithoutTheRefreshTokenGrant", grants: []string{consts.GrantTypeAuthorizationCode}, maximum: -1},
+		{name: "ShouldPassWithAShorterMaximumLifespan", grants: []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken}, maximum: 7 * day},
+		{
+			name:     "ShouldRejectALongerMaximumLifespan",
+			grants:   []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+			maximum:  365 * day,
+			expected: "OAuth 2.1 Section 9.3.2: rotated refresh tokens of the client 'client' must not outlive the first refresh token of the grant, but its refresh token maximum lifespan 8760h0m0s exceeds the lifespan 720h0m0s of the refresh token its 'authorization_code' grant issues",
+		},
+		{
+			name:     "ShouldRejectAnUnlimitedMaximumLifespan",
+			grants:   []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+			maximum:  -1,
+			expected: "OAuth 2.1 Section 9.3.2: rotated refresh tokens of the client 'client' must not outlive the first refresh token of the grant, but its refresh token maximum lifespan is not set",
+		},
+		{
+			name:     "ShouldRejectAShorterFirstRefreshTokenLifespan",
+			grants:   []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+			lifespan: new(day),
+			expected: "OAuth 2.1 Section 9.3.2: rotated refresh tokens of the client 'client' must not outlive the first refresh token of the grant, but its refresh token maximum lifespan 720h0m0s exceeds the lifespan 24h0m0s of the refresh token its 'authorization_code' grant issues",
+		},
+		{
+			name:      "ShouldRejectAShorterDeviceCodeRefreshTokenLifespan",
+			grants:    []string{consts.GrantTypeOAuthDeviceCode, consts.GrantTypeRefreshToken},
+			lifespans: &oauth2.ClientLifespanConfig{DeviceCodeGrantRefreshTokenLifespan: new(day)},
+			expected:  "OAuth 2.1 Section 9.3.2: rotated refresh tokens of the client 'client' must not outlive the first refresh token of the grant, but its refresh token maximum lifespan 720h0m0s exceeds the lifespan 24h0m0s of the refresh token its 'urn:ietf:params:oauth:grant-type:device_code' grant issues",
+		},
+		{
+			name:      "ShouldRejectAShorterCIBARefreshTokenLifespan",
+			grants:    []string{consts.GrantTypeOpenIDCIBA, consts.GrantTypeRefreshToken},
+			lifespans: &oauth2.ClientLifespanConfig{CIBAGrantRefreshTokenLifespan: new(day)},
+			expected:  "OAuth 2.1 Section 9.3.2: rotated refresh tokens of the client 'client' must not outlive the first refresh token of the grant, but its refresh token maximum lifespan 720h0m0s exceeds the lifespan 24h0m0s of the refresh token its 'urn:openid:params:grant-type:ciba' grant issues",
+		},
+		{
+			name:      "ShouldRejectAShorterPasswordRefreshTokenLifespan",
+			grants:    []string{consts.GrantTypeResourceOwnerPasswordCredentials, consts.GrantTypeRefreshToken},
+			lifespans: &oauth2.ClientLifespanConfig{PasswordGrantRefreshTokenLifespan: new(day)},
+			expected:  "OAuth 2.1 Section 9.3.2: rotated refresh tokens of the client 'client' must not outlive the first refresh token of the grant, but its refresh token maximum lifespan 720h0m0s exceeds the lifespan 24h0m0s of the refresh token its 'password' grant issues",
+		},
+		{
+			name:      "ShouldRejectAShorterTokenExchangeRefreshTokenLifespan",
+			grants:    []string{consts.GrantTypeOAuthTokenExchange, consts.GrantTypeRefreshToken},
+			lifespans: &oauth2.ClientLifespanConfig{TokenExchangeGrantRefreshTokenLifespan: new(day)},
+			expected:  "OAuth 2.1 Section 9.3.2: rotated refresh tokens of the client 'client' must not outlive the first refresh token of the grant, but its refresh token maximum lifespan 720h0m0s exceeds the lifespan 24h0m0s of the refresh token its 'urn:ietf:params:oauth:grant-type:token-exchange' grant issues",
+		},
+		{
+			name:      "ShouldIgnoreTheLifespanOfAGrantTheClientIsNotRegisteredFor",
+			grants:    []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+			lifespans: &oauth2.ClientLifespanConfig{PasswordGrantRefreshTokenLifespan: new(day)},
+		},
+		{
+			name:      "ShouldPassWithoutLifespans",
+			grants:    []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+			lifespans: &oauth2.ClientLifespanConfig{},
+		},
+		{
+			name:     "ShouldPassWithAFirstRefreshTokenWhichDoesNotExpireBeforeTheMaximum",
+			grants:   []string{consts.GrantTypeAuthorizationCode, consts.GrantTypeRefreshToken},
+			lifespan: new(time.Duration(-1)),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := newOAuth21Config()
+
+			ApplyOAuth21Profile(config)
+
+			lifespans := tc.lifespans
+			if lifespans == nil {
+				lifespans = &oauth2.ClientLifespanConfig{AuthorizationCodeGrantRefreshTokenLifespan: tc.lifespan}
+			}
+
+			client := &oauth21TestLifespanClient{
+				DefaultClientWithCustomTokenLifespans: &oauth2.DefaultClientWithCustomTokenLifespans{
+					DefaultClient:  &oauth2.DefaultClient{ID: "client", GrantTypes: tc.grants},
+					TokenLifespans: lifespans,
+				},
+				maximum: tc.maximum,
+			}
+
+			err := ValidateOAuth21ProfileClient(context.Background(), config, client)
+
+			if tc.expected == "" {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			assert.EqualError(t, err, tc.expected)
 		})
 	}
 }
@@ -400,4 +531,14 @@ func composeOAuth21(t *testing.T, config *oauth2.Config, extra ...Factory) oauth
 		},
 		factories...,
 	)
+}
+
+type oauth21TestLifespanClient struct {
+	*oauth2.DefaultClientWithCustomTokenLifespans
+
+	maximum time.Duration
+}
+
+func (c *oauth21TestLifespanClient) GetRefreshTokenMaximumLifespan() time.Duration {
+	return c.maximum
 }

@@ -34,6 +34,7 @@ func TestAuthorizeCode_TokenRequestRedirectURIOptional(t *testing.T) {
 		client   *bool
 		pkce     bool
 		verified bool
+		side     string
 		scopes   oauth2.Arguments
 		redirect []string
 		err      string
@@ -108,6 +109,22 @@ func TestAuthorizeCode_TokenRequestRedirectURIOptional(t *testing.T) {
 			err:    mismatch,
 		},
 		{
+			name:   "ShouldRejectOmittedRedirectURIWhenPKCEIsVerifiedOnlyAtTheTokenEndpoint",
+			global: true,
+			pkce:   true,
+			side:   "token",
+			scopes: oauth2.Arguments{"foo"},
+			err:    mismatch,
+		},
+		{
+			name:   "ShouldRejectOmittedRedirectURIWhenPKCEIsVerifiedOnlyAtTheAuthorizeEndpoint",
+			global: true,
+			pkce:   true,
+			side:   "authorize",
+			scopes: oauth2.Arguments{"foo"},
+			err:    mismatch,
+		},
+		{
 			name:     "ShouldAcceptOmittedRedirectURIWhenClientEnables",
 			client:   &enabled,
 			pkce:     true,
@@ -147,8 +164,12 @@ func TestAuthorizeCode_TokenRequestRedirectURIOptional(t *testing.T) {
 				TokenRequestRedirectURIOptional: tc.global,
 			}
 
-			if tc.verified {
+			if tc.verified || tc.side == "token" {
 				config.TokenEndpointHandlers = oauth2.TokenEndpointHandlers{&codeChallengeMethodsHandler{}}
+			}
+
+			if tc.verified || tc.side == "authorize" {
+				config.AuthorizeEndpointHandlers = oauth2.AuthorizeEndpointHandlers{&codeChallengeMethodsAuthorizeHandler{}}
 			}
 
 			handler := AuthorizeExplicitGrantHandler{
@@ -239,6 +260,14 @@ func TestAuthorizeCode_TokenRequestRedirectURIOptional(t *testing.T) {
 			}
 		})
 	}
+}
+
+type codeChallengeMethodsAuthorizeHandler struct {
+	oauth2.AuthorizeEndpointHandler
+}
+
+func (h *codeChallengeMethodsAuthorizeHandler) CodeChallengeMethodsSupported(_ context.Context) (methods []string) {
+	return []string{consts.PKCEChallengeMethodSHA256}
 }
 
 type codeChallengeMethodsHandler struct {

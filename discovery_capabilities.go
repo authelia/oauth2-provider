@@ -53,6 +53,20 @@ func SupportedCodeChallengeMethods(ctx context.Context, config Configurator) []s
 	))
 }
 
+// IsPKCEVerified reports whether PKCE is verified for the authorization code grant: an authorize endpoint handler
+// reports code challenge methods, so the 'code_challenge' is validated and recorded, and a token endpoint handler does
+// too, so the 'code_verifier' is checked against it. Only then may a token request omit the 'redirect_uri' the
+// authorization request included, as the code challenge binds the authorization code to the client in its place.
+//
+// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17#section-10.2
+func IsPKCEVerified(ctx context.Context, config Configurator) bool {
+	return len(capabilities(config.GetAuthorizeEndpointHandlers(ctx), func(h AuthorizeEndpointHandler) []string {
+		return h.CodeChallengeMethodsSupported(ctx)
+	})) != 0 && len(capabilities(config.GetTokenEndpointHandlers(ctx), func(h TokenEndpointHandler) []string {
+		return h.CodeChallengeMethodsSupported(ctx)
+	})) != 0
+}
+
 // SupportedRFC8693TokenTypes returns the sorted union of the RFC 8693 token types reported by the registered token
 // endpoint handlers, or nil when none report any.
 //

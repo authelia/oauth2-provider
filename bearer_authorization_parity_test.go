@@ -81,7 +81,7 @@ func TestBearerAuthorizationParity(t *testing.T) {
 			config := &Config{}
 			r := httptest.NewRequest(http.MethodPost, "https://as.example.com/endpoint", nil)
 
-			err := ValidateBearerAuthorization(ctx, config, r, newBearerRequester(tc.scopes, tc.audience), "token",
+			_, err := ValidateBearerAuthorization(ctx, config, nil, r, newBearerRequester(tc.scopes, tc.audience), "token",
 				BearerAuthorization{Audiences: tc.permitted, Scopes: tc.required})
 
 			if tc.expected == "" {
@@ -106,8 +106,8 @@ func TestBearerAuthorizationIndistinguishableFailures(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "https://as.example.com/endpoint", nil)
 	auth := BearerAuthorization{Audiences: []string{"urn:aud"}}
 
-	wrong := ValidateBearerAuthorization(ctx, config, r, newBearerRequester(nil, []string{"urn:wrong"}), "t", auth)
-	none := ValidateBearerAuthorization(ctx, config, r, newBearerRequester(nil, nil), "t", auth)
+	_, wrong := ValidateBearerAuthorization(ctx, config, nil, r, newBearerRequester(nil, []string{"urn:wrong"}), "t", auth)
+	_, none := ValidateBearerAuthorization(ctx, config, nil, r, newBearerRequester(nil, nil), "t", auth)
 
 	require.Error(t, wrong)
 	require.Error(t, none)
@@ -123,7 +123,7 @@ func TestBearerAuthorizationIndistinguishableFailures(t *testing.T) {
 func TestBearerAuthorizationScopeDisclosesNothingElse(t *testing.T) {
 	ctx := context.Background()
 
-	err := ValidateBearerAuthorization(ctx, &Config{}, httptest.NewRequest(http.MethodPost, "https://as.example.com/endpoint", nil),
+	_, err := ValidateBearerAuthorization(ctx, &Config{}, nil, httptest.NewRequest(http.MethodPost, "https://as.example.com/endpoint", nil),
 		newBearerRequester([]string{"read"}, []string{"urn:wrong"}), "token",
 		BearerAuthorization{Audiences: []string{"urn:aud"}, Scopes: []string{"urn:need"}})
 
@@ -153,7 +153,7 @@ func TestBearerAuthorizationEnforcementPrecedesScope(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateBearerAuthorization(ctx, tc.config, r, newBearerRequester([]string{"read"}, []string{"urn:aud"}), "token", auth)
+			_, err := ValidateBearerAuthorization(ctx, tc.config, nil, r, newBearerRequester([]string{"read"}, []string{"urn:aud"}), "token", auth)
 
 			require.Error(t, err)
 

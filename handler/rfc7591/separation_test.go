@@ -81,7 +81,7 @@ func TestRegistrationScopeDoesNotAuthorizeOtherEndpoints(t *testing.T) {
 		requester.GrantScope(consts.ScopeClientRegistration)
 		requester.GrantAudience(testEndpoint)
 
-		err := oauth2.ValidateBearerAuthorization(ctx, &oauth2.Config{},
+		_, err := oauth2.ValidateBearerAuthorization(ctx, &oauth2.Config{}, nil,
 			httptest.NewRequest(http.MethodPost, testEndpoint, nil), requester, "token",
 			oauth2.BearerAuthorization{Audiences: []string{testEndpoint}, Scopes: []string{consts.ScopeIntrospection}})
 

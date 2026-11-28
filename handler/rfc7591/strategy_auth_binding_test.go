@@ -466,6 +466,7 @@ func mintBoundAccessToken(t *testing.T, ctx context.Context, store *storage.Memo
 	token, signature, err := strategy.GenerateAccessToken(ctx, request)
 	require.NoError(t, err)
 	require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+	registerTokenClient(t, ctx, store, request.Client)
 
 	return token
 }

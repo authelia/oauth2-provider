@@ -155,6 +155,7 @@ func TestClientRegistration(t *testing.T) {
 	config.EndpointURLs.Registration = ts.URL + "/register"
 
 	creator := &oauth2.DefaultClient{ID: "initial-access-client"}
+	memory.Clients[creator.ID] = creator
 
 	creation := oauth2.NewRequest()
 	creation.Client = creator

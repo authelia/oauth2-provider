@@ -72,7 +72,9 @@ func (f *Fosite) authorizeSSFRequest(ctx context.Context, r *http.Request, sessi
 		scopes = []string{consts.ScopeSSFRead, consts.ScopeSSFManage}
 	}
 
-	if err = ValidateBearerAuthorization(ctx, f.Config, r, ar, token, BearerAuthorization{
+	var client Client
+
+	if client, err = ValidateBearerAuthorization(ctx, f.Config, f.Store, r, ar, token, BearerAuthorization{
 		Audiences: []string{audience},
 		Scopes:    scopes,
 	}); err != nil {
@@ -80,16 +82,14 @@ func (f *Fosite) authorizeSSFRequest(ctx context.Context, r *http.Request, sessi
 	}
 
 	// The client ID is the only stream ownership boundary (SSF Section 8), so a credential without a client is invalid.
-	client := ar.GetClient()
-
-	if client == nil || client.GetID() == "" {
+	if client == nil {
 		return nil, nil, errorsx.WithStack(ErrInvalidToken.WithHint("The Access Token is missing, malformed, or invalid.").WithDebug("The credential does not identify a client."))
 	}
 
 	// A client resolved from a Client ID Metadata Document is not registered, so it never manages streams.
 	//
 	// See: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-9.1
-	if jwt.IsClientIDMetadataDocumentClient(client) {
+	if jwt.IsClientIDMetadataDocumentClient(client) || jwt.IsClientIDMetadataDocumentClient(ar.GetClient()) {
 		return nil, nil, errorsx.WithStack(ErrInvalidToken.WithHint("The Access Token is missing, malformed, or invalid.").WithDebug("The Access Token was issued to a client resolved from a Client ID Metadata Document."))
 	}
 

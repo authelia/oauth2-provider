@@ -44,10 +44,16 @@ type BearerAuthorization struct {
 // ValidateBearerAuthorization performs the checks common to every endpoint that accepts an Access Token as a bearer
 // credential authorizing the call. requester is the resolved credential; token is the raw value as presented.
 //
-// The order is proof-of-possession, then scope, then audience, and must not change. ErrInvalidDPoPProof and
-// ErrInsufficientScope are distinguishable from the generic ErrInvalidToken and each implies every earlier check
-// passed, so the order bounds what an error discloses: the scope diagnostic only reaches a caller who has proven
-// possession, and discloses nothing about the audience.
+// The client recorded with the credential is a copy taken when it was issued, and for a stateless JWT access token
+// only its identifier, so store resolves the current registration of that client, which the DPoP proof policy and the
+// sender-constrained check apply as well as the recorded client. It returns the registration, or nil when the
+// credential identifies no client. A registration which cannot be found is answered with ErrInvalidToken. store is
+// nil only for a credential issued by another authorization server, whose client has no registration here.
+//
+// The order is the registration, then proof-of-possession, then scope, then audience, and must not change.
+// ErrInvalidDPoPProof and ErrInsufficientScope are distinguishable from the generic ErrInvalidToken and each implies
+// every earlier check passed, so the order bounds what an error discloses: the scope diagnostic only reaches a caller
+// who has proven possession, and discloses nothing about the audience.
 //
 // An access token bound to neither a DPoP key nor a client certificate is rejected when the configuration implements
 // EnforceSenderConstrainedAccessTokensProvider and enforces them, or the client it was issued to requires them, as a
@@ -55,21 +61,48 @@ type BearerAuthorization struct {
 //
 // See: https://www.rfc-editor.org/rfc/rfc6750#section-3.1
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.4
-func ValidateBearerAuthorization(ctx context.Context, config BearerAuthorizationConfig, r *http.Request, requester Requester, token string, auth BearerAuthorization) (err error) {
-	if err = validateBearerProofOfPossession(ctx, config, r, requester, requester.GetClient(), token, auth.Endpoints); err != nil {
-		return err
+func ValidateBearerAuthorization(ctx context.Context, config BearerAuthorizationConfig, store ClientGetter, r *http.Request, requester Requester, token string, auth BearerAuthorization) (client Client, err error) {
+	if store != nil {
+		if client, err = resolveBearerClient(ctx, config, store, requester); err != nil {
+			return nil, err
+		}
+	}
+
+	if err = validateBearerProofOfPossession(ctx, config, r, requester, client, token, auth.Endpoints); err != nil {
+		return nil, err
 	}
 
 	if err = validateBearerScope(requester, auth.Scopes); err != nil {
-		return err
+		return nil, err
 	}
 
-	return validateBearerAudience(r, requester, auth)
+	if err = validateBearerAudience(r, requester, auth); err != nil {
+		return nil, err
+	}
+
+	return client, nil
+}
+
+func resolveBearerClient(ctx context.Context, config any, store ClientGetter, requester Requester) (client Client, err error) {
+	if client = requester.GetClient(); client == nil || client.GetID() == "" {
+		return nil, nil
+	}
+
+	id := client.GetID()
+
+	if client, err = GetClient(ctx, config, store, id); err != nil {
+		if failure, ok := requestServerFailure(err); ok {
+			return nil, failure
+		}
+
+		return nil, errorsx.WithStack(ErrInvalidToken.WithHint("The Access Token is missing, malformed, or invalid.").WithWrap(err).WithDebugf("The client with id '%s' the credential was issued to could not be found.", id))
+	}
+
+	return client, nil
 }
 
 // validateBearerProofOfPossession enforces the RFC 9449 (DPoP) and RFC 8705 (mTLS) bindings the credential carries,
-// and - where the deployment enforces a binding method - that it carries one at all. The DPoP proof is validated with
-// the policy of client.
+// and - where the deployment enforces a binding method - that it carries one at all.
 //
 // The two methods are independent, and for each:
 //
@@ -79,8 +112,9 @@ func ValidateBearerAuthorization(ctx context.Context, config BearerAuthorization
 //   - A method disabled in configuration contributes neither check, whatever its enforcement setting.
 //
 // A credential bound by neither enabled method is rejected with ErrInvalidToken when
-// IsSenderConstrainedAccessTokenEnforced reports that the configuration or the client it was issued to requires
-// sender-constrained access tokens.
+// IsSenderConstrainedAccessTokenEnforced reports that the configuration, the client recorded with the credential, or
+// client requires sender-constrained access tokens. The DPoP proof is validated with the policy of client, or of the
+// recorded client when client is nil.
 //
 // Errors from the underlying strategies are returned unwrapped, as the response writers depend on their codes.
 //
@@ -109,7 +143,7 @@ func validateBearerProofOfPossession(ctx context.Context, config BearerAuthoriza
 					WithDebug("The credential used to authenticate the request is bound to a DPoP key but the configured DPoP strategy cannot validate resource access."))
 			}
 
-			if _, err = strategy.ValidateResourceAccess(NewDPoPProofClientContext(ctx, client), r, token, jkt, config.GetDPoPNonceRequired(ctx), endpoints...); err != nil {
+			if _, err = strategy.ValidateResourceAccess(NewDPoPProofClientContext(ctx, bearerProofClient(requester, client)), r, token, jkt, config.GetDPoPNonceRequired(ctx), endpoints...); err != nil {
 				return err
 			}
 		case config.GetDPoPEnforce(ctx):
@@ -142,7 +176,23 @@ func validateBearerProofOfPossession(ctx context.Context, config BearerAuthoriza
 		}
 	}
 
-	return validateBearerSenderConstrained(ctx, config, requester.GetClient(), session)
+	return validateBearerSenderConstrainedClients(ctx, config, requester.GetClient(), client, session)
+}
+
+func bearerProofClient(requester Requester, client Client) Client {
+	if client == nil {
+		return requester.GetClient()
+	}
+
+	return client
+}
+
+func validateBearerSenderConstrainedClients(ctx context.Context, config BearerAuthorizationConfig, recorded, client Client, session Session) (err error) {
+	if err = validateBearerSenderConstrained(ctx, config, recorded, session); err != nil || client == nil {
+		return err
+	}
+
+	return validateBearerSenderConstrained(ctx, config, client, session)
 }
 
 func validateBearerSenderConstrained(ctx context.Context, config BearerAuthorizationConfig, client Client, session Session) (err error) {

@@ -80,7 +80,7 @@ func TestValidateBearerAuthorizationAudienceFallbackChain(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), newBearerRequester(nil, tc.granted), "token", tc.auth)
+			_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), newBearerRequester(nil, tc.granted), "token", tc.auth)
 
 			if tc.expected != "" {
 				require.Error(t, err)
@@ -100,34 +100,34 @@ func TestValidateBearerAuthorizationScope(t *testing.T) {
 	auth := BearerAuthorization{Audiences: []string{"urn:aud"}, Scopes: []string{"urn:a", "urn:b"}}
 
 	t.Run("ShouldPermitAnyOneOfTheRequiredScopes", func(t *testing.T) {
-		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), newBearerRequester([]string{"urn:b"}, []string{"urn:aud"}), "token", auth)
+		_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), newBearerRequester([]string{"urn:b"}, []string{"urn:aud"}), "token", auth)
 
 		assert.NoError(t, err)
 	})
 
 	t.Run("ShouldRejectWhenNoneHeld", func(t *testing.T) {
-		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), newBearerRequester([]string{"read"}, []string{"urn:aud"}), "token", auth)
+		_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), newBearerRequester([]string{"read"}, []string{"urn:aud"}), "token", auth)
 
 		require.Error(t, err)
 		assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'urn:a', 'urn:b', at least one of which is required.")
 	})
 
 	t.Run("ShouldSkipCheckWhenNoScopesRequired", func(t *testing.T) {
-		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), newBearerRequester(nil, []string{"urn:aud"}), "token",
+		_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), newBearerRequester(nil, []string{"urn:aud"}), "token",
 			BearerAuthorization{Audiences: []string{"urn:aud"}})
 
 		assert.NoError(t, err)
 	})
 
 	t.Run("ShouldNotUseTheScopeStrategyForWildcardMatching", func(t *testing.T) {
-		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), newBearerRequester([]string{"*"}, []string{"urn:aud"}), "token", auth)
+		_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), newBearerRequester([]string{"*"}, []string{"urn:aud"}), "token", auth)
 
 		require.Error(t, err)
 		assert.EqualError(t, ErrorToDebugRFC6749Error(err), "The request requires higher privileges than provided by the Access Token. The credential used to authenticate the request is not granted any of the scopes 'urn:a', 'urn:b', at least one of which is required.")
 	})
 
 	t.Run("ShouldRecordTheRequiredScopesForTheChallenge", func(t *testing.T) {
-		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), newBearerRequester([]string{"read"}, []string{"urn:aud"}), "token", auth)
+		_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), newBearerRequester([]string{"read"}, []string{"urn:aud"}), "token", auth)
 
 		require.Error(t, err)
 		assert.Equal(t, "urn:a urn:b", ErrorToRFC6749Error(err).ScopeField)
@@ -143,7 +143,7 @@ func TestValidateBearerAuthorizationCheckOrder(t *testing.T) {
 	ctx := context.Background()
 	config := &Config{}
 
-	err := ValidateBearerAuthorization(ctx, config, newBearerRequest(),
+	_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(),
 		newBearerRequester([]string{"read"}, []string{"urn:wrong"}), "token",
 		BearerAuthorization{Audiences: []string{"urn:aud"}, Scopes: []string{"urn:required"}})
 
@@ -159,7 +159,7 @@ func TestValidateBearerAuthorizationResourceIndicatorsCountAsAudience(t *testing
 	requester.Session = &DefaultSession{}
 	requester.GrantResource("urn:example:resource")
 
-	err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), requester, "token",
+	_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), requester, "token",
 		BearerAuthorization{Audiences: []string{"urn:example:resource"}})
 
 	assert.NoError(t, err)
@@ -175,7 +175,7 @@ func TestValidateBearerAuthorizationBinding(t *testing.T) {
 		requester.Session = &DefaultSession{JWKThumbprint: "some-thumbprint"}
 		requester.GrantAudience("urn:aud")
 
-		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), requester, "token",
+		_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), requester, "token",
 			BearerAuthorization{Audiences: []string{"urn:aud"}})
 
 		require.Error(t, err)
@@ -191,7 +191,7 @@ func TestValidateBearerAuthorizationBinding(t *testing.T) {
 		requester.Session = &DefaultSession{JWKThumbprint: "some-thumbprint"}
 		requester.GrantAudience("urn:aud")
 
-		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), requester, "token",
+		_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), requester, "token",
 			BearerAuthorization{Audiences: []string{"urn:aud"}})
 
 		assert.NoError(t, err)
@@ -205,7 +205,7 @@ func TestValidateBearerAuthorizationBinding(t *testing.T) {
 			r := newBearerRequest()
 			r.Header.Set("Authorization", scheme+" token")
 
-			err := ValidateBearerAuthorization(ctx, config, r, newBearerRequester(nil, []string{"urn:aud"}), "token",
+			_, err := ValidateBearerAuthorization(ctx, config, nil, r, newBearerRequester(nil, []string{"urn:aud"}), "token",
 				BearerAuthorization{Audiences: []string{"urn:aud"}})
 
 			require.Error(t, err)
@@ -220,7 +220,7 @@ func TestValidateBearerAuthorizationBinding(t *testing.T) {
 		r := newBearerRequest()
 		r.Header.Set("Authorization", "Bearer token")
 
-		err := ValidateBearerAuthorization(ctx, config, r, newBearerRequester(nil, []string{"urn:aud"}), "token",
+		_, err := ValidateBearerAuthorization(ctx, config, nil, r, newBearerRequester(nil, []string{"urn:aud"}), "token",
 			BearerAuthorization{Audiences: []string{"urn:aud"}})
 
 		assert.NoError(t, err)
@@ -233,7 +233,7 @@ func TestValidateBearerAuthorizationBinding(t *testing.T) {
 		requester.Session = &DefaultSession{ClientCertificateThumbprint: "some-x5t"}
 		requester.GrantAudience("urn:aud")
 
-		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), requester, "token",
+		_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), requester, "token",
 			BearerAuthorization{Audiences: []string{"urn:aud"}})
 
 		assert.NoError(t, err)
@@ -246,7 +246,7 @@ func TestValidateBearerAuthorizationBinding(t *testing.T) {
 		requester.Session = &DefaultSession{ClientCertificateThumbprint: "some-x5t"}
 		requester.GrantAudience("urn:aud")
 
-		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), requester, "token",
+		_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), requester, "token",
 			BearerAuthorization{Audiences: []string{"urn:aud"}})
 
 		require.Error(t, err)
@@ -262,7 +262,7 @@ func TestValidateBearerAuthorizationBinding(t *testing.T) {
 		requester.Session = &DefaultSession{}
 		requester.GrantAudience("urn:aud")
 
-		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), requester, "token",
+		_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), requester, "token",
 			BearerAuthorization{Audiences: []string{"urn:aud"}})
 
 		assert.NoError(t, err)
@@ -275,7 +275,7 @@ func TestValidateBearerAuthorizationBinding(t *testing.T) {
 		requester.Session = nil
 		requester.GrantAudience("urn:aud")
 
-		err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), requester, "token",
+		_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), requester, "token",
 			BearerAuthorization{Audiences: []string{"urn:aud"}})
 
 		assert.NoError(t, err)
@@ -353,7 +353,7 @@ func TestValidateBearerAuthorizationBindingEnforcement(t *testing.T) {
 				config = &bearerEnforceWithoutEnableConfig{}
 			}
 
-			err := ValidateBearerAuthorization(ctx, config, newBearerRequest(), requester, "token", auth)
+			_, err := ValidateBearerAuthorization(ctx, config, nil, newBearerRequest(), requester, "token", auth)
 
 			if tc.expected == "" {
 				assert.NoError(t, err)
@@ -379,7 +379,8 @@ func TestValidateBearerAuthorizationBindingEnforcement(t *testing.T) {
 		r := newBearerRequest()
 		r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
 
-		assert.NoError(t, ValidateBearerAuthorization(ctx, config, r, requester, "token", auth))
+		_, err := ValidateBearerAuthorization(ctx, config, nil, r, requester, "token", auth)
+		assert.NoError(t, err)
 	})
 
 	t.Run("ShouldNotMutateThePackageLevelError", func(t *testing.T) {
@@ -471,7 +472,7 @@ func TestValidateBearerAuthorizationSenderConstrained(t *testing.T) {
 			r := newBearerRequest()
 			r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
 
-			err := ValidateBearerAuthorization(t.Context(), tc.config, r, requester, "token", BearerAuthorization{Audiences: []string{"urn:aud"}})
+			_, err := ValidateBearerAuthorization(t.Context(), tc.config, nil, r, requester, "token", BearerAuthorization{Audiences: []string{"urn:aud"}})
 
 			if tc.expected == "" {
 				assert.NoError(t, ErrorToDebugRFC6749Error(err))
@@ -509,7 +510,8 @@ func TestValidateBearerAuthorizationPassesEndpointsToTheDPoPCheck(t *testing.T) 
 
 	endpoints := []string{"https://auth.example.com/introspect", "https://mtls.auth.example.com/introspect"}
 
-	require.NoError(t, ValidateBearerAuthorization(context.Background(), config, newBearerRequest(), requester, "token", BearerAuthorization{Endpoints: endpoints}))
+	_, err := ValidateBearerAuthorization(context.Background(), config, nil, newBearerRequest(), requester, "token", BearerAuthorization{Endpoints: endpoints})
+	require.NoError(t, err)
 	assert.Equal(t, endpoints, strategy.alternates)
 }
 

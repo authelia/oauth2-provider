@@ -81,6 +81,24 @@ func TestTrustedIssuerNeverAcceptsSymmetricAlg(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestAuthenticateClientRegistrationJWTRejectsAClientResolvedAsADocumentClient(t *testing.T) {
+	ctx := context.Background()
+
+	auth, _, store, access := newJWTAuthFixtures(t)
+
+	store.Clients[testOnboardingClientID] = &documentClient{Client: &oauth2.DefaultClient{ID: testOnboardingClientID}, document: true}
+
+	token := signJWTAuthToken(t, access, jwt.JSONWebTokenTypeAccessToken, nil)
+
+	persistJWTAuthToken(t, store, token)
+
+	requester, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest(oauth2.BearerAccessToken, token, "", nil), "")
+
+	require.ErrorIs(t, err, oauth2.ErrInvalidToken)
+	assert.Nil(t, requester)
+	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "The Access Token was issued to a client resolved from a Client ID Metadata Document.")
+}
+
 func TestAuthenticateClientRegistrationJWT(t *testing.T) {
 	ctx := context.Background()
 
@@ -643,6 +661,8 @@ func newJWTAuthFixtures(t *testing.T) (auth *DefaultEndpointAuthStrategy, config
 
 	access = newJWTAuthSigner(config)
 
+	registerTokenClient(t, context.Background(), store, &oauth2.DefaultClient{ID: testOnboardingClientID})
+
 	return NewDefaultEndpointAuthStrategy(config, store, access, access), config, store, access
 }
 
@@ -775,6 +795,7 @@ func TestAuthenticateClientRegistrationJWTResolvesAnIssuedToken(t *testing.T) {
 				token, signature, err := access.GenerateAccessToken(ctx, request)
 				require.NoError(t, err)
 				require.NoError(t, store.CreateAccessTokenSession(ctx, signature, request))
+				registerTokenClient(t, ctx, store, request.Client)
 
 				requester, err := auth.AuthenticateClientRegistrationRequest(ctx, bindingRequest(oauth2.BearerAccessToken, token, "", nil), "")
 				require.NoError(t, err)

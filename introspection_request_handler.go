@@ -202,8 +202,6 @@ func isZeroQuality(value string) bool {
 //
 // See: https://www.rfc-editor.org/rfc/rfc7662#section-2.1
 // See: https://www.rfc-editor.org/rfc/rfc9449#section-6.2
-//
-//nolint:gocyclo
 func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.Context, r *http.Request, session Session, token string) (client Client, bearer bool, err error) {
 	var clientToken, method string
 
@@ -247,29 +245,15 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 		urls := f.Config.GetEndpointURLs(ctx)
 
 		// The audience falls back from the configured list to the introspection endpoint URL and its mutual TLS alias,
-		// then to RequestURL. GetIssuer is the 'iss' claim of JWT introspection responses, not this endpoint's URL.
-		if err = ValidateBearerAuthorization(ctx, f.Config, r, ar, clientToken, BearerAuthorization{
+		// then to RequestURL. GetIssuer is the 'iss' claim of JWT introspection responses, not this endpoint's URL. The
+		// permission check applies to the returned registration, which a credential issued without client
+		// authentication does not have.
+		if client, err = ValidateBearerAuthorization(ctx, f.Config, f.Store, r, ar, clientToken, BearerAuthorization{
 			Audiences: f.Config.GetAllowedIntrospectionAudiences(ctx),
 			Endpoints: urls.URLs(EndpointIntrospection),
 			Scopes:    f.Config.GetAllowedIntrospectionScopes(ctx),
 		}); err != nil {
 			return nil, true, err
-		}
-
-		// The permission and audience checks apply to the caller's current registration, not the one recorded when the
-		// credential was issued. A credential issued without client authentication has no registration.
-		if client = ar.GetClient(); client != nil && client.GetID() != "" {
-			id := client.GetID()
-
-			// RFC 7662 Section 2.3: a bearer token which is "otherwise invalid for this request" is answered as
-			// described in RFC 6750 Section 3.
-			if client, err = GetClient(ctx, f.Config, f.Store, id); err != nil {
-				if failure, ok := requestServerFailure(err); ok {
-					return nil, true, failure
-				}
-
-				return nil, true, errorsx.WithStack(ErrInvalidToken.WithHint("The client which the credential was issued to is not registered.").WithWrap(err).WithDebugf("The client with id '%s' could not be found.", id))
-			}
 		}
 
 		return client, true, nil

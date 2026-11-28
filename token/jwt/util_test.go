@@ -733,6 +733,46 @@ func TestNewClientSecretJWKSignatureUsesTheSecretOctets(t *testing.T) {
 	})
 }
 
+// RFC 7518 Section 8.8.
+func TestNewClientSecretJWKEncryptionSecretLength(t *testing.T) {
+	testCases := []struct {
+		name   string
+		alg    jose.KeyAlgorithm
+		enc    jose.ContentEncryption
+		octets int
+	}{
+		{name: "A128KW", alg: jose.A128KW, octets: 16},
+		{name: "A192GCMKW", alg: jose.A192GCMKW, octets: 24},
+		{name: "A256KW", alg: jose.A256KW, octets: 32},
+		{name: "PBES2HS256A128KW", alg: jose.PBES2_HS256_A128KW, octets: 16},
+		{name: "PBES2HS512A256KW", alg: jose.PBES2_HS512_A256KW, octets: 32},
+		{name: "DirectA128GCM", alg: jose.DIRECT, enc: jose.A128GCM, octets: 16},
+		{name: "DirectA128CBCHS256", alg: jose.DIRECT, enc: jose.A128CBC_HS256, octets: 32},
+		{name: "DirectA256CBCHS512", alg: jose.DIRECT, enc: jose.A256CBC_HS512, octets: 64},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("ShouldAcceptASecretOfTheKeyLength", func(t *testing.T) {
+				key, err := NewClientSecretJWK(t.Context(), make([]byte, tc.octets), "kid", string(tc.alg), string(tc.enc), JSONWebTokenUseEncryption)
+				require.NoError(t, err)
+
+				raw, ok := key.Key.([]byte)
+				require.True(t, ok, "got %T", key.Key)
+				assert.Len(t, raw, tc.octets)
+			})
+
+			t.Run("ShouldRejectAShorterSecret", func(t *testing.T) {
+				key, err := NewClientSecretJWK(t.Context(), make([]byte, tc.octets-1), "kid", string(tc.alg), string(tc.enc), JSONWebTokenUseEncryption)
+
+				require.Error(t, err)
+				assert.Nil(t, key)
+				assert.Contains(t, err.Error(), fmt.Sprintf("requires a client secret of at least %d octets", tc.octets))
+			})
+		})
+	}
+}
+
 type stubFetcher struct {
 	jwks      *jose.JSONWebKeySet
 	jwksForce *jose.JSONWebKeySet

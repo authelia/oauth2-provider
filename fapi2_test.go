@@ -104,9 +104,14 @@ func TestGetJWTClockSkewFAPI2SecurityProfileClient(t *testing.T) {
 }
 
 func TestFAPI2SecurityProfileEncodeOptions(t *testing.T) {
-	assert.Nil(t, FAPI2SecurityProfileEncodeOptions(nil))
-	assert.Nil(t, FAPI2SecurityProfileEncodeOptions(&DefaultClient{}))
-	assert.Len(t, FAPI2SecurityProfileEncodeOptions(newFAPI2Client()), 1)
+	ctx := t.Context()
+
+	assert.Nil(t, FAPI2SecurityProfileEncodeOptions(ctx, &Config{}, nil))
+	assert.Nil(t, FAPI2SecurityProfileEncodeOptions(ctx, &Config{}, &DefaultClient{}))
+	assert.Nil(t, FAPI2SecurityProfileEncodeOptions(ctx, nil, &DefaultClient{}))
+	assert.Len(t, FAPI2SecurityProfileEncodeOptions(ctx, &Config{}, newFAPI2Client()), 1)
+	assert.Len(t, FAPI2SecurityProfileEncodeOptions(ctx, &Config{FAPI2SecurityProfile: true}, &DefaultClient{}), 1)
+	assert.Len(t, FAPI2SecurityProfileEncodeOptions(ctx, &Config{FAPI2SecurityProfile: true}, nil), 1)
 }
 
 func TestDPoPProofClientContext(t *testing.T) {

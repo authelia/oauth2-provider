@@ -40,8 +40,8 @@ const (
 // as the sole client assertion audience and a string, no refresh token rotation, sender-constrained access tokens which
 // are refused when presented unbound or in the URI query, client authentication for the JWT bearer grant, an
 // authorization code lifetime of at most 60 seconds, a clock skew allowance between 10 and 60 seconds, and only the
-// permitted client authentication methods and JWS algorithms for the JWTs received. A value already within the profile
-// is kept.
+// permitted client authentication methods and JWS algorithms for the JWTs received. It also sets FAPI2SecurityProfile,
+// so the discovery metadata lists only the permitted JWS algorithms. A value already within the profile is kept.
 //
 // It does not set Issuer, enable DPoP or mTLS, register handlers, or choose the keys which sign the JWTs the server
 // issues, so ValidateFAPI2SecurityProfile must still be called once the provider is composed. An unset introspection endpoint list, which accepts every supported method, and
@@ -61,6 +61,7 @@ func ApplyFAPI2SecurityProfile(config *oauth2.Config) {
 	config.EnforceSenderConstrainedAccessTokens = true
 	config.GrantTypeJWTBearerCanSkipClientAuth = false
 	config.AccessTokenURIQueryParameterEnabled = false
+	config.FAPI2SecurityProfile = true
 
 	if config.AuthorizeCodeLifespan <= 0 || config.AuthorizeCodeLifespan > fapi2MaximumAuthorizeCodeLifespan {
 		config.AuthorizeCodeLifespan = fapi2MaximumAuthorizeCodeLifespan
@@ -90,6 +91,14 @@ func ApplyFAPI2SecurityProfile(config *oauth2.Config) {
 		config.RevocationEndpointAuthSigningAlgValues = fapi2Permitted(config.RevocationEndpointAuthSigningAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
 	}
 
+	if len(config.AuthorizationSignedResponseAlgValues) != 0 {
+		config.AuthorizationSignedResponseAlgValues = fapi2Permitted(config.AuthorizationSignedResponseAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
+	}
+
+	if len(config.IntrospectionSignedResponseAlgValues) != 0 {
+		config.IntrospectionSignedResponseAlgValues = fapi2Permitted(config.IntrospectionSignedResponseAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
+	}
+
 	if len(config.IntrospectionEndpointAuthSigningAlgValues) != 0 {
 		config.IntrospectionEndpointAuthSigningAlgValues = fapi2Permitted(config.IntrospectionEndpointAuthSigningAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
 	}
@@ -112,6 +121,7 @@ func ValidateFAPI2SecurityProfile(ctx context.Context, config oauth2.Configurato
 	v.authorizationEndpoint(ctx, config)
 	v.resourceServer(ctx, config)
 	v.cryptography(ctx, config)
+	v.responseSigning(ctx, config)
 
 	return errors.Join(v.errs...)
 }
@@ -283,6 +293,10 @@ func (v *fapi2Violations) authorizationEndpoint(ctx context.Context, config oaut
 }
 
 func (v *fapi2Violations) cryptography(ctx context.Context, config oauth2.Configurator) {
+	if !oauth2.IsFAPI2SecurityProfile(ctx, config) {
+		v.fail(fapi2SectionCryptography, "the discovery metadata must list only the permitted algorithms, but FAPI2SecurityProfile is not set")
+	}
+
 	if algs := config.GetClientAssertionSigningAlgValues(ctx); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
 		v.fail(fapi2SectionCryptography, "the client assertion algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
 	}
@@ -317,6 +331,21 @@ func (v *fapi2Violations) cryptography(ctx context.Context, config oauth2.Config
 		v.fail(fapi2SectionCryptography, "the JWT bearer grant handler is registered, but the configuration has no JWT bearer grant assertion algorithms")
 	} else if algs := p.GetRFC7523AssertionSigningAlgValues(ctx); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
 		v.fail(fapi2SectionCryptography, "the JWT bearer grant assertion algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
+	}
+}
+
+func (v *fapi2Violations) responseSigning(ctx context.Context, config oauth2.Configurator) {
+	p, ok := config.(oauth2.SignedResponseAlgValuesProvider)
+	if !ok {
+		return
+	}
+
+	if algs := p.GetAuthorizationSignedResponseAlgValues(ctx); len(algs) != 0 && !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
+		v.fail(fapi2SectionCryptography, "the authorization response algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
+	}
+
+	if algs := p.GetIntrospectionSignedResponseAlgValues(ctx); len(algs) != 0 && !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
+		v.fail(fapi2SectionCryptography, "the introspection response algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
 	}
 }
 

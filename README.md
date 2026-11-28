@@ -404,18 +404,21 @@ JWT access tokens: these must use PS256, ES256 or EdDSA, and the check fails whe
 algorithm outside them. `RequireStringClientAssertionAudience`, which it sets, refuses a client assertion carrying the
 issuer in an `aud` array rather than as a string. It also clears `GrantTypeJWTBearerCanSkipClientAuth` and
 `AccessTokenURIQueryParameterEnabled`, so a JWT bearer grant request must authenticate its client and an access token in
-the URI query is not accepted. An access token bound to neither a DPoP key nor a client certificate is refused by
-`ValidateBearerAuthorization` and the UserInfo endpoint when `EnforceSenderConstrainedAccessTokens` is set. A client
-implementing `FAPI2SecurityProfileClient` is instead held to the profile at each request, whatever the options: it must
-push its authorization requests with a redirect URI, use the `code` response type, PKCE with S256, `private_key_jwt` or
-mutual-TLS client authentication with the issuer as the string `aud` of its client assertions, and a permitted algorithm
-for its client assertions, request objects, JWT bearer grant assertions, Identity Assertion JWT Authorization Grants and
-DPoP proofs, whose `iat` and `nbf` are accepted between 10 and 60 seconds into the future. It may not use the resource
-owner password credentials grant, its authorization responses carry the RFC 9207 `iss` parameter, and a JWT is only
-issued to it when signed with a permitted algorithm, so it must register one wherever the default is RS256. Its access
-tokens are sender-constrained and refused when presented unbound, its refresh tokens are not rotated, and its
-authorization codes and pushed authorization requests are short-lived. What the registered handlers determine, such as
-the response types served, must still meet the profile.
+the URI query is not accepted. It sets `FAPI2SecurityProfile` too, under which every JWT the server issues must be
+signed with a permitted algorithm, and the discovery metadata lists only those: the RS256 that OpenID Connect Discovery
+1.0 requires for the ID Token is no longer required, and no client secret algorithm is offered for a signed response. An
+access token bound to neither a DPoP key nor a client certificate is refused by `ValidateBearerAuthorization` and the
+UserInfo endpoint when `EnforceSenderConstrainedAccessTokens` is set. A client implementing `FAPI2SecurityProfileClient`
+is instead held to the profile at each request, whatever the options: it must push its authorization requests with a
+redirect URI, use the `code` response type, PKCE with S256, `private_key_jwt` or mutual-TLS client authentication with
+the issuer as the string `aud` of its client assertions, and a permitted algorithm for its client assertions, request
+objects, JWT bearer grant assertions, Identity Assertion JWT Authorization Grants and DPoP proofs, whose `iat` and `nbf`
+are accepted between 10 and 60 seconds into the future. It may not use the resource owner password credentials grant,
+its authorization responses carry the RFC 9207 `iss` parameter, and a JWT is only issued to it when signed with a
+permitted algorithm, so it must register one wherever the default is RS256. Its access tokens are sender-constrained and
+refused when presented unbound, its refresh tokens are not rotated, and its authorization codes and pushed authorization
+requests are short-lived. What the registered handlers determine, such as the response types served, must still meet the
+profile.
 
 For [FAPI 2.0 Message Signing](https://openid.net/specs/fapi-message-signing-2_0-final.html),
 `compose.ApplyFAPI2MessageSigning` sets the options each selected part requires, being signed authorization requests,

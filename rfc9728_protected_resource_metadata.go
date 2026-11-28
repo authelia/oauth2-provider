@@ -215,7 +215,7 @@ func (f *Fosite) SignProtectedResourceMetadata(ctx context.Context, metadata *Pr
 
 	var signed string
 
-	if signed, err = signMetadataDocument(ctx, strategy, metadata, "protected resource metadata", issuer); err != nil {
+	if signed, err = signMetadataDocument(ctx, strategy, metadata, "protected resource metadata", issuer, IsFAPI2SecurityProfile(ctx, f.Config)); err != nil {
 		return err
 	}
 

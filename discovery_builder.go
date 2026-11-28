@@ -236,7 +236,7 @@ func (f *Fosite) newOpenIDConnectProviderMetadata(ctx context.Context) (metadata
 		return nil, errors.New("the openid provider metadata requires 'id_token_signing_alg_values_supported' but the id token issuer has no signing keys")
 	}
 
-	if !slices.Contains(algs, string(jose.RS256)) {
+	if !slices.Contains(algs, string(jose.RS256)) && !IsFAPI2SecurityProfile(ctx, config) {
 		return nil, errors.New("the openid provider metadata requires 'id_token_signing_alg_values_supported' to include 'RS256' but the id token issuer has no 'RS256' signing key")
 	}
 
@@ -287,7 +287,7 @@ func (f *Fosite) finalizeDiscoveryMetadata(ctx context.Context, metadata *OpenID
 	}
 
 	if len(hooks) != 0 {
-		if err = validateDiscoveryMetadataRequired(f.Config.GetIssuer(ctx), metadata, openid); err != nil {
+		if err = validateDiscoveryMetadataRequired(f.Config.GetIssuer(ctx), metadata, openid, IsFAPI2SecurityProfile(ctx, f.Config)); err != nil {
 			return fmt.Errorf("the discovery metadata hooks produced invalid metadata: %w", err)
 		}
 	}
@@ -299,12 +299,12 @@ func (f *Fosite) finalizeDiscoveryMetadata(ctx context.Context, metadata *OpenID
 
 	*signed = ""
 
-	*signed, err = signMetadataDocument(ctx, strategy, document, "discovery metadata", metadata.Issuer)
+	*signed, err = signMetadataDocument(ctx, strategy, document, "discovery metadata", metadata.Issuer, IsFAPI2SecurityProfile(ctx, f.Config))
 
 	return err
 }
 
-func signMetadataDocument(ctx context.Context, strategy jwt.Strategy, document any, name, issuer string) (signed string, err error) {
+func signMetadataDocument(ctx context.Context, strategy jwt.Strategy, document any, name, issuer string, fapi2 bool) (signed string, err error) {
 	var raw []byte
 
 	if raw, err = json.Marshal(document); err != nil {
@@ -326,9 +326,15 @@ func signMetadataDocument(ctx context.Context, strategy jwt.Strategy, document a
 
 	algs := strategy.SigningAlgValues(ctx)
 
+	if fapi2 {
+		algs = slices.DeleteFunc(slices.Clone(algs), func(alg string) bool { return !slices.Contains(FAPI2SecurityProfileSigningAlgValues, alg) })
+	}
+
 	var alg string
 
 	switch {
+	case len(algs) == 0 && fapi2:
+		return "", fmt.Errorf("unable to sign the %s: the signing strategy has no signing algorithm the FAPI 2.0 Security Profile permits", name)
 	case len(algs) == 0:
 		return "", fmt.Errorf("unable to sign the %s: the signing strategy has no signing algorithms", name)
 	case slices.Contains(algs, string(jose.RS256)):
@@ -715,7 +721,7 @@ func validateDiscoveryIssuer(issuer string) (err error) {
 	return nil
 }
 
-func validateDiscoveryMetadataRequired(issuer string, metadata *OpenIDConnectProviderMetadata, openid bool) (err error) {
+func validateDiscoveryMetadataRequired(issuer string, metadata *OpenIDConnectProviderMetadata, openid, fapi2 bool) (err error) {
 	if metadata.Issuer != issuer {
 		return fmt.Errorf("the 'issuer' must be '%s' but it is '%s'", issuer, metadata.Issuer)
 	}
@@ -731,7 +737,9 @@ func validateDiscoveryMetadataRequired(issuer string, metadata *OpenIDConnectPro
 	switch {
 	case metadata.JWKSURI == "":
 		return errors.New("the openid provider metadata requires a 'jwks_uri'")
-	case !slices.Contains(metadata.IDTokenSigningAlgValuesSupported, string(jose.RS256)):
+	case len(metadata.IDTokenSigningAlgValuesSupported) == 0:
+		return errors.New("the openid provider metadata requires 'id_token_signing_alg_values_supported'")
+	case !fapi2 && !slices.Contains(metadata.IDTokenSigningAlgValuesSupported, string(jose.RS256)):
 		return errors.New("the openid provider metadata requires 'id_token_signing_alg_values_supported' to include 'RS256'")
 	case len(metadata.SubjectTypesSupported) == 0:
 		return errors.New("the openid provider metadata requires 'subject_types_supported'")
@@ -852,6 +860,10 @@ func withoutNone(algs []string) (out []string) {
 	return out
 }
 
-func clientSecretSigningAlgValues(algs []string) []string {
+func clientSecretSigningAlgValues(ctx context.Context, config any, algs []string) []string {
+	if IsFAPI2SecurityProfile(ctx, config) {
+		return slices.Clone(algs)
+	}
+
 	return append(slices.Clone(algs), consts.JSONWebTokenAlgHMACSHA256, consts.JSONWebTokenAlgHMACSHA384, consts.JSONWebTokenAlgHMACSHA512)
 }

@@ -98,17 +98,20 @@ func TestDefaultResponseModeHandlerJWTRedirectURIQuery(t *testing.T) {
 
 func TestDefaultResponseModeHandlerJWTFAPI2SecurityProfileClient(t *testing.T) {
 	testCases := []struct {
-		name  string
-		fapi2 bool
-		err   bool
+		name    string
+		fapi2   bool
+		profile bool
+		err     bool
 	}{
 		{name: "ShouldSignWithRS256ForAnotherClient"},
 		{name: "ShouldNotSignWithRS256ForAFAPI2Client", fapi2: true, err: true},
+		{name: "ShouldNotSignWithRS256ForAnotherClientOfAFAPI2Server", profile: true, err: true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			handler := testNewJARMResponseModeHandler()
+			handler.Config.(*Config).FAPI2SecurityProfile = tc.profile
 
 			request := NewAuthorizeRequest()
 			request.ResponseTypes = Arguments{consts.ResponseTypeAuthorizationCodeFlow}

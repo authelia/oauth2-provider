@@ -869,6 +869,15 @@ type Config struct {
 	// client can be required individually through SenderConstrainedAccessTokensClient.
 	EnforceSenderConstrainedAccessTokens bool
 
+	// FAPI2SecurityProfile declares that the authorization server is held to the FAPI 2.0 Security Profile, as
+	// compose.ApplyFAPI2SecurityProfile sets. The discovery metadata then lists only the JWS algorithms the profile
+	// permits, rather than including 'RS256' for the ID Token as OpenID Connect Discovery 1.0 requires, and no JWT
+	// signing algorithm offered for a client secret, and a JWT signed with any other algorithm, or not signed, is never
+	// issued to any client. It does not by itself apply the other requirements of the profile.
+	//
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.4.1
+	FAPI2SecurityProfile bool
+
 	// RFC8628EnforceSenderConstrainedAccessTokens requires every token request of the RFC 8628 device authorization
 	// grant to bind its tokens to a DPoP proof or a mutual-TLS client certificate. A client can be held to it alone
 	// by implementing CrossDeviceSenderConstrainedAccessTokensClient.
@@ -2422,6 +2431,11 @@ func (c *Config) GetEnforceSenderConstrainedAccessTokens(_ context.Context) (enf
 	return c.EnforceSenderConstrainedAccessTokens
 }
 
+// GetFAPI2SecurityProfile returns the FAPI2SecurityProfile field.
+func (c *Config) GetFAPI2SecurityProfile(_ context.Context) (enabled bool) {
+	return c.FAPI2SecurityProfile
+}
+
 // GetEnforceIntrospectionPermission returns true if only a permitted client may call the introspection endpoint.
 func (c *Config) GetEnforceIntrospectionPermission(_ context.Context) (enforce bool) {
 	return c.EnforceIntrospectionPermission
@@ -2687,6 +2701,7 @@ var (
 	_ OIDCKeyBindingConfigProvider                             = (*Config)(nil)
 	_ MTLSConfigProvider                                       = (*Config)(nil)
 	_ EnforceSenderConstrainedAccessTokensProvider             = (*Config)(nil)
+	_ FAPI2SecurityProfileProvider                             = (*Config)(nil)
 	_ CrossDeviceSenderConstrainedAccessTokensProvider         = (*Config)(nil)
 	_ IntrospectionPermissionProvider                          = (*Config)(nil)
 	_ SignedResponseAlgValuesProvider                          = (*Config)(nil)

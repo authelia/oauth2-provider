@@ -89,6 +89,28 @@ func (f *Fosite) checkEndpointAuthMethod(ctx context.Context, client Client, met
 	return errorsx.WithStack(ErrInvalidClient.WithHint(fmt.Sprintf("The %s endpoint does not permit the client authentication method '%s'.", strategy.Name(), method)).WithDebugf("The client with id '%s' authenticated using '%s' but the %s endpoint is configured to accept only '%s'.", client.GetID(), method, strategy.Name(), strings.Join(methods, "', '")))
 }
 
+// clientAuthenticationEndpointError answers an error authenticating the client at the introspection, pushed
+// authorization request, device authorization and backchannel authentication endpoints as RFC 6749 Section 5.2 does. An 'invalid_client' or 'invalid_request' error is answered as it is, and so
+// is a failure of the server, with an error which is not an RFC6749Error answered as 'server_error'. Any other error is
+// answered as 'invalid_client', with a 'WWW-Authenticate' challenge when the client used the Authorization header.
+//
+// See: https://www.rfc-editor.org/rfc/rfc6749#section-5.2
+func (f *Fosite) clientAuthenticationEndpointError(ctx context.Context, r *http.Request, err error) error {
+	if errors.Is(err, ErrInvalidClient) {
+		return err
+	}
+
+	if failure, ok := requestServerFailure(err); ok {
+		return failure
+	}
+
+	if rfc := ErrorToRFC6749Error(err); rfc.ErrorField == errInvalidRequestName {
+		return err
+	}
+
+	return withClientAuthenticationChallenge(r, errorsx.WithStack(ErrInvalidClient.WithHint("The request either did not include a known client authentication method, or contained invalid authentication details.").WithWrap(err).WithDebugError(err)), f.Config.GetClientAuthenticationRealm(ctx))
+}
+
 func withClientAuthenticationChallenge(r *http.Request, err error, realm string) error {
 	if r == nil || len(r.Header.Values(consts.HeaderAuthorization)) == 0 {
 		return err

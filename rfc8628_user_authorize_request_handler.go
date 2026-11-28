@@ -24,13 +24,19 @@ import (
 // RFC8628UserCodeBindingSession and identify the authenticated End-User presenting the user code, which is read before
 // the stored session replaces it and is the End-User an undecided user code is bound to. The approval session given to
 // NewRFC8628UserAuthorizeResponse must identify the same End-User. An error for a user code which is not accepted
-// wraps ErrUserCodeUnknown, ErrUserCodeExpired, ErrUserCodeDecided or ErrUserCodeClaimed.
+// wraps ErrUserCodeUnknown, ErrUserCodeExpired, ErrUserCodeDecided or ErrUserCodeClaimed. A single-valued parameter
+// included more than once in the query or in the body is refused with ErrInvalidRequest; one included once in each is
+// read from the body.
 func (f *Fosite) NewRFC8628UserAuthorizeRequest(ctx context.Context, r *http.Request, session Session) (requester DeviceAuthorizeRequester, err error) {
 	request := NewDeviceAuthorizeRequest()
 	request.Lang = i18n.GetLangFromRequest(f.Config.GetMessageCatalog(ctx), r)
 
 	if err = r.ParseForm(); err != nil {
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
+	}
+
+	if err = validateRequestQueryAndBodyParametersNotRepeated(r); err != nil {
+		return nil, err
 	}
 
 	request.Form = make(url.Values, len(r.Form))

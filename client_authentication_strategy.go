@@ -158,6 +158,12 @@ func (s *DefaultClientAuthenticationStrategy) authenticate(ctx context.Context, 
 			break
 		}
 
+		// RFC 7521 Section 4.2.1 requires 'invalid_client' when a client assertion is one of the methods, and RFC 6749
+		// Section 5.2 'invalid_request' otherwise.
+		if assertion != nil {
+			return nil, "", errorsx.WithStack(ErrInvalidClient.WithHint("The request uses more than one client authentication method.").WithDebugf("Client Authentication failed with more than one known authentication method included in the request, one of which is a client assertion. The registered client with id '%s' and the authorization server policy does not permit this. The `%s_endpoint_auth_method` methods determined to be used were '%s'.", client.GetID(), endpointClientAuthMetadataName(strategy), strings.Join(methods, "', '")))
+		}
+
 		return nil, "", errorsx.WithStack(ErrInvalidRequest.WithHint("The request uses more than one client authentication method.").WithDebugf("Client Authentication failed with more than one known authentication method included in the request which is not permitted. The registered client with id '%s' and the authorization server policy does not permit this malformed request. The `%s_endpoint_auth_method` methods determined to be used were '%s'.", client.GetID(), endpointClientAuthMetadataName(strategy), strings.Join(methods, "', '")))
 	}
 

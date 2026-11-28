@@ -959,7 +959,7 @@ func TestNewPushedAuthorizeRequestClientCredentials(t *testing.T) {
 	})
 
 	t.Run("ShouldChallengeConvertedAuthenticationErrorWithBasicAuthentication", func(t *testing.T) {
-		provider := &Fosite{Config: &Config{ClientAuthenticationStrategy: &staticClientAuthenticationStrategy{err: ErrInvalidRequest}}}
+		provider := &Fosite{Config: &Config{ClientAuthenticationStrategy: &staticClientAuthenticationStrategy{err: ErrInvalidGrant}}}
 
 		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(parameters.Encode()))
 		r.Header.Set(consts.HeaderContentType, consts.ContentTypeApplicationURLEncodedForm)

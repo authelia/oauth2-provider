@@ -6,7 +6,6 @@ package oauth2
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"authelia.com/provider/oauth2/i18n"
@@ -53,11 +52,7 @@ func (f *Fosite) NewPushedAuthorizeRequest(ctx context.Context, r *http.Request)
 
 	// Authenticate the client in the same way as at the token endpoint (Section 2.3 of [RFC6749]).
 	if client, _, err = f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, &AudienceEndpointClientAuthStrategy{EndpointClientAuthStrategy: f.Config.GetTokenEndpointClientAuthStrategy(ctx), AudienceEndpoint: EndpointPushedAuthorizationRequest}); err != nil {
-		if rfcerr, ok := errors.AsType[*RFC6749Error](err); ok && rfcerr.ErrorField != ErrInvalidClient.ErrorField {
-			return request, withClientAuthenticationChallenge(r, errorsx.WithStack(ErrInvalidClient.WithHint("The requested OAuth 2.0 Client could not be authenticated.").WithWrap(err).WithDebugError(err)), f.Config.GetClientAuthenticationRealm(ctx))
-		}
-
-		return request, err
+		return request, f.clientAuthenticationEndpointError(ctx, r, err)
 	}
 
 	// RFC 9126 Section 2.1: the request is processed for the authenticated client, so a 'client_id' naming any other

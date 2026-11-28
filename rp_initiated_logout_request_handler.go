@@ -29,7 +29,8 @@ import (
 // with the End-User, terminates its own session, and redirects.
 //
 // On any error the returned requester's post logout redirect URI is nil, so an error can never be redirected to an
-// unvalidated URI.
+// unvalidated URI. A single-valued parameter included more than once in the query or in the body is refused with
+// ErrInvalidRequest; one included once in each is read from the body.
 //
 // See: https://openid.net/specs/openid-connect-rpinitiated-1_0.html
 func (f *Fosite) NewRPInitiatedLogoutRequest(ctx context.Context, r *http.Request) (requester RPInitiatedLogoutRequester, err error) {
@@ -46,6 +47,10 @@ func (f *Fosite) NewRPInitiatedLogoutRequest(ctx context.Context, r *http.Reques
 
 	if err = r.ParseForm(); err != nil {
 		return request, errorsx.WithStack(ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithWrap(err).WithDebugError(err))
+	}
+
+	if err = validateRequestQueryAndBodyParametersNotRepeated(r); err != nil {
+		return request, err
 	}
 
 	request.Form = r.Form

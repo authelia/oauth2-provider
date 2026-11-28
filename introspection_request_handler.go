@@ -6,7 +6,6 @@ package oauth2
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"mime"
 	"net/http"
@@ -290,28 +289,10 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 		// Section 3 'WWW-Authenticate' challenge.
 		return nil, false, errorsx.WithStack(ErrInvalidToken.WithHint("The request did not include an Access Token to authorize the call, and client authentication is disabled at this endpoint."))
 	} else if client, _, err = f.AuthenticateClientWithAuthHandler(ctx, r, r.PostForm, f.Config.GetIntrospectionEndpointClientAuthStrategy(ctx)); err != nil {
-		return nil, false, f.introspectionClientAuthenticationError(ctx, r, err)
+		return nil, false, f.clientAuthenticationEndpointError(ctx, r, err)
 	}
 
 	return client, false, nil
-}
-
-func (f *Fosite) introspectionClientAuthenticationError(ctx context.Context, r *http.Request, err error) error {
-	if errors.Is(err, ErrInvalidClient) {
-		return err
-	}
-
-	if failure, ok := requestServerFailure(err); ok {
-		return failure
-	}
-
-	if rfc := ErrorToRFC6749Error(err); rfc.ErrorField == errInvalidRequestName {
-		return err
-	}
-
-	// RFC 7662 Section 2.3: invalid client credentials are answered as described in RFC 6749 Section 5.2, which is
-	// 'invalid_client' with a 'WWW-Authenticate' challenge when the client used the Authorization header.
-	return withClientAuthenticationChallenge(r, errorsx.WithStack(ErrInvalidClient.WithHint("The request either did not include a known client authentication method, or contained invalid authentication details.").WithWrap(err).WithDebugError(err)), f.Config.GetClientAuthenticationRealm(ctx))
 }
 
 func (f *Fosite) accessTokenCredentialFromRequest(ctx context.Context, r *http.Request) (token, method string, err error) {

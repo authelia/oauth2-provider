@@ -102,7 +102,7 @@ func preferDefiniteIntrospectionError(primary, secondary error) error {
 func isIntrospectionServerFailure(err error) bool {
 	rfc, ok := oauth2.AsRFC6749Error(err)
 
-	return ok && rfc.CodeField >= http.StatusInternalServerError
+	return ok && (rfc.CodeField >= http.StatusInternalServerError || rfc.CodeField == http.StatusTooManyRequests)
 }
 
 func isUnrecognizedIntrospectionError(err error) bool {
@@ -110,11 +110,12 @@ func isUnrecognizedIntrospectionError(err error) bool {
 }
 
 // IntrospectionStorageError classifies an error from looking up a token session other than oauth2.ErrNotFound. An
-// oauth2.RFC6749Error with a status below 500 is the store's statement about the token, such as oauth2.ErrInactiveToken
-// for a revoked token, and is reported as oauth2.ErrRequestUnauthorized. One with a 5xx status, such as
-// oauth2.ErrTemporarilyUnavailable, is a failure of the store and is returned as it is. Any other error is a failure of
-// the store too, and is reported as oauth2.ErrServerError. A failure of the store says nothing about the token, so it is
-// never reported as an inactive token.
+// oauth2.RFC6749Error with a status below 500, other than 429, is the store's statement about the token, such as
+// oauth2.ErrInactiveToken for a revoked token, and is reported as oauth2.ErrRequestUnauthorized. One with a 5xx status,
+// such as oauth2.ErrTemporarilyUnavailable, or with the status 429, such as oauth2.ErrTooManyRequests, is a failure of
+// the store and is returned as it is. Any other error is a failure of the store too, and is reported as
+// oauth2.ErrServerError. A failure of the store says nothing about the token, so it is never reported as an inactive
+// token.
 //
 // See: https://datatracker.ietf.org/doc/html/rfc7662#section-2.3
 func IntrospectionStorageError(err error) *oauth2.RFC6749Error {
@@ -123,7 +124,7 @@ func IntrospectionStorageError(err error) *oauth2.RFC6749Error {
 	switch {
 	case !ok, rfc.ErrorField == oauth2.ErrUnknownRequest.ErrorField && rfc.CodeField >= http.StatusInternalServerError:
 		return oauth2.ErrServerError.WithWrap(err).WithDebugError(err)
-	case rfc.CodeField >= http.StatusInternalServerError:
+	case rfc.CodeField >= http.StatusInternalServerError, rfc.CodeField == http.StatusTooManyRequests:
 		return rfc
 	default:
 		return oauth2.ErrRequestUnauthorized.WithWrap(err).WithDebugError(err)

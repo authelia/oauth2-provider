@@ -6,7 +6,6 @@ package oauth2
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 
@@ -58,8 +57,10 @@ func (f *Fosite) authorizeSSFRequest(ctx context.Context, r *http.Request, sessi
 		ar  AccessRequester
 	)
 
-	if use, ar, err = f.IntrospectToken(ctx, token, AccessToken, session); errors.Is(err, ErrServerError) {
-		return nil, nil, err
+	use, ar, err = f.IntrospectToken(ctx, token, AccessToken, session)
+
+	if failure, ok := IntrospectionServerFailure(err); ok {
+		return nil, nil, failure
 	} else if err != nil {
 		return nil, nil, errorsx.WithStack(ErrInvalidToken.WithHint("The Access Token is missing, malformed, or invalid.").WithWrap(err).WithDebugError(err))
 	} else if use != "" && use != AccessToken {

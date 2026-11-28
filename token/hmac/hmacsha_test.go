@@ -101,13 +101,13 @@ func TestHMACStrategyValidate(t *testing.T) {
 			name:   "ShouldFailWhenTokenKeyIsInvalidBase64",
 			token:  "!!.MTIzNA",
 			config: &oauth2.Config{GlobalSecret: []byte(validSecret)},
-			err:    "illegal base64 data at input byte 0",
+			err:    oauth2.ErrInvalidTokenFormat.Error(),
 		},
 		{
 			name:   "ShouldFailWhenTokenSignatureIsInvalidBase64",
 			token:  "MTIzNA.!!",
 			config: &oauth2.Config{GlobalSecret: []byte(validSecret)},
-			err:    "illegal base64 data at input byte 0",
+			err:    oauth2.ErrInvalidTokenFormat.Error(),
 		},
 		{
 			name:   "ShouldFailTokenMissingSignature",

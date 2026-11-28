@@ -76,8 +76,8 @@ func (f *Fosite) NewIntrospectionRequest(ctx context.Context, r *http.Request, s
 	use, ar, err := f.IntrospectToken(ctx, token, TokenUse(tokenTypeHint), session, RemoveEmpty(strings.Split(r.PostForm.Get(consts.FormParameterScope), " "))...)
 	if err != nil {
 		// A failure of the server says nothing about the token, so it is not answered as an inactive token.
-		if errors.Is(err, ErrServerError) || isIntrospectorServerFailure(err) {
-			return &IntrospectionResponse{Client: client, Active: false, JWTRequested: jwtRequested}, errorsx.WithStack(err)
+		if failure, ok := IntrospectionServerFailure(err); ok {
+			return &IntrospectionResponse{Client: client, Active: false, JWTRequested: jwtRequested}, errorsx.WithStack(failure)
 		}
 
 		inactive := &IntrospectionResponse{Client: client, Active: false, JWTRequested: jwtRequested}
@@ -148,10 +148,34 @@ func isIntrospectionTokenVisible(client Client, token Requester) bool {
 	return slices.ContainsFunc(JoinGrantedAudienceAndResource(token.GetGrantedAudience(), token.GetGrantedResource()), func(value string) bool { return slices.Contains(served, value) })
 }
 
-func isIntrospectorServerFailure(err error) bool {
-	rfc, ok := errors.AsType[*RFC6749Error](err)
+// IntrospectionServerFailure reports whether an error returned by IntrospectToken is a failure of the server or a
+// rate limit rather than a rejection of the token, which says nothing about the token, so it is answered as the error
+// rather than as an inactive token or an invalid credential. Only an RFC6749Error with a status below 500, other than
+// 429, rejects the token. An RFC6749Error with a status of 500 or more, or of 429, is returned as it is, unless it has
+// no error name of its own, being empty or the name ErrorToRFC6749Error gives an error which is not an RFC6749Error,
+// and then ErrServerError wrapping it is returned, as it is for any other error. The outermost RFC6749Error decides.
+//
+// See: https://www.rfc-editor.org/rfc/rfc7662#section-2.2
+// See: https://www.rfc-editor.org/rfc/rfc6750#section-3.1
+func IntrospectionServerFailure(err error) (failure error, ok bool) {
+	if err == nil {
+		return nil, false
+	}
 
-	return ok && rfc.ErrorField != errUnknownErrorName && rfc.CodeField >= http.StatusInternalServerError
+	rfc, found := AsRFC6749Error(err)
+	if !found {
+		return errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugError(err)), true
+	}
+
+	if code := rfc.StatusCode(); code < http.StatusInternalServerError && code != http.StatusTooManyRequests {
+		return nil, false
+	}
+
+	if rfc.ErrorField == "" || rfc.ErrorField == errUnknownErrorName {
+		return errorsx.WithStack(ErrServerError.WithWrap(err).WithDebugError(err)), true
+	}
+
+	return err, true
 }
 
 func clientID(client Client) string {
@@ -233,9 +257,13 @@ func (f *Fosite) handleNewIntrospectionRequestClientAuthentication(ctx context.C
 		// covering "expired, revoked, malformed, or invalid for other reasons", so an unresolvable credential and
 		// one of the wrong kind stay indistinguishable on the wire; the distinction goes in the debug field, which
 		// only a deployment that opts in surfaces.
-		switch use, ar, err = f.IntrospectToken(ctx, clientToken, AccessToken, session.Clone()); {
-		case errors.Is(err, ErrServerError), isIntrospectorServerFailure(err):
-			return nil, true, err
+		use, ar, err = f.IntrospectToken(ctx, clientToken, AccessToken, session.Clone())
+
+		if failure, ok := IntrospectionServerFailure(err); ok {
+			return nil, true, failure
+		}
+
+		switch {
 		case err != nil:
 			return nil, true, errorsx.WithStack(ErrInvalidToken.WithHint("HTTP Authorization header missing, malformed, or credentials used are invalid.").WithWrap(err).WithDebugError(err))
 		case use != "" && use != AccessToken:

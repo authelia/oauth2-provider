@@ -60,18 +60,23 @@ func IsRedirectURISecureForClient(ctx context.Context, client Client, uri *url.U
 
 // ValidateRedirectURISecurity returns an invalid_request error when the redirect URI fails the configured
 // RedirectSecureChecker, or IsRedirectURISecureForClient when none is configured. The check applies to every client,
-// unless the client is public and AllowInsecureRedirectURIForPublicClients is enabled.
+// unless the client is public and AllowInsecureRedirectURIForPublicClients is enabled. When the client or the
+// authorization server is held to the FAPI 2.0 Security Profile the redirect URI must pass IsRedirectURISecureForClient
+// as well as the RedirectSecureChecker, and AllowInsecureRedirectURIForPublicClients does not apply.
 //
 // See: https://www.rfc-editor.org/rfc/rfc9700#section-2.6
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.2
 func ValidateRedirectURISecurity(ctx context.Context, config RedirectURISecurityProvider, client Client, uri *url.URL) (err error) {
-	if uri == nil || (client != nil && client.IsPublic() && config.GetAllowInsecureRedirectURIForPublicClients(ctx)) {
+	fapi2 := IsFAPI2SecurityProfile(ctx, config) || IsFAPI2SecurityProfileClient(client)
+
+	if uri == nil || (!fapi2 && client != nil && client.IsPublic() && config.GetAllowInsecureRedirectURIForPublicClients(ctx)) {
 		return nil
 	}
 
 	var secure bool
 
 	if checker := config.GetRedirectSecureChecker(ctx); checker != nil {
-		secure = checker(ctx, uri)
+		secure = checker(ctx, uri) && (!fapi2 || IsRedirectURISecureForClient(ctx, client, uri))
 	} else {
 		secure = IsRedirectURISecureForClient(ctx, client, uri)
 	}

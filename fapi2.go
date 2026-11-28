@@ -65,15 +65,17 @@ var (
 // FAPI2SecurityProfileClient is a client held to the FAPI 2.0 Security Profile at every request it makes, whatever the
 // provider-wide options. Such a client must authenticate with private_key_jwt or mutual-TLS, push its authorization
 // requests with a redirect URI, use the 'code' response type and PKCE with S256, and never use the resource owner
-// password credentials grant. Its client assertions must carry the issuer as their sole audience, as a string. The
-// JWTs it sends, being client assertions, request objects, JWT bearer grant assertions and DPoP proofs, must use a
-// permitted algorithm, and an 'iat' or 'nbf' claim is accepted up to between 10 and 60 seconds in the future. The JWTs
-// issued to it must be signed with a permitted algorithm, so its registered response algorithms must be permitted
-// ones. Its authorization responses carry the RFC 9207 'iss' parameter when an issuer is configured. Its access tokens
-// are sender-constrained and refused when presented unbound, its refresh tokens are not rotated, its authorization
-// codes last at most 60 seconds, and its pushed authorization requests expire in less than 600 seconds. What the
-// handlers registered determine, such as the response types served, is left to the configuration; see
-// compose.ValidateFAPI2SecurityProfile.
+// password credentials grant. Its client assertions must carry the issuer as their sole audience, as a string. The JWTs
+// it sends, being client assertions, request objects, JWT bearer grant assertions and DPoP proofs, must use a permitted
+// algorithm, and an 'iat' or 'nbf' claim is accepted up to between 10 and 60 seconds in the future. The JWTs issued to
+// it must be signed with a permitted algorithm, so its registered response algorithms must be permitted ones. Its
+// authorization responses carry the RFC 9207 'iss' parameter when an issuer is configured. Its access tokens are
+// sender-constrained and refused when presented unbound, its refresh tokens are not rotated, its authorization codes
+// last at most 60 seconds, and its pushed authorization requests expire in less than 600 seconds. Its redirect URIs
+// must pass the default redirect URI security rule as well as any RedirectSecureChecker. What the handlers registered
+// determine, such as the response types served, is left to the configuration, which
+// compose.ValidateFAPI2SecurityProfileClientSupport checks. A custom ClientAuthenticationStrategy, DPoPStrategy,
+// SecurityEventTokenStrategy or response mode handler must apply these rules itself.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2
 type FAPI2SecurityProfileClient interface {

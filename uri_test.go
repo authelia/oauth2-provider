@@ -101,6 +101,8 @@ func TestValidateRedirectURISecurity(t *testing.T) {
 		applicationType string
 		allow           bool
 		nilClient       bool
+		fapi2           bool
+		profile         bool
 		checker         func(context.Context, *url.URL) bool
 		err             bool
 	}{
@@ -131,11 +133,15 @@ func TestValidateRedirectURISecurity(t *testing.T) {
 		{name: "ShouldAllowLocalhostConfidentialWebWithIsRedirectURISecureChecker", uri: "http://localhost/cb", applicationType: consts.ApplicationTypeWeb, checker: IsRedirectURISecure},
 		{name: "ShouldAllowHTTPConfidentialWithPermissiveChecker", uri: "http://client.example.com/cb", checker: permissive},
 		{name: "ShouldAllowNoRedirectURI"},
+		{name: "ShouldRejectHTTPFAPI2ClientWithPermissiveChecker", uri: "http://client.example.com/cb", fapi2: true, checker: permissive, err: true},
+		{name: "ShouldRejectHTTPWithPermissiveCheckerOfAFAPI2Server", uri: "http://client.example.com/cb", profile: true, checker: permissive, err: true},
+		{name: "ShouldRejectHTTPPublicWhenPublicClientsAllowedOfAFAPI2Server", uri: "http://client.example.com/cb", public: true, allow: true, profile: true, err: true},
+		{name: "ShouldAllowHTTPSFAPI2ClientWithPermissiveChecker", uri: "https://client.example.com/cb", fapi2: true, checker: permissive},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := &Config{RedirectSecureChecker: tc.checker, AllowInsecureRedirectURIForPublicClients: tc.allow}
+			config := &Config{RedirectSecureChecker: tc.checker, AllowInsecureRedirectURIForPublicClients: tc.allow, FAPI2SecurityProfile: tc.profile}
 
 			var uri *url.URL
 
@@ -152,6 +158,8 @@ func TestValidateRedirectURISecurity(t *testing.T) {
 				client = &DefaultRegisteredClient{DefaultClient: client.(*DefaultClient)}
 			case tc.applicationType != "":
 				client = &DefaultRegisteredClient{DefaultClient: client.(*DefaultClient), ApplicationType: tc.applicationType}
+			case tc.fapi2:
+				client = &DefaultRegisteredClient{DefaultClient: client.(*DefaultClient), FAPI2SecurityProfile: true}
 			}
 
 			err := ValidateRedirectURISecurity(t.Context(), config, client, uri)

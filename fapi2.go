@@ -84,11 +84,26 @@ type FAPI2SecurityProfileClient interface {
 }
 
 // IsFAPI2SecurityProfile returns true if config is a FAPI2SecurityProfileProvider holding the whole authorization
-// server to the FAPI 2.0 Security Profile.
+// server to the FAPI 2.0 Security Profile, or ctx is one the authorization server passes to a strategy it calls while
+// held to the profile, such as a SecurityEventTokenStrategy, which can therefore apply the profile with a nil config.
 func IsFAPI2SecurityProfile(ctx context.Context, config any) (enabled bool) {
+	if held, _ := ctx.Value(fapi2SecurityProfileContextKey).(bool); held {
+		return true
+	}
+
 	p, ok := config.(FAPI2SecurityProfileProvider)
 
 	return ok && p.GetFAPI2SecurityProfile(ctx)
+}
+
+const fapi2SecurityProfileContextKey = ContextKey("fapi2SecurityProfile")
+
+func newFAPI2SecurityProfileContext(ctx context.Context, config any) context.Context {
+	if !IsFAPI2SecurityProfile(ctx, config) {
+		return ctx
+	}
+
+	return context.WithValue(ctx, fapi2SecurityProfileContextKey, true)
 }
 
 // IsFAPI2SecurityProfileClient returns true if the client is a FAPI2SecurityProfileClient held to the profile.

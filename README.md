@@ -194,13 +194,16 @@ the responsibility of the application that uses it:
 
 - **Authenticate the user before redirecting**
   ([Section 4.11.2](https://datatracker.ietf.org/doc/html/rfc9700#section-4.11.2)): once the client and redirect URI are
-  valid, the library redirects authorization errors to the redirect URI without any user interaction. Authenticate the
-  user before calling `NewAuthorizeResponse` or `WriteAuthorizeError` for a request. Silent authentication
-  (`prompt=none`) only skips prompting for credentials: respond successfully only when the user already has a session.
-  Neither authentication nor consent, including declined consent, makes an attacker-chosen redirect URI trustworthy, so
-  only redirect automatically, including a `login_required` or `access_denied` error, to a redirect URI you trust;
-  otherwise inform the user and let them decide whether to continue. This matters most when anyone can register a
-  client, through Dynamic Client Registration or Client ID Metadata Documents, as the redirect URI is then
+  valid, the library redirects authorization errors to the redirect URI without any user interaction, unless the
+  `Config.AuthorizeErrorRedirectPolicy` does not trust it, in which case the error is written by the
+  `AuthorizeErrorFieldResponseStrategy` instead. The default policy trusts every client except one resolved from a
+  Client ID Metadata Document; set a policy which also distrusts dynamically registered clients when you allow them.
+  Authenticate the user before calling `NewAuthorizeResponse` or `WriteAuthorizeError` for a request. Silent
+  authentication (`prompt=none`) only skips prompting for credentials: respond successfully only when the user already
+  has a session. Neither authentication nor consent, including declined consent, makes an attacker-chosen redirect URI
+  trustworthy, so only redirect automatically, including a `login_required` or `access_denied` error, to a redirect URI
+  you trust; otherwise inform the user and let them decide whether to continue. This matters most when anyone can
+  register a client, through Dynamic Client Registration or Client ID Metadata Documents, as the redirect URI is then
   attacker-chosen.
 - **Prevent clickjacking** ([Section 4.16](https://datatracker.ietf.org/doc/html/rfc9700#section-4.16)): send
   `Content-Security-Policy: frame-ancestors` (and `X-Frame-Options` for older browsers) on the authorization endpoint,

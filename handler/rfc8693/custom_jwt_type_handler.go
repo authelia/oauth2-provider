@@ -15,6 +15,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"authelia.com/provider/jose"
+
 	"authelia.com/provider/oauth2"
 	"authelia.com/provider/oauth2/handler/openid"
 	"authelia.com/provider/oauth2/internal/claimvalue"
@@ -151,6 +153,57 @@ func (c *CustomJWTTypeHandler) CanHandleTokenEndpointRequest(_ context.Context, 
 	return request.GetGrantTypes().ExactOne(consts.GrantTypeOAuthTokenExchange)
 }
 
+func (c *CustomJWTTypeHandler) parse(ctx context.Context, client oauth2.Client, validation *JWTValidationConfig, value string) (token *jwt.Token, err error) {
+	if validation.ValidateFunc == nil {
+		return nil, errorsx.WithStack(oauth2.ErrServerError.WithDebug("The JSON Web Token type has no ValidateFunc."))
+	}
+
+	var config oauth2.JWTClockSkewProvider = noJWTClockSkew{config: c.Config}
+
+	if p, ok := c.Config.(oauth2.JWTClockSkewProvider); ok {
+		config = p
+	}
+
+	// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	if token, err = jwt.ParseCustomWithClaimsOptions(value, jwt.MapClaims{}, validation.ValidateFunc, customJWTAlgorithms(ctx, c.Config, client, validation), jwt.ValidateTimeFunc(time.Now), jwt.ValidateClockSkew(oauth2.GetJWTClockSkew(ctx, config, client))); err != nil {
+		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the JSON web token").WithWrap(err).WithDebugError(err))
+	}
+
+	return token, nil
+}
+
+func customJWTAlgorithms(ctx context.Context, config any, client oauth2.Client, validation *JWTValidationConfig) (algs []jose.SignatureAlgorithm) {
+	if len(validation.SigningAlgValues) == 0 {
+		algs = []jose.SignatureAlgorithm{jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512, jose.EdDSA, jose.Ed25519}
+	} else {
+		for _, alg := range validation.SigningAlgValues {
+			if alg != jwt.JSONWebTokenAlgNone {
+				algs = append(algs, jose.SignatureAlgorithm(alg))
+			}
+		}
+	}
+
+	if !oauth2.IsFAPI2SecurityProfile(ctx, config) && !oauth2.IsFAPI2SecurityProfileClient(client) {
+		return algs
+	}
+
+	return slices.DeleteFunc(algs, func(alg jose.SignatureAlgorithm) bool {
+		return !slices.Contains(oauth2.FAPI2SecurityProfileSigningAlgValues, string(alg))
+	})
+}
+
+type noJWTClockSkew struct {
+	config any
+}
+
+func (noJWTClockSkew) GetJWTClockSkew(context.Context) time.Duration {
+	return 0
+}
+
+func (n noJWTClockSkew) GetFAPI2SecurityProfile(ctx context.Context) bool {
+	return oauth2.IsFAPI2SecurityProfile(ctx, n.config)
+}
+
 func (c *CustomJWTTypeHandler) inherit(ctx context.Context, request oauth2.AccessRequester, claims map[string]any, role tokenRole) (err error) {
 	var incoming tokenBinding
 
@@ -179,9 +232,9 @@ func (c *CustomJWTTypeHandler) validate(ctx context.Context, request oauth2.Acce
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHintf("The '%s' token type is not accepted as %s.", jwtType.GetName(ctx), role.hint()))
 	}
 
-	ftoken, err := jwt.ParseWithClaims(token, jwt.MapClaims{}, validation.ValidateFunc)
+	ftoken, err := c.parse(ctx, request.GetClient(), validation, token)
 	if err != nil {
-		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the JSON web token").WithWrap(err).WithDebugError(err))
+		return nil, err
 	}
 
 	if err = validateCustomJWTType(ctx, jwtType, ftoken); err != nil {

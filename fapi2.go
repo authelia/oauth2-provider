@@ -150,12 +150,12 @@ func GetPushedAuthorizeContextLifespan(ctx context.Context, config PushedAuthori
 }
 
 // GetJWTClockSkew returns how far into the future an 'iat' or 'nbf' claim may be in a JWT received from the client: the
-// configured clock skew, held between FAPI2SecurityProfileMinimumClockSkew and FAPI2SecurityProfileMaximumClockSkew for
-// a client held to the FAPI 2.0 Security Profile.
+// configured clock skew, held between FAPI2SecurityProfileMinimumClockSkew and FAPI2SecurityProfileMaximumClockSkew when
+// config holds the whole authorization server to the FAPI 2.0 Security Profile or the client is held to it.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 func GetJWTClockSkew(ctx context.Context, config JWTClockSkewProvider, client Client) (skew time.Duration) {
-	return fapi2ClockSkew(client, config.GetJWTClockSkew(ctx))
+	return fapi2ClockSkew(IsFAPI2SecurityProfile(ctx, config) || IsFAPI2SecurityProfileClient(client), config.GetJWTClockSkew(ctx))
 }
 
 // DPoPClockSkewProvider returns the provider for configuring the clock skew permitted when validating a DPoP proof.
@@ -165,20 +165,46 @@ type DPoPClockSkewProvider interface {
 }
 
 // GetDPoPClockSkew returns the tolerance allowed when judging the 'iat' claim of a DPoP proof from the client: the
-// configured clock skew, held between FAPI2SecurityProfileMinimumClockSkew and FAPI2SecurityProfileMaximumClockSkew for
-// a client held to the FAPI 2.0 Security Profile.
+// configured clock skew, held between FAPI2SecurityProfileMinimumClockSkew and FAPI2SecurityProfileMaximumClockSkew when
+// config holds the whole authorization server to the FAPI 2.0 Security Profile or the client is held to it.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
 func GetDPoPClockSkew(ctx context.Context, config DPoPClockSkewProvider, client Client) (skew time.Duration) {
-	return fapi2ClockSkew(client, config.GetDPoPClockSkew(ctx))
+	return fapi2ClockSkew(IsFAPI2SecurityProfile(ctx, config) || IsFAPI2SecurityProfileClient(client), config.GetDPoPClockSkew(ctx))
 }
 
-// FilterFAPI2SecurityProfileSigningAlgValues returns the algs which FAPI2SecurityProfileSigningAlgValues holds for a
-// client held to the FAPI 2.0 Security Profile, and the algs unchanged for any other client.
+// IDTokenValidationClientOpts returns the IDTokenValidationOpt which validate an ID Token received in a request of the
+// client: the clock skew of GetJWTClockSkew when config is a JWTClockSkewProvider, and when config holds the whole
+// authorization server to the FAPI 2.0 Security Profile or the client is held to it, the algorithms of
+// FAPI2SecurityProfileSigningAlgValues and a clock skew of at least FAPI2SecurityProfileMinimumClockSkew.
+//
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.4.1
+func IDTokenValidationClientOpts(ctx context.Context, config any, client Client) (opts []IDTokenValidationOpt) {
+	var skew time.Duration
+
+	if p, ok := config.(JWTClockSkewProvider); ok {
+		skew = p.GetJWTClockSkew(ctx)
+	}
+
+	fapi2 := IsFAPI2SecurityProfile(ctx, config) || IsFAPI2SecurityProfileClient(client)
+
+	opts = append(opts, WithIDTokenClockSkew(fapi2ClockSkew(fapi2, skew)))
+
+	if fapi2 {
+		opts = append(opts, WithIDTokenSigningAlgValues(FAPI2SecurityProfileSigningAlgValues...))
+	}
+
+	return opts
+}
+
+// FilterFAPI2SecurityProfileSigningAlgValues returns the algs which FAPI2SecurityProfileSigningAlgValues holds when
+// config holds the whole authorization server to the FAPI 2.0 Security Profile or the client is held to it, and the
+// algs unchanged otherwise.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.4.1
-func FilterFAPI2SecurityProfileSigningAlgValues(client Client, algs []string) (permitted []string) {
-	if !IsFAPI2SecurityProfileClient(client) {
+func FilterFAPI2SecurityProfileSigningAlgValues(ctx context.Context, config any, client Client, algs []string) (permitted []string) {
+	if !IsFAPI2SecurityProfile(ctx, config) && !IsFAPI2SecurityProfileClient(client) {
 		return algs
 	}
 
@@ -223,8 +249,8 @@ func validateFAPI2ResponseTypes(client Client, responseTypes Arguments) (err err
 	return errorsx.WithStack(ErrUnsupportedResponseType.WithHint("The OAuth 2.0 Client is not allowed to request the value of the 'response_type' parameter.").WithDebugf("The client with id '%s' is held to the FAPI 2.0 Security Profile, which permits only the 'code' response type.", client.GetID()))
 }
 
-func fapi2ClockSkew(client Client, skew time.Duration) time.Duration {
-	if !IsFAPI2SecurityProfileClient(client) {
+func fapi2ClockSkew(held bool, skew time.Duration) time.Duration {
+	if !held {
 		return skew
 	}
 

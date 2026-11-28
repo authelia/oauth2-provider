@@ -13,7 +13,6 @@ import (
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/handler/par"
-	"authelia.com/provider/oauth2/handler/pkce"
 	"authelia.com/provider/oauth2/handler/rfc8705"
 	"authelia.com/provider/oauth2/handler/rfc9449"
 )
@@ -63,9 +62,7 @@ func (v *fapi2Violations) clientSupportAuthorization(ctx context.Context, config
 		v.fail(fapi2SectionAuthorizationEndpoint, "the response type must be 'code', but the authorization code grant handler is not registered")
 	}
 
-	if !fapi2Registered[*pkce.Handler](config.GetAuthorizeEndpointHandlers(ctx)) {
-		v.fail(fapi2SectionAuthorizationEndpoint, "PKCE is required, but the PKCE handler is not registered")
-	}
+	v.pkce(ctx, config, fapi2SectionAuthorizationEndpoint, "PKCE is required")
 
 	if methods := oauth2.SupportedEndpointAuthMethods(ctx, config, oauth2.ClientAuthEndpointToken); !slices.ContainsFunc(methods, func(method string) bool {
 		return slices.Contains(oauth2.FAPI2SecurityProfileClientAuthMethods, method)

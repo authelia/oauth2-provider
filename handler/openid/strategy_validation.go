@@ -6,8 +6,10 @@ package openid
 
 import (
 	"context"
+	"errors"
 
 	"authelia.com/provider/oauth2"
+	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/token/jwt"
 	"authelia.com/provider/oauth2/x/errorsx"
 )
@@ -54,6 +56,10 @@ func (s *DefaultIDTokenValidationStrategy) ValidateIDToken(ctx context.Context, 
 		}
 	}
 
+	if len(o.SigningAlgValues) != 0 {
+		sopts = append(sopts, jwt.WithSigAlgorithm(jwt.ToSignatureAlgorithms(o.SigningAlgValues)...))
+	}
+
 	var decoded *jwt.Token
 
 	if decoded, err = s.Decode(ctx, token, sopts...); err != nil {
@@ -74,13 +80,18 @@ func (s *DefaultIDTokenValidationStrategy) ValidateIDToken(ctx context.Context, 
 		return nil, errorsx.WithStack(err)
 	}
 
-	var copts []jwt.ClaimValidationOption
+	copts := []jwt.ClaimValidationOption{jwt.ValidateClockSkew(o.ClockSkew), jwt.ValidateRequireIssuedAt()}
 
-	// OpenID Connect Core 1.0 Section 2: the 'exp' and 'iat' claims are REQUIRED.
+	// OpenID Connect Core 1.0 Section 2: the 'exp' and 'iat' claims are REQUIRED. An expired ID Token must still have
+	// one, so a JWT of another kind without it is not accepted, per RFC 8725 Section 3.12.
 	if o.AllowExpired {
+		if exp, _ := claims.GetExpirationTime(); exp == nil {
+			return nil, errorsx.WithStack(&jwt.ValidationError{Errors: jwt.ValidationErrorExpired, Inner: errors.New("token is missing the 'exp' claim")})
+		}
+
 		copts = append(copts, jwt.ValidateIgnoreExpiration())
 	} else {
-		copts = append(copts, jwt.ValidateRequireExpiresAt(), jwt.ValidateRequireIssuedAt())
+		copts = append(copts, jwt.ValidateRequireExpiresAt())
 	}
 
 	if err = claims.Valid(copts...); err != nil {
@@ -93,3 +104,42 @@ func (s *DefaultIDTokenValidationStrategy) ValidateIDToken(ctx context.Context, 
 var (
 	_ TokenValidationStrategy = (*DefaultIDTokenValidationStrategy)(nil)
 )
+
+// validateIDTokenHint returns the subject of an 'id_token_hint': an ID Token previously issued by this authorization
+// server to the client, which may be expired.
+//
+// See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+// See: https://datatracker.ietf.org/doc/html/rfc8725#section-3.12
+func validateIDTokenHint(ctx context.Context, strategy jwt.Strategy, config any, issuer string, client oauth2.Client, hint string) (subject string, err error) {
+	if issuer == "" {
+		return "", errors.New("the issuer is not configured")
+	}
+
+	if client == nil {
+		return "", errors.New("the request has no client")
+	}
+
+	validator := &DefaultIDTokenValidationStrategy{Strategy: strategy}
+
+	opts := oauth2.IDTokenValidationClientOpts(ctx, config, client)
+
+	var claims jwt.MapClaims
+
+	if claims, err = validator.ValidateIDToken(ctx, &oauth2.Request{Client: client}, hint, append([]oauth2.IDTokenValidationOpt{oauth2.WithAllowExpired(), oauth2.WithIDTokenHint()}, opts...)...); err != nil {
+		return "", err
+	}
+
+	if err = claims.Valid(jwt.ValidateIgnoreExpiration(), jwt.ValidateClockSkew(oauth2.NewIDTokenValidationOpts(opts...).ClockSkew), jwt.ValidateIssuer(issuer), jwt.ValidateAudienceAny(client.GetID())); err != nil {
+		return "", err
+	}
+
+	if azp, present := claims[consts.ClaimAuthorizedParty]; present && azp != client.GetID() {
+		return "", errors.New("the 'azp' claim is not the client")
+	}
+
+	if subject, _ = claims.GetSubject(); subject == "" {
+		return "", errors.New("the 'sub' claim is missing")
+	}
+
+	return subject, nil
+}

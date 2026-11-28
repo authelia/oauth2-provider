@@ -162,7 +162,7 @@ func (c *IDTokenTypeHandler) CanHandleTokenEndpointRequest(ctx context.Context, 
 }
 
 func (c *IDTokenTypeHandler) validate(ctx context.Context, request oauth2.AccessRequester, token string) (claims map[string]any, err error) {
-	if claims, err = c.ValidationStrategy.ValidateIDToken(ctx, request, token); err != nil {
+	if claims, err = c.ValidationStrategy.ValidateIDToken(ctx, request, token, oauth2.IDTokenValidationClientOpts(ctx, c.Config, request.GetClient())...); err != nil {
 		return nil, errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Unable to parse the id_token").WithWrap(err).WithDebugError(err))
 	}
 

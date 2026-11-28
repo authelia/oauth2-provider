@@ -20,9 +20,14 @@ import (
 )
 
 func TestValidatePrompt(t *testing.T) {
-	const errPromptNoneWithOtherValues = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."
+	const (
+		errPromptNoneWithOtherValues = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed."
+		errInvalidIDTokenHint        = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Failed to validate OpenID Connect request as the ID Token from the id_token_hint parameter is not valid."
+		issuer                       = "https://as.example.com"
+	)
 
 	config := &oauth2.Config{
+		Issuer:              issuer,
 		MinParameterEntropy: oauth2.MinParameterEntropy,
 	}
 
@@ -39,7 +44,33 @@ func TestValidatePrompt(t *testing.T) {
 	v := NewOpenIDConnectRequestValidator(j, config)
 
 	var genIDToken = func(c jwt.IDTokenClaims) string {
+		if c.Issuer == "" {
+			c.Issuer = issuer
+		}
+
+		if c.Audience == nil {
+			c.Audience = []string{"client"}
+		}
+
+		if c.IssuedAt == nil {
+			c.IssuedAt = jwt.NewNumericDate(time.Now().Add(-time.Minute))
+		}
+
 		s, _, err := j.Encode(t.Context(), c.ToMapClaims())
+		require.NoError(t, err)
+
+		return s
+	}
+
+	var genIDTokenWithAuthorizedParty = func(azp any) string {
+		s, _, err := j.Encode(t.Context(), jwt.MapClaims{
+			consts.ClaimIssuer:          issuer,
+			consts.ClaimAudience:        []string{"client"},
+			consts.ClaimSubject:         "foo",
+			consts.ClaimAuthorizedParty: azp,
+			consts.ClaimIssuedAt:        time.Now().Add(-time.Minute).Unix(),
+			consts.ClaimExpirationTime:  time.Now().Add(time.Hour).Unix(),
+		})
 		require.NoError(t, err)
 
 		return s
@@ -327,6 +358,52 @@ func TestValidatePrompt(t *testing.T) {
 			}),
 		},
 		{
+			name:        "ShouldFailHintIssuedToAnotherClient",
+			err:         errInvalidIDTokenHint + " Token has invalid audience",
+			session:     &DefaultSession{Subject: "foo", Claims: &jwt.IDTokenClaims{Subject: "foo", AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Second))}, RequestedAt: time.Now()},
+			idTokenHint: genIDToken(jwt.IDTokenClaims{Subject: "foo", Audience: []string{"another"}, ExpirationTime: jwt.NewNumericDate(time.Now().Add(time.Hour))}),
+		},
+		{
+			name:        "ShouldFailHintWithAnEmptyAuthorizedParty",
+			err:         errInvalidIDTokenHint + " the 'azp' claim is not the client",
+			session:     &DefaultSession{Subject: "foo", Claims: &jwt.IDTokenClaims{Subject: "foo", AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Second))}, RequestedAt: time.Now()},
+			idTokenHint: genIDTokenWithAuthorizedParty(""),
+		},
+		{
+			name:        "ShouldPassHintWithTheClientAsTheAuthorizedParty",
+			session:     &DefaultSession{Subject: "foo", Claims: &jwt.IDTokenClaims{Subject: "foo", AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Second))}, RequestedAt: time.Now()},
+			idTokenHint: genIDTokenWithAuthorizedParty("client"),
+		},
+		{
+			name:        "ShouldFailHintWithAnAuthorizedPartyArray",
+			err:         errInvalidIDTokenHint + " the 'azp' claim is not the client",
+			session:     &DefaultSession{Subject: "foo", Claims: &jwt.IDTokenClaims{Subject: "foo", AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Second))}, RequestedAt: time.Now()},
+			idTokenHint: genIDTokenWithAuthorizedParty([]string{"client"}),
+		},
+		{
+			name:        "ShouldPassHintIssuedWithinTheClockSkew",
+			session:     &DefaultSession{Subject: "foo", Claims: &jwt.IDTokenClaims{Subject: "foo", AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Second))}, RequestedAt: time.Now()},
+			idTokenHint: genIDToken(jwt.IDTokenClaims{Subject: "foo", IssuedAt: jwt.NewNumericDate(time.Now().Add(5 * time.Second)), ExpirationTime: jwt.NewNumericDate(time.Now().Add(time.Hour))}),
+		},
+		{
+			name:        "ShouldFailHintOfAnotherIssuer",
+			err:         errInvalidIDTokenHint + " Token has invalid issuer",
+			session:     &DefaultSession{Subject: "foo", Claims: &jwt.IDTokenClaims{Subject: "foo", AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Second))}, RequestedAt: time.Now()},
+			idTokenHint: genIDToken(jwt.IDTokenClaims{Subject: "foo", Issuer: "https://other.example.com", ExpirationTime: jwt.NewNumericDate(time.Now().Add(time.Hour))}),
+		},
+		{
+			name:        "ShouldFailHintWithoutAnExpiration",
+			err:         errInvalidIDTokenHint + " token is missing the 'exp' claim",
+			session:     &DefaultSession{Subject: "foo", Claims: &jwt.IDTokenClaims{Subject: "foo", AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Second))}, RequestedAt: time.Now()},
+			idTokenHint: genIDToken(jwt.IDTokenClaims{Subject: "foo"}),
+		},
+		{
+			name:        "ShouldFailHintIssuedInTheFuture",
+			err:         errInvalidIDTokenHint + " Token used before issued",
+			session:     &DefaultSession{Subject: "foo", Claims: &jwt.IDTokenClaims{Subject: "foo", AuthTime: jwt.NewNumericDate(time.Now().Add(-time.Second))}, RequestedAt: time.Now()},
+			idTokenHint: genIDToken(jwt.IDTokenClaims{Subject: "foo", IssuedAt: jwt.NewNumericDate(time.Now().Add(2 * time.Minute)), ExpirationTime: jwt.NewNumericDate(time.Now().Add(time.Hour))}),
+		},
+		{
 			name: "ShouldPassHintOnlyExpired",
 			session: &DefaultSession{
 				Subject: "foo",
@@ -523,7 +600,7 @@ func TestValidatePrompt(t *testing.T) {
 				form["max_age"] = tc.maxAge
 			}
 
-			var client oauth2.Client = &oauth2.DefaultClient{Public: tc.isPublic}
+			var client oauth2.Client = &oauth2.DefaultClient{ID: "client", Public: tc.isPublic}
 
 			if tc.client != nil {
 				client = tc.client
@@ -755,6 +832,8 @@ func parse(u string) *url.URL {
 type validateClaimsPromptsOnlyConfig struct{}
 
 func (validateClaimsPromptsOnlyConfig) GetAllowedPrompts(_ context.Context) []string { return nil }
+
+func (validateClaimsPromptsOnlyConfig) GetIssuer(_ context.Context) string { return "" }
 
 func TestValidateClaims(t *testing.T) {
 	const (

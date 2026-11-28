@@ -160,7 +160,9 @@ func (f *Fosite) validateIDTokenHintForClient(ctx context.Context, client Client
 		return nil, errorsx.WithStack(ErrServerError.WithDebug("Failed to validate the 'id_token_hint' because the issuer is not configured."))
 	}
 
-	if claims, err = strategy.ValidateIDToken(ctx, &Request{Client: client}, hint, WithAllowExpired(), WithIDTokenHint()); err != nil {
+	opts := IDTokenValidationClientOpts(ctx, f.Config, client)
+
+	if claims, err = strategy.ValidateIDToken(ctx, &Request{Client: client}, hint, append([]IDTokenValidationOpt{WithAllowExpired(), WithIDTokenHint()}, opts...)...); err != nil {
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' could not be validated.").WithWrap(err).WithDebugError(err))
 	}
 
@@ -168,13 +170,14 @@ func (f *Fosite) validateIDTokenHintForClient(ctx context.Context, client Client
 
 	if err = claims.Valid(
 		jwt.ValidateIgnoreExpiration(),
+		jwt.ValidateClockSkew(NewIDTokenValidationOpts(opts...).ClockSkew),
 		jwt.ValidateIssuer(issuer),
 		jwt.ValidateAudienceAny(clientID),
 	); err != nil {
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' claims could not be validated.").WithWrap(err).WithDebugError(err))
 	}
 
-	if azp, ok := claims[consts.ClaimAuthorizedParty].(string); ok && azp != "" && azp != clientID {
+	if azp, present := claims[consts.ClaimAuthorizedParty]; present && azp != clientID {
 		return nil, errorsx.WithStack(ErrInvalidRequest.WithHint("The 'id_token_hint' was not issued to the requesting client."))
 	}
 

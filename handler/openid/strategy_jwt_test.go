@@ -123,6 +123,7 @@ func TestDefaultSession_Clone(t *testing.T) {
 
 func TestJWTStrategy_GenerateIDToken(t *testing.T) {
 	config := &oauth2.Config{
+		Issuer:              "https://as.example.com",
 		MinParameterEntropy: oauth2.MinParameterEntropy,
 	}
 

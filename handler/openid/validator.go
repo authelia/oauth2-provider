@@ -6,7 +6,6 @@ package openid
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -19,6 +18,7 @@ import (
 
 type openIDConnectRequestValidatorConfigProvider interface {
 	oauth2.AllowedPromptsProvider
+	oauth2.IssuerProvider
 }
 
 // OpenIDConnectRequestValidator validates the OpenID Connect parameters of authorization requests.
@@ -214,18 +214,8 @@ func (v *OpenIDConnectRequestValidator) ValidateSession(ctx context.Context, req
 }
 
 func (v *OpenIDConnectRequestValidator) getIDTokenHintSubject(ctx context.Context, request oauth2.Requester) (subject string, err error) {
-	var tokenHint *jwt.Token
-
-	tokenHint, err = v.Strategy.Decode(ctx, request.GetRequestForm().Get(consts.FormParameterIDTokenHint), jwt.WithIDTokenHintClient(request.GetClient()))
-
-	if ve, ok := errors.AsType[*jwt.ValidationError](err); ok && ve.Has(jwt.ValidationErrorExpired) {
-		// Expired tokens are ok.
-	} else if err != nil {
-		return "", errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as decoding ID Token from id_token_hint parameter failed.").WithWrap(err).WithDebugError(err))
-	}
-
-	if subject, err = tokenHint.Claims.GetSubject(); subject == "" || err != nil {
-		return "", errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request because provided ID Token from id_token_hint does not have a subject."))
+	if subject, err = validateIDTokenHint(ctx, v.Strategy, v.Config, v.Config.GetIssuer(ctx), request.GetClient(), request.GetRequestForm().Get(consts.FormParameterIDTokenHint)); err != nil {
+		return "", errorsx.WithStack(oauth2.ErrInvalidRequest.WithHint("Failed to validate OpenID Connect request as the ID Token from the id_token_hint parameter is not valid.").WithWrap(err).WithDebugError(err))
 	}
 
 	return subject, nil

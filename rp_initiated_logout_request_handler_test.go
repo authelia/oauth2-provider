@@ -167,6 +167,24 @@ func TestNewRPInitiatedLogoutRequest_RejectsNotYetValidIDTokenHint(t *testing.T)
 	assert.ErrorIs(t, err, oauth2.ErrInvalidRequest)
 }
 
+// FAPI 2.0 Security Profile Section 5.3.2.1.
+func TestNewRPInitiatedLogoutRequest_AcceptsIDTokenHintIssuedWithinTheClockSkew(t *testing.T) {
+	client := &oauth2.DefaultClient{ID: "test-client"}
+	f, jwtStrategy, _ := newLogoutProviderWithJWT(t, client)
+
+	claims := baseHintClaims("test-client")
+	claims[jwt.ClaimIssuedAt] = jwt.NewNumericDate(time.Now().Add(5 * time.Second))
+
+	hint := mintIDToken(t, jwtStrategy, claims)
+
+	requester, err := f.NewRPInitiatedLogoutRequest(t.Context(), newLogoutGet(url.Values{
+		"id_token_hint": []string{hint},
+	}))
+
+	require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+	assert.Equal(t, "test-client", requester.GetClient().GetID())
+}
+
 func TestNewRPInitiatedLogoutRequest_ClaimPolicy(t *testing.T) {
 	client := &oauth2.DefaultClient{ID: "test-client"}
 
@@ -178,6 +196,9 @@ func TestNewRPInitiatedLogoutRequest_ClaimPolicy(t *testing.T) {
 		{"AudienceMissingClient", func(c jwt.MapClaims) { c[jwt.ClaimAudience] = []string{"other-client"} }},
 		{"AuthorizedPartyMismatch", func(c jwt.MapClaims) { c[jwt.ClaimAuthorizedParty] = "other-client" }},
 		{"MissingSubject", func(c jwt.MapClaims) { delete(c, jwt.ClaimSubject) }},
+		{"EmptyAuthorizedParty", func(c jwt.MapClaims) { c[jwt.ClaimAuthorizedParty] = "" }},
+		{"AuthorizedPartyArray", func(c jwt.MapClaims) { c[jwt.ClaimAuthorizedParty] = []string{"test-client"} }},
+		{"MissingExpiration", func(c jwt.MapClaims) { delete(c, jwt.ClaimExpirationTime) }},
 	}
 
 	for _, tc := range testCases {

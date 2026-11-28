@@ -327,9 +327,7 @@ func (v *fapi2Violations) authorizationEndpoint(ctx context.Context, config oaut
 		v.fail(fapi2SectionAuthorizationEndpoint, "the pushed authorization request 'expires_in' must be less than %s, but is %s", fapi2MaximumPushedAuthorizeLife, lifespan)
 	}
 
-	if !fapi2Registered[*pkce.Handler](config.GetAuthorizeEndpointHandlers(ctx)) {
-		v.fail(fapi2SectionAuthorizationEndpoint, "PKCE is required, but the PKCE handler is not registered")
-	}
+	v.pkce(ctx, config, fapi2SectionAuthorizationEndpoint, "PKCE is required")
 
 	if !config.GetEnforcePKCE(ctx) {
 		v.fail(fapi2SectionAuthorizationEndpoint, "PKCE is required, but EnforcePKCE is not set")
@@ -476,6 +474,16 @@ func (v *fapi2Violations) grantSigning(ctx context.Context, config oauth2.Config
 		if alg := fapi2SigningAlg(t.Issue.SigningAlg); !slices.Contains(oauth2.FAPI2SecurityProfileSigningAlgValues, alg) {
 			v.fail(fapi2SectionCryptography, "the JWT authorization grant type '%s' is signed with '%s', which is not permitted", name, alg)
 		}
+	}
+}
+
+// See: https://www.rfc-editor.org/rfc/rfc9700#section-2.1.1
+func (v *fapi2Violations) pkce(ctx context.Context, config oauth2.Configurator, section, requirement string) {
+	switch {
+	case !fapi2Registered[*pkce.Handler](config.GetAuthorizeEndpointHandlers(ctx)):
+		v.fail(section, "%s, but the PKCE handler is not registered", requirement)
+	case !fapi2Registered[*pkce.Handler](config.GetTokenEndpointHandlers(ctx)):
+		v.fail(section, "%s, but the PKCE handler is not registered with the token endpoint handlers, so no 'code_verifier' is verified", requirement)
 	}
 }
 

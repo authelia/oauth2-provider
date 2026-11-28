@@ -6,6 +6,7 @@ package compose
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,6 +16,7 @@ import (
 
 	"authelia.com/provider/oauth2"
 	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
+	"authelia.com/provider/oauth2/handler/pkce"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
@@ -25,6 +27,7 @@ func TestValidateFAPI2SecurityProfileClientSupport(t *testing.T) {
 	testCases := []struct {
 		name      string
 		modify    func(config *oauth2.Config)
+		composed  func(config *oauth2.Config)
 		factories []Factory
 		expected  []string
 	}{
@@ -46,6 +49,17 @@ func TestValidateFAPI2SecurityProfileClientSupport(t *testing.T) {
 			modify: func(config *oauth2.Config) {
 				config.JWTStrategy = &jwt.DefaultStrategy{Config: config}
 			},
+		},
+		{
+			name: "ShouldRejectWithoutThePKCEHandlerAtTheTokenEndpoint",
+			composed: func(config *oauth2.Config) {
+				config.TokenEndpointHandlers = slices.DeleteFunc(config.TokenEndpointHandlers, func(handler oauth2.TokenEndpointHandler) bool {
+					_, ok := handler.(*pkce.Handler)
+
+					return ok
+				})
+			},
+			expected: []string{"Section 5.3.2.2: PKCE is required, but the PKCE handler is not registered with the token endpoint handlers, so no 'code_verifier' is verified"},
 		},
 		{
 			name:      "ShouldRejectWithoutThePKCEHandler",
@@ -117,6 +131,10 @@ func TestValidateFAPI2SecurityProfileClientSupport(t *testing.T) {
 			}
 
 			Compose(config, storage.NewMemoryStore(), &CommonStrategy{CoreStrategy: NewOAuth2HMACStrategy(config)}, factories...)
+
+			if tc.composed != nil {
+				tc.composed(config)
+			}
 
 			err := ValidateFAPI2SecurityProfileClientSupport(context.Background(), config)
 

@@ -95,6 +95,12 @@ func ApplyFAPI2SecurityProfile(config *oauth2.Config) {
 		config.RevocationEndpointAuthSigningAlgValues = fapi2Permitted(config.RevocationEndpointAuthSigningAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
 	}
 
+	if len(config.RFC7591TrustedIssuerSigningAlgValues) == 0 {
+		config.RFC7591TrustedIssuerSigningAlgValues = slices.Clone(oauth2.FAPI2SecurityProfileSigningAlgValues)
+	} else {
+		config.RFC7591TrustedIssuerSigningAlgValues = fapi2Permitted(config.RFC7591TrustedIssuerSigningAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
+	}
+
 	if len(config.AuthorizationSignedResponseAlgValues) != 0 {
 		config.AuthorizationSignedResponseAlgValues = fapi2Permitted(config.AuthorizationSignedResponseAlgValues, oauth2.FAPI2SecurityProfileSigningAlgValues)
 	}
@@ -355,6 +361,12 @@ func (v *fapi2Violations) responseSigning(ctx context.Context, config oauth2.Con
 }
 
 func (v *fapi2Violations) extensionSigning(ctx context.Context, config oauth2.Configurator) {
+	if p, ok := config.(oauth2.RFC7591ClientRegistrationPolicyProvider); ok && len(p.GetRFC7591ClientRegistrationTrustedIssuers(ctx)) != 0 {
+		if algs := config.GetRFC7591TrustedIssuerSigningAlgValues(ctx); !fapi2Subset(algs, oauth2.FAPI2SecurityProfileSigningAlgValues) {
+			v.fail(fapi2SectionCryptography, "the software statement and trusted issuer algorithms '%s' include one not permitted", strings.Join(algs, "', '"))
+		}
+	}
+
 	for _, name := range slices.Sorted(maps.Keys(config.GetRFC8693TokenTypes(ctx))) {
 		t, ok := config.GetRFC8693TokenTypes(ctx)[name].(*rfc8693.TxnTokenType)
 		if !ok {

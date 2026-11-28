@@ -414,7 +414,9 @@ func NewClientSecretJWKFromClient(ctx context.Context, client BaseClient, kid, a
 //
 // The MAC key for a symmetric signature is the octets of the client_secret with no derivation applied, and the secret
 // must carry at least the octets the algorithm's MAC key needs. The symmetric encryption key is the left-most bits of
-// a truncated SHA-2 hash of the client_secret.
+// a truncated SHA-2 hash of the client_secret, and the secret must carry at least the octets of that key.
+//
+// See: https://www.rfc-editor.org/rfc/rfc7518#section-8.8
 //
 // See: https://openid.net/specs/openid-connect-core-1_0.html#Signing
 // See: https://openid.net/specs/openid-connect-core-1_0.html#Encryption
@@ -506,6 +508,11 @@ func NewClientSecretJWK(ctx context.Context, secret []byte, kid, alg, enc, use s
 			default:
 				hasher = sha512.New()
 			}
+		}
+
+		// RFC 7518 Section 8.8: a password is ideally at least as long as the derived key.
+		if len(secret) < bits {
+			return nil, &JWKLookupError{Description: fmt.Sprintf("The client secret is %d octets long but the '%s' algorithm requires a client secret of at least %d octets to derive its key", len(secret), alg, bits)}
 		}
 
 		if _, err = hasher.Write(secret); err != nil {

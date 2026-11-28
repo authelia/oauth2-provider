@@ -25,6 +25,7 @@ import (
 type softwareStatementConfig interface {
 	oauth2.RFC7591ClientRegistrationPolicyProvider
 	oauth2.JWKSFetcherStrategyProvider
+	oauth2.ClientJWKSFetcherStrategyProvider
 	oauth2.GrantAssertionAlgorithmsProvider
 }
 

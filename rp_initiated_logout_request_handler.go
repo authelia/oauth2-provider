@@ -222,8 +222,7 @@ func (f *Fosite) validateRPInitiatedLogoutRedirectURI(ctx context.Context, reque
 		return errorsx.WithStack(ErrInvalidRequest.WithHint("The 'post_logout_redirect_uri' parameter is not a valid URI.").WithWrap(err).WithDebugError(err))
 	}
 
-	switch uri.Scheme {
-	case "javascript", "data", "vbscript":
+	if IsExecutableURIScheme(uri.Scheme) {
 		return errorsx.WithStack(ErrInvalidRequest.WithHintf("The 'post_logout_redirect_uri' parameter uses the '%s' scheme which is not permitted.", uri.Scheme))
 	}
 

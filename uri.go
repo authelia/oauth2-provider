@@ -33,7 +33,21 @@ func IsValidRedirectURI(uri *url.URL) bool {
 		return false
 	}
 
-	return true
+	// RFC 9700 Section 4.11: the user agent must never be redirected to a URI which executes in the origin it is sent from.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9700#section-4.11
+	return !IsExecutableURIScheme(uri.Scheme)
+}
+
+// IsExecutableURIScheme reports whether a URI of the scheme is executed by a user agent rather than navigated to, such
+// as 'javascript', 'data' and 'vbscript', so it must never be a redirect target.
+func IsExecutableURIScheme(scheme string) bool {
+	switch strings.ToLower(scheme) {
+	case "javascript", "data", "vbscript":
+		return true
+	default:
+		return false
+	}
 }
 
 // IsRedirectURISecure reports whether the given URI is acceptable for use as a redirect target. The check is permissive:

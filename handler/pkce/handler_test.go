@@ -1678,6 +1678,40 @@ func TestHandlerTokenEndpointKeepsTheTokenRequestSession(t *testing.T) {
 	}
 }
 
+// RFC 7636 Section 4.6.
+func TestHandlerTokenEndpointReportsAMissingVerifier(t *testing.T) {
+	config := &oauth2.Config{GlobalSecret: []byte("foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar")}
+	strategy := hoauth2.NewHMACCoreStrategy(config, "authelia_%s_")
+	client := &oauth2.DefaultClient{ID: "app", Public: true}
+	store := storage.NewMemoryStore()
+
+	code, signature, err := strategy.GenerateAuthorizeCode(t.Context(), nil)
+	require.NoError(t, err)
+
+	require.NoError(t, store.CreatePKCERequestSession(t.Context(), signature, &oauth2.Request{
+		Client: client,
+		Form: url.Values{
+			consts.FormParameterCodeChallenge:       {testChallengeS256},
+			consts.FormParameterCodeChallengeMethod: {consts.PKCEChallengeMethodSHA256},
+		},
+		Session: &oauth2.DefaultSession{},
+	}))
+
+	request := &oauth2.AccessRequest{
+		GrantTypes: oauth2.Arguments{consts.GrantTypeAuthorizationCode},
+		Request: oauth2.Request{
+			Client:  client,
+			Session: &oauth2.DefaultSession{},
+			Form:    url.Values{consts.FormParameterAuthorizationCode: {code}},
+		},
+	}
+
+	err = (&Handler{AuthorizeCodeStrategy: strategy, Storage: store, Config: config}).HandleTokenEndpointRequest(t.Context(), request)
+
+	require.ErrorIs(t, err, oauth2.ErrInvalidGrant)
+	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "The PKCE code verifier is missing, but the authorization request included a code challenge.")
+}
+
 func TestHandler_HandleAuthorizeEndpointRequestDetectsReusedChallenges(t *testing.T) {
 	const expected = "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The PKCE code challenge was already used by this client, a new code challenge must be generated for every authorization request. The client with id 'client-a' used a 'code_challenge' value which it used in an earlier authorization request."
 

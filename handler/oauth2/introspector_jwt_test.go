@@ -7,7 +7,9 @@ package oauth2
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -541,6 +543,105 @@ type scopeStrategyClient struct {
 
 func (c *scopeStrategyClient) GetScopeStrategy(_ context.Context) oauth2.ScopeStrategy {
 	return c.strategy
+}
+
+// RFC 9068 Sections 2.2 and 4.
+func TestStatelessJWTValidatorIssuerAndExpiry(t *testing.T) {
+	const issuer = "https://as.example.com"
+
+	config := &oauth2.Config{
+		EnforceJWTProfileAccessTokens: true,
+		GlobalSecret:                  []byte("foofoofoofoofoofoofoofoofoofoofoo"),
+		Issuer:                        issuer,
+	}
+
+	signer := &jwt.DefaultStrategy{Config: config, Issuer: jwt.NewDefaultIssuerRS256Unverified(gen.MustRSAKey())}
+
+	strategy := &JWTProfileCoreStrategy{
+		HMACCoreStrategy: NewHMACCoreStrategy(config, "authelia_%s_"),
+		Strategy:         signer,
+		Config:           config,
+	}
+
+	request := jwtValidCase(oauth2.AccessToken)
+	request.GetSession().(*JWTSession).JWTClaims.Issuer = issuer
+
+	token, _, err := strategy.GenerateAccessToken(t.Context(), request)
+	require.NoError(t, err)
+
+	sign := func(t *testing.T, exp any) string {
+		t.Helper()
+
+		claims := jwt.MapClaims{
+			consts.ClaimIssuer:           issuer,
+			consts.ClaimSubject:          "peter",
+			consts.ClaimClientIdentifier: "client",
+			consts.ClaimIssuedAt:         time.Now().Add(-time.Hour).Unix(),
+			consts.ClaimJWTID:            "jti",
+		}
+
+		if exp != nil {
+			claims[consts.ClaimExpirationTime] = exp
+		}
+
+		signed, _, err := signer.Encode(t.Context(), claims, jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{consts.JSONWebTokenHeaderType: consts.JSONWebTokenTypeAccessToken}}))
+		require.NoError(t, err)
+
+		return signed
+	}
+
+	unexpiring := sign(t, nil)
+
+	testCases := []struct {
+		name   string
+		token  string
+		issuer string
+		err    string
+	}{
+		{name: "ShouldAcceptTheIssuer", token: token, issuer: issuer},
+		{name: "ShouldRejectAnotherIssuer", token: token, issuer: "https://other.example.com", err: "its 'iss' claim 'https://as.example.com' is not the issuer 'https://other.example.com'"},
+		{name: "ShouldNotCheckTheIssuerWhenNoneIsConfigured", token: token},
+		{name: "ShouldRejectATokenWithoutAnExpiry", token: unexpiring, issuer: issuer, err: "missing the 'exp' claim"},
+		{name: "ShouldRejectATokenWithAZeroExpiry", token: sign(t, 0), issuer: issuer, err: "missing the 'exp' claim"},
+		{name: "ShouldRejectAnExpiredToken", token: sign(t, time.Now().Add(-time.Minute).Unix()), issuer: issuer},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validator := &StatelessJWTValidator{
+				StatelessJWTStrategy: strategy,
+				Config:               &oauth2.Config{ScopeStrategy: oauth2.HierarchicScopeStrategy, Issuer: tc.issuer},
+			}
+
+			_, err := validator.IntrospectToken(t.Context(), tc.token, oauth2.AccessToken, oauth2.NewAccessRequest(&oauth2.DefaultSession{}), nil)
+
+			if tc.err == "" && !strings.HasPrefix(tc.name, "ShouldReject") {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			require.Error(t, err)
+
+			if tc.err != "" {
+				require.ErrorIs(t, err, oauth2.ErrRequestUnauthorized)
+				assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.err)
+			}
+		})
+	}
+}
+
+// RFC 9068 Section 4 and RFC 7519 Section 4.1.4: an 'exp' claim at or before the epoch is expired, however it is decoded.
+func TestStatelessJWTValidatorRejectsAnEpochExpiry(t *testing.T) {
+	validator := &StatelessJWTValidator{Config: &oauth2.Config{}}
+
+	for _, exp := range []any{json.Number("0"), json.Number("0.4"), float64(0.4), json.Number("-1")} {
+		err := validator.validateIssuerAndExpiry(t.Context(), &jwt.Token{Claims: jwt.MapClaims{consts.ClaimExpirationTime: exp}})
+
+		require.ErrorIs(t, err, oauth2.ErrRequestUnauthorized, "exp %v", exp)
+	}
+
+	require.NoError(t, validator.validateIssuerAndExpiry(t.Context(), &jwt.Token{Claims: jwt.MapClaims{consts.ClaimExpirationTime: json.Number(strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10))}}))
 }
 
 type statelessClientsFailure struct{}

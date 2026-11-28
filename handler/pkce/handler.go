@@ -236,16 +236,8 @@ func (c *Handler) HandleTokenEndpointRequest(ctx context.Context, request oauth2
 	// The code verifier must have enough entropy to make it impractical to guess.
 	// See: https://www.rfc-editor.org/rfc/rfc7636#section-4.1
 
-	// Validation.
-	switch {
-	case nv < 43:
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must be at least 43 characters."))
-	case nv > 128:
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must be no more than 128 characters."))
-	case nc == 0:
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier was provided but the code challenge was absent from the authorization request."))
-	case verifierWrongFormat.MatchString(verifier):
-		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must only contain [a-Z], [0-9], '-', '.', '_', '~'."))
+	if err = validateVerifier(verifier, challenge); err != nil {
+		return err
 	}
 
 	// Verify the 'code_verifier' against the stored 'code_challenge' using the stored method; a mismatch is
@@ -389,4 +381,26 @@ func sessionCopy(request oauth2.Requester) oauth2.Session {
 	}
 
 	return nil
+}
+
+// validateVerifier checks the syntax of the code verifier and that a code challenge was recorded for it.
+//
+// See: https://www.rfc-editor.org/rfc/rfc7636#section-4.1
+func validateVerifier(verifier, challenge string) (err error) {
+	nv, nc := len(verifier), len(challenge)
+
+	switch {
+	case nv == 0 && nc != 0:
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier is missing, but the authorization request included a code challenge."))
+	case nv < 43:
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must be at least 43 characters."))
+	case nv > 128:
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must be no more than 128 characters."))
+	case nc == 0:
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier was provided but the code challenge was absent from the authorization request."))
+	case verifierWrongFormat.MatchString(verifier):
+		return errorsx.WithStack(oauth2.ErrInvalidGrant.WithHint("The PKCE code verifier must only contain [a-Z], [0-9], '-', '.', '_', '~'."))
+	default:
+		return nil
+	}
 }

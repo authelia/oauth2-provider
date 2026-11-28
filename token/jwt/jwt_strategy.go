@@ -61,6 +61,8 @@ type IssuerSigningJWKProvider interface {
 type StrategyConfig interface {
 	// GetJWKSFetcherStrategy returns the JWKS fetcher strategy.
 	GetJWKSFetcherStrategy(ctx context.Context) (strategy JWKSFetcherStrategy)
+
+	ClientJWKSFetcherStrategyProvider
 }
 
 var errNoIssuer = errors.New("no issuer is configured")

@@ -99,6 +99,60 @@ func TestAuthenticateClientRegistrationJWTRejectsAClientResolvedAsADocumentClien
 	assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), "The Access Token was issued to a client resolved from a Client ID Metadata Document.")
 }
 
+// FAPI 2.0 Security Profile Section 5.4.1.
+func TestAuthenticateClientRegistrationJWTTrustedIssuerFAPI2SecurityProfile(t *testing.T) {
+	rsa := newJWTAuthKeyedSigner(t, &oauth2.Config{}, gen.MustRSAKey(), "rs")
+
+	ecKey := gen.MustES256Key()
+
+	ec := &jwt.DefaultStrategy{Config: &oauth2.Config{}, Issuer: jwt.NewDefaultIssuerUnverifiedFromJWKS(&jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+		{Key: ecKey, KeyID: "es", Algorithm: string(jose.ES256), Use: jwt.JSONWebTokenUseSignature},
+	}})}
+
+	jwks := newJWKSServer(t, &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{publicJWK(t, rsa), {Key: ecKey.Public(), KeyID: "es", Algorithm: string(jose.ES256), Use: jwt.JSONWebTokenUseSignature}}})
+
+	header := jwt.WithHeaders(&jwt.Headers{Extra: map[string]any{jwt.JSONWebTokenHeaderType: jwt.JSONWebTokenTypeAccessToken}})
+	claims := signJWTAuthClaims(jwt.MapClaims{jwt.ClaimIssuer: testJWTTrustedIssuer})
+
+	rs256, _, err := rsa.Encode(context.Background(), claims, header)
+	require.NoError(t, err)
+
+	es256, _, err := ec.Encode(context.Background(), claims, header, jwt.WithIssuerSigningAlg(string(jose.ES256)))
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name    string
+		token   string
+		profile bool
+		err     bool
+	}{
+		{name: "ShouldAcceptRS256WithoutTheProfile", token: rs256},
+		{name: "ShouldRejectRS256WithTheProfile", token: rs256, profile: true, err: true},
+		{name: "ShouldAcceptES256WithTheProfile", token: es256, profile: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			auth, config, _, _ := newJWTAuthFixtures(t)
+
+			config.FAPI2SecurityProfile = tc.profile
+			config.RFC7591ClientRegistrationTrustedIssuers = []oauth2.RFC7591TrustedIssuer{{Issuer: testJWTTrustedIssuer, JSONWebKeysURI: jwks.URL}}
+
+			requester, err := auth.AuthenticateClientRegistrationRequest(context.Background(), bindingRequest(oauth2.BearerAccessToken, tc.token, "", nil), "")
+
+			if tc.err {
+				require.ErrorIs(t, err, oauth2.ErrInvalidToken)
+				assert.Nil(t, requester)
+
+				return
+			}
+
+			require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+			assert.NotNil(t, requester)
+		})
+	}
+}
+
 func TestAuthenticateClientRegistrationJWT(t *testing.T) {
 	ctx := context.Background()
 

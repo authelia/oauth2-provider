@@ -259,7 +259,10 @@ func TestIntrospectionJWTResponseFAPI2SecurityProfileClient(t *testing.T) {
 			responder, err := provider.NewIntrospectionRequest(t.Context(), r, &DefaultSession{})
 			require.NoError(t, ErrorToDebugRFC6749Error(err))
 
-			client.FAPI2SecurityProfile = tc.fapi2
+			response, ok := responder.(*IntrospectionResponse)
+			require.True(t, ok)
+
+			response.Client = &DefaultRegisteredClient{DefaultClient: client.DefaultClient, IntrospectionSignedResponseAlg: client.IntrospectionSignedResponseAlg, FAPI2SecurityProfile: tc.fapi2}
 
 			recorder := httptest.NewRecorder()
 

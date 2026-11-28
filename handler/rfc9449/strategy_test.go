@@ -537,6 +537,7 @@ func TestStrategyValidateProofReplayMarkerOutlivesEveryClientWindow(t *testing.T
 		{name: "ShouldKeepTheConfiguredWindowForAnotherClient", skew: 5 * time.Minute, client: &oauth2.DefaultClient{}, expected: 6 * time.Minute},
 		{name: "ShouldKeepTheConfiguredWindowForAFAPI2Client", skew: 5 * time.Minute, client: newTestFAPI2Client(), expected: 6 * time.Minute},
 		{name: "ShouldKeepTheFAPI2WindowForAnotherClient", skew: time.Second, client: &oauth2.DefaultClient{}, expected: time.Minute + oauth2.FAPI2SecurityProfileMinimumClockSkew},
+		{name: "ShouldKeepTheRaisedWindowForAFAPI2Client", skew: time.Second, client: newTestFAPI2Client(), expected: time.Minute + oauth2.FAPI2SecurityProfileMinimumClockSkew},
 	}
 
 	for _, tc := range testCases {

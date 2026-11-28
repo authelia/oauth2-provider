@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
@@ -310,6 +311,42 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because the OpenID Connect session is not for the subject the device code was approved by.",
 		},
 		{
+			name: "ShouldFailSessionIsNotFromTheApprovalOfTheDecision",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+				return newDeviceApprovalTestRequest(oidcStore, tokenHandler, &DefaultSession{ApprovalID: "winner"}, &DefaultSession{ApprovalID: "loser"})
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because the OpenID Connect session is not from the approval the device code decision was recorded for.",
+		},
+		{
+			name: "ShouldFailSessionWithoutApprovalIDForADecisionWithOne",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+				return newDeviceApprovalTestRequest(oidcStore, tokenHandler, &DefaultSession{ApprovalID: "winner"}, &DefaultSession{})
+			},
+			err: "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. Failed to generate ID Token because the OpenID Connect session is not from the approval the device code decision was recorded for.",
+		},
+		{
+			name: "ShouldPassSessionIsFromTheApprovalOfTheDecision",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+				return newDeviceApprovalTestRequest(oidcStore, tokenHandler, &DefaultSession{ApprovalID: "winner"}, &DefaultSession{ApprovalID: "winner"})
+			},
+		},
+		{
+			name: "ShouldPassNeitherSessionHasAnApprovalID",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+				return newDeviceApprovalTestRequest(oidcStore, tokenHandler, &DefaultSession{}, &DefaultSession{})
+			},
+		},
+		{
+			name: "ShouldPassDecisionSessionWithoutApprovalSession",
+			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+				req, resp := newDeviceApprovalTestRequest(oidcStore, tokenHandler, &DefaultSession{ApprovalID: "winner"}, &DefaultSession{ApprovalID: "loser"})
+
+				req.Session = &deviceApprovalTestUntrackedSession{Session: req.Session.(*DefaultSession)}
+
+				return req, resp
+			},
+		},
+		{
 			name: "ShouldFailGetOIDCSessionOtherError",
 			setup: func(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
 				req := oauth2.NewAccessRequest(nil)
@@ -464,4 +501,64 @@ func TestOpenIDConnectDeviceAuthorizeHandler_PopulateTokenEndpointResponse(t *te
 			}
 		})
 	}
+}
+
+func TestGetSessionApprovalID(t *testing.T) {
+	testCases := []struct {
+		name     string
+		session  any
+		id       string
+		expected bool
+	}{
+		{"ShouldNotTrackNil", nil, "", false},
+		{"ShouldNotTrackTypedNil", (*DefaultSession)(nil), "", false},
+		{"ShouldNotTrackSessionWithoutApprovalSession", &oauth2.DefaultSession{}, "", false},
+		{"ShouldTrackSessionWithoutApprovalID", &DefaultSession{}, "", true},
+		{"ShouldTrackSessionWithApprovalID", &DefaultSession{ApprovalID: "approval"}, "approval", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			id, ok := getSessionApprovalID(tc.session)
+
+			assert.Equal(t, tc.id, id)
+			assert.Equal(t, tc.expected, ok)
+		})
+	}
+}
+
+type deviceApprovalTestUntrackedSession struct {
+	Session
+}
+
+func newDeviceApprovalTestRequest(oidcStore *mock.MockOpenIDConnectRequestStorage, tokenHandler *mock.MockCodeTokenEndpointHandler, decision, stored *DefaultSession) (*oauth2.AccessRequest, *oauth2.AccessResponse) {
+	for _, session := range []*DefaultSession{decision, stored} {
+		session.Subject, session.Claims, session.Headers, session.RequestedAt = "peter", &jwt.IDTokenClaims{Subject: "peter"}, &jwt.Headers{}, time.Now()
+	}
+
+	req := oauth2.NewAccessRequest(nil)
+	req.GrantedScope = []string{consts.ScopeOpenID}
+	req.GrantTypes = []string{string(oauth2.GrantTypeDeviceCode)}
+	req.Session = decision
+	req.Client = &oauth2.DefaultClient{
+		GrantTypes: []string{string(oauth2.GrantTypeDeviceCode)},
+	}
+
+	tokenHandler.EXPECT().DeviceCodeSignature(gomock.Any(), gomock.Any()).Return("foobar", nil)
+	oidcStore.EXPECT().GetOpenIDConnectSession(gomock.Any(), "foobar", req).DoAndReturn(func(_ context.Context, _ string, requester oauth2.Requester) (oauth2.Requester, error) {
+		authReq := oauth2.NewAuthorizeRequest()
+		authReq.GrantedScope = []string{consts.ScopeOpenID}
+		authReq.Session = requester.GetSession()
+
+		if hydrated, ok := requester.GetSession().(*DefaultSession); ok {
+			*hydrated = *stored
+		} else {
+			*requester.GetSession().(*deviceApprovalTestUntrackedSession).Session.(*DefaultSession) = *stored
+		}
+
+		return authReq, nil
+	}).AnyTimes()
+	oidcStore.EXPECT().DeleteOpenIDConnectSession(gomock.Any(), "foobar").Return(nil).AnyTimes()
+
+	return req, oauth2.NewAccessResponse()
 }

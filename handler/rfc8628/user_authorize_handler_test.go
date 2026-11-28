@@ -290,6 +290,7 @@ func TestUserAuthorizeHandlerConcurrentDecisionsKeepTheFirst(t *testing.T) {
 			newSubmission := func() *oauth2.DeviceAuthorizeRequest {
 				session := openid.NewDefaultSession()
 				session.SetSubject("user")
+				session.UserCodeBindingSubject = "user"
 
 				submission := oauth2.NewDeviceAuthorizeRequest()
 				submission.SetSession(session)
@@ -391,6 +392,7 @@ func TestUserAuthorizeHandlerKeepsOnlyTheUserCodeOfTheUserAgent(t *testing.T) {
 
 			session := openid.NewDefaultSession()
 			session.SetSubject("user")
+			session.UserCodeBindingSubject = "user"
 
 			request := oauth2.NewDeviceAuthorizeRequest()
 			request.SetSession(session)
@@ -928,6 +930,7 @@ func TestUserAuthorizeHandler_PopulateRFC8628UserAuthorizeEndpointResponse_Handl
 
 			if session, ok := tt.args.req.GetSession().(*openid.DefaultSession); ok && session != nil {
 				session.SetSubject("user")
+				session.UserCodeBindingSubject = "user"
 			}
 
 			if tt.wantErr != nil {

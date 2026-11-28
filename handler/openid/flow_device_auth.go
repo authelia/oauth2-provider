@@ -6,6 +6,7 @@ package openid
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 
 	"authelia.com/provider/oauth2"
@@ -46,7 +47,9 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) HandleRFC8628UserAuthorizeEndpoint
 // parameters of the device authorization request, the 'default_max_age' or the 'require_auth_time' of the client is
 // rejected with the error the authorization endpoint returns for it, such as oauth2.ErrLoginRequired, so the decision
 // is not recorded and the user code can be approved again once the End-User has authenticated as required. A 'nonce'
-// the client already used while the device code issued for it could still be redeemed is rejected.
+// the client already used while the device code issued for it could still be redeemed is rejected. A session
+// implementing ApprovalSession is given a new approval identifier, which the token endpoint requires the OpenID Connect
+// 1.0 session to share with the session of the recorded decision.
 //
 // See: https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
 // See: https://openid.net/specs/openid-connect-core-1_0.html#AuthError
@@ -73,6 +76,10 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateRFC8628UserAuthorizeEndpoi
 
 	if err = setNonceUsed(ctx, c.OpenIDConnectRequestStorage, req, getSessionExpiresAt(req, oauth2.DeviceCode, c.Config.GetIDTokenLifespan(ctx))); err != nil {
 		return err
+	}
+
+	if session, ok := req.GetSession().(ApprovalSession); ok {
+		session.SetApprovalID(rand.Text())
 	}
 
 	if err = c.OpenIDConnectRequestStorage.CreateOpenIDConnectSession(ctx, req.GetDeviceCodeSignature(), req.Sanitize(oidcParameters)); err != nil {
@@ -105,7 +112,8 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) HandleTokenEndpointRequest(_ conte
 // stored under the device code signature, deletes it, and adds the 'id_token' with an 'at_hash' claim to the response.
 // When no such session exists it returns oauth2.ErrServerError if the 'openid' scope was granted, and otherwise
 // oauth2.ErrUnknownRequest. It returns oauth2.ErrServerError when the session is not for the subject of the recorded
-// decision.
+// decision, or when the session of the decision implements ApprovalSession and the session was stored by another
+// approval.
 //
 // See: https://openid.net/specs/openid-connect-core-1_0.html#TokenResponse
 func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx context.Context, request oauth2.AccessRequester, response oauth2.AccessResponder) (err error) {
@@ -126,6 +134,7 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 
 	// Read first, as the storage may hydrate the OpenID Connect 1.0 session into the session of the request.
 	subject := getSessionSubject(request)
+	approval, tracked := getSessionApprovalID(request.GetSession())
 
 	if ar, err = c.OpenIDConnectRequestStorage.GetOpenIDConnectSession(ctx, signature, request); errors.Is(err, ErrNoSessionFound) {
 		if request.GetGrantedScopes().Has(consts.ScopeOpenID) {
@@ -151,6 +160,10 @@ func (c *OpenIDConnectDeviceAuthorizeHandler) PopulateTokenEndpointResponse(ctx 
 
 	if session.GetSubject() != subject {
 		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because the OpenID Connect session is not for the subject the device code was approved by."))
+	}
+
+	if id, _ := getSessionApprovalID(session); tracked && id != approval {
+		return errorsx.WithStack(oauth2.ErrServerError.WithDebug("Failed to generate ID Token because the OpenID Connect session is not from the approval the device code decision was recorded for."))
 	}
 
 	claims := session.IDTokenClaims()

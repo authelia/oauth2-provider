@@ -108,6 +108,8 @@ func TestDefaultSession_Clone(t *testing.T) {
 					RequestedAuthenticationContextClaims: []string{"acr"},
 					RefreshTokenMode:                     oauth2.RefreshTokenModeOnline,
 					AccessTokenDigest:                    "digest",
+					ApprovalID:                           "approval",
+					UserCodeBindingSubject:               "peter",
 					ExpiryDeadline:                       time.Unix(1700003600, 0).UTC(),
 					RequestedAt:                          now,
 				}

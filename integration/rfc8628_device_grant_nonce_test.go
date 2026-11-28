@@ -31,7 +31,7 @@ func TestDeviceFlowNonceEntropy(t *testing.T) {
 		RFC8628UserVerificationURL:            "https://www.authelia.com/device",
 	}, s, gen.MustRSAKey())
 
-	ts := deviceFlowServer(t, f, &openid.DefaultSession{Subject: testSubject})
+	ts := deviceFlowServer(t, f, &openid.DefaultSession{Subject: testSubject, UserCodeBindingSubject: testSubject})
 	defer ts.Close()
 
 	s.Clients[testClientIDRAR] = &oauth2.DefaultClient{

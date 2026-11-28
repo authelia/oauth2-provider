@@ -63,7 +63,7 @@ func TestDeviceFlowWithAuthorizationDetails(t *testing.T) {
 				compose.OAuth2TokenIntrospectionFactory,
 			)
 
-			ts := deviceFlowServer(t, f, &openid.DefaultSession{Subject: testSubject})
+			ts := deviceFlowServer(t, f, &openid.DefaultSession{Subject: testSubject, UserCodeBindingSubject: testSubject})
 			defer ts.Close()
 
 			clients[testClientIDRAR] = &oauth2.DefaultClient{

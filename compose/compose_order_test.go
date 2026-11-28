@@ -6,11 +6,13 @@ package compose
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -360,8 +362,179 @@ func TestComposeAllEnabledDeviceFlowRecordsTheDecisionLast(t *testing.T) {
 				assert.Nil(t, response)
 				assert.Equal(t, "server_error", deviceOrderTestErrorCode(err))
 			})
+
+			t.Run("ShouldNotIssueAnIDTokenFromTheSessionOfAnApprovalWhichLost", func(t *testing.T) {
+				store, _ := st.new()
+				provider := newDeviceOrderTestProvider(store, false)
+
+				grant := newDeviceOrderTestGrant(t, provider, "")
+
+				winner, loser := grant.present(t, provider, deviceOrderTestSubject), grant.present(t, provider, deviceOrderTestSubject)
+
+				winnerSession, loserSession := newDeviceOrderTestSession(deviceOrderTestSubject), newDeviceOrderTestSession(deviceOrderTestSubject)
+
+				winnerSession.Claims.AuthenticationContextClassReference = "winner"
+				loserSession.Claims.AuthenticationContextClassReference = "loser"
+
+				require.NoError(t, grant.decideWithSession(provider, winner, winnerSession))
+				assert.Equal(t, "invalid_grant", deviceOrderTestErrorCode(grant.decideWithSession(provider, loser, loserSession)))
+
+				response, err := grant.poll(t, provider)
+
+				assert.Nil(t, response)
+				assert.Equal(t, "server_error", deviceOrderTestErrorCode(err))
+
+				_, err = grant.poll(t, provider)
+
+				assert.Equal(t, "invalid_grant", deviceOrderTestErrorCode(err))
+			})
+
+			t.Run("ShouldIssueAnIDTokenFromTheSessionOfTheApprovalWhichWon", func(t *testing.T) {
+				store, _ := st.new()
+				provider := newDeviceOrderTestProvider(store, false)
+
+				grant := newDeviceOrderTestGrant(t, provider, deviceOrderTestNonce)
+
+				session := newDeviceOrderTestSession(deviceOrderTestSubject)
+
+				session.Claims.AuthenticationContextClassReference = "winner"
+
+				require.NoError(t, grant.decideWithSession(provider, grant.present(t, provider, deviceOrderTestSubject), session))
+
+				response, err := grant.poll(t, provider)
+
+				require.NoError(t, err)
+				assert.Equal(t, "winner", deviceOrderTestIDTokenClaims(t, response)[consts.ClaimAuthenticationContextClassReference])
+			})
+
+			t.Run("ShouldRefuseAnApprovalWhoseSessionDoesNotIdentifyTheEndUser", func(t *testing.T) {
+				store, _ := st.new()
+				provider := newDeviceOrderTestProvider(store, false)
+
+				grant := newDeviceOrderTestGrant(t, provider, "")
+
+				for name, session := range map[string]oauth2.Session{
+					"nil":     nil,
+					"missing": newDeviceOrderTestSessionWithBinding(deviceOrderTestSubject, ""),
+					"sub":     &oauth2.DefaultSession{Subject: deviceOrderTestSubject},
+				} {
+					request := grant.present(t, provider, deviceOrderTestSubject)
+
+					request.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
+
+					_, err := provider.NewRFC8628UserAuthorizeResponse(context.Background(), request, session)
+
+					assert.ErrorIs(t, err, oauth2.ErrUserCodeClaimed, name)
+					assert.Equal(t, "invalid_grant", deviceOrderTestErrorCode(err), name)
+				}
+
+				_, err := grant.poll(t, provider)
+
+				assert.Equal(t, "authorization_pending", deviceOrderTestErrorCode(err))
+			})
+
+			t.Run("ShouldBindTheUserCodeToTheEndUserRatherThanTheSubject", func(t *testing.T) {
+				store, _ := st.new()
+				provider := newDeviceOrderTestProvider(store, false)
+
+				grant := newDeviceOrderTestGrant(t, provider, "")
+
+				request, err := provider.NewRFC8628UserAuthorizeRequest(context.Background(), newDeviceOrderTestRequest(url.Values{consts.FormParameterUserCode: {grant.userCode}}), newDeviceOrderTestSessionWithBinding("", "end-user"))
+
+				require.NoError(t, err)
+
+				require.NoError(t, grant.decideWithSession(provider, request, newDeviceOrderTestSessionWithBinding("pairwise-subject", "end-user")))
+
+				response, err := grant.poll(t, provider)
+
+				require.NoError(t, err)
+				assert.Equal(t, "pairwise-subject", deviceOrderTestIDTokenClaims(t, response)[consts.ClaimSubject])
+			})
+
+			t.Run("ShouldRefuseAPresentationWhoseSessionDoesNotIdentifyTheEndUser", func(t *testing.T) {
+				store, _ := st.new()
+				provider := newDeviceOrderTestProvider(store, false)
+
+				grant := newDeviceOrderTestGrant(t, provider, "")
+
+				_, err := provider.NewRFC8628UserAuthorizeRequest(context.Background(), newDeviceOrderTestRequest(url.Values{consts.FormParameterUserCode: {grant.userCode}}), &oauth2.DefaultSession{Subject: deviceOrderTestSubject})
+
+				assert.Equal(t, "server_error", deviceOrderTestErrorCode(err))
+			})
+
+			t.Run("ShouldRecordADenialWhoseSessionIdentifiesAnotherEndUser", func(t *testing.T) {
+				store, _ := st.new()
+				provider := newDeviceOrderTestProvider(store, false)
+
+				grant := newDeviceOrderTestGrant(t, provider, "")
+
+				request := grant.present(t, provider, deviceOrderTestSubject)
+
+				request.SetStatus(oauth2.DeviceAuthorizeStatusDenied)
+
+				_, err := provider.NewRFC8628UserAuthorizeResponse(context.Background(), request, newDeviceOrderTestSession("mallory"))
+
+				require.NoError(t, err)
+
+				_, err = grant.poll(t, provider)
+
+				assert.Equal(t, "access_denied", deviceOrderTestErrorCode(err))
+			})
+
+			t.Run("ShouldAcceptAnApprovalByAnotherEndUserWhenTheBindingIsDisabled", func(t *testing.T) {
+				store, _ := st.new()
+				provider := newDeviceOrderTestProvider(store, true)
+
+				grant := newDeviceOrderTestGrant(t, provider, "")
+
+				require.NoError(t, grant.decide(provider, grant.present(t, provider, deviceOrderTestSubject), "mallory"))
+
+				response, err := grant.poll(t, provider)
+
+				require.NoError(t, err)
+				assert.Equal(t, "mallory", deviceOrderTestIDTokenClaims(t, response)[consts.ClaimSubject])
+			})
+
+			t.Run("ShouldRefuseAnApprovalForASubjectTheUserCodeIsNotBoundTo", func(t *testing.T) {
+				store, _ := st.new()
+				provider := newDeviceOrderTestProvider(store, false)
+
+				grant := newDeviceOrderTestGrant(t, provider, deviceOrderTestNonce)
+
+				request := grant.present(t, provider, deviceOrderTestSubject)
+
+				assert.Equal(t, "invalid_grant", deviceOrderTestErrorCode(grant.decide(provider, request, "mallory")))
+
+				_, err := grant.poll(t, provider)
+
+				assert.Equal(t, "authorization_pending", deviceOrderTestErrorCode(err))
+
+				require.NoError(t, grant.approve(t, provider))
+
+				response, err := grant.poll(t, provider)
+
+				require.NoError(t, err)
+				assert.NotEmpty(t, response.GetExtra(consts.AccessResponseIDToken))
+			})
 		})
 	}
+}
+
+func TestComposeAllEnabledDeviceFlowRefusesAnOpenIDConnectSessionWithoutTheApprovalID(t *testing.T) {
+	store := &deviceOrderTestSerializingStore{HydratingMemoryStore: storage.NewHydratingMemoryStore(), sessions: map[string][]byte{}, strip: true}
+
+	store.Clients[deviceOrderTestClientID] = newDeviceOrderTestClient()
+
+	provider := newDeviceOrderTestProvider(store, false)
+
+	grant := newDeviceOrderTestGrant(t, provider, "")
+
+	require.NoError(t, grant.approve(t, provider))
+
+	response, err := grant.poll(t, provider)
+
+	assert.Nil(t, response)
+	assert.Equal(t, "server_error", deviceOrderTestErrorCode(err))
 }
 
 func TestComposePanicsWhenThePKCEFactoryPrecedesTheExplicitFactory(t *testing.T) {
@@ -417,6 +590,87 @@ var deviceOrderTestStores = []struct {
 			return &deviceOrderTestFailingHydratingMemoryStore{HydratingMemoryStore: store.(*storage.HydratingMemoryStore)}
 		},
 	},
+	{
+		name: "SerializingStore",
+		new: func() (any, *storage.MemoryStore) {
+			store := &deviceOrderTestSerializingStore{HydratingMemoryStore: storage.NewHydratingMemoryStore(), sessions: map[string][]byte{}}
+
+			store.Clients[deviceOrderTestClientID] = newDeviceOrderTestClient()
+
+			return store, store.MemoryStore
+		},
+		failing: func(store any) any {
+			return &deviceOrderTestFailingSerializingStore{deviceOrderTestSerializingStore: store.(*deviceOrderTestSerializingStore)}
+		},
+	},
+}
+
+type deviceOrderTestSerializingStore struct {
+	*storage.HydratingMemoryStore
+
+	mu       sync.Mutex
+	sessions map[string][]byte
+	strip    bool
+}
+
+func (s *deviceOrderTestSerializingStore) CreateOpenIDConnectSession(ctx context.Context, signature string, request oauth2.Requester) (err error) {
+	var data []byte
+
+	if data, err = json.Marshal(request.GetSession()); err != nil {
+		return err
+	}
+
+	if s.strip {
+		values := map[string]any{}
+
+		if err = json.Unmarshal(data, &values); err != nil {
+			return err
+		}
+
+		delete(values, "approval_id")
+
+		if data, err = json.Marshal(values); err != nil {
+			return err
+		}
+	}
+
+	s.mu.Lock()
+	s.sessions[signature] = data
+	s.mu.Unlock()
+
+	return s.HydratingMemoryStore.CreateOpenIDConnectSession(ctx, signature, request)
+}
+
+func (s *deviceOrderTestSerializingStore) GetOpenIDConnectSession(ctx context.Context, signature string, request oauth2.Requester) (oauth2.Requester, error) {
+	stored, err := s.HydratingMemoryStore.GetOpenIDConnectSession(ctx, signature, request)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	data := s.sessions[signature]
+	s.mu.Unlock()
+
+	if session, ok := request.GetSession().(openid.ApprovalSession); ok {
+		session.SetApprovalID("")
+	}
+
+	if err = json.Unmarshal(data, request.GetSession()); err != nil {
+		return nil, err
+	}
+
+	restored := *stored.(*oauth2.Request)
+	restored.Session = request.GetSession()
+
+	return &restored, nil
+}
+
+type deviceOrderTestFailingSerializingStore struct {
+	*deviceOrderTestSerializingStore
+}
+
+func (s *deviceOrderTestFailingSerializingStore) CreateOpenIDConnectSession(_ context.Context, _ string, _ oauth2.Requester) error {
+	return errors.New("unavailable")
 }
 
 type deviceOrderTestFailingMemoryStore struct {
@@ -469,11 +723,28 @@ func newDeviceOrderTestClient() (client oauth2.Client) {
 }
 
 func newDeviceOrderTestSession(subject string) (session *openid.DefaultSession) {
+	return newDeviceOrderTestSessionWithBinding(subject, subject)
+}
+
+func newDeviceOrderTestSessionWithBinding(subject, binding string) (session *openid.DefaultSession) {
 	return &openid.DefaultSession{
-		Subject: subject,
-		Claims:  &jwt.IDTokenClaims{Subject: subject},
-		Headers: &jwt.Headers{},
+		Subject:                subject,
+		UserCodeBindingSubject: binding,
+		Claims:                 &jwt.IDTokenClaims{Subject: subject},
+		Headers:                &jwt.Headers{},
 	}
+}
+
+func deviceOrderTestIDTokenClaims(t *testing.T, response oauth2.AccessResponder) (claims map[string]any) {
+	t.Helper()
+
+	claims = map[string]any{}
+
+	_, err := jwt.UnsafeParseSignedAny(response.GetExtra(consts.AccessResponseIDToken).(string), &claims)
+
+	require.NoError(t, err)
+
+	return claims
 }
 
 func newDeviceOrderTestRequest(form url.Values) (r *http.Request) {
@@ -517,13 +788,17 @@ func (g deviceOrderTestGrant) present(t *testing.T, provider oauth2.Provider, su
 }
 
 func (g deviceOrderTestGrant) decide(provider oauth2.Provider, request oauth2.DeviceAuthorizeRequester, subject string) (err error) {
+	return g.decideWithSession(provider, request, newDeviceOrderTestSession(subject))
+}
+
+func (g deviceOrderTestGrant) decideWithSession(provider oauth2.Provider, request oauth2.DeviceAuthorizeRequester, session *openid.DefaultSession) (err error) {
 	for _, scope := range request.GetRequestedScopes() {
 		request.GrantScope(scope)
 	}
 
 	request.SetStatus(oauth2.DeviceAuthorizeStatusApproved)
 
-	_, err = provider.NewRFC8628UserAuthorizeResponse(context.Background(), request, newDeviceOrderTestSession(subject))
+	_, err = provider.NewRFC8628UserAuthorizeResponse(context.Background(), request, session)
 
 	return err
 }

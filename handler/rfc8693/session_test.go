@@ -139,6 +139,8 @@ func TestDefaultSessionClone(t *testing.T) {
 				ExpiryDeadline:                       time.Unix(1700003600, 0).UTC(),
 				RefreshTokenMode:                     oauth2.RefreshTokenModeOnline,
 				AccessTokenDigest:                    "digest",
+				ApprovalID:                           "approval",
+				UserCodeBindingSubject:               "peter",
 				RequestedAt:                          now,
 			},
 			ActorToken:     map[string]any{consts.ClaimSubject: "actor"},

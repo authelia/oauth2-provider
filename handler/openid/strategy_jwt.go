@@ -43,6 +43,19 @@ type Session interface {
 	oauth2.Session
 }
 
+// ApprovalSession is implemented by a Session which records the identifier of the approval it was created by, so the
+// OpenID Connect 1.0 session stored for a device code can be matched with the approval the decision was recorded for.
+// A store which restores a session by merging the stored values into the given session must clear the approval
+// identifier when the stored session has none, or an OpenID Connect 1.0 session stored without one matches any
+// decision.
+type ApprovalSession interface {
+	// SetApprovalID sets the identifier of the approval.
+	SetApprovalID(id string)
+
+	// GetApprovalID returns the identifier of the approval, or an empty string when none is set.
+	GetApprovalID() (id string)
+}
+
 // DefaultSession is a session container for the id token.
 type DefaultSession struct {
 	Claims                               *jwt.IDTokenClaims             `json:"id_token_claims,omitempty"`
@@ -60,6 +73,8 @@ type DefaultSession struct {
 	RequestedAuthenticationContextClaims []string                       `json:"requested_authentication_context_claims,omitempty"`
 	RefreshTokenMode                     oauth2.RefreshTokenMode        `json:"refresh_token_mode,omitempty"`
 	AccessTokenDigest                    string                         `json:"access_token_digest,omitempty"`
+	ApprovalID                           string                         `json:"approval_id,omitempty"`
+	UserCodeBindingSubject               string                         `json:"user_code_binding_subject,omitempty"`
 }
 
 // NewDefaultSession returns a DefaultSession with empty claims and headers, requested at the current time.
@@ -528,9 +543,33 @@ func (s *DefaultSession) GetOIDCKeyBindingGranted() (granted bool) {
 	return s.KeyBindingGranted
 }
 
-var (
-	_ oauth2.DPoPBoundSession = (*DefaultSession)(nil)
-	_ oauth2.MTLSBoundSession = (*DefaultSession)(nil)
+// SetApprovalID implements ApprovalSession for DefaultSession.
+func (s *DefaultSession) SetApprovalID(id string) {
+	s.ApprovalID = id
+}
 
-	_ hoauth2.EncryptedAccessTokenSession = (*DefaultSession)(nil)
+// GetRFC8628UserCodeBindingSubject implements oauth2.RFC8628UserCodeBindingSession for DefaultSession.
+func (s *DefaultSession) GetRFC8628UserCodeBindingSubject() (subject string) {
+	if s == nil {
+		return ""
+	}
+
+	return s.UserCodeBindingSubject
+}
+
+// GetApprovalID implements ApprovalSession for DefaultSession.
+func (s *DefaultSession) GetApprovalID() (id string) {
+	if s == nil {
+		return ""
+	}
+
+	return s.ApprovalID
+}
+
+var (
+	_ oauth2.DPoPBoundSession              = (*DefaultSession)(nil)
+	_ oauth2.MTLSBoundSession              = (*DefaultSession)(nil)
+	_ oauth2.RFC8628UserCodeBindingSession = (*DefaultSession)(nil)
+	_ hoauth2.EncryptedAccessTokenSession  = (*DefaultSession)(nil)
+	_ ApprovalSession                      = (*DefaultSession)(nil)
 )

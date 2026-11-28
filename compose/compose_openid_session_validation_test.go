@@ -597,7 +597,7 @@ func newSessionValidationTestProvider(store any, notifier oauth2.BackChannelNoti
 func newSessionValidationTestSession(subject string, authTime *time.Time) (session *openid.DefaultSession) {
 	session = openid.NewDefaultSession()
 
-	session.Subject, session.Claims.Subject = subject, subject
+	session.Subject, session.Claims.Subject, session.UserCodeBindingSubject = subject, subject, subject
 
 	if authTime != nil && !authTime.IsZero() {
 		session.Claims.AuthTime = jwt.NewNumericDate(*authTime)

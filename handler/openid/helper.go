@@ -231,6 +231,16 @@ func setNonceUsed(ctx context.Context, storage OpenIDConnectRequestStorage, requ
 	return nil
 }
 
+func getSessionApprovalID(session any) (id string, ok bool) {
+	var approval ApprovalSession
+
+	if approval, ok = session.(ApprovalSession); !ok || reflection.IsNil(approval) {
+		return "", false
+	}
+
+	return approval.GetApprovalID(), true
+}
+
 func getSessionSubject(request oauth2.Requester) (subject string) {
 	if session := request.GetSession(); !reflection.IsNil(session) {
 		return session.GetSubject()

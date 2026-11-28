@@ -39,6 +39,7 @@ type JWTSession struct {
 	ExpiryDeadline              time.Time               `json:",omitzero"`
 	RefreshTokenMode            oauth2.RefreshTokenMode `json:",omitempty"`
 	AccessTokenDigest           string                  `json:",omitempty"`
+	UserCodeBindingSubject      string                  `json:",omitempty"`
 }
 
 // EncryptedAccessTokenSession is a session recording the digest of the encrypted JWT profile access token issued with
@@ -260,7 +261,17 @@ func (j *JWTSession) GetExtraClaims() map[string]any {
 	return j.Clone().(*JWTSession).GetJWTClaims().WithScopeField(jwt.JWTScopeFieldString).ToMapClaims()
 }
 
+// GetRFC8628UserCodeBindingSubject implements oauth2.RFC8628UserCodeBindingSession for JWTSession.
+func (j *JWTSession) GetRFC8628UserCodeBindingSubject() (subject string) {
+	if j == nil {
+		return ""
+	}
+
+	return j.UserCodeBindingSubject
+}
+
 var (
-	_ oauth2.DPoPBoundSession = (*JWTSession)(nil)
-	_ oauth2.MTLSBoundSession = (*JWTSession)(nil)
+	_ oauth2.DPoPBoundSession              = (*JWTSession)(nil)
+	_ oauth2.MTLSBoundSession              = (*JWTSession)(nil)
+	_ oauth2.RFC8628UserCodeBindingSession = (*JWTSession)(nil)
 )

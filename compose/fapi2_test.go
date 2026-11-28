@@ -23,6 +23,14 @@ import (
 	"authelia.com/provider/oauth2/token/jwt"
 )
 
+func TestApplyFAPI2SecurityProfileDefaultTrustedIssuerAlgorithms(t *testing.T) {
+	config := &oauth2.Config{}
+
+	ApplyFAPI2SecurityProfile(config)
+
+	assert.Equal(t, oauth2.FAPI2SecurityProfileSigningAlgValues, config.RFC7591TrustedIssuerSigningAlgValues)
+}
+
 func TestValidateFAPI2SecurityProfile(t *testing.T) {
 	testCases := []struct {
 		name      string
@@ -253,6 +261,20 @@ func TestValidateFAPI2SecurityProfile(t *testing.T) {
 			modify: func(config *oauth2.Config) { config.JWTStrategy = &jwt.DefaultStrategy{Config: config} },
 		},
 		{
+			name: "ShouldRejectRS256TrustedIssuerAlgorithms",
+			modify: func(config *oauth2.Config) {
+				config.RFC7591ClientRegistrationTrustedIssuers = []oauth2.RFC7591TrustedIssuer{{Issuer: "https://other.example.com"}}
+				config.RFC7591TrustedIssuerSigningAlgValues = []string{string(jose.RS256)}
+			},
+			expected: []string{"Section 5.4.1: the software statement and trusted issuer algorithms 'RS256' include one not permitted"},
+		},
+		{
+			name: "ShouldPassWithTrustedIssuers",
+			modify: func(config *oauth2.Config) {
+				config.RFC7591ClientRegistrationTrustedIssuers = []oauth2.RFC7591TrustedIssuer{{Issuer: "https://other.example.com"}}
+			},
+		},
+		{
 			name: "ShouldRejectTheDefaultTransactionTokenAlgorithm",
 			modify: func(config *oauth2.Config) {
 				config.RFC8693TokenTypes = map[string]oauth2.RFC8693TokenType{
@@ -396,6 +418,7 @@ func TestApplyFAPI2SecurityProfile(t *testing.T) {
 		GrantTypeJWTBearerCanSkipClientAuth:      true,
 		AccessTokenURIQueryParameterEnabled:      true,
 		AuthorizationSignedResponseAlgValues:     []string{string(jose.HS256), string(jose.ES256)},
+		RFC7591TrustedIssuerSigningAlgValues:     []string{string(jose.RS256), string(jose.EdDSA)},
 		IntrospectionSignedResponseAlgValues:     []string{string(jose.RS256), string(jose.PS256)},
 	}
 
@@ -405,6 +428,7 @@ func TestApplyFAPI2SecurityProfile(t *testing.T) {
 	assert.False(t, config.AccessTokenURIQueryParameterEnabled)
 	assert.True(t, config.FAPI2SecurityProfile)
 	assert.Equal(t, []string{string(jose.ES256)}, config.AuthorizationSignedResponseAlgValues)
+	assert.Equal(t, []string{string(jose.EdDSA)}, config.RFC7591TrustedIssuerSigningAlgValues)
 	assert.Equal(t, []string{string(jose.PS256)}, config.IntrospectionSignedResponseAlgValues)
 
 	assert.Equal(t, time.Minute, config.AuthorizeCodeLifespan)

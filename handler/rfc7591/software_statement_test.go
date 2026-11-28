@@ -504,6 +504,53 @@ func TestApplySoftwareStatementWithoutStatement(t *testing.T) {
 	assert.Equal(t, &oauth2.ClientRegistrationMetadata{ClientName: testStatementUnchanged}, metadata)
 }
 
+// FAPI 2.0 Security Profile §5.4.1: a JWT signed with an algorithm other than PS256, ES256 or EdDSA is not accepted.
+func TestApplySoftwareStatementFAPI2SecurityProfile(t *testing.T) {
+	rsaKey, ecKey := gen.MustRSAKey(), gen.MustES256Key()
+
+	server := newJWKSServer(t, &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
+		{Key: &rsaKey.PublicKey, KeyID: "rs", Algorithm: string(jose.RS256), Use: jwt.JSONWebTokenUseSignature},
+		{Key: &rsaKey.PublicKey, KeyID: "ps", Algorithm: string(jose.PS256), Use: jwt.JSONWebTokenUseSignature},
+		{Key: &ecKey.PublicKey, KeyID: "es", Algorithm: string(jose.ES256), Use: jwt.JSONWebTokenUseSignature},
+	}})
+
+	fixture := &softwareStatementFixture{server: server.URL}
+
+	testCases := []struct {
+		name    string
+		alg     jose.SignatureAlgorithm
+		key     any
+		kid     string
+		profile bool
+		reason  string
+	}{
+		{name: "ShouldAcceptRS256WithoutTheProfile", alg: jose.RS256, key: rsaKey, kid: "rs"},
+		{name: "ShouldRejectRS256WithTheProfile", alg: jose.RS256, key: rsaKey, kid: "rs", profile: true, reason: "unexpected signature algorithm 'RS256'"},
+		{name: "ShouldAcceptPS256WithTheProfile", alg: jose.PS256, key: rsaKey, kid: "ps", profile: true},
+		{name: "ShouldAcceptES256WithTheProfile", alg: jose.ES256, key: ecKey, kid: "es", profile: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := fixture.config(nil)
+			config.FAPI2SecurityProfile = tc.profile
+
+			metadata := &oauth2.ClientRegistrationMetadata{SoftwareStatement: signSoftwareStatementWithAlg(t, tc.alg, tc.key, tc.kid, testStatementType, softwareStatementClaims(nil))}
+
+			err := applySoftwareStatement(context.Background(), config, metadata)
+
+			if tc.reason == "" {
+				require.NoError(t, oauth2.ErrorToDebugRFC6749Error(err))
+
+				return
+			}
+
+			require.ErrorIs(t, err, oauth2.ErrInvalidSoftwareStatement)
+			assert.Contains(t, oauth2.ErrorToDebugRFC6749Error(err).Error(), tc.reason)
+		})
+	}
+}
+
 func TestClientRegistrationHandlerSoftwareStatement(t *testing.T) {
 	fixture := newSoftwareStatementFixture(t)
 
@@ -776,6 +823,12 @@ func signSoftwareStatement(t *testing.T, key any, kid string, claims jwt.MapClai
 func signTypedSoftwareStatement(t *testing.T, key any, kid, typ string, claims jwt.MapClaims) string {
 	t.Helper()
 
+	return signSoftwareStatementWithAlg(t, jose.RS256, key, kid, typ, claims)
+}
+
+func signSoftwareStatementWithAlg(t *testing.T, alg jose.SignatureAlgorithm, key any, kid, typ string, claims jwt.MapClaims) string {
+	t.Helper()
+
 	options := &jose.SignerOptions{}
 
 	if kid != "" {
@@ -786,7 +839,7 @@ func signTypedSoftwareStatement(t *testing.T, key any, kid, typ string, claims j
 		options = options.WithType(jose.ContentType(typ))
 	}
 
-	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: key}, options)
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: key}, options)
 	require.NoError(t, err)
 
 	payload, err := json.Marshal(claims)

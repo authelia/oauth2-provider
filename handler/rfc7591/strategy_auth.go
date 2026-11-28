@@ -390,7 +390,13 @@ func (s *DefaultEndpointAuthStrategy) clientRegistrationJWTIssuer(ctx context.Co
 }
 
 func trustedIssuerSigningAlgs(ctx context.Context, config oauth2.GrantAssertionAlgorithmsProvider) []jose.SignatureAlgorithm {
-	return jwt.ToAsymmetricSignatureAlgorithms(config.GetRFC7591TrustedIssuerSigningAlgValues(ctx))
+	algs := config.GetRFC7591TrustedIssuerSigningAlgValues(ctx)
+
+	if oauth2.IsFAPI2SecurityProfile(ctx, config) {
+		algs = slices.DeleteFunc(slices.Clone(algs), func(alg string) bool { return !slices.Contains(oauth2.FAPI2SecurityProfileSigningAlgValues, alg) })
+	}
+
+	return jwt.ToAsymmetricSignatureAlgorithms(algs)
 }
 
 func jwksKeyFunc(config oauth2.JWKSFetcherStrategyProvider, location string) jwt.KeyFuncJWS {

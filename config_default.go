@@ -439,6 +439,13 @@ type Config struct {
 	// page as well.
 	AuthorizeErrorFieldResponseStrategy AuthorizeErrorFieldResponseStrategy
 
+	// AuthorizeErrorRedirectPolicy decides whether an authorization error is delivered by redirecting the user agent
+	// automatically to the redirect URI, or written by the AuthorizeErrorFieldResponseStrategy. Defaults to a
+	// DefaultAuthorizeErrorRedirectPolicy.
+	//
+	// See: https://www.rfc-editor.org/rfc/rfc9700#section-4.11.2
+	AuthorizeErrorRedirectPolicy AuthorizeErrorRedirectPolicy
+
 	// ResponseModeHandlers provides the handlers for performing response mode formatting.
 	ResponseModeHandlers ResponseModeHandlers
 
@@ -2112,6 +2119,16 @@ func (c *Config) GetBackChannelNotifier(_ context.Context) (notifier BackChannel
 	})
 
 	return c.BackChannelNotifier
+}
+
+// GetAuthorizeErrorRedirectPolicy returns the policy deciding whether an authorization error is delivered by
+// redirecting the user agent automatically. Defaults to a DefaultAuthorizeErrorRedirectPolicy.
+func (c *Config) GetAuthorizeErrorRedirectPolicy(_ context.Context) (policy AuthorizeErrorRedirectPolicy) {
+	if c.AuthorizeErrorRedirectPolicy == nil {
+		return DefaultAuthorizeErrorRedirectPolicy{}
+	}
+
+	return c.AuthorizeErrorRedirectPolicy
 }
 
 // GetAuthorizeErrorFieldResponseStrategy returns the strategy which handles authorize error responses when the user

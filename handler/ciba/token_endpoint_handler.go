@@ -143,7 +143,7 @@ func (c *TokenHandler) GetCodeAndSession(ctx context.Context, request oauth2.Acc
 		return "", "", nil, errorsx.WithStack(oauth2.ErrServerError.WithWrap(err).WithDebugError(err))
 	}
 
-	if timeout := c.longPollingTimeout(ctx, now); timeout > 0 {
+	if timeout := c.longPollingTimeout(ctx, request.GetClient(), now); timeout > 0 {
 		var decided bool
 
 		if r, decided, err = c.longPoll(ctx, request, code, signature, base, poll, timeout); decided {
@@ -230,11 +230,11 @@ func (c *TokenHandler) slowDown(ctx context.Context, signature string, stored oa
 // longPollingTimeout returns how long a pending poll is held open. The DPoP proof of the poll is validated once the
 // hold ends, so a poll carrying one is held only while the proof remains acceptable, measured from both the receipt of
 // the request and the proof's 'iat', and is not held when a server nonce is required but the proof carries no valid
-// one.
+// one. The clock skew is the one the proof is accepted with for the client, as oauth2.GetDPoPClockSkew returns.
 //
 // See: https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1
 // See: https://www.rfc-editor.org/rfc/rfc9449#section-4.3
-func (c *TokenHandler) longPollingTimeout(ctx context.Context, receivedAt time.Time) (timeout time.Duration) {
+func (c *TokenHandler) longPollingTimeout(ctx context.Context, client oauth2.Client, receivedAt time.Time) (timeout time.Duration) {
 	if timeout = c.Config.GetCIBALongPollingTimeout(ctx); timeout <= 0 {
 		return 0
 	}
@@ -275,7 +275,7 @@ func (c *TokenHandler) longPollingTimeout(ctx context.Context, receivedAt time.T
 	}
 
 	now := time.Now()
-	window := config.GetDPoPProofLifespan(ctx) + config.GetDPoPClockSkew(ctx)
+	window := config.GetDPoPProofLifespan(ctx) + oauth2.GetDPoPClockSkew(ctx, config, client)
 
 	expires := receivedAt.Add(window)
 

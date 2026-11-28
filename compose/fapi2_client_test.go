@@ -14,6 +14,7 @@ import (
 	"authelia.com/provider/jose"
 
 	"authelia.com/provider/oauth2"
+	hoauth2 "authelia.com/provider/oauth2/handler/oauth2"
 	"authelia.com/provider/oauth2/internal/consts"
 	"authelia.com/provider/oauth2/internal/gen"
 	"authelia.com/provider/oauth2/storage"
@@ -67,6 +68,20 @@ func TestValidateFAPI2SecurityProfileClientSupport(t *testing.T) {
 				config.TokenEndpointAuthMethods = []string{consts.ClientAuthMethodClientSecretBasic}
 			},
 			expected: []string{"Section 5.3.2.1: the token endpoint accepts the client authentication methods 'client_secret_basic', none of which is permitted"},
+		},
+		{
+			name:      "ShouldRejectStatelessIntrospectionWithoutAStatefulOne",
+			factories: []Factory{OAuth2AuthorizeExplicitFactory, OAuth2PKCEFactory, PushedAuthorizeHandlerFactory, DPoPAuthorizeFactory, DPoPTokenFactory, OAuth2StatelessJWTIntrospectionFactory},
+			expected:  []string{"Section 5.3.4: the revocation status of access tokens must be verified, but the stateless JWT introspection handler is registered without a storage-backed one"},
+		},
+		{
+			name:      "ShouldRejectStatelessIntrospectionWithoutClients",
+			factories: []Factory{OAuth2AuthorizeExplicitFactory, OAuth2PKCEFactory, PushedAuthorizeHandlerFactory, DPoPAuthorizeFactory, DPoPTokenFactory, func(oauth2.Configurator, any, any) any { return &hoauth2.StatelessJWTValidator{} }, OAuth2TokenIntrospectionFactory},
+			expected:  []string{"Section 5.3.4: the revocation status of access tokens must be verified, but the stateless JWT introspection handler has no Clients to recognize a FAPI 2.0 client by"},
+		},
+		{
+			name:      "ShouldPassStatelessIntrospectionWithAStatefulOne",
+			factories: []Factory{OAuth2AuthorizeExplicitFactory, OAuth2PKCEFactory, PushedAuthorizeHandlerFactory, DPoPAuthorizeFactory, DPoPTokenFactory, OAuth2StatelessJWTIntrospectionFactory, OAuth2TokenIntrospectionFactory},
 		},
 		{
 			name: "ShouldRejectWithoutAPermittedIssuerSigningKey",

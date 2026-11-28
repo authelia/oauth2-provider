@@ -342,6 +342,21 @@ func TestValidateFAPI2SecurityProfile(t *testing.T) {
 			},
 		},
 		{
+			name: "ShouldRejectStatelessIntrospectionWithoutAStatefulOne",
+			modify: func(config *oauth2.Config) {
+				config.IntrospectionEndpointAuthMethods = []string{consts.ClientAuthMethodPrivateKeyJWT}
+			},
+			factories: []Factory{OAuth2StatelessJWTIntrospectionFactory},
+			expected:  []string{"Section 5.3.4: the revocation status of access tokens must be verified, but the stateless JWT introspection handler is registered without a storage-backed one"},
+		},
+		{
+			name: "ShouldPassStatelessIntrospectionWithAStatefulOne",
+			modify: func(config *oauth2.Config) {
+				config.IntrospectionEndpointAuthMethods = []string{consts.ClientAuthMethodPrivateKeyJWT}
+			},
+			factories: []Factory{OAuth2StatelessJWTIntrospectionFactory, OAuth2TokenIntrospectionFactory},
+		},
+		{
 			name:     "ShouldRejectAMinimumNonceLengthOver64",
 			modify:   func(config *oauth2.Config) { config.MinParameterEntropy = 65 },
 			expected: []string{"Section 5.3.2.2: 'nonce' values of up to 64 characters must be accepted, but MinParameterEntropy is 65"},

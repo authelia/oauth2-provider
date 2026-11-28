@@ -26,13 +26,13 @@ import (
 // A FAPI 2.0 client relies on the configuration for what it cannot enforce at each request: an issuer for the 'iss'
 // authorization response parameter and the client assertion audience, the RFC 9207 response mode parameter handler, the
 // authorization code grant, pushed authorization request and PKCE handlers, a sender-constraining method with its
-// handlers, a permitted client authentication method at the token endpoint, and an issuer signing key of a permitted
-// algorithm when the JWT strategy reports any. A custom ClientAuthenticationStrategy, DPoPStrategy,
-// SecurityEventTokenStrategy or response mode handler is not checked, and must apply the rules of
-// oauth2.FAPI2SecurityProfileClient itself. A JWT strategy reporting no signing algorithms is not checked, as
-// ValidateFAPI2SecurityProfile does not check one either: an authorization server issuing only opaque tokens signs
-// nothing, and the signer passed to Compose is not visible here. Each JWT issued to such a client is still refused
-// unless signed with a permitted algorithm.
+// handlers, a permitted client authentication method at the token endpoint, an issuer signing key of a permitted
+// algorithm when the JWT strategy reports any, and a storage-backed introspection handler behind a stateless JWT one,
+// which must recognize such a client. A custom ClientAuthenticationStrategy, DPoPStrategy, SecurityEventTokenStrategy
+// or response mode handler is not checked, and must apply the rules of oauth2.FAPI2SecurityProfileClient itself. A JWT
+// strategy reporting no signing algorithms is not checked, as ValidateFAPI2SecurityProfile does not check one either:
+// an authorization server issuing only opaque tokens signs nothing, and the signer passed to Compose is not visible
+// here. Each JWT issued to such a client is still refused unless signed with a permitted algorithm.
 //
 // See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2
 func ValidateFAPI2SecurityProfileClientSupport(ctx context.Context, config oauth2.Configurator) (err error) {
@@ -41,6 +41,7 @@ func ValidateFAPI2SecurityProfileClientSupport(ctx context.Context, config oauth
 	v.clientSupportAuthorization(ctx, config)
 	v.clientSupportSenderConstrained(ctx, config)
 	v.clientSupportCryptography(ctx, config)
+	v.clientSupportResourceServer(ctx, config)
 
 	return errors.Join(v.errs...)
 }
@@ -94,6 +95,19 @@ func (v *fapi2Violations) clientSupportSenderConstrained(ctx context.Context, co
 
 	if p, ok := config.(oauth2.AuthorizeEndpointBindingHandlersProvider); !ok || !fapi2Registered[*rfc9449.AuthorizeHandler](p.GetAuthorizeEndpointBindingHandlers(ctx)) {
 		v.fail(fapi2SectionGeneral, "DPoP is enabled, but the DPoP authorization code binding handler is not registered")
+	}
+}
+
+func (v *fapi2Violations) clientSupportResourceServer(ctx context.Context, config oauth2.Configurator) {
+	stateless, stateful := fapi2Introspection(ctx, config)
+
+	switch {
+	case stateless == nil:
+		return
+	case stateless.Clients == nil:
+		v.fail(fapi2SectionResourceServer, "the revocation status of access tokens must be verified, but the stateless JWT introspection handler has no Clients to recognize a FAPI 2.0 client by")
+	case !stateful:
+		v.fail(fapi2SectionResourceServer, "the revocation status of access tokens must be verified, but the stateless JWT introspection handler is registered without a storage-backed one")
 	}
 }
 

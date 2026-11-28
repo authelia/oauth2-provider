@@ -199,7 +199,8 @@ func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Con
 // GenerateJWT encodes the claims of the request session, which must be a JWTSessionContainer, as a signed JWT and
 // returns the token and its signature. The 'client_id' claim is taken from the request client, the
 // 'authorization_details' claim from the granted authorization details, and the 'cnf' claim is rebuilt from the
-// bindings recorded on the session.
+// bindings recorded on the session. An encrypted token is not issued when the authorization server or the client is
+// held to the FAPI 2.0 Security Profile, as its revocation status cannot be verified from storage.
 //
 // RFC 9068 Section 2.2 requires the 'iss', 'exp', 'aud' and 'sub' claims, so a token that would have no value for one of
 // them nor a default is not issued. The 'aud' claim defaults to oauth2.JWTProfileAccessTokenDefaultAudienceProvider,
@@ -208,6 +209,7 @@ func (s *JWTProfileCoreStrategy) IsPossiblyJWTProfileAccessToken(ctx context.Con
 //
 // See: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
 // See: https://www.rfc-editor.org/rfc/rfc9068#section-3
+// See: https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.4
 func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oauth2.TokenType, request oauth2.Requester, client oauth2.JWTProfileClient) (tokenString string, signature string, err error) {
 	var (
 		session JWTSessionContainer
@@ -290,7 +292,23 @@ func (s *JWTProfileCoreStrategy) GenerateJWT(ctx context.Context, tokenType oaut
 	// binding methods that are currently enabled.
 	oauth2.ApplyConfirmation(ctx, s.Config, mapClaims, request.GetSession())
 
+	if err = s.validateFAPI2SecurityProfileEncryption(ctx, request, client); err != nil {
+		return "", "", err
+	}
+
 	return s.Encode(ctx, mapClaims, append(oauth2.FAPI2SecurityProfileEncodeOptions(ctx, s.Config, request.GetClient()), jwt.WithHeaders(header), jwt.WithJWTProfileAccessTokenClient(client))...)
+}
+
+func (s *JWTProfileCoreStrategy) validateFAPI2SecurityProfileEncryption(ctx context.Context, request oauth2.Requester, client oauth2.JWTProfileClient) (err error) {
+	if client == nil || jwt.IsNoneAlg(client.GetAccessTokenEncryptedResponseAlg()) {
+		return nil
+	}
+
+	if !oauth2.IsFAPI2SecurityProfile(ctx, s.Config) && !oauth2.IsFAPI2SecurityProfileClient(request.GetClient()) {
+		return nil
+	}
+
+	return errorsx.WithStack(oauth2.ErrServerError.WithDebug("An encrypted JWT profile access token is not issued under the FAPI 2.0 Security Profile, as its revocation status cannot be verified from storage."))
 }
 
 func (s *JWTProfileCoreStrategy) applyDefaultAudience(ctx context.Context, request oauth2.Requester) (err error) {
